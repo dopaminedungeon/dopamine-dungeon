@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import GradientBackground from "../components/GradientBackground";
 import Sidebar from "../components/Sidebar";
 import TopBar from "../components/TopBar";
+import { useMode } from "../context/ModeContext.jsx";
 import {
   Users,
   Search,
@@ -85,6 +86,7 @@ const typeColors = {
 };
 
 export default function Npcs() {
+  const { isGM } = useMode();
   const navigate = useNavigate();
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedType, setSelectedType] = useState("All");
@@ -160,13 +162,15 @@ export default function Npcs() {
               </div>
 
               {/* Add Button */}
-              <button
-                className="flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-purple-500 to-pink-500 text-white font-medium rounded-xl hover:opacity-90 transition-opacity"
-                onClick={() => setShowCreateModal(true)}
-              >
-                <Plus className="w-5 h-5" />
-                Add NPC
-              </button>
+              {isGM && (
+  <button
+    className="flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-indigo-500 to-purple-500 text-white font-medium rounded-xl hover:opacity-90 transition-opacity"
+    onClick={() => setShowCreateModal(true)}
+  >
+    <Plus className="w-5 h-5" />
+    Add NPC
+  </button>
+)}
             </div>
 
             {/* NPCs Grid */}
