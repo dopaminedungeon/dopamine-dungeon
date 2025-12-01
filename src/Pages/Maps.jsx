@@ -1,8 +1,22 @@
-import React, { useState } from 'react';
-import GradientBackground from '../components/GradientBackground';
-import Sidebar from '../components/Sidebar';
-import TopBar from '../components/TopBar';
-import { Search, Plus, Map, MapPin, Mountain, TreePine, Castle, Skull, Waves, Flame, Grid, LayoutGrid } from 'lucide-react';
+import React, { useState } from "react";
+import { useNavigate } from "react-router-dom";
+import GradientBackground from "../components/GradientBackground";
+import Sidebar from "../components/Sidebar";
+import TopBar from "../components/TopBar";
+import {
+  Search,
+  Plus,
+  Map as MapIconBase,
+  MapPin,
+  Mountain,
+  TreePine,
+  Castle,
+  Skull,
+  Waves,
+  Flame,
+  Grid,
+  LayoutGrid,
+} from "lucide-react";
 
 const mockMaps = [
   { 
@@ -95,7 +109,8 @@ const difficultyConfig = {
 };
 
 export default function Maps() {
-  const [searchQuery, setSearchQuery] = useState('');
+  const navigate = useNavigate();
+  const [searchQuery, setSearchQuery] = useState("");
   const [selectedType, setSelectedType] = useState('All');
   const [viewMode, setViewMode] = useState('grid');
 
@@ -179,10 +194,11 @@ export default function Maps() {
                 const difficulty = difficultyConfig[map.difficulty] || difficultyConfig.Normal;
                 
                 return (
-                  <div
-                    key={map.id}
-                    className="group bg-white/5 backdrop-blur-sm border border-white/10 rounded-2xl overflow-hidden hover:border-indigo-500/30 hover:bg-white/10 transition-all cursor-pointer"
-                  >
+                 <div
+  key={map.id}
+  className="group bg-white/5 backdrop-blur-sm border border-white/10 rounded-2xl overflow-hidden hover:border-indigo-500/30 hover:bg-white/10 transition-all cursor-pointer"
+  onClick={() => navigate(`/map/${map.id}`)}
+>
                     {/* Thumbnail */}
                     <div className="relative h-48 overflow-hidden">
                       <img 
@@ -224,7 +240,7 @@ export default function Maps() {
                             <span className="text-zinc-400 text-sm">{map.npcs} NPCs</span>
                           </div>
                           <div className="flex items-center gap-2">
-                            <Map className="w-4 h-4 text-zinc-500" />
+                            <MapIconBase className="w-4 h-4 text-zinc-500" />
                             <span className="text-zinc-400 text-sm">{map.items} Items</span>
                           </div>
                         </div>

@@ -1,8 +1,20 @@
-import React, { useState } from 'react';
-import GradientBackground from '../components/GradientBackground';
-import Sidebar from '../components/Sidebar';
-import TopBar from '../components/TopBar';
-import { Search, Plus, Clock, Users, Play, Pause, Square, Calendar, Timer, TrendingUp } from 'lucide-react';
+import React, { useState } from "react";
+import { useNavigate } from "react-router-dom";
+import GradientBackground from "../components/GradientBackground";
+import Sidebar from "../components/Sidebar";
+import TopBar from "../components/TopBar";
+import {
+  Search,
+  Plus,
+  Clock,
+  Users,
+  Play,
+  Pause,
+  Square,
+  Calendar,
+  Timer,
+  TrendingUp,
+} from "lucide-react";
 
 const mockSessions = [
   { 
@@ -95,7 +107,8 @@ const difficultyColors = {
 };
 
 export default function Sessions() {
-  const [searchQuery, setSearchQuery] = useState('');
+  const navigate = useNavigate();
+  const [searchQuery, setSearchQuery] = useState("");
   const [selectedStatus, setSelectedStatus] = useState('All');
 
   const filteredSessions = mockSessions.filter(session => {
@@ -202,9 +215,10 @@ export default function Sessions() {
                 
                 return (
                   <div
-                    key={session.id}
-                    className="group bg-white/5 backdrop-blur-sm border border-white/10 rounded-2xl p-6 hover:border-emerald-500/30 hover:bg-white/10 transition-all cursor-pointer"
-                  >
+  key={session.id}
+  className="group bg-white/5 backdrop-blur-sm border border-white/10 rounded-2xl p-6 hover:border-emerald-500/30 hover:bg-white/10 transition-all cursor-pointer"
+  onClick={() => navigate(`/session/${session.id}`)}
+>
                     <div className="flex flex-col lg:flex-row lg:items-center gap-4">
                       {/* Session Info */}
                       <div className="flex items-center gap-4 flex-1">

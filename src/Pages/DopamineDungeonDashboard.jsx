@@ -1,5 +1,5 @@
-// src/pages/DopamineDungeonDashboard.jsx
 import React from "react";
+import { useNavigate } from "react-router-dom";
 import GradientBackground from "../components/GradientBackground";
 import Sidebar from "../components/Sidebar";
 import TopBar from "../components/TopBar";
@@ -25,6 +25,8 @@ const mockSessions = [
 ];
 
 export default function DopamineDungeonDashboard() {
+  const navigate = useNavigate();
+
   return (
     <GradientBackground>
       <div className="flex min-h-screen">
@@ -80,12 +82,14 @@ export default function DopamineDungeonDashboard() {
                 title="NPCs"
                 icon={<Users className="w-5 h-5" />}
                 accentColor="purple"
+                onViewAll={() => navigate("/npcs")}
               >
                 <div className="space-y-3">
                   {mockNpcs.map((npc) => (
                     <div
                       key={npc.id}
                       className="flex items-center justify-between p-3 bg-white/5 rounded-xl hover:bg-white/10 transition-colors cursor-pointer group"
+                      onClick={() => navigate(`/npc/${npc.id}`)}
                     >
                       <div className="flex items-center gap-3">
                         <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-purple-500 to-pink-500 flex items-center justify-center">
@@ -113,12 +117,14 @@ export default function DopamineDungeonDashboard() {
                 title="Items"
                 icon={<Swords className="w-5 h-5" />}
                 accentColor="blue"
+                onViewAll={() => navigate("/items")}
               >
                 <div className="space-y-3">
                   {mockItems.map((item) => (
                     <div
                       key={item.id}
                       className="flex items-center justify-between p-3 bg-white/5 rounded-xl hover:bg-white/10 transition-colors cursor-pointer group"
+                      onClick={() => navigate(`/item/${item.id}`)}
                     >
                       <div className="flex items-center gap-3">
                         <div
@@ -168,12 +174,14 @@ export default function DopamineDungeonDashboard() {
                 title="Sessions"
                 icon={<Clock className="w-5 h-5" />}
                 accentColor="emerald"
+                onViewAll={() => navigate("/sessions")}
               >
                 <div className="space-y-3">
                   {mockSessions.map((session) => (
                     <div
                       key={session.id}
                       className="flex items-center justify-between p-3 bg-white/5 rounded-xl hover:bg-white/10 transition-colors cursor-pointer group"
+                      onClick={() => navigate(`/item/${session.id}`)}
                     >
                       <div className="flex items-center gap-3">
                         <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-emerald-500 to-teal-500 flex items-center justify-center">
