@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import GradientBackground from "../components/GradientBackground";
 import Sidebar from "../components/Sidebar";
 import TopBar from "../components/TopBar";
+import { useMode } from "../context/ModeContext.jsx";
 import {
   Search,
   Plus,
@@ -120,6 +121,7 @@ const [formData, setFormData] = useState({
   const [selectedType, setSelectedType] = useState('All');
   const [selectedRarity, setSelectedRarity] = useState('All');
   const [viewMode, setViewMode] = useState('grid');
+  const { isGM } = useMode();
 
   const filteredItems = mockItems.filter(item => {
     const matchesSearch = item.name.toLowerCase().includes(searchQuery.toLowerCase());
@@ -199,13 +201,15 @@ const [formData, setFormData] = useState({
               </div>
 
               {/* Add Button */}
-<button
-  className="flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-blue-500 to-cyan-500 text-white font-medium rounded-xl hover:opacity-90 transition-opacity"
-  onClick={() => setShowCreateModal(true)}
->
-  <Plus className="w-5 h-5" />
-  Add Item
-</button>
+{isGM && (
+  <button
+    className="flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-indigo-500 to-purple-500 text-white font-medium rounded-xl hover:opacity-90 transition-opacity"
+    onClick={() => setShowCreateModal(true)}
+  >
+    <Plus className="w-5 h-5" />
+    Add Item
+  </button>
+)}
             </div>
 
             {/* Items Grid */}

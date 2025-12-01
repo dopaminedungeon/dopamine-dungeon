@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import GradientBackground from "../components/GradientBackground";
 import Sidebar from "../components/Sidebar";
 import TopBar from "../components/TopBar";
+import { useMode } from "../context/ModeContext.jsx";
 import {
   Search,
   Plus,
@@ -122,6 +123,7 @@ const [formData, setFormData] = useState({
   const navigate = useNavigate();
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedStatus, setSelectedStatus] = useState('All');
+  const { isGM } = useMode();
 
   const filteredSessions = mockSessions.filter(session => {
     const matchesSearch = session.name.toLowerCase().includes(searchQuery.toLowerCase());
@@ -213,12 +215,15 @@ const [formData, setFormData] = useState({
               </div>
 
               {/* Create Button */}
-              <button
-  className="px-4 py-2 bg-purple-500/20 hover:bg-purple-500/30 text-purple-300 rounded-lg transition"
-  onClick={() => setShowCreateModal(true)}
->
-  New Session
-</button>
+              {isGM && (
+  <button
+    className="flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-indigo-500 to-purple-500 text-white font-medium rounded-xl hover:opacity-90 transition-opacity"
+    onClick={() => setShowCreateModal(true)}
+  >
+    <Plus className="w-5 h-5" />
+    New Session
+  </button>
+)}
             </div>
 
             {/* Sessions List */}
