@@ -89,7 +89,7 @@ export default function DopamineDungeonDashboard() {
                     <div
                       key={npc.id}
                       className="flex items-center justify-between p-3 bg-white/5 rounded-xl hover:bg-white/10 transition-colors cursor-pointer group"
-                      onClick={() => navigate(`/npc/${npc.id}`)}
+                      onClick={() => navigate(`/npcs/${npc.id}`)}
                     >
                       <div className="flex items-center gap-3">
                         <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-purple-500 to-pink-500 flex items-center justify-center">
@@ -124,7 +124,7 @@ export default function DopamineDungeonDashboard() {
                     <div
                       key={item.id}
                       className="flex items-center justify-between p-3 bg-white/5 rounded-xl hover:bg-white/10 transition-colors cursor-pointer group"
-                      onClick={() => navigate(`/item/${item.id}`)}
+                      onClick={() => navigate(`/items/${item.id}`)}
                     >
                       <div className="flex items-center gap-3">
                         <div
@@ -181,7 +181,7 @@ export default function DopamineDungeonDashboard() {
                     <div
                       key={session.id}
                       className="flex items-center justify-between p-3 bg-white/5 rounded-xl hover:bg-white/10 transition-colors cursor-pointer group"
-                      onClick={() => navigate(`/session/${session.id}`)}
+                      onClick={() => navigate(`/sessions/${session.id}`)}
                     >
                       <div className="flex items-center gap-3">
                         <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-emerald-500 to-teal-500 flex items-center justify-center">

@@ -179,7 +179,7 @@ export default function Npcs() {
                   <div
   key={npc.id}
   className="group bg-white/5 backdrop-blur-sm border border-white/10 rounded-2xl p-6 hover:border-purple-500/30 hover:bg-white/10 transition-all cursor-pointer"
-  onClick={() => navigate(`/npc/${npc.id}`)}
+  onClick={() => navigate(`/npcs/${npc.id}`)}
 >
                     <div className="flex items-start justify-between mb-4">
                       <div className={`w-14 h-14 rounded-xl bg-gradient-to-br ${gradientColor} flex items-center justify-center shadow-lg`}>

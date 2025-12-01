@@ -231,7 +231,7 @@ const [formData, setFormData] = useState({
                   <div
   key={session.id}
   className="group bg-white/5 backdrop-blur-sm border border-white/10 rounded-2xl p-6 hover:border-emerald-500/30 hover:bg-white/10 transition-all cursor-pointer"
-  onClick={() => navigate(`/session/${session.id}`)}
+  onClick={() => navigate(`/sessions/${session.id}`)}
 >
                     <div className="flex flex-col lg:flex-row lg:items-center gap-4">
                       {/* Session Info */}
