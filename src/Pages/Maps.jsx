@@ -1,22 +1,9 @@
-import React, { useState } from "react";
-import { useNavigate } from "react-router-dom";
-import GradientBackground from "../components/GradientBackground";
-import Sidebar from "../components/Sidebar";
-import TopBar from "../components/TopBar";
-import {
-  Search,
-  Plus,
-  Map as MapIconBase,
-  MapPin,
-  Mountain,
-  TreePine,
-  Castle,
-  Skull,
-  Waves,
-  Flame,
-  Grid,
-  LayoutGrid,
-} from "lucide-react";
+import React, { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
+import GradientBackground from '../components/GradientBackground';
+import Sidebar from '../components/Sidebar';
+import TopBar from '../components/TopBar';
+import { Search, Plus, Map, MapPin, Mountain, TreePine, Castle, Skull, Waves, Flame, Grid, LayoutGrid } from 'lucide-react';
 
 const mockMaps = [
   { 
@@ -110,9 +97,22 @@ const difficultyConfig = {
 
 export default function Maps() {
   const navigate = useNavigate();
-  const [searchQuery, setSearchQuery] = useState("");
+
+  const [searchQuery, setSearchQuery] = useState('');
   const [selectedType, setSelectedType] = useState('All');
   const [viewMode, setViewMode] = useState('grid');
+
+  const [showCreateModal, setShowCreateModal] = useState(false);
+  const [formData, setFormData] = useState({
+    name: "",
+    type: "Dungeon",
+    difficulty: "Normal",
+    size: "Medium",
+    players: "4-6",
+    thumbnail: "",
+    npcs: 0,
+    items: 0,
+  });
 
   const filteredMaps = mockMaps.filter(map => {
     const matchesSearch = map.name.toLowerCase().includes(searchQuery.toLowerCase());
@@ -177,10 +177,13 @@ export default function Maps() {
               </div>
 
               {/* Create Button */}
-              <button className="flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-indigo-500 to-purple-500 text-white font-medium rounded-xl hover:opacity-90 transition-opacity">
-                <Plus className="w-5 h-5" />
-                Create Map
-              </button>
+              <button
+  className="flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-indigo-500 to-purple-500 text-white font-medium rounded-xl hover:opacity-90 transition-opacity"
+  onClick={() => setShowCreateModal(true)}
+>
+  <Plus className="w-5 h-5" />
+  Create Map
+</button>
             </div>
 
             {/* Maps Grid */}
@@ -197,7 +200,7 @@ export default function Maps() {
                  <div
   key={map.id}
   className="group bg-white/5 backdrop-blur-sm border border-white/10 rounded-2xl overflow-hidden hover:border-indigo-500/30 hover:bg-white/10 transition-all cursor-pointer"
-  onClick={() => navigate(`/map/${map.id}`)}
+  onClick={() => navigate(`/maps/${map.id}`)}
 >
                     {/* Thumbnail */}
                     <div className="relative h-48 overflow-hidden">
@@ -240,9 +243,9 @@ export default function Maps() {
                             <span className="text-zinc-400 text-sm">{map.npcs} NPCs</span>
                           </div>
                           <div className="flex items-center gap-2">
-                            <MapIconBase className="w-4 h-4 text-zinc-500" />
-                            <span className="text-zinc-400 text-sm">{map.items} Items</span>
-                          </div>
+  <Map className="w-4 h-4 text-zinc-500" />
+  <span className="text-zinc-400 text-sm">{map.items} Items</span>
+</div>
                         </div>
                       </div>
                     </div>
@@ -250,6 +253,184 @@ export default function Maps() {
                 );
               })}
             </div>
+            {showCreateModal && (
+  <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm">
+    <div className="w-full max-w-xl bg-zinc-950 border border-white/10 rounded-2xl p-6">
+      <h2 className="text-xl font-bold text-white mb-4">Create New Map</h2>
+
+      <form
+        className="space-y-4"
+        onSubmit={(e) => {
+          e.preventDefault();
+          console.log("New map created:", formData);
+
+          // Close and reset for now – real persistence later
+          setShowCreateModal(false);
+          setFormData({
+            name: "",
+            type: "Dungeon",
+            difficulty: "Normal",
+            size: "Medium",
+            players: "4-6",
+            thumbnail: "",
+            npcs: 0,
+            items: 0,
+          });
+        }}
+      >
+        {/* Name */}
+        <div>
+          <label className="block text-sm text-zinc-400 mb-1">Name</label>
+          <input
+            type="text"
+            required
+            value={formData.name}
+onChange={(e) =>
+  setFormData({ ...formData, name: e.target.value })
+}
+            className="w-full px-3 py-2 bg-white/5 border border-white/10 rounded-xl text-white"
+          />
+        </div>
+
+        {/* Type & Difficulty */}
+        <div className="grid grid-cols-2 gap-4">
+          <div>
+            <label className="block text-sm text-zinc-400 mb-1">Type</label>
+            <select
+              value={formData.type}
+              onChange={(e) =>
+                setFormData({ ...formData, type: e.target.value })
+              }
+              className="w-full px-3 py-2 bg-white/5 border border-white/10 rounded-xl text-white"
+            >
+              <option>Dungeon</option>
+              <option>Open World</option>
+              <option>PvP</option>
+              <option>Story</option>
+            </select>
+          </div>
+
+          <div>
+            <label className="block text-sm text-zinc-400 mb-1">Difficulty</label>
+            <select
+              value={formData.difficulty}
+              onChange={(e) =>
+                setFormData({ ...formData, difficulty: e.target.value })
+              }
+              className="w-full px-3 py-2 bg-white/5 border border-white/10 rounded-xl text-white"
+            >
+              <option>Normal</option>
+              <option>Heroic</option>
+              <option>Epic</option>
+              <option>Mythic</option>
+              <option>Competitive</option>
+            </select>
+          </div>
+        </div>
+
+        {/* Size & Players */}
+        <div className="grid grid-cols-2 gap-4">
+          <div>
+            <label className="block text-sm text-zinc-400 mb-1">Size</label>
+            <select
+              value={formData.size}
+              onChange={(e) =>
+                setFormData({ ...formData, size: e.target.value })
+              }
+              className="w-full px-3 py-2 bg-white/5 border border-white/10 rounded-xl text-white"
+            >
+              <option>Small</option>
+              <option>Medium</option>
+              <option>Large</option>
+              <option>Massive</option>
+            </select>
+          </div>
+
+          <div>
+            <label className="block text-sm text-zinc-400 mb-1">
+              Players (range)
+            </label>
+            <input
+              type="text"
+              placeholder="e.g. 4-6"
+              value={formData.players}
+              onChange={(e) =>
+                setFormData({ ...formData, players: e.target.value })
+              }
+              className="w-full px-3 py-2 bg-white/5 border border-white/10 rounded-xl text-white"
+            />
+          </div>
+        </div>
+
+        {/* Thumbnail */}
+        <div>
+          <label className="block text-sm text-zinc-400 mb-1">
+            Thumbnail URL
+          </label>
+          <input
+            type="url"
+            placeholder="https://..."
+            value={formData.thumbnail}
+            onChange={(e) =>
+              setFormData({ ...formData, thumbnail: e.target.value })
+            }
+            className="w-full px-3 py-2 bg-white/5 border border-white/10 rounded-xl text-white"
+          />
+        </div>
+
+        {/* NPC & Item counts */}
+        <div className="grid grid-cols-2 gap-4">
+          <div>
+            <label className="block text-sm text-zinc-400 mb-1">NPCs</label>
+            <input
+              type="number"
+              value={formData.npcs}
+              onChange={(e) =>
+                setFormData({
+                  ...formData,
+                  npcs: Number(e.target.value),
+                })
+              }
+              className="w-full px-3 py-2 bg-white/5 border border-white/10 rounded-xl text-white"
+            />
+          </div>
+
+          <div>
+            <label className="block text-sm text-zinc-400 mb-1">Items</label>
+            <input
+              type="number"
+              value={formData.items}
+              onChange={(e) =>
+                setFormData({
+                  ...formData,
+                  items: Number(e.target.value),
+                })
+              }
+              className="w-full px-3 py-2 bg-white/5 border border-white/10 rounded-xl text-white"
+            />
+          </div>
+        </div>
+
+        {/* Buttons */}
+        <div className="flex justify-end gap-3 pt-2">
+          <button
+            type="button"
+            onClick={() => setShowCreateModal(false)}
+            className="px-4 py-2 rounded-xl bg-white/5 text-zinc-300 hover:bg-white/10"
+          >
+            Cancel
+          </button>
+          <button
+            type="submit"
+            className="px-4 py-2 rounded-xl bg-gradient-to-r from-indigo-500 to-purple-500 text-white font-medium hover:opacity-90"
+          >
+            Save Map
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+)}
           </main>
         </div>
       </div>

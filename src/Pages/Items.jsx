@@ -106,6 +106,15 @@ const rarityConfig = {
 };
 
 export default function Items() {
+  const [showCreateModal, setShowCreateModal] = useState(false);
+
+const [formData, setFormData] = useState({
+  name: "",
+  type: "Weapon",
+  rarity: "Common",
+  power: 0,
+  description: "",
+});
   const navigate = useNavigate();
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedType, setSelectedType] = useState('All');
@@ -190,10 +199,13 @@ export default function Items() {
               </div>
 
               {/* Add Button */}
-              <button className="flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-blue-500 to-cyan-500 text-white font-medium rounded-xl hover:opacity-90 transition-opacity">
-                <Plus className="w-5 h-5" />
-                Add Item
-              </button>
+<button
+  className="flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-blue-500 to-cyan-500 text-white font-medium rounded-xl hover:opacity-90 transition-opacity"
+  onClick={() => setShowCreateModal(true)}
+>
+  <Plus className="w-5 h-5" />
+  Add Item
+</button>
             </div>
 
             {/* Items Grid */}
@@ -262,6 +274,126 @@ export default function Items() {
                 );
               })}
             </div>
+            {showCreateModal && (
+  <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm">
+    <div className="w-full max-w-lg bg-zinc-950 border border-white/10 rounded-2xl p-6">
+      <h2 className="text-xl font-bold text-white mb-4">Add New Item</h2>
+
+      <form
+        className="space-y-4"
+        onSubmit={(e) => {
+          e.preventDefault();
+          console.log("New item created:", formData);
+
+          // Close modal
+          setShowCreateModal(false);
+
+          // Reset form
+          setFormData({
+            name: "",
+            type: "Weapon",
+            rarity: "Common",
+            power: 0,
+            description: "",
+          });
+        }}
+      >
+        {/* Item Name */}
+        <div>
+          <label className="block text-sm text-zinc-400 mb-1">Name</label>
+          <input
+            type="text"
+            required
+            value={formData.name}
+            onChange={(e) =>
+              setFormData({ ...formData, name: e.target.value })
+            }
+            className="w-full px-3 py-2 bg-white/5 border border-white/10 rounded-xl text-white"
+          />
+        </div>
+
+        {/* Type & Rarity */}
+        <div className="grid grid-cols-2 gap-4">
+          <div>
+            <label className="block text-sm text-zinc-400 mb-1">Type</label>
+            <select
+              value={formData.type}
+              onChange={(e) =>
+                setFormData({ ...formData, type: e.target.value })
+              }
+              className="w-full px-3 py-2 bg-white/5 border border-white/10 rounded-xl text-white"
+            >
+              <option>Weapon</option>
+              <option>Armor</option>
+              <option>Consumable</option>
+            </select>
+          </div>
+
+          <div>
+            <label className="block text-sm text-zinc-400 mb-1">Rarity</label>
+            <select
+              value={formData.rarity}
+              onChange={(e) =>
+                setFormData({ ...formData, rarity: e.target.value })
+              }
+              className="w-full px-3 py-2 bg-white/5 border border-white/10 rounded-xl text-white"
+            >
+              <option>Common</option>
+              <option>Uncommon</option>
+              <option>Rare</option>
+              <option>Epic</option>
+              <option>Legendary</option>
+            </select>
+          </div>
+        </div>
+
+        {/* Power */}
+        <div>
+          <label className="block text-sm text-zinc-400 mb-1">Power</label>
+          <input
+            type="number"
+            value={formData.power}
+            onChange={(e) =>
+              setFormData({ ...formData, power: Number(e.target.value) })
+            }
+            className="w-full px-3 py-2 bg-white/5 border border-white/10 rounded-xl text-white"
+          />
+        </div>
+
+        {/* Description */}
+        <div>
+          <label className="block text-sm text-zinc-400 mb-1">Description</label>
+          <textarea
+            rows={3}
+            value={formData.description}
+            onChange={(e) =>
+              setFormData({ ...formData, description: e.target.value })
+            }
+            className="w-full px-3 py-2 bg-white/5 border border-white/10 rounded-xl text-white resize-none"
+          />
+        </div>
+
+        {/* Buttons */}
+        <div className="flex justify-end gap-3 pt-2">
+          <button
+            type="button"
+            onClick={() => setShowCreateModal(false)}
+            className="px-4 py-2 rounded-xl bg-white/5 text-zinc-300 hover:bg-white/10"
+          >
+            Cancel
+          </button>
+
+          <button
+            type="submit"
+            className="px-4 py-2 rounded-xl bg-gradient-to-r from-blue-500 to-cyan-500 text-white font-medium hover:opacity-90"
+          >
+            Save Item
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+)}
           </main>
         </div>
       </div>

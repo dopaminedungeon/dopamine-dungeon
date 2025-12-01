@@ -168,7 +168,9 @@ export default function MapProfile() {
                 <div className="flex items-center gap-2">
                   <Users className="w-5 h-5 text-zinc-400" />
                   <div>
-                    <p className="text-zinc-500 text-xs">Recommended Players</p>
+                    <p className="text-zinc-500 text-xs">
+                      Recommended Players
+                    </p>
                     <p className="text-white font-medium">{map.players}</p>
                   </div>
                 </div>
