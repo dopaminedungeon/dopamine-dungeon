@@ -1,42 +1,214 @@
+/* src/App.css */
+
+:root {
+  font-family: system-ui, -apple-system, BlinkMacSystemFont, "SF Pro Text",
+    "Segoe UI", sans-serif;
+  color: #e5e7eb;
+  background: #020617;
+}
+
+body {
+  margin: 0;
+  background: radial-gradient(circle at top, #1e293b 0, #020617 55%);
+  color: #e5e7eb;
+}
+
 #root {
-  max-width: 1280px;
-  margin: 0 auto;
-  padding: 2rem;
-  text-align: center;
+  min-height: 100vh;
 }
 
-.logo {
-  height: 6em;
-  padding: 1.5em;
-  will-change: filter;
-  transition: filter 300ms;
-}
-.logo:hover {
-  filter: drop-shadow(0 0 2em #646cffaa);
-}
-.logo.react:hover {
-  filter: drop-shadow(0 0 2em #61dafbaa);
+/* Layout */
+
+.dd-app {
+  display: flex;
+  min-height: 100vh;
 }
 
-@keyframes logo-spin {
-  from {
-    transform: rotate(0deg);
-  }
-  to {
-    transform: rotate(360deg);
-  }
+.dd-sidebar {
+  width: 260px;
+  background: linear-gradient(to bottom, #020617, #020617, #0f172a);
+  border-right: 1px solid #1f2937;
+  padding: 20px 16px;
+  box-sizing: border-box;
 }
 
-@media (prefers-reduced-motion: no-preference) {
-  a:nth-of-type(2) .logo {
-    animation: logo-spin infinite 20s linear;
-  }
+.dd-logo {
+  font-weight: 700;
+  font-size: 20px;
+  letter-spacing: 0.04em;
+  margin-bottom: 24px;
 }
 
-.card {
-  padding: 2em;
+.dd-nav {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
 }
 
-.read-the-docs {
-  color: #888;
+.dd-nav-item {
+  text-align: left;
+  padding: 8px 10px;
+  border-radius: 8px;
+  border: none;
+  background: transparent;
+  color: #9ca3af;
+  font-size: 14px;
+  cursor: pointer;
+}
+
+.dd-nav-item:hover {
+  background: rgba(148, 163, 184, 0.1);
+  color: #e5e7eb;
+}
+
+.dd-nav-item--active {
+  background: linear-gradient(90deg, #4f46e5, #ec4899);
+  color: #f9fafb;
+}
+
+/* Main */
+
+.dd-main {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  padding: 20px 28px;
+  box-sizing: border-box;
+}
+
+/* Top bar */
+
+.dd-topbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 20px;
+}
+
+.dd-topbar-title {
+  font-size: 24px;
+  font-weight: 600;
+}
+
+.dd-topbar-right {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.dd-search {
+  background: rgba(15, 23, 42, 0.9);
+  border-radius: 9999px;
+  border: 1px solid #1f2937;
+  padding: 6px 12px;
+  color: #e5e7eb;
+  min-width: 240px;
+}
+
+.dd-search::placeholder {
+  color: #6b7280;
+}
+
+.dd-user-pill {
+  background: #111827;
+  border-radius: 9999px;
+  padding: 6px 12px;
+  border: 1px solid #1f2937;
+  font-size: 13px;
+}
+
+/* Cards */
+
+.dd-cards-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 16px;
+  margin-bottom: 24px;
+}
+
+.dd-card {
+  background: rgba(15, 23, 42, 0.9);
+  border-radius: 16px;
+  border: 1px solid rgba(55, 65, 81, 0.8);
+  padding: 14px 16px;
+  box-shadow: 0 18px 40px rgba(0, 0, 0, 0.4);
+  box-sizing: border-box;
+}
+
+.dd-card-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  margin-bottom: 8px;
+}
+
+.dd-card-title {
+  font-size: 14px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: #9ca3af;
+}
+
+.dd-card-subtitle {
+  font-size: 13px;
+  color: #6b7280;
+}
+
+.dd-card-value {
+  font-size: 22px;
+  font-weight: 600;
+}
+
+.dd-card-body {
+  font-size: 14px;
+  color: #d1d5db;
+}
+
+.dd-card-list {
+  list-style: none;
+  padding-left: 0;
+  margin: 0;
+}
+
+.dd-card-list li::before {
+  content: "• ";
+  color: #6366f1;
+}
+
+/* Activity */
+
+.dd-section-title {
+  font-size: 16px;
+  font-weight: 600;
+  margin-bottom: 8px;
+}
+
+.dd-activity-list {
+  list-style: none;
+  padding-left: 0;
+  margin: 0;
+  font-size: 14px;
+  color: #d1d5db;
+}
+
+.dd-activity-list li + li {
+  margin-top: 4px;
+}
+
+/* Buttons */
+
+.dd-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.dd-button {
+  border-radius: 9999px;
+  border: none;
+  padding: 6px 12px;
+  font-size: 13px;
+  cursor: pointer;
+  background: linear-gradient(90deg, #22c55e, #a855f7);
+  color: #f9fafb;
 }
