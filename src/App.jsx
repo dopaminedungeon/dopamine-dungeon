@@ -10,6 +10,7 @@ import SessionProfile from "./pages/SessionProfile";
 import Maps from "./pages/Maps";
 import MapProfile from "./pages/MapProfile";
 import Settings from "./pages/Settings";
+import { auth, db, storage } from "./firebase";
 
 function App() {
   return (
