@@ -1,9 +1,13 @@
 import React, { useState, useRef, useEffect } from "react";
 import { Bell, Search, User, ChevronDown } from "lucide-react";
+import { useMode } from "../context/ModeContext.jsx";
+import { Shield, Eye } from "lucide-react";
 
 export default function TopBar({ title }) {
+  const { mode, setMode } = useMode();
   const [showNotifications, setShowNotifications] = useState(false);
   const [showProfileMenu, setShowProfileMenu] = useState(false);
+  const { isGM } = useMode();
 
   const notificationsRef = useRef(null);
   const profileRef = useRef(null);
@@ -73,7 +77,33 @@ export default function TopBar({ title }) {
               </div>
             )}
           </div>
-
+                {/* GM / Player toggle */}
+      <div className="flex items-center gap-2 mr-4">
+        <button
+          type="button"
+          onClick={() => setMode("player")}
+          className={`px-3 py-1.5 text-xs rounded-lg border ${
+            mode === "player"
+              ? "bg-white/10 border-indigo-500 text-indigo-300"
+              : "bg-transparent border-white/10 text-zinc-400 hover:text-white"
+          }`}
+        >
+          <Eye className="inline w-3 h-3 mr-1" />
+          Player
+        </button>
+        <button
+          type="button"
+          onClick={() => setMode("gm")}
+          className={`px-3 py-1.5 text-xs rounded-lg border ${
+            mode === "gm"
+              ? "bg-indigo-500/80 border-indigo-400 text-white"
+              : "bg-transparent border-white/10 text-zinc-400 hover:text-white"
+          }`}
+        >
+          <Shield className="inline w-3 h-3 mr-1" />
+          GM
+        </button>
+      </div>
           {/* Profile */}
           <div className="relative" ref={profileRef}>
             <button
