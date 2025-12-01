@@ -1,6 +1,6 @@
 // src/App.jsx
 import { BrowserRouter, Routes, Route } from "react-router-dom";
-import DopamineDungeonDashboard from "./pages/DopamineDungeonDashboard";
+import Dashboard from "./pages/DopamineDungeonDashboard.jsx";
 import Npcs from "./pages/Npcs";
 import NpcProfile from "./pages/NpcProfile";
 import Items from "./pages/Items";
