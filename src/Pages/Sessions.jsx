@@ -107,6 +107,18 @@ const difficultyColors = {
 };
 
 export default function Sessions() {
+  const [showCreateModal, setShowCreateModal] = useState(false);
+
+const [formData, setFormData] = useState({
+  name: "",
+  map: "",
+  difficulty: "Normal",
+  players: 0,
+  maxPlayers: 4,
+  status: "scheduled",
+  startTime: "",
+  notes: "",
+});
   const navigate = useNavigate();
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedStatus, setSelectedStatus] = useState('All');
@@ -201,10 +213,12 @@ export default function Sessions() {
               </div>
 
               {/* Create Button */}
-              <button className="flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-emerald-500 to-teal-500 text-white font-medium rounded-xl hover:opacity-90 transition-opacity">
-                <Plus className="w-5 h-5" />
-                New Session
-              </button>
+              <button
+  className="px-4 py-2 bg-purple-500/20 hover:bg-purple-500/30 text-purple-300 rounded-lg transition"
+  onClick={() => setShowCreateModal(true)}
+>
+  New Session
+</button>
             </div>
 
             {/* Sessions List */}
@@ -274,6 +288,155 @@ export default function Sessions() {
                 );
               })}
             </div>
+            {showCreateModal && (
+  <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm">
+    <div className="w-full max-w-xl bg-zinc-950 border border-white/10 rounded-2xl p-6">
+      <h2 className="text-xl font-bold text-white mb-4">Create New Session</h2>
+
+      <form
+        className="space-y-4"
+        onSubmit={(e) => {
+          e.preventDefault();
+          console.log("New session:", formData);
+          setShowCreateModal(false);
+          setFormData({
+            name: "",
+            map: "",
+            difficulty: "Normal",
+            players: 0,
+            maxPlayers: 4,
+            status: "scheduled",
+            startTime: "",
+            notes: "",
+          });
+        }}
+      >
+        <div>
+          <label className="block text-sm text-zinc-400 mb-1">Session Name</label>
+          <input
+            type="text"
+            required
+            value={formData.name}
+            onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+            className="w-full px-3 py-2 bg-white/5 border border-white/10 rounded-xl text-white"
+          />
+        </div>
+
+        <div>
+          <label className="block text-sm text-zinc-400 mb-1">Map</label>
+          <input
+            type="text"
+            required
+            value={formData.map}
+            onChange={(e) => setFormData({ ...formData, map: e.target.value })}
+            className="w-full px-3 py-2 bg-white/5 border border-white/10 rounded-xl text-white"
+          />
+        </div>
+
+        <div className="grid grid-cols-2 gap-4">
+          <div>
+            <label className="block text-sm text-zinc-400 mb-1">Difficulty</label>
+            <select
+              value={formData.difficulty}
+              onChange={(e) =>
+                setFormData({ ...formData, difficulty: e.target.value })
+              }
+              className="w-full px-3 py-2 bg-white/5 border border-white/10 rounded-xl text-white"
+            >
+              <option>Normal</option>
+              <option>Heroic</option>
+              <option>Mythic</option>
+              <option>Extreme</option>
+              <option>Competitive</option>
+            </select>
+          </div>
+
+          <div>
+            <label className="block text-sm text-zinc-400 mb-1">Status</label>
+            <select
+              value={formData.status}
+              onChange={(e) =>
+                setFormData({ ...formData, status: e.target.value })
+              }
+              className="w-full px-3 py-2 bg-white/5 border border-white/10 rounded-xl text-white"
+            >
+              <option value="scheduled">Scheduled</option>
+              <option value="active">Active</option>
+              <option value="paused">Paused</option>
+              <option value="completed">Completed</option>
+            </select>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-2 gap-4">
+          <div>
+            <label className="block text-sm text-zinc-400 mb-1">Players</label>
+            <input
+              type="number"
+              value={formData.players}
+              onChange={(e) =>
+                setFormData({ ...formData, players: Number(e.target.value) })
+              }
+              className="w-full px-3 py-2 bg-white/5 border border-white/10 rounded-xl text-white"
+            />
+          </div>
+
+          <div>
+            <label className="block text-sm text-zinc-400 mb-1">Max Players</label>
+            <input
+              type="number"
+              value={formData.maxPlayers}
+              onChange={(e) =>
+                setFormData({ ...formData, maxPlayers: Number(e.target.value) })
+              }
+              className="w-full px-3 py-2 bg-white/5 border border-white/10 rounded-xl text-white"
+            />
+          </div>
+        </div>
+
+        <div>
+          <label className="block text-sm text-zinc-400 mb-1">Start Time</label>
+          <input
+            type="datetime-local"
+            value={formData.startTime}
+            onChange={(e) =>
+              setFormData({ ...formData, startTime: e.target.value })
+            }
+            className="w-full px-3 py-2 bg-white/5 border border-white/10 rounded-xl text-white"
+          />
+        </div>
+
+        <div>
+          <label className="block text-sm text-zinc-400 mb-1">Notes</label>
+          <textarea
+            rows={3}
+            value={formData.notes}
+            onChange={(e) =>
+              setFormData({ ...formData, notes: e.target.value })
+            }
+            className="w-full px-3 py-2 bg-white/5 border border-white/10 rounded-xl text-white resize-none"
+          />
+        </div>
+
+        <div className="flex justify-end gap-3 pt-2">
+          <button
+            type="button"
+            onClick={() => setShowCreateModal(false)}
+            className="px-4 py-2 rounded-xl bg-white/5 text-zinc-300 hover:bg-white/10"
+          >
+            Cancel
+          </button>
+          <button
+            type="submit"
+            className="px-4 py-2 rounded-xl bg-gradient-to-r from-purple-500 to-indigo-500 text-white font-medium hover:opacity-90"
+          >
+            Save Session
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+)}
           </main>
         </div>
       </div>
