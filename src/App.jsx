@@ -16,7 +16,7 @@ function App() {
   return (
     <BrowserRouter>
       <Routes>
-        <Route path="/" element={<DopamineDungeonDashboard />} />
+        <Route path="/" element={<Dashboard />} />
 
         <Route path="/npcs" element={<Npcs />} />
         <Route path="/npcs/:id" element={<NpcProfile />} />
