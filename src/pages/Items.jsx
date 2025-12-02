@@ -25,6 +25,7 @@ const mockItems = [
     rarity: 'Legendary', 
     power: 150,
     description: 'A blade forged in the heart of a dying star, its flames never extinguish.',
+    visibility: "public",
     stats: { attack: 150, speed: 20, critical: 15 }
   },
   { 
@@ -34,6 +35,7 @@ const mockItems = [
     rarity: 'Epic', 
     power: 120,
     description: 'Blessed by the old gods, this shield can block even magical attacks.',
+    visibility: "public",
     stats: { defense: 120, block: 45, resistance: 30 }
   },
   { 
@@ -43,6 +45,7 @@ const mockItems = [
     rarity: 'Common', 
     power: 25,
     description: 'Restores 25% of maximum health when consumed.',
+    visibility: "public",
     stats: { heal: 25 }
   },
   { 
@@ -52,6 +55,7 @@ const mockItems = [
     rarity: 'Epic', 
     power: 135,
     description: 'Channels the power of lightning storms into devastating magical attacks.',
+    visibility: "public",
     stats: { attack: 135, magic: 80, critical: 25 }
   },
   { 
@@ -61,6 +65,7 @@ const mockItems = [
     rarity: 'Rare', 
     power: 60,
     description: 'Enchanted boots that increase movement speed significantly.',
+    visibility: "gm-only",
     stats: { speed: 60, dodge: 20 }
   },
   { 
@@ -70,6 +75,7 @@ const mockItems = [
     rarity: 'Uncommon', 
     power: 40,
     description: 'Restores 40% of maximum mana when consumed.',
+    visibility: "gm-only",
     stats: { mana: 40 }
   },
   { 
@@ -79,6 +85,7 @@ const mockItems = [
     rarity: 'Legendary', 
     power: 180,
     description: 'Forged from the scales of an ancient dragon, nearly impenetrable.',
+    visibility: "gm-only",
     stats: { defense: 180, resistance: 60, health: 100 }
   },
   { 
@@ -88,6 +95,7 @@ const mockItems = [
     rarity: 'Rare', 
     power: 85,
     description: 'A dagger that phases through armor, dealing true damage.',
+    visibility: "gm-only",
     stats: { attack: 85, penetration: 50, speed: 40 }
   },
 ];
@@ -115,6 +123,7 @@ const [formData, setFormData] = useState({
   rarity: "Common",
   power: 0,
   description: "",
+  visibility: "public",
 });
   const navigate = useNavigate();
   const [searchQuery, setSearchQuery] = useState("");
@@ -129,6 +138,10 @@ const [formData, setFormData] = useState({
     const matchesRarity = selectedRarity === 'All' || item.rarity === selectedRarity;
     return matchesSearch && matchesType && matchesRarity;
   });
+
+  const visibleItems = isGM
+  ? filteredItems
+  : filteredItems.filter((item) => item.visibility === "public");
 
   return (
     <GradientBackground>
@@ -217,7 +230,7 @@ const [formData, setFormData] = useState({
               ? "grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-6"
               : "flex flex-col gap-4"
             }>
-              {filteredItems.map((item) => {
+              {visibleItems.map((item) => {
                 const TypeIcon = typeIcons[item.type] || Sparkles;
                 const rarity = rarityConfig[item.rarity] || rarityConfig.Common;
                 
@@ -258,9 +271,17 @@ const [formData, setFormData] = useState({
                       </span>
                     </div>
 
-                    <h3 className="text-lg font-bold text-white mb-1 group-hover:text-blue-300 transition-colors">
-                      {item.name}
-                    </h3>
+                   <div className="flex items-center gap-2">
+  <h3 className="text-lg font-bold text-white group-hover:text-purple-300 transition-colors">
+    {item.name}
+  </h3>
+
+  {isGM && item.visibility === "gm-only" && (
+    <span className="px-2 py-0.5 rounded-full text-[10px] font-medium bg-red-500/20 text-red-300 border border-red-500/40">
+      GM ONLY
+    </span>
+  )}
+</div>
                     <p className="text-zinc-500 text-sm mb-3">{item.type}</p>
                     <p className="text-zinc-400 text-sm mb-4 line-clamp-2">{item.description}</p>
 
@@ -332,6 +353,19 @@ const [formData, setFormData] = useState({
               <option>Consumable</option>
             </select>
           </div>
+          <div>
+  <label className="block text-sm text-zinc-400 mb-1">Visibility</label>
+  <select
+    value={formData.visibility}
+    onChange={(e) =>
+      setFormData({ ...formData, visibility: e.target.value })
+    }
+    className="w-full px-3 py-2 bg-white/5 border border-white/10 rounded-xl text-white"
+  >
+    <option value="public">Player-visible</option>
+    <option value="gm-only">GM only</option>
+  </select>
+</div>
 
           <div>
             <label className="block text-sm text-zinc-400 mb-1">Rarity</label>
