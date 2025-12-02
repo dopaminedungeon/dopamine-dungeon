@@ -241,7 +241,7 @@ const [formData, setFormData] = useState({
   <div
     key={item.id}
     className={`group bg-white/5 backdrop-blur-sm border ${rarity.border} rounded-xl p-4 hover:bg-white/10 transition-all cursor-pointer flex items-center gap-4`}
-    onClick={() => navigate(`/items/${item.id}`)}
+    onClick={() => navigate(`/items/${item.id}${isGM ? "?mode=gm" : "?mode=player"}`)}
   >
                       <div className={`w-14 h-14 rounded-xl bg-gradient-to-br ${rarity.bg} flex items-center justify-center shadow-lg ${rarity.glow}`}>
                         <TypeIcon className="w-7 h-7 text-white" />
@@ -262,7 +262,7 @@ const [formData, setFormData] = useState({
   <div
     key={item.id}
     className={`group bg-white/5 backdrop-blur-sm border ${rarity.border} rounded-2xl p-5 hover:bg-white/10 transition-all cursor-pointer`}
-    onClick={() => navigate(`/items/${item.id}`)}
+    onClick={() => navigate(`/items/${item.id}${isGM ? "?mode=gm" : "?mode=player"}`)}
   >
                     <div className="flex items-start justify-between mb-4">
                       <div className={`w-12 h-12 rounded-xl bg-gradient-to-br ${rarity.bg} flex items-center justify-center shadow-lg ${rarity.glow}`}>
