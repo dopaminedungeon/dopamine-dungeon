@@ -371,13 +371,51 @@ export default function MapProfile() {
                       </span>
                     )}
 
-                    {isGmView &&
-                      (editMode ? editableMap.visibility : map.visibility) === "gm-only" && (
-                        <span className="inline-flex items-center gap-1 px-3 py-1 rounded-full text-[11px] font-semibold bg-red-500/20 text-red-200 border border-red-500/40">
-                          <EyeOff className="w-3 h-3" />
-                          GM ONLY
-                        </span>
-                      )}
+                    {isGmView && (
+                      editMode ? (
+                        <div className="flex gap-2 mt-1">
+                          <button
+                            type="button"
+                            onClick={() =>
+                              setEditableMap((prev) => ({
+                                ...prev,
+                                visibility: "public",
+                              }))
+                            }
+                            className={`px-3 py-1 rounded-full text-[11px] font-semibold border transition-colors ${
+                              editableMap.visibility === "public"
+                                ? "bg-emerald-500/20 text-emerald-100 border-emerald-400"
+                                : "bg-black/40 text-zinc-200 border-white/20 hover:bg-white/10"
+                            }`}
+                          >
+                            Player-visible
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() =>
+                              setEditableMap((prev) => ({
+                                ...prev,
+                                visibility: "gm-only",
+                              }))
+                            }
+                            className={`px-3 py-1 rounded-full text-[11px] font-semibold border transition-colors ${
+                              editableMap.visibility === "gm-only"
+                                ? "bg-red-500/30 text-red-100 border-red-400"
+                                : "bg-black/40 text-zinc-200 border-white/20 hover:bg-white/10"
+                            }`}
+                          >
+                            GM only
+                          </button>
+                        </div>
+                      ) : (
+                        (map.visibility === "gm-only") && (
+                          <span className="inline-flex items-center gap-1 px-3 py-1 rounded-full text-[11px] font-semibold bg-red-500/20 text-red-200 border border-red-500/40">
+                            <EyeOff className="w-3 h-3" />
+                            GM ONLY
+                          </span>
+                        )
+                      )
+                    )}
                   </div>
                 </div>
               </div>
