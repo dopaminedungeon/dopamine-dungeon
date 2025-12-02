@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import GradientBackground from "../components/GradientBackground";
 import Sidebar from "../components/Sidebar";
@@ -186,9 +186,11 @@ export default function ItemProfile() {
   const navigate = useNavigate();
   const { isGM } = useMode();
 
-  const item = MOCK_ITEM_DATA[id];
+  const rawItem = MOCK_ITEM_DATA[id];
+  const [formData, setFormData] = useState(rawItem || null);
+  const [isEditing, setIsEditing] = useState(false);
 
-  if (!item) {
+  if (!formData) {
     return (
       <GradientBackground>
         <div className="flex min-h-screen">
@@ -207,26 +209,52 @@ export default function ItemProfile() {
     );
   }
 
-  const rarityBg = rarityColors[item.rarity] || rarityColors.Common;
-  const Icon = typeIcons[item.type] || Sparkles;
-  const visibility = item.visibility || "public";
+  const handleFieldChange = (field, value) => {
+    setFormData(prev => ({ ...prev, [field]: value }));
+  };
+
+  const handleStatChange = (statKey, value) => {
+    setFormData(prev => ({
+      ...prev,
+      stats: {
+        ...prev.stats,
+        [statKey]: Number.isNaN(Number(value)) ? prev.stats[statKey] : Number(value),
+      },
+    }));
+  };
+
+  const handleVisibilityChange = (visibility) => {
+    setFormData(prev => ({ ...prev, visibility }));
+  };
+
+  const rarityBg = rarityColors[formData.rarity] || rarityColors.Common;
+  const Icon = typeIcons[formData.type] || Sparkles;
+  const visibility = formData.visibility || "public";
 
   return (
     <GradientBackground>
       <div className="flex min-h-screen">
         <Sidebar />
-
         <div className="flex-1 flex flex-col ml-64">
-          <TopBar title={item.name} />
-
+          <TopBar title={formData.name} />
           <main className="flex-1 p-8 overflow-auto">
-            <button
-              className="flex items-center gap-2 text-zinc-400 hover:text-white mb-6"
-              onClick={() => navigate("/items")}
-            >
-              <ArrowLeft className="w-5 h-5" />
-              Back to Items
-            </button>
+            <div className="flex items-center justify-between mb-6">
+              <button
+                className="flex items-center gap-2 text-zinc-400 hover:text-white"
+                onClick={() => navigate("/items")}
+              >
+                <ArrowLeft className="w-5 h-5" />
+                Back to Items
+              </button>
+              {isGM && (
+                <button
+                  onClick={() => setIsEditing(prev => !prev)}
+                  className="px-4 py-2 rounded-xl bg-white/10 text-zinc-200 hover:bg-white/20 text-sm font-medium"
+                >
+                  {isEditing ? "Done" : "Edit"}
+                </button>
+              )}
+            </div>
 
             {/* Header / identity */}
             <div className="bg-white/5 border border-white/10 rounded-2xl p-6 backdrop-blur-sm mb-6">
@@ -238,34 +266,116 @@ export default function ItemProfile() {
                     <Icon className="w-10 h-10" />
                   </div>
                   <div>
-                    <h1 className="text-3xl font-bold text-white flex items-center gap-2">
-                      {item.name}
-                      {isGM && visibility === "gm-only" && (
-                        <span className="px-2 py-0.5 text-[10px] rounded-full bg-red-500/20 text-red-300 border border-red-500/40 uppercase tracking-wide">
-                          GM ONLY
-                        </span>
+                    {isEditing && isGM ? (
+                      <input
+                        className="bg-transparent border border-white/20 rounded-lg px-2 py-1 text-2xl font-bold text-white"
+                        value={formData.name}
+                        onChange={e => handleFieldChange("name", e.target.value)}
+                      />
+                    ) : (
+                      <h1 className="text-3xl font-bold text-white flex items-center gap-2">
+                        {formData.name}
+                        {isGM && visibility === "gm-only" && (
+                          <span className="px-2 py-0.5 text-[10px] rounded-full bg-red-500/20 text-red-300 border border-red-500/40 uppercase tracking-wide">
+                            GM ONLY
+                          </span>
+                        )}
+                      </h1>
+                    )}
+                    <div className="flex gap-2 mt-1">
+                      {isEditing && isGM ? (
+                        <>
+                          <select
+                            className="bg-transparent border border-white/20 rounded-lg px-2 py-1 text-sm text-white"
+                            value={formData.type}
+                            onChange={e => handleFieldChange("type", e.target.value)}
+                          >
+                            <option value="Weapon">Weapon</option>
+                            <option value="Armor">Armor</option>
+                            <option value="Consumable">Consumable</option>
+                          </select>
+                          <select
+                            className="bg-transparent border border-white/20 rounded-lg px-2 py-1 text-sm text-white"
+                            value={formData.rarity}
+                            onChange={e => handleFieldChange("rarity", e.target.value)}
+                          >
+                            <option value="Legendary">Legendary</option>
+                            <option value="Epic">Epic</option>
+                            <option value="Rare">Rare</option>
+                            <option value="Uncommon">Uncommon</option>
+                            <option value="Common">Common</option>
+                          </select>
+                        </>
+                      ) : (
+                        <p className="text-zinc-400 text-sm">
+                          {formData.type} • <span className="font-medium">{formData.rarity}</span>
+                        </p>
                       )}
-                    </h1>
-                    <p className="text-zinc-400 text-sm">
-                      {item.type} • <span className="font-medium">{item.rarity}</span>
-                    </p>
+                    </div>
                   </div>
                 </div>
 
                 <div className="grid grid-cols-2 md:grid-cols-3 gap-3 text-sm">
                   <div className="bg-white/5 rounded-xl border border-white/10 px-4 py-3">
                     <p className="text-zinc-500 text-xs uppercase tracking-wide">Power</p>
-                    <p className="text-white text-xl font-bold">+{item.power}</p>
+                    {isEditing && isGM ? (
+                      <input
+                        type="number"
+                        className="bg-transparent border border-white/20 rounded-lg px-2 py-1 text-xl font-bold text-white w-20"
+                        value={formData.power}
+                        onChange={e => handleFieldChange("power", Number(e.target.value))}
+                      />
+                    ) : (
+                      <p className="text-white text-xl font-bold">+{formData.power}</p>
+                    )}
                   </div>
                   <div className="bg-white/5 rounded-xl border border-white/10 px-4 py-3">
                     <p className="text-zinc-500 text-xs uppercase tracking-wide">Attunement</p>
-                    <p className="text-white font-medium">{item.attunement || "None"}</p>
+                    {isEditing && isGM ? (
+                      <select
+                        className="bg-transparent border border-white/20 rounded-lg px-2 py-1 text-white"
+                        value={formData.attunement}
+                        onChange={e => handleFieldChange("attunement", e.target.value)}
+                      >
+                        <option value="Required">Required</option>
+                        <option value="None">None</option>
+                      </select>
+                    ) : (
+                      <p className="text-white font-medium">{formData.attunement || "None"}</p>
+                    )}
                   </div>
                   <div className="bg-white/5 rounded-xl border border-white/10 px-4 py-3">
                     <p className="text-zinc-500 text-xs uppercase tracking-wide">Visibility</p>
-                    <p className="text-white font-medium">
-                      {visibility === "gm-only" ? "GM-only" : "Player-visible"}
-                    </p>
+                    {isEditing && isGM ? (
+                      <div className="flex gap-2 mt-1">
+                        <button
+                          type="button"
+                          onClick={() => handleVisibilityChange("public")}
+                          className={`px-3 py-1 rounded-full text-xs font-medium border ${
+                            visibility === "public"
+                              ? "bg-emerald-500/20 border-emerald-400 text-emerald-200"
+                              : "bg-white/5 border-white/10 text-zinc-300"
+                          }`}
+                        >
+                          Player-visible
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handleVisibilityChange("gm-only")}
+                          className={`px-3 py-1 rounded-full text-xs font-medium border ${
+                            visibility === "gm-only"
+                              ? "bg-red-500/20 border-red-400 text-red-200"
+                              : "bg-white/5 border-white/10 text-zinc-300"
+                          }`}
+                        >
+                          GM only
+                        </button>
+                      </div>
+                    ) : (
+                      <p className="text-white font-medium">
+                        {visibility === "gm-only" ? "GM-only" : "Player-visible"}
+                      </p>
+                    )}
                   </div>
                 </div>
               </div>
@@ -280,32 +390,82 @@ export default function ItemProfile() {
                 {/* Description */}
                 <section className="bg-white/5 border border-white/10 rounded-2xl p-5">
                   <h2 className="text-lg font-semibold text-white mb-2">Item description</h2>
-                  <p className="text-zinc-400">{item.description}</p>
+                  {isEditing && isGM ? (
+                    <textarea
+                      className="bg-transparent border border-white/20 rounded-lg px-2 py-1 text-zinc-200 w-full min-h-[80px]"
+                      value={formData.description}
+                      onChange={e => handleFieldChange("description", e.target.value)}
+                    />
+                  ) : (
+                    <p className="text-zinc-400">{formData.description}</p>
+                  )}
                 </section>
 
                 {/* Core stats */}
                 <section className="bg-white/5 border border-white/10 rounded-2xl p-5">
                   <h2 className="text-lg font-semibold text-white mb-3">Core stats</h2>
                   <div className="flex flex-wrap gap-2 mb-3">
-                    <span className="px-3 py-1 rounded-lg bg-white/5 text-zinc-300 text-xs uppercase tracking-wide">
-                      {item.type}
-                    </span>
-                    <span className="px-3 py-1 rounded-lg bg-white/5 text-zinc-300 text-xs uppercase tracking-wide">
-                      {item.rarity}
-                    </span>
-                    <span className="px-3 py-1 rounded-lg bg-white/5 text-zinc-300 text-xs uppercase tracking-wide">
-                      Power +{item.power}
-                    </span>
+                    {isEditing && isGM ? (
+                      <>
+                        <select
+                          className="bg-transparent border border-white/20 rounded-lg px-2 py-1 text-xs text-white"
+                          value={formData.type}
+                          onChange={e => handleFieldChange("type", e.target.value)}
+                        >
+                          <option value="Weapon">Weapon</option>
+                          <option value="Armor">Armor</option>
+                          <option value="Consumable">Consumable</option>
+                        </select>
+                        <select
+                          className="bg-transparent border border-white/20 rounded-lg px-2 py-1 text-xs text-white"
+                          value={formData.rarity}
+                          onChange={e => handleFieldChange("rarity", e.target.value)}
+                        >
+                          <option value="Legendary">Legendary</option>
+                          <option value="Epic">Epic</option>
+                          <option value="Rare">Rare</option>
+                          <option value="Uncommon">Uncommon</option>
+                          <option value="Common">Common</option>
+                        </select>
+                        <span className="px-3 py-1 rounded-lg bg-white/5 text-zinc-300 text-xs uppercase tracking-wide">
+                          Power +{formData.power}
+                        </span>
+                      </>
+                    ) : (
+                      <>
+                        <span className="px-3 py-1 rounded-lg bg-white/5 text-zinc-300 text-xs uppercase tracking-wide">
+                          {formData.type}
+                        </span>
+                        <span className="px-3 py-1 rounded-lg bg-white/5 text-zinc-300 text-xs uppercase tracking-wide">
+                          {formData.rarity}
+                        </span>
+                        <span className="px-3 py-1 rounded-lg bg-white/5 text-zinc-300 text-xs uppercase tracking-wide">
+                          Power +{formData.power}
+                        </span>
+                      </>
+                    )}
                   </div>
                   <div className="flex flex-wrap gap-2">
-                    {Object.entries(item.stats).map(([key, value]) => (
-                      <span
-                        key={key}
-                        className="px-3 py-1 rounded-lg bg-white/5 text-zinc-300 text-sm"
-                      >
-                        {key}: {value}
-                      </span>
-                    ))}
+                    {isEditing && isGM
+                      ? Object.entries(formData.stats).map(([key, value]) => (
+                          <span key={key} className="flex items-center gap-1 px-2 py-1 rounded-lg bg-white/5 text-zinc-300 text-sm">
+                            <span>{key}:</span>
+                            <input
+                              type="number"
+                              className="bg-transparent border border-white/20 rounded px-1 py-0.5 w-16 text-zinc-100"
+                              value={value}
+                              onChange={e => handleStatChange(key, e.target.value)}
+                            />
+                          </span>
+                        ))
+                      : Object.entries(formData.stats).map(([key, value]) => (
+                          <span
+                            key={key}
+                            className="px-3 py-1 rounded-lg bg-white/5 text-zinc-300 text-sm"
+                          >
+                            {key}: {value}
+                          </span>
+                        ))}
                   </div>
                 </section>
 
@@ -314,15 +474,29 @@ export default function ItemProfile() {
                   <h2 className="text-lg font-semibold text-white mb-2">
                     Ownership & usage
                   </h2>
-                  <p className="text-zinc-400 text-sm mb-1">
-                    <span className="text-zinc-500">Current owner:</span>{" "}
-                    <span className="text-white font-medium">
-                      {item.owner || "Unassigned"}
-                    </span>
+                  <p className="text-zinc-400 text-sm mb-1 flex items-center gap-2">
+                    <span className="text-zinc-500">Current owner:</span>
+                    {isEditing && isGM ? (
+                      <input
+                        className="bg-transparent border border-white/20 rounded-lg px-2 py-1 text-white font-medium"
+                        value={formData.owner}
+                        onChange={e => handleFieldChange("owner", e.target.value)}
+                      />
+                    ) : (
+                      <span className="text-white font-medium">{formData.owner || "Unassigned"}</span>
+                    )}
                   </p>
-                  <p className="text-zinc-400 text-sm mb-1">
-                    <span className="text-zinc-500">Typical location:</span>{" "}
-                    <span className="text-white/90">{item.location || "—"}</span>
+                  <p className="text-zinc-400 text-sm mb-1 flex items-center gap-2">
+                    <span className="text-zinc-500">Typical location:</span>
+                    {isEditing && isGM ? (
+                      <input
+                        className="bg-transparent border border-white/20 rounded-lg px-2 py-1 text-white/90"
+                        value={formData.location}
+                        onChange={e => handleFieldChange("location", e.target.value)}
+                      />
+                    ) : (
+                      <span className="text-white/90">{formData.location || "—"}</span>
+                    )}
                   </p>
                   <p className="text-zinc-500 text-xs mt-2">
                     Later this card will auto-link to PCs, sessions and maps that reference this item.
@@ -337,44 +511,78 @@ export default function ItemProfile() {
                     <h2 className="text-lg font-semibold text-white mb-2">
                       Hidden properties (GM only)
                     </h2>
-                    <p className="text-zinc-400">
-                      {item.hiddenEffects ||
-                        "Space for secret mechanics, extra damage riders, or conditional bonuses the players haven't discovered yet."}
-                    </p>
+                    {isEditing && isGM ? (
+                      <textarea
+                        className="bg-transparent border border-white/20 rounded-lg px-2 py-1 text-zinc-200 w-full min-h-[60px]"
+                        value={formData.hiddenEffects}
+                        onChange={e => handleFieldChange("hiddenEffects", e.target.value)}
+                      />
+                    ) : (
+                      <p className="text-zinc-400">
+                        {formData.hiddenEffects ||
+                          "Space for secret mechanics, extra damage riders, or conditional bonuses the players haven't discovered yet."}
+                      </p>
+                    )}
                   </section>
 
                   <section className="bg-white/5 border border-red-500/30 rounded-2xl p-5">
                     <h2 className="text-lg font-semibold text-white mb-2">
                       Curses & drawbacks
                     </h2>
-                    <p className="text-zinc-400">
-                      {item.curse && item.curse !== "—"
-                        ? item.curse
-                        : "If this item has a curse or downside, park it here so you remember to actually use it at the table."}
-                    </p>
+                    {isEditing && isGM ? (
+                      <textarea
+                        className="bg-transparent border border-white/20 rounded-lg px-2 py-1 text-zinc-200 w-full min-h-[60px]"
+                        value={formData.curse}
+                        onChange={e => handleFieldChange("curse", e.target.value)}
+                      />
+                    ) : (
+                      <p className="text-zinc-400">
+                        {formData.curse && formData.curse !== "—"
+                          ? formData.curse
+                          : "If this item has a curse or downside, park it here so you remember to actually use it at the table."}
+                      </p>
+                    )}
                   </section>
 
                   <section className="bg-white/5 border border-emerald-500/30 rounded-2xl p-5">
                     <h2 className="text-lg font-semibold text-white mb-2">
                       Upgrade path / evolution
                     </h2>
-                    <p className="text-zinc-400">
-                      {item.upgradePath ||
-                        "Ideas for how this item can grow with the party: reforging, absorbing shards, unlocking attunement tiers, etc."}
-                    </p>
+                    {isEditing && isGM ? (
+                      <textarea
+                        className="bg-transparent border border-white/20 rounded-lg px-2 py-1 text-zinc-200 w-full min-h-[60px]"
+                        value={formData.upgradePath}
+                        onChange={e => handleFieldChange("upgradePath", e.target.value)}
+                      />
+                    ) : (
+                      <p className="text-zinc-400">
+                        {formData.upgradePath ||
+                          "Ideas for how this item can grow with the party: reforging, absorbing shards, unlocking attunement tiers, etc."}
+                      </p>
+                    )}
                   </section>
 
                   <section className="bg-white/5 border border-blue-500/30 rounded-2xl p-5">
                     <h2 className="text-lg font-semibold text-white mb-2">
                       Story hooks & links
                     </h2>
-                    <p className="text-zinc-400 mb-2">
-                      {item.storyHooks ||
-                        "Notes on which NPCs, factions, maps or future sessions this item is tied to."}
-                    </p>
-                    <p className="text-zinc-500 text-xs">
-                      Later this will connect to Sessions, NPCs and Maps automatically.
-                    </p>
+                    {isEditing && isGM ? (
+                      <textarea
+                        className="bg-transparent border border-white/20 rounded-lg px-2 py-1 text-zinc-200 w-full min-h-[60px]"
+                        value={formData.storyHooks}
+                        onChange={e => handleFieldChange("storyHooks", e.target.value)}
+                      />
+                    ) : (
+                      <>
+                        <p className="text-zinc-400 mb-2">
+                          {formData.storyHooks ||
+                            "Notes on which NPCs, factions, maps or future sessions this item is tied to."}
+                        </p>
+                        <p className="text-zinc-500 text-xs">
+                          Later this will connect to Sessions, NPCs and Maps automatically.
+                        </p>
+                      </>
+                    )}
                   </section>
                 </div>
               )}
