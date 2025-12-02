@@ -124,6 +124,8 @@ const [formData, setFormData] = useState({
   power: 0,
   description: "",
   visibility: "public",
+  mechanicalSummary: "",
+  gmNotes: "",
 });
   const navigate = useNavigate();
   const [searchQuery, setSearchQuery] = useState("");
@@ -320,6 +322,9 @@ const [formData, setFormData] = useState({
             rarity: "Common",
             power: 0,
             description: "",
+            visibility: "public",
+            mechanicalSummary: "",
+            gmNotes: "",
           });
         }}
       >
@@ -354,20 +359,6 @@ const [formData, setFormData] = useState({
             </select>
           </div>
           <div>
-  <label className="block text-sm text-zinc-400 mb-1">Visibility</label>
-  <select
-    value={formData.visibility}
-    onChange={(e) =>
-      setFormData({ ...formData, visibility: e.target.value })
-    }
-    className="w-full px-3 py-2 bg-white/5 border border-white/10 rounded-xl text-white"
-  >
-    <option value="public">Player-visible</option>
-    <option value="gm-only">GM only</option>
-  </select>
-</div>
-
-          <div>
             <label className="block text-sm text-zinc-400 mb-1">Rarity</label>
             <select
               value={formData.rarity}
@@ -385,27 +376,74 @@ const [formData, setFormData] = useState({
           </div>
         </div>
 
-        {/* Power */}
-        <div>
-          <label className="block text-sm text-zinc-400 mb-1">Power</label>
-          <input
-            type="number"
-            value={formData.power}
-            onChange={(e) =>
-              setFormData({ ...formData, power: Number(e.target.value) })
-            }
-            className="w-full px-3 py-2 bg-white/5 border border-white/10 rounded-xl text-white"
-          />
+        {/* Visibility & Power */}
+        <div className="grid grid-cols-2 gap-4">
+          <div>
+            <label className="block text-sm text-zinc-400 mb-1">Visibility</label>
+            <select
+              value={formData.visibility}
+              onChange={(e) =>
+                setFormData({ ...formData, visibility: e.target.value })
+              }
+              className="w-full px-3 py-2 bg-white/5 border border-white/10 rounded-xl text-white"
+            >
+              <option value="public">Player-visible</option>
+              <option value="gm-only">GM only</option>
+            </select>
+          </div>
+          <div>
+            <label className="block text-sm text-zinc-400 mb-1">Power</label>
+            <input
+              type="number"
+              value={formData.power}
+              onChange={(e) =>
+                setFormData({ ...formData, power: Number(e.target.value) })
+              }
+              className="w-full px-3 py-2 bg-white/5 border border-white/10 rounded-xl text-white"
+            />
+          </div>
         </div>
 
-        {/* Description */}
+        {/* Description (player-facing) */}
         <div>
-          <label className="block text-sm text-zinc-400 mb-1">Description</label>
+          <label className="block text-sm text-zinc-400 mb-1">
+            Player-facing description
+          </label>
           <textarea
             rows={3}
             value={formData.description}
             onChange={(e) =>
               setFormData({ ...formData, description: e.target.value })
+            }
+            className="w-full px-3 py-2 bg-white/5 border border-white/10 rounded-xl text-white resize-none"
+          />
+        </div>
+
+        {/* Mechanical summary */}
+        <div>
+          <label className="block text-sm text-zinc-400 mb-1">
+            Mechanical summary (what it does)
+          </label>
+          <textarea
+            rows={3}
+            value={formData.mechanicalSummary}
+            onChange={(e) =>
+              setFormData({ ...formData, mechanicalSummary: e.target.value })
+            }
+            className="w-full px-3 py-2 bg-white/5 border border-white/10 rounded-xl text-white resize-none"
+          />
+        </div>
+
+        {/* GM notes */}
+        <div>
+          <label className="block text-sm text-zinc-400 mb-1">
+            GM notes / secrets (optional)
+          </label>
+          <textarea
+            rows={3}
+            value={formData.gmNotes}
+            onChange={(e) =>
+              setFormData({ ...formData, gmNotes: e.target.value })
             }
             className="w-full px-3 py-2 bg-white/5 border border-white/10 rounded-xl text-white resize-none"
           />
