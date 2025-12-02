@@ -114,6 +114,9 @@ export default function Maps() {
   const [formData, setFormData] = useState({
     name: "",
     type: "Dungeon",
+    visibility: "gm-only",
+    location: "",
+    description: "",
     difficulty: "Normal",
     size: "Medium",
     players: "4-6",
@@ -303,9 +306,38 @@ export default function Maps() {
             type="text"
             required
             value={formData.name}
-onChange={(e) =>
-  setFormData({ ...formData, name: e.target.value })
-}
+            onChange={(e) =>
+              setFormData({ ...formData, name: e.target.value })
+            }
+            className="w-full px-3 py-2 bg-white/5 border border-white/10 rounded-xl text-white"
+          />
+        </div>
+
+        {/* Visibility */}
+        <div>
+          <label className="block text-sm text-zinc-400 mb-1">Visibility</label>
+          <select
+            value={formData.visibility}
+            onChange={(e) =>
+              setFormData({ ...formData, visibility: e.target.value })
+            }
+            className="w-full px-3 py-2 bg-white/5 border border-white/10 rounded-xl text-white"
+          >
+            <option value="gm-only">GM Only</option>
+            <option value="public">Player Visible</option>
+          </select>
+        </div>
+
+        {/* Location */}
+        <div>
+          <label className="block text-sm text-zinc-400 mb-1">Location Hierarchy</label>
+          <input
+            type="text"
+            placeholder="e.g. Varionath → Langendris → Takeru District"
+            value={formData.location}
+            onChange={(e) =>
+              setFormData({ ...formData, location: e.target.value })
+            }
             className="w-full px-3 py-2 bg-white/5 border border-white/10 rounded-xl text-white"
           />
         </div>
@@ -393,6 +425,20 @@ onChange={(e) =>
               setFormData({ ...formData, thumbnail: e.target.value })
             }
             className="w-full px-3 py-2 bg-white/5 border border-white/10 rounded-xl text-white"
+          />
+        </div>
+
+        {/* Description */}
+        <div>
+          <label className="block text-sm text-zinc-400 mb-1">Player-Facing Description</label>
+          <textarea
+            rows={3}
+            placeholder="What the players see..."
+            value={formData.description}
+            onChange={(e) =>
+              setFormData({ ...formData, description: e.target.value })
+            }
+            className="w-full px-3 py-2 bg-white/5 border border-white/10 rounded-xl text-white resize-none"
           />
         </div>
 
