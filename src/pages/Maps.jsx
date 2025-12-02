@@ -17,6 +17,7 @@ const mockMaps = [
     thumbnail: 'https://images.unsplash.com/photo-1518173946687-a4c036bc9982?w=400&h=300&fit=crop',
     npcs: 24,
     items: 45,
+    visibility: "public",
     icon: Flame
   },
   { 
@@ -29,6 +30,7 @@ const mockMaps = [
     thumbnail: 'https://images.unsplash.com/photo-1448375240586-882707db888b?w=400&h=300&fit=crop',
     npcs: 56,
     items: 120,
+    visibility: "gm-only",
     icon: TreePine
   },
   { 
@@ -41,6 +43,7 @@ const mockMaps = [
     thumbnail: 'https://images.unsplash.com/photo-1519681393784-d120267933ba?w=400&h=300&fit=crop',
     npcs: 4,
     items: 20,
+    visibility: "public",
     icon: Castle
   },
   { 
@@ -53,6 +56,7 @@ const mockMaps = [
     thumbnail: 'https://images.unsplash.com/photo-1509023464722-18d996393ca8?w=400&h=300&fit=crop',
     npcs: 35,
     items: 78,
+    visibility: "public",
     icon: Skull
   },
   { 
@@ -65,6 +69,7 @@ const mockMaps = [
     thumbnail: 'https://images.unsplash.com/photo-1534447677768-be436bb09401?w=400&h=300&fit=crop',
     npcs: 42,
     items: 95,
+    visibility: "public",
     icon: Mountain
   },
   { 
@@ -77,6 +82,7 @@ const mockMaps = [
     thumbnail: 'https://images.unsplash.com/photo-1551244072-5d12893278ab?w=400&h=300&fit=crop',
     npcs: 28,
     items: 62,
+    visibility: "gm-only",
     icon: Waves
   },
 ];
@@ -121,6 +127,9 @@ export default function Maps() {
     const matchesType = selectedType === 'All' || map.type === selectedType;
     return matchesSearch && matchesType;
   });
+    const visibleMaps = isGM
+  ? filteredMaps
+  : filteredMaps.filter((map) => map.visibility === "public");
 
   return (
     <GradientBackground>
@@ -195,7 +204,7 @@ export default function Maps() {
               ? "grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6"
               : "grid grid-cols-1 lg:grid-cols-2 gap-8"
             }>
-              {filteredMaps.map((map) => {
+              {visibleMaps.map((map) => {
                 const MapIcon = map.icon;
                 const typeGradient = typeColors[map.type] || 'from-zinc-500 to-zinc-600';
                 const difficulty = difficultyConfig[map.difficulty] || difficultyConfig.Normal;
@@ -232,6 +241,11 @@ export default function Maps() {
                         <div>
                           <h3 className="text-lg font-bold text-white group-hover:text-indigo-300 transition-colors">
                             {map.name}
+                            {isGM && map.visibility === "gm-only" && (
+  <span className="ml-2 px-2 py-0.5 text-[10px] rounded-full bg-red-500/20 text-red-300 border border-red-500/40">
+    GM ONLY
+  </span>
+)}
                           </h3>
                           <p className="text-zinc-500 text-sm">{map.size} • {map.players} players</p>
                         </div>
