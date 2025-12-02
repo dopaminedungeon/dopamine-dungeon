@@ -1,5 +1,5 @@
 import React from "react";
-import { Link } from "react-router-dom";
+import { Link, useLocation } from "react-router-dom";
 import { 
   LayoutDashboard, 
   Users, 
@@ -21,7 +21,8 @@ const navItems = [
 ];
 
 export default function Sidebar() {
-  const currentPath = window.location.pathname;
+  const location = useLocation();
+  const currentPath = location.pathname;
 
   return (
     <aside className="fixed left-0 top-0 h-full w-64 bg-black/40 backdrop-blur-xl border-r border-white/5 flex flex-col z-50">
@@ -42,7 +43,10 @@ export default function Sidebar() {
       <nav className="flex-1 p-4 space-y-1 overflow-y-auto">
         {navItems.map((item) => {
           const Icon = item.icon;
-          const isActive = currentPath === item.path;
+          const isActive =
+            item.path === "/"
+              ? currentPath === "/"
+              : currentPath === item.path || currentPath.startsWith(item.path + "/");
           
           return (
             <Link
