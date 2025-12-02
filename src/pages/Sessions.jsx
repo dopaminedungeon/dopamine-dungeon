@@ -118,12 +118,14 @@ export default function Sessions() {
 
 const [formData, setFormData] = useState({
   name: "",
+  sessionNumber: 1,
   map: "",
   difficulty: "Normal",
   players: 0,
   maxPlayers: 4,
   status: "scheduled",
   startTime: "",
+  visibility: "public",
   notes: "",
 });
   const navigate = useNavigate();
@@ -330,12 +332,14 @@ const [formData, setFormData] = useState({
           setShowCreateModal(false);
           setFormData({
             name: "",
+            sessionNumber: 1,
             map: "",
             difficulty: "Normal",
             players: 0,
             maxPlayers: 4,
             status: "scheduled",
             startTime: "",
+            visibility: "public",
             notes: "",
           });
         }}
@@ -349,6 +353,34 @@ const [formData, setFormData] = useState({
             onChange={(e) => setFormData({ ...formData, name: e.target.value })}
             className="w-full px-3 py-2 bg-white/5 border border-white/10 rounded-xl text-white"
           />
+        </div>
+
+        <div className="grid grid-cols-2 gap-4">
+          <div>
+            <label className="block text-sm text-zinc-400 mb-1">Session Number</label>
+            <input
+              type="number"
+              min={1}
+              value={formData.sessionNumber}
+              onChange={(e) =>
+                setFormData({ ...formData, sessionNumber: Number(e.target.value) })
+              }
+              className="w-full px-3 py-2 bg-white/5 border border-white/10 rounded-xl text-white"
+            />
+          </div>
+          <div>
+            <label className="block text-sm text-zinc-400 mb-1">Visibility</label>
+            <select
+              value={formData.visibility}
+              onChange={(e) =>
+                setFormData({ ...formData, visibility: e.target.value })
+              }
+              className="w-full px-3 py-2 bg-white/5 border border-white/10 rounded-xl text-white"
+            >
+              <option value="public">Player-visible</option>
+              <option value="gm-only">GM-only</option>
+            </select>
+          </div>
         </div>
 
         <div>
@@ -436,7 +468,7 @@ const [formData, setFormData] = useState({
         </div>
 
         <div>
-          <label className="block text-sm text-zinc-400 mb-1">Notes</label>
+          <label className="block text-sm text-zinc-400 mb-1">GM notes / prep (optional)</label>
           <textarea
             rows={3}
             value={formData.notes}
