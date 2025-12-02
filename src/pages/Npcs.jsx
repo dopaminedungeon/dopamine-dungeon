@@ -1,5 +1,6 @@
 import React, { useState } from "react";
 import { useNavigate } from "react-router-dom";
+import { useSearchParams } from "react-router-dom";
 import GradientBackground from "../components/GradientBackground";
 import Sidebar from "../components/Sidebar";
 import TopBar from "../components/TopBar";
@@ -23,6 +24,7 @@ const mockNpcs = [
     location: "Crystal Market",
     health: 450,
     description: "A weathered merchant who deals in rare artifacts and forbidden knowledge.",
+    visibility: "public",
   },
   {
     id: 2,
@@ -32,6 +34,7 @@ const mockNpcs = [
     location: "Shadow Grove",
     health: 800,
     description: "An enigmatic elf who guides heroes on dangerous quests.",
+    visibility: "public",
   },
   {
     id: 3,
@@ -41,6 +44,7 @@ const mockNpcs = [
     location: "Obsidian Fortress",
     health: 15000,
     description: "A fearsome demon lord who guards the gates of the underworld.",
+    visibility: "gm-only",
   },
   {
     id: 4,
@@ -50,6 +54,7 @@ const mockNpcs = [
     location: "Starting Village",
     health: 100,
     description: "A friendly villager who offers guidance to new adventurers.",
+    visibility: "public",
   },
   {
     id: 5,
@@ -59,6 +64,7 @@ const mockNpcs = [
     location: "Skyward Peak",
     health: 1200,
     description: "A powerful mage who controls the winds and storms.",
+    visibility: "gm-only",
   },
   {
     id: 6,
@@ -68,6 +74,7 @@ const mockNpcs = [
     location: "Venom Caves",
     health: 12000,
     description: "A giant spider queen with deadly poison attacks.",
+    visibility: "gm-only",
   },
 ];
 
@@ -87,6 +94,8 @@ const typeColors = {
 
 export default function Npcs() {
   const { isGM } = useMode();
+  const [searchParams] = useSearchParams();
+  const isGmMode = searchParams.get("mode") !== "player";
   const navigate = useNavigate();
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedType, setSelectedType] = useState("All");
@@ -101,6 +110,9 @@ export default function Npcs() {
   });
 
   const filteredNpcs = mockNpcs.filter((npc) => {
+    const visibleNpcs = isGmMode
+  ? filteredNpcs
+  : filteredNpcs.filter((npc) => npc.visibility === "public");
     const matchesSearch = npc.name.toLowerCase().includes(searchQuery.toLowerCase());
     const matchesType = selectedType === "All" || npc.type === selectedType;
     return matchesSearch && matchesType;
@@ -175,7 +187,7 @@ export default function Npcs() {
 
             {/* NPCs Grid */}
             <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
-              {filteredNpcs.map((npc) => {
+              {visibleNpcs.map((npc) => {
                 const TypeIcon = typeIcons[npc.type] || Users;
                 const gradientColor = typeColors[npc.type] || "from-zinc-500 to-zinc-600";
 
@@ -208,6 +220,11 @@ export default function Npcs() {
 
                     <h3 className="text-xl font-bold text-white mb-1 group-hover:text-purple-300 transition-colors">
                       {npc.name}
+                      {isGmMode && npc.visibility !== "public" && (
+  <span className="ml-2 px-2 py-0.5 text-[10px] rounded-full bg-red-500/20 text-red-300 border border-red-500/40">
+    GM ONLY
+  </span>
+)}
                     </h3>
                     <p className="text-zinc-500 text-sm mb-4">{npc.location}</p>
                     <p className="text-zinc-400 text-sm mb-4 line-clamp-2">{npc.description}</p>
