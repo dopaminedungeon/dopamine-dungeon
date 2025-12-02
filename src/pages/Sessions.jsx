@@ -356,32 +356,53 @@ const [formData, setFormData] = useState({
         </div>
 
         <div className="grid grid-cols-2 gap-4">
-          <div>
-            <label className="block text-sm text-zinc-400 mb-1">Session Number</label>
-            <input
-              type="number"
-              min={1}
-              value={formData.sessionNumber}
-              onChange={(e) =>
-                setFormData({ ...formData, sessionNumber: Number(e.target.value) })
-              }
-              className="w-full px-3 py-2 bg-white/5 border border-white/10 rounded-xl text-white"
-            />
-          </div>
-          <div>
-            <label className="block text-sm text-zinc-400 mb-1">Visibility</label>
-            <select
-              value={formData.visibility}
-              onChange={(e) =>
-                setFormData({ ...formData, visibility: e.target.value })
-              }
-              className="w-full px-3 py-2 bg-white/5 border border-white/10 rounded-xl text-white"
-            >
-              <option value="public">Player-visible</option>
-              <option value="gm-only">GM-only</option>
-            </select>
-          </div>
-        </div>
+  <div>
+    <label className="block text-sm text-zinc-400 mb-1">Session Number</label>
+    <input
+      type="number"
+      min={1}
+      value={formData.sessionNumber}
+      onChange={(e) =>
+        setFormData({ ...formData, sessionNumber: Number(e.target.value) })
+      }
+      className="w-full px-3 py-2 bg-white/5 border border-white/10 rounded-xl text-white"
+    />
+  </div>
+
+  <div>
+    <label className="block text-sm text-zinc-400 mb-1">
+      Visibility
+    </label>
+    <div className="flex gap-3">
+      <button
+        type="button"
+        onClick={() =>
+          setFormData({ ...formData, visibility: "public" })
+        }
+        className={`px-3 py-2 rounded-xl text-sm border ${
+          formData.visibility === "public"
+            ? "border-emerald-500 bg-emerald-500/10 text-emerald-300"
+            : "border-white/10 bg-white/5 text-zinc-300"
+        }`}
+      >
+        Player-visible
+      </button>
+      <button
+        type="button"
+        onClick={() =>
+          setFormData({ ...formData, visibility: "gm-only" })
+        }
+        className={`px-3 py-2 rounded-xl text-sm border ${
+          formData.visibility === "gm-only"
+            ? "border-red-500 bg-red-500/10 text-red-300"
+            : "border-white/10 bg-white/5 text-zinc-300"
+        }`}
+      >
+        GM only
+      </button>
+    </div>
+  </div>
+</div>
 
         <div>
           <label className="block text-sm text-zinc-400 mb-1">Map</label>

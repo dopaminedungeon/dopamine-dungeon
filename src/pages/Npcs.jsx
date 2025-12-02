@@ -102,13 +102,17 @@ export default function Npcs() {
   const [selectedType, setSelectedType] = useState("All");
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [formData, setFormData] = useState({
-    name: "",
-    type: "NPC",
-    level: 1,
-    location: "",
-    health: 10,
-    description: "",
-  });
+  // Player-visible basics
+  name: "",
+  type: "NPC",           // NPC / Merchant / Quest Giver / Boss
+  location: "",
+  description: "",       // what the party knows / first impression
+
+  // GM basics
+  visibility: "public",  // "public" or "gm-only"
+  relationship: "",      // short note about relationship to party
+  tags: "",              // comma-separated tags for now
+});
 
   // 1) Filter by search + type
   const filteredNpcs = mockNpcs.filter((npc) => {
@@ -128,14 +132,15 @@ export default function Npcs() {
     e.preventDefault();
     console.log("New NPC (not yet persisted):", formData);
     setShowCreateModal(false);
-    setFormData({
-      name: "",
-      type: "NPC",
-      level: 1,
-      location: "",
-      health: 10,
-      description: "",
-    });
+setFormData({
+  name: "",
+  type: "NPC",
+  location: "",
+  description: "",
+  visibility: "public",
+  relationship: "",
+  tags: "",
+});
   };
 
   return (
@@ -275,137 +280,181 @@ export default function Npcs() {
             </div>
 
             {/* Create NPC Modal */}
-            {showCreateModal && (
-              <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm">
-                <div className="w-full max-w-lg bg-zinc-950 border border-white/10 rounded-2xl p-6">
-                  <h2 className="text-xl font-bold text-white mb-4">
-                    Add New NPC
-                  </h2>
-                  <form className="space-y-4" onSubmit={handleCreate}>
-                    <div>
-                      <label className="block text-sm text-zinc-400 mb-1">
-                        Name
-                      </label>
-                      <input
-                        type="text"
-                        required
-                        value={formData.name}
-                        onChange={(e) =>
-                          setFormData({ ...formData, name: e.target.value })
-                        }
-                        className="w-full px-3 py-2 bg-white/5 border border-white/10 rounded-xl text-white focus:outline-none focus:border-purple-500/50"
-                      />
-                    </div>
+{showCreateModal && (
+  <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm">
+    <div className="w-full max-w-lg bg-zinc-950 border border-white/10 rounded-2xl p-6">
+      <h2 className="text-xl font-bold text-white mb-1">Quick Add NPC</h2>
+      <p className="text-xs text-zinc-500 mb-4">
+        Capture the basics now. You can flesh out the full profile later in GM edit mode.
+      </p>
 
-                    <div className="grid grid-cols-2 gap-4">
-                      <div>
-                        <label className="block text-sm text-zinc-400 mb-1">
-                          Type
-                        </label>
-                        <select
-                          value={formData.type}
-                          onChange={(e) =>
-                            setFormData({ ...formData, type: e.target.value })
-                          }
-                          className="w-full px-3 py-2 bg-white/5 border border-white/10 rounded-xl text-white focus:outline-none focus:border-purple-500/50"
-                        >
-                          <option>NPC</option>
-                          <option>Merchant</option>
-                          <option>Quest Giver</option>
-                          <option>Boss</option>
-                        </select>
-                      </div>
-                      <div>
-                        <label className="block text-sm text-zinc-400 mb-1">
-                          Level
-                        </label>
-                        <input
-                          type="number"
-                          min={1}
-                          value={formData.level}
-                          onChange={(e) =>
-                            setFormData({
-                              ...formData,
-                              level: Number(e.target.value),
-                            })
-                          }
-                          className="w-full px-3 py-2 bg-white/5 border border-white/10 rounded-xl text-white focus:outline-none focus:border-purple-500/50"
-                        />
-                      </div>
-                    </div>
+      <form className="space-y-6" onSubmit={handleCreate}>
+        {/* Player-visible basics */}
+        <div className="space-y-4">
+          <h3 className="text-sm font-semibold text-zinc-300">
+            Player-visible info
+          </h3>
 
-                    <div className="grid grid-cols-2 gap-4">
-                      <div>
-                        <label className="block text-sm text-zinc-400 mb-1">
-                          Location
-                        </label>
-                        <input
-                          type="text"
-                          value={formData.location}
-                          onChange={(e) =>
-                            setFormData({
-                              ...formData,
-                              location: e.target.value,
-                            })
-                          }
-                          className="w-full px-3 py-2 bg-white/5 border border-white/10 rounded-xl text-white focus:outline-none focus:border-purple-500/50"
-                        />
-                      </div>
-                      <div>
-                        <label className="block text-sm text-zinc-400 mb-1">
-                          Health
-                        </label>
-                        <input
-                          type="number"
-                          min={1}
-                          value={formData.health}
-                          onChange={(e) =>
-                            setFormData({
-                              ...formData,
-                              health: Number(e.target.value),
-                            })
-                          }
-                          className="w-full px-3 py-2 bg-white/5 border border-white/10 rounded-xl text-white focus:outline-none focus:border-purple-500/50"
-                        />
-                      </div>
-                    </div>
+          {/* Name */}
+          <div>
+            <label className="block text-sm text-zinc-400 mb-1">
+              Name
+            </label>
+            <input
+              type="text"
+              required
+              value={formData.name}
+              onChange={(e) =>
+                setFormData({ ...formData, name: e.target.value })
+              }
+              className="w-full px-3 py-2 bg-white/5 border border-white/10 rounded-xl text-white focus:outline-none focus:border-purple-500/50"
+            />
+          </div>
 
-                    <div>
-                      <label className="block text-sm text-zinc-400 mb-1">
-                        Description
-                      </label>
-                      <textarea
-                        rows={3}
-                        value={formData.description}
-                        onChange={(e) =>
-                          setFormData({
-                            ...formData,
-                            description: e.target.value,
-                          })
-                        }
-                        className="w-full px-3 py-2 bg-white/5 border border-white/10 rounded-xl text-white focus:outline-none focus:border-purple-500/50 resize-none"
-                      />
-                    </div>
+          {/* Type & Location */}
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm text-zinc-400 mb-1">
+                Type
+              </label>
+              <select
+                value={formData.type}
+                onChange={(e) =>
+                  setFormData({ ...formData, type: e.target.value })
+                }
+                className="w-full px-3 py-2 bg-white/5 border border-white/10 rounded-xl text-white focus:outline-none focus:border-purple-500/50"
+              >
+                <option value="NPC">NPC</option>
+                <option value="Merchant">Merchant</option>
+                <option value="Quest Giver">Quest Giver</option>
+                <option value="Boss">Boss</option>
+              </select>
+            </div>
+            <div>
+              <label className="block text-sm text-zinc-400 mb-1">
+                Location
+              </label>
+              <input
+                type="text"
+                value={formData.location}
+                onChange={(e) =>
+                  setFormData({ ...formData, location: e.target.value })
+                }
+                className="w-full px-3 py-2 bg-white/5 border border-white/10 rounded-xl text-white focus:outline-none focus:border-purple-500/50"
+              />
+            </div>
+          </div>
 
-                    <div className="flex justify-end gap-3 pt-2">
-                      <button
-                        type="button"
-                        onClick={() => setShowCreateModal(false)}
-                        className="px-4 py-2 rounded-xl bg-white/5 text-zinc-300 hover:bg-white/10"
-                      >
-                        Cancel
-                      </button>
-                      <button
-                        type="submit"
-                        className="px-4 py-2 rounded-xl bg-gradient-to-r from-purple-500 to-pink-500 text-white font-medium hover:opacity-90"
-                      >
-                        Save NPC
-                      </button>
-                    </div>
-                  </form>
-                </div>
-              </div>
-            )}
+          {/* Description / first impression */}
+          <div>
+            <label className="block text-sm text-zinc-400 mb-1">
+              Description (what the party knows / first impression)
+            </label>
+            <textarea
+              rows={3}
+              value={formData.description}
+              onChange={(e) =>
+                setFormData({ ...formData, description: e.target.value })
+              }
+              className="w-full px-3 py-2 bg-white/5 border border-white/10 rounded-xl text-white focus:outline-none focus:border-purple-500/50 resize-none"
+            />
+          </div>
+        </div>
+
+        {/* GM basics */}
+        <div className="space-y-4 border-t border-white/10 pt-4">
+          <h3 className="text-sm font-semibold text-zinc-300">
+            GM basics
+          </h3>
+
+          {/* Visibility */}
+          <div>
+            <label className="block text-sm text-zinc-400 mb-1">
+              Visibility
+            </label>
+            <div className="flex gap-3">
+              <button
+                type="button"
+                onClick={() =>
+                  setFormData({ ...formData, visibility: "public" })
+                }
+                className={`px-3 py-2 rounded-xl text-sm border ${
+                  formData.visibility === "public"
+                    ? "border-emerald-500 bg-emerald-500/10 text-emerald-300"
+                    : "border-white/10 bg-white/5 text-zinc-300"
+                }`}
+              >
+                Player-visible
+              </button>
+              <button
+                type="button"
+                onClick={() =>
+                  setFormData({ ...formData, visibility: "gm-only" })
+                }
+                className={`px-3 py-2 rounded-xl text-sm border ${
+                  formData.visibility === "gm-only"
+                    ? "border-red-500 bg-red-500/10 text-red-300"
+                    : "border-white/10 bg-white/5 text-zinc-300"
+                }`}
+              >
+                GM only
+              </button>
+            </div>
+          </div>
+
+          {/* Relationship */}
+          <div>
+            <label className="block text-sm text-zinc-400 mb-1">
+              Relationship to party (short note)
+            </label>
+            <input
+              type="text"
+              placeholder="ally, wary contact, secret patron..."
+              value={formData.relationship}
+              onChange={(e) =>
+                setFormData({ ...formData, relationship: e.target.value })
+              }
+              className="w-full px-3 py-2 bg-white/5 border border-white/10 rounded-xl text-white focus:outline-none focus:border-purple-500/50"
+            />
+          </div>
+
+          {/* Tags */}
+          <div>
+            <label className="block text-sm text-zinc-400 mb-1">
+              Tags (comma separated)
+            </label>
+            <input
+              type="text"
+              placeholder="langendris, council, shadow, stormwrought..."
+              value={formData.tags}
+              onChange={(e) =>
+                setFormData({ ...formData, tags: e.target.value })
+              }
+              className="w-full px-3 py-2 bg-white/5 border border-white/10 rounded-xl text-white focus:outline-none focus:border-purple-500/50"
+            />
+          </div>
+        </div>
+
+        {/* Buttons */}
+        <div className="flex justify-end gap-3 pt-2">
+          <button
+            type="button"
+            onClick={() => setShowCreateModal(false)}
+            className="px-4 py-2 rounded-xl bg-white/5 text-zinc-300 hover:bg-white/10"
+          >
+            Cancel
+          </button>
+          <button
+            type="submit"
+            className="px-4 py-2 rounded-xl bg-gradient-to-r from-purple-500 to-pink-500 text-white font-medium hover:opacity-90"
+          >
+            Save NPC
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+)}
           </main>
         </div>
       </div>

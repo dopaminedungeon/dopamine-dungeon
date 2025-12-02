@@ -287,16 +287,19 @@ export default function Maps() {
 
           // Close and reset for now – real persistence later
           setShowCreateModal(false);
-          setFormData({
-            name: "",
-            type: "Dungeon",
-            difficulty: "Normal",
-            size: "Medium",
-            players: "4-6",
-            thumbnail: "",
-            npcs: 0,
-            items: 0,
-          });
+setFormData({
+  name: "",
+  type: "Dungeon",
+  visibility: "gm-only",
+  location: "",
+  description: "",
+  difficulty: "Normal",
+  size: "Medium",
+  players: "4-6",
+  thumbnail: "",
+  npcs: 0,
+  items: 0,
+});
         }}
       >
         {/* Name */}
@@ -314,19 +317,39 @@ export default function Maps() {
         </div>
 
         {/* Visibility */}
-        <div>
-          <label className="block text-sm text-zinc-400 mb-1">Visibility</label>
-          <select
-            value={formData.visibility}
-            onChange={(e) =>
-              setFormData({ ...formData, visibility: e.target.value })
-            }
-            className="w-full px-3 py-2 bg-white/5 border border-white/10 rounded-xl text-white"
-          >
-            <option value="gm-only">GM Only</option>
-            <option value="public">Player Visible</option>
-          </select>
-        </div>
+<div>
+  <label className="block text-sm text-zinc-400 mb-1">
+    Visibility
+  </label>
+  <div className="flex gap-3">
+    <button
+      type="button"
+      onClick={() =>
+        setFormData({ ...formData, visibility: "public" })
+      }
+      className={`px-3 py-2 rounded-xl text-sm border ${
+        formData.visibility === "public"
+          ? "border-emerald-500 bg-emerald-500/10 text-emerald-300"
+          : "border-white/10 bg-white/5 text-zinc-300"
+      }`}
+    >
+      Player-visible
+    </button>
+    <button
+      type="button"
+      onClick={() =>
+        setFormData({ ...formData, visibility: "gm-only" })
+      }
+      className={`px-3 py-2 rounded-xl text-sm border ${
+        formData.visibility === "gm-only"
+          ? "border-red-500 bg-red-500/10 text-red-300"
+          : "border-white/10 bg-white/5 text-zinc-300"
+      }`}
+    >
+      GM only
+    </button>
+  </div>
+</div>
 
         {/* Location */}
         <div>
