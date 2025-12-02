@@ -4,12 +4,13 @@ import { useParams, useNavigate } from "react-router-dom";
 import GradientBackground from "../components/GradientBackground";
 import Sidebar from "../components/Sidebar";
 import TopBar from "../components/TopBar";
-import { ArrowLeft, Users, Clock, Map, TrendingUp } from "lucide-react";
+import { ArrowLeft, Users, Clock, Map } from "lucide-react";
 import { useMode } from "../context/ModeContext.jsx";
 
 const MOCK_SESSION_DATA = {
   1: {
     id: 1,
+    sessionNumber: 1,
     name: "Dragon's Lair Raid",
     players: 6,
     maxPlayers: 8,
@@ -34,6 +35,7 @@ const MOCK_SESSION_DATA = {
   },
   2: {
     id: 2,
+    sessionNumber: 2,
     name: "Forest Exploration",
     players: 4,
     maxPlayers: 6,
@@ -58,6 +60,7 @@ const MOCK_SESSION_DATA = {
   },
   3: {
     id: 3,
+    sessionNumber: 3,
     name: "PvP Tournament",
     players: 16,
     maxPlayers: 16,
@@ -82,6 +85,7 @@ const MOCK_SESSION_DATA = {
   },
   4: {
     id: 4,
+    sessionNumber: 4,
     name: "Dungeon Crawl",
     players: 5,
     maxPlayers: 5,
@@ -105,6 +109,7 @@ const MOCK_SESSION_DATA = {
   },
   5: {
     id: 5,
+    sessionNumber: 5,
     name: "Boss Rush Challenge",
     players: 0,
     maxPlayers: 4,
@@ -129,6 +134,7 @@ const MOCK_SESSION_DATA = {
   },
   6: {
     id: 6,
+    sessionNumber: 6,
     name: "Story Campaign Ch.5",
     players: 3,
     maxPlayers: 4,
@@ -151,14 +157,6 @@ const MOCK_SESSION_DATA = {
       "Prep 1 emergency combat scene if they go feral",
     ],
   },
-};
-
-const difficultyColors = {
-  Normal: "text-emerald-400 bg-emerald-500/10",
-  Heroic: "text-blue-400 bg-blue-500/10",
-  Mythic: "text-purple-400 bg-purple-500/10",
-  Extreme: "text-red-400 bg-red-500/10",
-  Competitive: "text-amber-400 bg-amber-500/10",
 };
 
 export default function SessionProfile() {
@@ -191,7 +189,6 @@ export default function SessionProfile() {
     );
   }
 
-  const difficulty = difficultyColors[session.difficulty] || difficultyColors.Normal;
   const isGmOnly = session.visibility === "gm-only";
 
   // Player trying to open GM-only session
@@ -257,100 +254,241 @@ export default function SessionProfile() {
                     )}
                   </h1>
                   <p className="text-zinc-400 text-sm">
-                    {session.map} • {session.difficulty}
+                    {session.map}
+                    {session.sessionNumber && (
+                      <>
+                        {" "}
+                        • Session #{session.sessionNumber}
+                      </>
+                    )}
+                    {session.startTime && (
+                      <>
+                        {" "}
+                        • {session.startTime}
+                      </>
+                    )}
                   </p>
                 </div>
-                <span
-                  className={`px-3 py-1 rounded-lg text-xs font-medium ${difficulty}`}
-                >
-                  {session.difficulty}
-                </span>
               </div>
 
-              {/* Stats grid */}
-              <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-                <div className="bg-white/5 rounded-xl border border-white/10 p-4">
-                  <p className="text-zinc-500 text-sm">Players</p>
-                  <p className="text-white text-2xl font-bold">
-                    {session.players}/{session.maxPlayers}
-                  </p>
-                </div>
-                <div className="bg-white/5 rounded-xl border border-white/10 p-4">
-                  <p className="text-zinc-500 text-sm">Duration</p>
-                  <p className="text-white text-2xl font-bold">
-                    {session.duration}
-                  </p>
-                </div>
-                <div className="bg-white/5 rounded-xl border border-white/10 p-4">
-                  <p className="text-zinc-500 text-sm">Start Time</p>
-                  <p className="text-white text-md">{session.startTime}</p>
-                </div>
-                <div className="bg-white/5 rounded-xl border border-white/10 p-4">
-                  <p className="text-zinc-500 text-sm">Progress</p>
-                  <div className="flex items-center gap-2 mt-1">
-                    <TrendingUp className="w-4 h-4 text-emerald-400" />
-                    <p className="text-white text-xl font-bold">
-                      {session.progress}%
+
+              {/* Player & GM layout */}
+              <div className={`grid grid-cols-1 ${isGM ? "lg:grid-cols-2" : ""} gap-6 pt-2`}>
+                {/* LEFT: Player overview */}
+                <div className="space-y-4">
+                  {/* Recap */}
+                  <div className="bg-white/5 rounded-xl border border-white/10 p-5">
+                    <h2 className="text-lg font-semibold text-white mb-2">
+                      Session recap
+                    </h2>
+                    <p className="text-zinc-300 text-sm whitespace-pre-line">
+                      {session.summary}
+                    </p>
+                  </div>
+
+                  {/* Attendance */}
+                  <div className="bg-white/5 rounded-xl border border-white/10 p-5">
+                    <h2 className="text-lg font-semibold text-white mb-2">
+                      Attendance
+                    </h2>
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-3">
+                        <Users className="w-5 h-5 text-zinc-500" />
+                        <div>
+                          <p className="text-zinc-400 text-xs uppercase tracking-wide">
+                            Players present
+                          </p>
+                          <p className="text-white font-semibold text-lg">
+                            {session.players} / {session.maxPlayers}
+                          </p>
+                        </div>
+                      </div>
+                      <p className="text-zinc-500 text-xs">
+                        (Detailed PC list & roles coming later)
+                      </p>
+                    </div>
+                  </div>
+
+                  {/* Items (player-visible) */}
+                  <div className="bg-white/5 rounded-xl border border-white/10 p-5">
+                    <h2 className="text-lg font-semibold text-white mb-2">
+                      Items discovered
+                    </h2>
+                    <p className="text-zinc-400 text-sm">
+                      No items logged yet. You&apos;ll be able to track items as a
+                      table (gained / refused / destroyed) once real data is wired
+                      in.
+                    </p>
+                  </div>
+
+                  {/* Notable NPCs (player-visible) */}
+                  <div className="bg-white/5 rounded-xl border border-white/10 p-5">
+                    <h2 className="text-lg font-semibold text-white mb-2">
+                      Notable NPCs
+                    </h2>
+                    <p className="text-zinc-400 text-sm">
+                      Placeholder for a future NPC table: who appeared, what they
+                      did this session, and the current relationship vibe with the
+                      party.
+                    </p>
+                  </div>
+
+                  {/* Session timeline */}
+                  <div className="bg-white/5 rounded-xl border border-white/10 p-5">
+                    <h2 className="text-lg font-semibold text-white mb-2">
+                      Session timeline
+                    </h2>
+                    <p className="text-zinc-400 text-sm">
+                      Placeholder for a chronological list of key beats in this
+                      session (&quot;Arrived at Volcanic Caverns&quot; → &quot;Negotiated
+                      with the dragon&quot; → &quot;Lair collapse escape&quot;).
+                    </p>
+                  </div>
+
+                  {/* Moments */}
+                  <div className="bg-white/5 rounded-xl border border-white/10 p-5">
+                    <h2 className="text-lg font-semibold text-white mb-2">
+                      Moments
+                    </h2>
+                    <p className="text-zinc-400 text-sm">
+                      Highlight reel placeholder for the most cinematic or
+                      emotionally heavy moments of the session.
+                    </p>
+                  </div>
+
+                  {/* Quotes of the day */}
+                  <div className="bg-white/5 rounded-xl border border-white/10 p-5">
+                    <h2 className="text-lg font-semibold text-white mb-2">
+                      Quotes of the day
+                    </h2>
+                    <p className="text-zinc-400 text-sm">
+                      Space for Fizzy one-liners, Akumu drama, and other iconic
+                      quotes. Eventually this can be a small list per session.
+                    </p>
+                  </div>
+
+                  {/* NPC relationship tracker */}
+                  <div className="bg-white/5 rounded-xl border border-white/10 p-5">
+                    <h2 className="text-lg font-semibold text-white mb-2">
+                      NPC relationships
+                    </h2>
+                    <p className="text-zinc-400 text-sm">
+                      Placeholder for a relationship tracker summarising how this
+                      session changed the party&apos;s ties to key NPCs. Later this
+                      will sync with NPC profiles.
                     </p>
                   </div>
                 </div>
-              </div>
 
-              {/* Progress bar */}
-              <div>
-                <h2 className="text-xl font-bold text-white mb-2">Progress</h2>
-                <div className="h-2 bg-white/10 rounded-full overflow-hidden">
-                  <div
-                    className={`h-full rounded-full ${
-                      session.progress === 100
-                        ? "bg-zinc-500"
-                        : "bg-gradient-to-r from-emerald-500 to-teal-500"
-                    }`}
-                    style={{ width: `${session.progress}%` }}
-                  />
-                </div>
-              </div>
-
-              {/* Player recap + GM notes */}
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6 pt-2">
-                {/* Player-facing */}
-                <div className="bg-white/5 rounded-xl border border-white/10 p-5">
-                  <h2 className="text-lg font-semibold text-white mb-2">
-                    Session recap (player-safe)
-                  </h2>
-                  <p className="text-zinc-300 text-sm whitespace-pre-line">
-                    {session.summary}
-                  </p>
-                </div>
-
-                {/* GM-only section */}
+                {/* RIGHT: GM-only zone */}
                 {isGM && (
-                  <div className="bg-white/5 rounded-xl border border-purple-500/40 p-5">
-                    <h2 className="text-lg font-semibold text-purple-200 mb-2">
-                      GM prep & secrets
-                    </h2>
-                    <p className="text-zinc-300 text-sm mb-3">
-                      {session.gmNotes}
-                    </p>
-                    <p className="text-zinc-400 text-sm mb-3">
-                      <span className="font-semibold text-purple-200">
-                        Secrets & twists:
-                      </span>{" "}
-                      {session.gmSecrets}
-                    </p>
-                    {session.gmPrep && session.gmPrep.length > 0 && (
-                      <ul className="list-disc list-inside text-zinc-400 text-sm space-y-1">
-                        {session.gmPrep.map((item, idx) => (
-                          <li key={idx}>{item}</li>
-                        ))}
-                      </ul>
-                    )}
+                  <div className="space-y-4">
+                    {/* Off-screen events / GM notes / secrets */}
+                    <div className="bg-white/5 rounded-xl border border-purple-500/40 p-5">
+                      <h2 className="text-lg font-semibold text-purple-200 mb-2">
+                        Off-screen events & GM notes
+                      </h2>
+                      <p className="text-zinc-300 text-sm mb-3">
+                        {session.gmNotes}
+                      </p>
+                      <p className="text-zinc-400 text-sm mb-3">
+                        <span className="font-semibold text-purple-200">
+                          Secrets &amp; twists:
+                        </span>{" "}
+                        {session.gmSecrets}
+                      </p>
+                      {session.gmPrep && session.gmPrep.length > 0 && (
+                        <div className="mt-3">
+                          <p className="text-zinc-500 text-xs mb-1 uppercase tracking-wide">
+                            Prep notes
+                          </p>
+                          <ul className="list-disc list-inside text-zinc-400 text-sm space-y-1">
+                            {session.gmPrep.map((item, idx) => (
+                              <li key={idx}>{item}</li>
+                            ))}
+                          </ul>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Encounter stage */}
+                    <div className="bg-white/5 rounded-xl border border-purple-500/40 p-5">
+                      <h2 className="text-lg font-semibold text-purple-200 mb-2">
+                        Encounter stage
+                      </h2>
+                      <p className="text-zinc-400 text-sm">
+                        Placeholder for tracking the current encounter phase:
+                        which stat blocks are in play, objectives, map used, and
+                        what triggered this scene.
+                      </p>
+                    </div>
+
+                    {/* Condition trackers (GM-only placeholder) */}
+                    <div className="bg-white/5 rounded-xl border border-purple-500/40 p-5">
+                      <h2 className="text-lg font-semibold text-purple-200 mb-2">
+                        Condition trackers
+                      </h2>
+                      <p className="text-zinc-400 text-sm">
+                        Here you&apos;ll track things like Kriaxin&apos;s corruption,
+                        Roman&apos;s stress, Akumu&apos;s contract pressure, etc. For
+                        now this is a free-text placeholder until we wire real data.
+                      </p>
+                    </div>
+
+                    {/* Future hooks / timers / foreshadowing */}
+                    <div className="bg-white/5 rounded-xl border border-purple-500/40 p-5">
+                      <h2 className="text-lg font-semibold text-purple-200 mb-2">
+                        Future hooks & timelines
+                      </h2>
+                      <p className="text-zinc-400 text-sm mb-2">
+                        Space for timers, foreshadowing notes, missed clues, and
+                        spoiler timelines tied to this session.
+                      </p>
+                      <p className="text-zinc-500 text-xs">
+                        (Currently using gmPrep as a rough placeholder seed.)
+                      </p>
+                    </div>
+
+                    {/* Multi-session arcs */}
+                    <div className="bg-white/5 rounded-xl border border-purple-500/40 p-5">
+                      <h2 className="text-lg font-semibold text-purple-200 mb-2">
+                        Multi-session arcs & progress
+                      </h2>
+                      <p className="text-zinc-400 text-sm">
+                        Placeholder for tracking how long arcs (Kiyomi, Ciara,
+                        Nexus corruption, etc.) advance with this session — later
+                        this can become progress bars per arc.
+                      </p>
+                    </div>
+
+                    {/* Milestone Power Bible integration */}
+                    <div className="bg-white/5 rounded-xl border border-purple-500/40 p-5">
+                      <h2 className="text-lg font-semibold text-purple-200 mb-2">
+                        Milestone Power Bible
+                      </h2>
+                      <p className="text-zinc-400 text-sm">
+                        Slot for linking this session to your Milestone level /
+                        power progression notes. For now this is just a GM-only
+                        reminder panel.
+                      </p>
+                    </div>
+
+                    {/* DM tools */}
+                    <div className="bg-white/5 rounded-xl border border-purple-500/40 p-5">
+                      <h2 className="text-lg font-semibold text-purple-200 mb-2">
+                        DM tools
+                      </h2>
+                      <p className="text-zinc-400 text-sm">
+                        Future home for combat prep helpers, an initiative
+                        tracker, and quick dice tools specific to this session.
+                      </p>
+                    </div>
                   </div>
                 )}
               </div>
 
-              {/* Small footer */}
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm text-zinc-400 pt-2">
+              {/* Metadata strip */}
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm text-zinc-400 pt-2">
                 <div className="flex items-center gap-3">
                   <Users className="w-4 h-4 text-zinc-500" />
                   <span>{session.players} active players in this session.</span>
@@ -358,6 +496,13 @@ export default function SessionProfile() {
                 <div className="flex items-center gap-3">
                   <Map className="w-4 h-4 text-zinc-500" />
                   <span>Map: {session.map}</span>
+                </div>
+                <div className="flex items-center gap-3">
+                  <Clock className="w-4 h-4 text-zinc-500" />
+                  <span>
+                    Status: {session.status} • Duration: {session.duration} •
+                    Visibility: {isGmOnly ? "GM-only" : "Player-visible"}
+                  </span>
                 </div>
               </div>
             </div>
