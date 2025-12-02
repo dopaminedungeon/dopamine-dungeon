@@ -256,14 +256,28 @@ const [formData, setFormData] = useState({
                         </div>
                         <div>
                           <div className="flex items-center gap-3">
-                            <h3 className="text-lg font-bold text-white group-hover:text-emerald-300 transition-colors">
-                              {session.name}
-                            </h3>
-                            <span className={`flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium ${status.text} bg-white/5`}>
-                              <span className={`w-1.5 h-1.5 rounded-full ${status.color} ${session.status === 'active' ? 'animate-pulse' : ''}`} />
-                              {status.label}
-                            </span>
-                          </div>
+  <h3 className="text-lg font-bold text-white group-hover:text-emerald-300 transition-colors">
+    {session.name}
+  </h3>
+
+  {/* GM-only badge – only visible in GM mode */}
+  {isGM && isGmOnly && (
+    <span className="px-2 py-0.5 rounded-full text-[10px] font-medium bg-red-500/20 text-red-300 border border-red-500/40">
+      GM ONLY
+    </span>
+  )}
+
+  <span
+    className={`flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium ${status.text} bg-white/5`}
+  >
+    <span
+      className={`w-1.5 h-1.5 rounded-full ${status.color} ${
+        session.status === "active" ? "animate-pulse" : ""
+      }`}
+    />
+    {status.label}
+  </span>
+</div>
                           <p className="text-zinc-500 text-sm">{session.map}</p>
                         </div>
                       </div>
