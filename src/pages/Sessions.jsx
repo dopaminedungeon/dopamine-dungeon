@@ -1,9 +1,9 @@
 import React, { useState } from "react";
 import { useNavigate } from "react-router-dom";
+import { useMode } from "../context/ModeContext.jsx";
 import GradientBackground from "../components/GradientBackground";
 import Sidebar from "../components/Sidebar";
 import TopBar from "../components/TopBar";
-import { useMode } from "../context/ModeContext.jsx";
 import {
   Search,
   Plus,
@@ -28,6 +28,7 @@ const mockSessions = [
     startTime: '2024-01-15 19:00',
     map: 'Volcanic Caverns',
     difficulty: 'Mythic',
+    visibility: "public",
     progress: 75
   },
   { 
@@ -40,6 +41,7 @@ const mockSessions = [
     startTime: '2024-01-15 20:00',
     map: 'Enchanted Woods',
     difficulty: 'Normal',
+    visibility: "public",
     progress: 40
   },
   { 
@@ -52,6 +54,7 @@ const mockSessions = [
     startTime: '2024-01-15 18:00',
     map: 'Arena of Champions',
     difficulty: 'Competitive',
+    visibility: "public",
     progress: 60
   },
   { 
@@ -64,6 +67,7 @@ const mockSessions = [
     startTime: '2024-01-14 20:00',
     map: 'Catacombs of Despair',
     difficulty: 'Heroic',
+    visibility: "public",
     progress: 100
   },
   { 
@@ -76,6 +80,7 @@ const mockSessions = [
     startTime: '2024-01-16 21:00',
     map: 'Gauntlet Arena',
     difficulty: 'Extreme',
+    visibility: "gm-only",
     progress: 0
   },
   { 
@@ -88,6 +93,7 @@ const mockSessions = [
     startTime: '2024-01-15 19:30',
     map: 'Crystal Kingdom',
     difficulty: 'Normal',
+    visibility: "gm-only",
     progress: 55
   },
 ];
@@ -121,15 +127,18 @@ const [formData, setFormData] = useState({
   notes: "",
 });
   const navigate = useNavigate();
+  const { isGM } = useMode();
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedStatus, setSelectedStatus] = useState('All');
-  const { isGM } = useMode();
-
+  
   const filteredSessions = mockSessions.filter(session => {
     const matchesSearch = session.name.toLowerCase().includes(searchQuery.toLowerCase());
     const matchesStatus = selectedStatus === 'All' || session.status === selectedStatus.toLowerCase();
     return matchesSearch && matchesStatus;
   });
+  const visibleSessions = isGM
+  ? filteredSessions
+  : filteredSessions.filter((session) => session.visibility === "public");
 
   const activeSessions = mockSessions.filter(s => s.status === 'active').length;
   const totalPlayers = mockSessions.reduce((acc, s) => acc + s.players, 0);
@@ -228,16 +237,17 @@ const [formData, setFormData] = useState({
 
             {/* Sessions List */}
             <div className="space-y-4">
-              {filteredSessions.map((session) => {
+              {visibleSessions.map((session) => {
                 const status = statusConfig[session.status];
                 const StatusIcon = status.icon;
+                const isGmOnly = session.visibility === "gm-only";
                 
                 return (
-                  <div
-  key={session.id}
-  className="group bg-white/5 backdrop-blur-sm border border-white/10 rounded-2xl p-6 hover:border-emerald-500/30 hover:bg-white/10 transition-all cursor-pointer"
-  onClick={() => navigate(`/sessions/${session.id}`)}
->
+    <div
+      key={session.id}
+      className="group bg-white/5 backdrop-blur-sm border border-white/10 rounded-2xl p-6 hover:border-purple-500/30 hover:bg-white/10 transition-all cursor-pointer"
+      onClick={() => navigate(`/sessions/${session.id}`)}
+    >
                     <div className="flex flex-col lg:flex-row lg:items-center gap-4">
                       {/* Session Info */}
                       <div className="flex items-center gap-4 flex-1">
