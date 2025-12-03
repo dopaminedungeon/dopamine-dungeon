@@ -1,6 +1,6 @@
 // src/pages/SessionProfile.jsx
 import React, { useState } from "react";
-import { useParams, useNavigate } from "react-router-dom";
+import { useParams, useNavigate, useSearchParams } from "react-router-dom";
 import GradientBackground from "../components/GradientBackground";
 import Sidebar from "../components/Sidebar";
 import TopBar from "../components/TopBar";
@@ -163,8 +163,35 @@ export default function SessionProfile() {
   const { id } = useParams();
   const navigate = useNavigate();
   const { isGM } = useMode();
+  const [searchParams] = useSearchParams();
+  const isGmView = isGM && searchParams.get("mode") !== "player";
 
   const session = MOCK_SESSION_DATA[id];
+
+  const [editMode, setEditMode] = useState(false);
+  const [editableSession, setEditableSession] = useState({ ...session });
+
+  const [gmPrepText, setGmPrepText] = useState(
+    (session && session.gmPrep) ? session.gmPrep.join("\n") : ""
+  );
+  const [encounterStageText, setEncounterStageText] = useState(
+    "Placeholder for tracking the current encounter phase: which stat blocks are in play, objectives, map used, and what triggered this scene."
+  );
+  const [conditionTrackersText, setConditionTrackersText] = useState(
+    "Here you'll track things like Kriaxin's corruption, Roman's stress, Akumu's contract pressure, etc. For now this is a free-text placeholder until we wire real data."
+  );
+  const [futureHooksText, setFutureHooksText] = useState(
+    "Space for timers, foreshadowing notes, missed clues, and spoiler timelines tied to this session."
+  );
+  const [multiSessionText, setMultiSessionText] = useState(
+    "Placeholder for tracking how long arcs (Kiyomi, Ciara, Nexus corruption, etc.) advance with this session — later this can become progress bars per arc."
+  );
+  const [milestoneBibleText, setMilestoneBibleText] = useState(
+    "Slot for linking this session to your Milestone level / power progression notes. For now this is just a GM-only reminder panel."
+  );
+  const [dmToolsText, setDmToolsText] = useState(
+    "Future home for combat prep helpers, an initiative tracker, and quick dice tools specific to this session."
+  );
 
   // No such session at all
   if (!session) {
@@ -189,10 +216,8 @@ export default function SessionProfile() {
     );
   }
 
-  const isGmOnly = session.visibility === "gm-only";
-
-  // Player trying to open GM-only session
-  if (isGmOnly && !isGM) {
+  // GM restriction guard: prevent players from viewing GM-only sessions
+  if (session.visibility === "gm-only" && !isGmView) {
     return (
       <GradientBackground>
         <div className="flex min-h-screen">
@@ -213,8 +238,7 @@ export default function SessionProfile() {
                   Hidden by the Dungeon Master
                 </h1>
                 <p className="text-zinc-400 text-sm max-w-xl">
-                  This session is still in planning or is reserved as a surprise.
-                  Ask your DM before snooping around, chaos goblin. 💜
+                  This session is GM-only. Nice try, chaos goblin 💜
                 </p>
               </div>
             </main>
@@ -224,8 +248,8 @@ export default function SessionProfile() {
     );
   }
 
-  const [editMode, setEditMode] = useState(false);
-  const [editableSession, setEditableSession] = useState({ ...session });
+  const isGmOnly = session.visibility === "gm-only";
+
 
   const viewSession = editMode ? editableSession : session;
   const isGmOnlyCurrent = viewSession.visibility === "gm-only";
@@ -237,27 +261,14 @@ export default function SessionProfile() {
     }));
   };
 
-  const [gmPrepText, setGmPrepText] = useState(
-    (session.gmPrep || []).join("\n")
-  );
-  const [encounterStageText, setEncounterStageText] = useState(
-    "Placeholder for tracking the current encounter phase: which stat blocks are in play, objectives, map used, and what triggered this scene."
-  );
-  const [conditionTrackersText, setConditionTrackersText] = useState(
-    "Here you'll track things like Kriaxin's corruption, Roman's stress, Akumu's contract pressure, etc. For now this is a free-text placeholder until we wire real data."
-  );
-  const [futureHooksText, setFutureHooksText] = useState(
-    "Space for timers, foreshadowing notes, missed clues, and spoiler timelines tied to this session."
-  );
-  const [multiSessionText, setMultiSessionText] = useState(
-    "Placeholder for tracking how long arcs (Kiyomi, Ciara, Nexus corruption, etc.) advance with this session — later this can become progress bars per arc."
-  );
-  const [milestoneBibleText, setMilestoneBibleText] = useState(
-    "Slot for linking this session to your Milestone level / power progression notes. For now this is just a GM-only reminder panel."
-  );
-  const [dmToolsText, setDmToolsText] = useState(
-    "Future home for combat prep helpers, an initiative tracker, and quick dice tools specific to this session."
-  );
+  const handleVisibilityChange = (visibility) => {
+    if (!isGM || !editMode) return;
+    setEditableSession((prev) => ({
+      ...prev,
+      visibility,
+    }));
+  };
+
 
   return (
     <GradientBackground>
@@ -306,18 +317,46 @@ export default function SessionProfile() {
                 </div>
 
                 {isGM && (
-                  <button
-                    type="button"
-                    onClick={() => {
-                      if (editMode) {
-                        Object.assign(session, editableSession);
-                      }
-                      setEditMode((prev) => !prev);
-                    }}
-                    className="self-start px-3 py-1.5 rounded-xl bg-white/5 border border-white/10 text-xs text-zinc-300 hover:bg-white/10 transition"
-                  >
-                    {editMode ? "Done" : "Edit"}
-                  </button>
+                  <div className="flex items-center gap-3 self-start">
+                    <div className="flex items-center gap-1 bg-white/5 border border-white/10 rounded-full p-1">
+                      <button
+                        type="button"
+                        disabled={!editMode}
+                        onClick={() => handleVisibilityChange("public")}
+                        className={`px-3 py-1 rounded-full text-xs font-medium transition ${
+                          viewSession.visibility === "public"
+                            ? "bg-emerald-500 text-white"
+                            : "text-zinc-300 hover:text-white hover:bg-white/10 disabled:opacity-40 disabled:hover:bg-transparent disabled:hover:text-zinc-400"
+                        }`}
+                      >
+                        Player-visible
+                      </button>
+                      <button
+                        type="button"
+                        disabled={!editMode}
+                        onClick={() => handleVisibilityChange("gm-only")}
+                        className={`px-3 py-1 rounded-full text-xs font-medium transition ${
+                          viewSession.visibility === "gm-only"
+                            ? "bg-red-500 text-white"
+                            : "text-zinc-300 hover:text-white hover:bg-white/10 disabled:opacity-40 disabled:hover:bg-transparent disabled:hover:text-zinc-400"
+                        }`}
+                      >
+                        GM-only
+                      </button>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (editMode) {
+                          Object.assign(session, editableSession);
+                        }
+                        setEditMode((prev) => !prev);
+                      }}
+                      className="px-3 py-1.5 rounded-xl bg-white/5 border border-white/10 text-xs text-zinc-300 hover:bg-white/10 transition"
+                    >
+                      {editMode ? "Done" : "Edit"}
+                    </button>
+                  </div>
                 )}
               </div>
 
