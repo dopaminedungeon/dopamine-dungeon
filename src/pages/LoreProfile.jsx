@@ -740,7 +740,7 @@ export default function LoreProfile() {
                   </p>
 
                   {/* Title */}
-                  {isEditing ? (
+                  {isGMMode && isEditing ? (
                     <input
                       type="text"
                       value={effectiveData.title || ""}
@@ -756,7 +756,7 @@ export default function LoreProfile() {
                   )}
 
                   {/* Summary / tagline */}
-                  {isEditing ? (
+                  {isGMMode && isEditing ? (
                     <textarea
                       rows={3}
                       value={effectiveData.summary || ""}
