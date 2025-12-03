@@ -11,6 +11,8 @@ import Maps from "./pages/Maps";
 import MapProfile from "./pages/MapProfile";
 import Settings from "./pages/Settings";
 import { auth, db, storage } from "./firebase";
+import Lore from "./pages/Lore";
+import LoreProfile from "./pages/LoreProfile";
 
 function App() {
   return (
@@ -29,6 +31,8 @@ function App() {
 
         <Route path="/maps" element={<Maps />} />
         <Route path="/maps/:id" element={<MapProfile />} />
+        <Route path="/lore" element={<Lore />} />
+        <Route path="/lore/:id" element={<LoreProfile />} />
       </Routes>
     </BrowserRouter>
   );
