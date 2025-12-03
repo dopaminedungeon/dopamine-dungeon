@@ -9,6 +9,7 @@ import {
   Settings,
   Gamepad2,
   ChevronRight,
+  BookOpen,
 } from "lucide-react";
 
 const navItems = [
@@ -17,6 +18,7 @@ const navItems = [
   { icon: Package, label: "Items", path: "/items" },
   { icon: Clock, label: "Sessions", path: "/sessions" },
   { icon: Map, label: "Maps", path: "/maps" },
+  { icon: BookOpen, label: "Lore", path: "/lore" },
   { icon: Settings, label: "Settings", path: "/settings" },
 ];
 

@@ -304,7 +304,7 @@ export default function MapProfile() {
 
                 {/* Name + subtitle + location */}
                 <div className="absolute bottom-4 left-6 space-y-1">
-                  {editMode ? (
+                  {isGmView && editMode ? (
                     <input
                       className="text-3xl font-bold text-white bg-white/10 px-2 py-1 rounded-xl w-full"
                       value={editableMap.name}
@@ -313,7 +313,7 @@ export default function MapProfile() {
                   ) : (
                     <h1 className="text-3xl font-bold text-white">{map.name}</h1>
                   )}
-                  {editMode ? (
+                  {isGmView && editMode ? (
                     <input
                       className="text-sm text-white bg-white/10 px-2 py-1 rounded-xl w-full"
                       value={editableMap.subtitle}
@@ -324,7 +324,7 @@ export default function MapProfile() {
                       <p className="text-zinc-300 text-sm">{map.subtitle}</p>
                     )
                   )}
-                  {editMode ? (
+                  {isGmView && editMode ? (
                     <div className="flex items-center gap-2 text-xs text-zinc-200 mt-1">
                       <Compass className="w-3 h-3 text-zinc-400" />
                       <input
@@ -348,7 +348,7 @@ export default function MapProfile() {
                 {/* Type, size + visibility pill */}
                 <div className="absolute top-4 right-6 flex items-start gap-3">
                   <div className="flex flex-col items-end gap-2">
-                    {editMode ? (
+                    {isGmView && editMode ? (
                       <div className="flex gap-2">
                         <input
                           className="px-2 py-1 rounded-lg bg-black/50 border border-white/20 text-xs text-white w-28"
@@ -427,7 +427,7 @@ export default function MapProfile() {
                   <div>
                     <p className="text-zinc-500 text-xs">Location Type</p>
                     <p className="text-white font-medium">
-                      {editMode ? (
+                      {isGmView && editMode ? (
                         <input
                           className="px-2 py-1 rounded-lg bg-black/40 border border-white/20 text-xs text-white w-40"
                           value={editableMap.category || ""}
@@ -446,7 +446,7 @@ export default function MapProfile() {
                   <div>
                     <p className="text-zinc-500 text-xs">Recommended Players</p>
                     <p className="text-white font-medium">
-                      {editMode ? (
+                      {isGmView && editMode ? (
                         <input
                           className="px-2 py-1 rounded-lg bg-black/40 border border-white/20 text-xs text-white w-24"
                           value={editableMap.players || ""}
@@ -465,7 +465,7 @@ export default function MapProfile() {
                   <div>
                     <p className="text-zinc-500 text-xs">Content</p>
                     <p className="text-white font-medium">
-                      {editMode ? (
+                      {isGmView && editMode ? (
                         <div className="flex items-center gap-2">
                           <input
                             type="number"
@@ -518,7 +518,7 @@ export default function MapProfile() {
                   <h2 className="text-lg font-semibold text-white mb-2">
                     Map description
                   </h2>
-                  {editMode ? (
+                  {isGmView && editMode ? (
                     <textarea
                       className="w-full bg-white/10 text-white rounded-xl p-3 text-sm"
                       rows={4}
@@ -541,7 +541,7 @@ export default function MapProfile() {
                   </div>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     {visibleKeyFeatures.map((feat, idx) => {
-                      if (editMode) {
+                      if (isGmView && editMode) {
                         const updateFeature = (idx, field, value) => {
                           setKeyFeaturesData((prev) => {
                             const next = [...prev];
@@ -605,7 +605,7 @@ export default function MapProfile() {
                   </div>
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     {npcsPresentData.map((npc, idx) => {
-                      if (editMode) {
+                      if (isGmView && editMode) {
                         const updateNpc = (idx, field, value) => {
                           setNpcsPresentData((prev) => {
                             const next = [...prev];
@@ -663,7 +663,7 @@ export default function MapProfile() {
                         className="flex items-start gap-2 text-zinc-300"
                       >
                         <span className="mt-1 h-1.5 w-1.5 rounded-full bg-indigo-400" />
-                        {editMode ? (
+                        {isGmView && editMode ? (
                           <input
                             className="w-full bg-black/40 border border-white/20 rounded-lg px-2 py-1 text-xs text-zinc-100"
                             value={entry}
@@ -684,7 +684,7 @@ export default function MapProfile() {
                   </ul>
                   <p className="mt-3 text-xs text-zinc-500">
                     Current state:{" "}
-                    {editMode ? (
+                    {isGmView && editMode ? (
                       <input
                         className="ml-1 px-2 py-1 rounded-lg bg-black/40 border border-white/20 text-[11px] text-zinc-100 w-64 max-w-full"
                         value={editableMap.state || ""}
@@ -859,7 +859,7 @@ export default function MapProfile() {
             <div className="mt-8 border-t border-white/10 pt-4 text-xs text-zinc-400 flex flex-wrap gap-4">
               <span>
                 Campaign:{" "}
-                {editMode ? (
+                {isGmView && editMode ? (
                   <input
                     className="ml-1 px-2 py-1 rounded-lg bg-black/40 border border-white/20 text-[11px] text-zinc-100"
                     value={editableMap.campaign || ""}
@@ -875,7 +875,7 @@ export default function MapProfile() {
               </span>
               <span>
                 Category:{" "}
-                {editMode ? (
+                {isGmView && editMode ? (
                   <input
                     className="ml-1 px-2 py-1 rounded-lg bg-black/40 border border-white/20 text-[11px] text-zinc-100"
                     value={editableMap.category || ""}
@@ -891,7 +891,7 @@ export default function MapProfile() {
               </span>
               <span>
                 Creator:{" "}
-                {editMode ? (
+                {isGmView && editMode ? (
                   <input
                     className="ml-1 px-2 py-1 rounded-lg bg-black/40 border border-white/20 text-[11px] text-zinc-100"
                     value={editableMap.creator || ""}
@@ -908,7 +908,7 @@ export default function MapProfile() {
               <span className="inline-flex items-center gap-1">
                 <Tag className="w-3 h-3" />
                 Tags:{" "}
-                {editMode ? (
+                {isGmView && editMode ? (
                   <input
                     className="ml-1 px-2 py-1 rounded-lg bg-black/40 border border-white/20 text-[11px] text-zinc-100"
                     value={
@@ -934,7 +934,7 @@ export default function MapProfile() {
               </span>
               <span>
                 Last updated:{" "}
-                {editMode ? (
+                {isGmView && editMode ? (
                   <input
                     className="ml-1 px-2 py-1 rounded-lg bg-black/40 border border-white/20 text-[11px] text-zinc-100"
                     value={editableMap.lastUpdated || ""}
