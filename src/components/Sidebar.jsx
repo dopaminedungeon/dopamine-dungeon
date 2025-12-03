@@ -11,20 +11,29 @@ import {
   ChevronRight,
   BookOpen,
 } from "lucide-react";
-
-const navItems = [
-  { icon: LayoutDashboard, label: "Dashboard", path: "/" },
-  { icon: Users, label: "NPCs", path: "/npcs" },
-  { icon: Package, label: "Items", path: "/items" },
-  { icon: Clock, label: "Sessions", path: "/sessions" },
-  { icon: Map, label: "Maps", path: "/maps" },
-  { icon: BookOpen, label: "Lore", path: "/lore" },
-  { icon: Settings, label: "Settings", path: "/settings" },
-];
+import { useMode } from "../context/ModeContext.jsx";
 
 export default function Sidebar() {
   const location = useLocation();
   const currentPath = location.pathname;
+  const { isGM } = useMode();
+
+  const baseNav = [
+    { icon: LayoutDashboard, label: "Dashboard", path: "/" },
+    { icon: Users, label: "NPCs", path: "/npcs" },
+    { icon: Package, label: "Items", path: "/items" },
+    { icon: Clock, label: "Sessions", path: "/sessions" },
+    { icon: Map, label: "Maps", path: "/maps" },
+    { icon: BookOpen, label: "Lore", path: "/lore" },
+    { icon: Settings, label: "Settings", path: "/settings" },
+  ];
+  const navItems = isGM
+    ? [
+        ...baseNav.slice(0, 5),
+        { icon: BookOpen, label: "Arcs", path: "/arcs" },
+        ...baseNav.slice(5),
+      ]
+    : baseNav;
 
   return (
     <aside className="fixed left-0 top-0 h-full w-64 bg-black/40 backdrop-blur-xl border-r border-white/5 flex flex-col z-50">

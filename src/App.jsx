@@ -13,6 +13,8 @@ import Settings from "./pages/Settings";
 import { auth, db, storage } from "./firebase";
 import Lore from "./pages/Lore";
 import LoreProfile from "./pages/LoreProfile";
+import Arcs from "./pages/Arcs";
+import ArcProfile from "./pages/ArcProfile";
 
 function App() {
   return (
@@ -33,6 +35,8 @@ function App() {
         <Route path="/maps/:id" element={<MapProfile />} />
         <Route path="/lore" element={<Lore />} />
         <Route path="/lore/:id" element={<LoreProfile />} />
+        <Route path="/arcs" element={<Arcs />} />
+        <Route path="/arcs/:id" element={<ArcProfile />} />
       </Routes>
     </BrowserRouter>
   );
