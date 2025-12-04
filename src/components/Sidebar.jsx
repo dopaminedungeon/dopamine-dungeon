@@ -29,9 +29,16 @@ export default function Sidebar() {
   ];
   const navItems = isGM
     ? [
-        ...baseNav.slice(0, 5),
+        // Common entries
+        ...baseNav.slice(0, 5), // Dashboard, NPCs, Items, Sessions, Maps
+        // GM-only: Arcs
         { icon: BookOpen, label: "Arcs", path: "/arcs" },
-        ...baseNav.slice(5),
+        // Lore
+        baseNav[5],
+        // GM-only: Quests
+        { icon: BookOpen, label: "Quests", path: "/quests" },
+        // Settings
+        baseNav[6],
       ]
     : baseNav;
 
