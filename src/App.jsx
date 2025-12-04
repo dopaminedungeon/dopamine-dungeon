@@ -15,28 +15,28 @@ import Lore from "./pages/Lore";
 import LoreProfile from "./pages/LoreProfile";
 import Arcs from "./pages/Arcs";
 import ArcProfile from "./pages/ArcProfile";
+import Quests from "./pages/Quests.jsx";
+import QuestProfile from "./pages/QuestProfile.jsx";
 
 function App() {
   return (
     <BrowserRouter>
       <Routes>
         <Route path="/" element={<Dashboard />} />
-
         <Route path="/npcs" element={<Npcs />} />
         <Route path="/npcs/:id" element={<NpcProfile />} />
-
         <Route path="/items" element={<Items />} />
         <Route path="/items/:id" element={<ItemProfile />} />
-
         <Route path="/sessions" element={<Sessions />} />
         <Route path="/sessions/:id" element={<SessionProfile />} />
-
         <Route path="/maps" element={<Maps />} />
         <Route path="/maps/:id" element={<MapProfile />} />
         <Route path="/lore" element={<Lore />} />
         <Route path="/lore/:id" element={<LoreProfile />} />
         <Route path="/arcs" element={<Arcs />} />
         <Route path="/arcs/:id" element={<ArcProfile />} />
+        <Route path="/quests" element={<Quests />} />
+        <Route path="/quests/:id" element={<QuestProfile />} />
       </Routes>
     </BrowserRouter>
   );
