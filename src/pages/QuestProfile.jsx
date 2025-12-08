@@ -6,43 +6,7 @@ import Sidebar from "../components/Sidebar";
 import TopBar from "../components/TopBar";
 import { useMode } from "../context/ModeContext.jsx";
 import { ArrowLeft, Tag, Link as LinkIcon } from "lucide-react";
-
-// Temporary mock quest data
-const mockQuest = {
-  id: "1",
-  name: "Nexus Echoes in Langendris",
-  tagline: "Unravel why the city hums with half-remembered dreams.",
-  status: "active", // not-started | active | completed | failed
-  type: "main-arc", // main-arc | side-quest | character-arc | world-arc
-  campaign: "Varionath Core",
-  playerSummary:
-    "Strange echoes ripple through Langendris. People wake up with someone else's memories, and the Nexus stones in the city walls thrum louder each week.",
-  playerSteps: [
-    "Investigate unusual dreams and memory slips in the Takeru District.",
-    "Track the connection between the Nexus stones and the recent disappearances.",
-  ],
-  visibleConsequences:
-    "Whispers of 'the Last Shadow' spread through taverns. Clerics report prayers going to the wrong gods.",
-  playerRewards:
-    "Gold from worried nobles, rare Nexus fragments, new allies in the Moonlit Archive.",
-  gmSummary:
-    "The Last Shadow is using Langendris as a testbed, bleeding 'taste' and 'memory' together via corrupted Nexus stones. This arc sets up the reveal of Ciara's fractured senses.",
-  gmSteps: [
-    "Kiyomi notices script anomalies in city records and quietly flags the party.",
-    "A minor cult in Waldenmont begins 'harvesting' memories as offerings.",
-    "A failed ritual causes one PC to glimpse the true form of the Last Shadow.",
-  ],
-  gmConsequences:
-    "If ignored, Langendris becomes partially memory-scarred: maps, contracts, and even names no longer line up. Factions exploit the chaos.",
-  gmRewards:
-    "Foothold for the Last Shadow, leverage over Kiyomi, and a direct line into the party's personal histories.",
-  tags: ["nexus", "langendris", "last-shadow", "main-arc"],
-  linkedSessionsCount: 3,
-  linkedNpcsCount: 5,
-  linkedItemsCount: 2,
-  linkedMapsCount: 2,
-  linkedLoreCount: 4,
-};
+import { mockQuest } from "../data/mockQuests.js";
 
 const statusOptions = [
   { value: "not-started", label: "Not started", color: "bg-zinc-700 text-zinc-200" },

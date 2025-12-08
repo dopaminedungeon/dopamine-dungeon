@@ -6,6 +6,7 @@ import TopBar from "../components/TopBar";
 import GradientBackground from "../components/GradientBackground";
 import { ArrowLeft } from "lucide-react";
 import { useMode } from "../context/ModeContext.jsx";
+import { mockArcs } from "../data/mockArcs";
 
 const defaultArc = {
   id: "1",

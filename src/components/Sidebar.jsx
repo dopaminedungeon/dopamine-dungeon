@@ -31,13 +31,19 @@ export default function Sidebar() {
     ? [
         // Common entries
         ...baseNav.slice(0, 5), // Dashboard, NPCs, Items, Sessions, Maps
+
         // GM-only: Arcs
         { icon: BookOpen, label: "Arcs", path: "/arcs" },
-        // Lore
+
+        // Lore (shared)
         baseNav[5],
-        // GM-only: Quests
+
+        // GM-only: Quests, Relationships, Conditions
         { icon: BookOpen, label: "Quests", path: "/quests" },
-        // Settings
+        { icon: BookOpen, label: "Relationships", path: "/relationships" },
+        { icon: BookOpen, label: "Conditions", path: "/conditions" },
+
+        // Settings (shared)
         baseNav[6],
       ]
     : baseNav;

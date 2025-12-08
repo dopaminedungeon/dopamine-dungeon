@@ -13,72 +13,7 @@ import {
   ShoppingBag,
   MessageSquare,
 } from "lucide-react";
-
-const mockNpcs = [
-  {
-    id: 1,
-    name: "Grimlock the Wise",
-    type: "Merchant",
-    level: 12,
-    location: "Crystal Market",
-    health: 450,
-    description:
-      "A weathered merchant who deals in rare artifacts and forbidden knowledge.",
-    visibility: "public",
-  },
-  {
-    id: 2,
-    name: "Sera Nightwhisper",
-    type: "Quest Giver",
-    level: 25,
-    location: "Shadow Grove",
-    health: 800,
-    description: "An enigmatic elf who guides heroes on dangerous quests.",
-    visibility: "public",
-  },
-  {
-    id: 3,
-    name: "Thornax the Destroyer",
-    type: "Boss",
-    level: 50,
-    location: "Obsidian Fortress",
-    health: 15000,
-    description:
-      "A fearsome demon lord who guards the gates of the underworld.",
-    visibility: "gm-only",
-  },
-  {
-    id: 4,
-    name: "Old Man Jenkins",
-    type: "NPC",
-    level: 5,
-    location: "Starting Village",
-    health: 100,
-    description:
-      "A friendly villager who offers guidance to new adventurers.",
-    visibility: "public",
-  },
-  {
-    id: 5,
-    name: "Zephyr Stormcaller",
-    type: "Quest Giver",
-    level: 35,
-    location: "Skyward Peak",
-    health: 1200,
-    description: "A powerful mage who controls the winds and storms.",
-    visibility: "gm-only",
-  },
-  {
-    id: 6,
-    name: "Blackfang",
-    type: "Boss",
-    level: 40,
-    location: "Venom Caves",
-    health: 12000,
-    description: "A giant spider queen with deadly poison attacks.",
-    visibility: "gm-only",
-  },
-];
+import { mockNpcs } from "../data/mockNpcs.js";
 
 const typeIcons = {
   Merchant: ShoppingBag,

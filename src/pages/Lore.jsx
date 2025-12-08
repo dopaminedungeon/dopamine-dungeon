@@ -14,39 +14,7 @@ import {
   Tag,
 } from "lucide-react";
 import { useMode } from "../context/ModeContext.jsx";
-
-const MOCK_LORE = [
-  {
-    id: 1,
-    title: "Chronicles of Varionath",
-    type: "World",
-    category: "World Overview",
-    rarity: "Major",
-    visibility: "public",
-    synopsis: "High-level overview of Varionath, its planes, and core metaphysics.",
-    tags: ["planes", "cosmology", "history"],
-  },
-  {
-    id: 2,
-    title: "Nexus Points",
-    type: "Concept",
-    category: "Magic",
-    rarity: "Major",
-    visibility: "public",
-    synopsis: "Ancient loci of power where reality thins and senses fracture.",
-    tags: ["nexus", "senses", "magic"],
-  },
-  {
-    id: 3,
-    title: "Court of Shattered Dawn",
-    type: "Faction",
-    category: "Fey Court",
-    rarity: "Minor",
-    visibility: "gm-only",
-    synopsis: "A hidden fey faction secretly influencing mortal dreams and omens.",
-    tags: ["fey", "faction", "dreams"],
-  },
-];
+import { MOCK_LORE } from "../data/mockLore";
 
 const TYPE_FILTERS = ["All", "World", "Location", "Deity", "Faction", "Event", "Concept"];
 const RARITY_FILTERS = ["All", "Major", "Minor", "Obscure"];
