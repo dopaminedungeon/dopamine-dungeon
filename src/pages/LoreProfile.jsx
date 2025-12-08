@@ -6,40 +6,7 @@ import Sidebar from "../components/Sidebar";
 import TopBar from "../components/TopBar";
 import { useMode } from "../context/ModeContext.jsx";
 import { ArrowLeft, Tag } from "lucide-react";
-
-// Mock lore entries with basic template hints
-const MOCK_LORE = {
-  1: {
-    id: 1,
-    title: "Chronicles of Varionath",
-    type: "World",
-    template: "concept", // generic world/meta concept
-    category: "World Overview",
-    summary:
-      "High-level overview of Varionath, its planes, the Veins of Reality, and the central metaphysical rules.",
-    playerFacing:
-      "Varionath is a fractured world stitched together by ancient powers. Most folk only know the surface level of these stories.",
-    gmNotes:
-      "Use this as the top node that links to Nexus Points, major factions, and pantheon entries. This is GM-only scaffolding for now.",
-    visibility: "gm-only",
-    tags: ["core", "world", "varionath"],
-  },
-  2: {
-    id: 2,
-    title: "Nexus Points",
-    type: "Concept",
-    template: "concept",
-    category: "Magic",
-    summary:
-      "Ancient loci where senses, magic, and reality itself become unstable. Each is tied to a specific 'sense' or aspect.",
-    playerFacing:
-      "Legends speak of places where the world grows thin and strange phenomena occur. Most think they are myths.",
-    gmNotes:
-      "Tie into your Nexus document + Shadow Dragon stuff. This is the backbone of the campaign's deeper arc.",
-    visibility: "gm-only",
-    tags: ["nexus", "senses", "metaphysics"],
-  },
-};
+import { MOCK_LORE } from "../data/mockLore";
 
 // Map internal template key to a nice label
 const TEMPLATE_LABELS = {

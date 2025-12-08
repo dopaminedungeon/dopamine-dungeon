@@ -16,87 +16,8 @@ import {
   Timer,
   TrendingUp,
 } from "lucide-react";
+import { mockSessions } from "../data/mockSessions.js";
 
-const mockSessions = [
-  { 
-    id: 1, 
-    name: "Dragon's Lair Raid", 
-    players: 6,
-    maxPlayers: 8,
-    duration: '2h 30m',
-    status: 'active',
-    startTime: '2024-01-15 19:00',
-    map: 'Volcanic Caverns',
-    difficulty: 'Mythic',
-    visibility: "public",
-    progress: 75
-  },
-  { 
-    id: 2, 
-    name: 'Forest Exploration', 
-    players: 4,
-    maxPlayers: 6,
-    duration: '1h 15m',
-    status: 'active',
-    startTime: '2024-01-15 20:00',
-    map: 'Enchanted Woods',
-    difficulty: 'Normal',
-    visibility: "public",
-    progress: 40
-  },
-  { 
-    id: 3, 
-    name: 'PvP Tournament', 
-    players: 16,
-    maxPlayers: 16,
-    duration: '45m',
-    status: 'paused',
-    startTime: '2024-01-15 18:00',
-    map: 'Arena of Champions',
-    difficulty: 'Competitive',
-    visibility: "public",
-    progress: 60
-  },
-  { 
-    id: 4, 
-    name: 'Dungeon Crawl', 
-    players: 5,
-    maxPlayers: 5,
-    duration: '3h 45m',
-    status: 'completed',
-    startTime: '2024-01-14 20:00',
-    map: 'Catacombs of Despair',
-    difficulty: 'Heroic',
-    visibility: "public",
-    progress: 100
-  },
-  { 
-    id: 5, 
-    name: 'Boss Rush Challenge', 
-    players: 0,
-    maxPlayers: 4,
-    duration: '0m',
-    status: 'scheduled',
-    startTime: '2024-01-16 21:00',
-    map: 'Gauntlet Arena',
-    difficulty: 'Extreme',
-    visibility: "gm-only",
-    progress: 0
-  },
-  { 
-    id: 6, 
-    name: 'Story Campaign Ch.5', 
-    players: 3,
-    maxPlayers: 4,
-    duration: '1h 50m',
-    status: 'active',
-    startTime: '2024-01-15 19:30',
-    map: 'Crystal Kingdom',
-    difficulty: 'Normal',
-    visibility: "gm-only",
-    progress: 55
-  },
-];
 
 const statusConfig = {
   active: { color: 'bg-emerald-500', text: 'text-emerald-400', label: 'Live', icon: Play },

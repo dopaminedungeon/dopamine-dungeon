@@ -4,6 +4,7 @@ import GradientBackground from "../components/GradientBackground";
 import Sidebar from "../components/Sidebar";
 import TopBar from "../components/TopBar";
 import { useMode } from "../context/ModeContext.jsx";
+import { mockItems } from "../data/mockItems";
 import {
   Search,
   Plus,
@@ -17,88 +18,6 @@ import {
   List,
 } from "lucide-react";
 
-const mockItems = [
-  { 
-    id: 1, 
-    name: 'Sword of Eternal Flames', 
-    type: 'Weapon',
-    rarity: 'Legendary', 
-    power: 150,
-    description: 'A blade forged in the heart of a dying star, its flames never extinguish.',
-    visibility: "public",
-    stats: { attack: 150, speed: 20, critical: 15 }
-  },
-  { 
-    id: 2, 
-    name: 'Shield of the Ancients', 
-    type: 'Armor',
-    rarity: 'Epic', 
-    power: 120,
-    description: 'Blessed by the old gods, this shield can block even magical attacks.',
-    visibility: "public",
-    stats: { defense: 120, block: 45, resistance: 30 }
-  },
-  { 
-    id: 3, 
-    name: 'Healing Potion', 
-    type: 'Consumable',
-    rarity: 'Common', 
-    power: 25,
-    description: 'Restores 25% of maximum health when consumed.',
-    visibility: "public",
-    stats: { heal: 25 }
-  },
-  { 
-    id: 4, 
-    name: 'Thunder Staff', 
-    type: 'Weapon',
-    rarity: 'Epic', 
-    power: 135,
-    description: 'Channels the power of lightning storms into devastating magical attacks.',
-    visibility: "public",
-    stats: { attack: 135, magic: 80, critical: 25 }
-  },
-  { 
-    id: 5, 
-    name: 'Boots of Swiftness', 
-    type: 'Armor',
-    rarity: 'Rare', 
-    power: 60,
-    description: 'Enchanted boots that increase movement speed significantly.',
-    visibility: "gm-only",
-    stats: { speed: 60, dodge: 20 }
-  },
-  { 
-    id: 6, 
-    name: 'Mana Crystal', 
-    type: 'Consumable',
-    rarity: 'Uncommon', 
-    power: 40,
-    description: 'Restores 40% of maximum mana when consumed.',
-    visibility: "gm-only",
-    stats: { mana: 40 }
-  },
-  { 
-    id: 7, 
-    name: 'Dragon Scale Armor', 
-    type: 'Armor',
-    rarity: 'Legendary', 
-    power: 180,
-    description: 'Forged from the scales of an ancient dragon, nearly impenetrable.',
-    visibility: "gm-only",
-    stats: { defense: 180, resistance: 60, health: 100 }
-  },
-  { 
-    id: 8, 
-    name: 'Void Dagger', 
-    type: 'Weapon',
-    rarity: 'Rare', 
-    power: 85,
-    description: 'A dagger that phases through armor, dealing true damage.',
-    visibility: "gm-only",
-    stats: { attack: 85, penetration: 50, speed: 40 }
-  },
-];
 
 const typeIcons = {
   Weapon: Swords,

@@ -4,6 +4,7 @@ import GradientBackground from "../components/GradientBackground";
 import Sidebar from "../components/Sidebar";
 import TopBar from "../components/TopBar";
 import { useMode } from "../context/ModeContext.jsx";
+import { MOCK_MAP_DATA } from "../data/mockMaps.js";
 import {
   ArrowLeft,
   MapPin,
@@ -17,141 +18,6 @@ import {
   Tag,
 } from "lucide-react";
 
-// --- MOCK DATA (will be replaced by Firebase later) ---
-const MOCK_MAP_DATA = {
-  1: {
-    id: 1,
-    name: "Volcanic Caverns",
-    type: "Dungeon",
-    size: "Large",
-    players: "4-8",
-    thumbnail:
-      "https://images.unsplash.com/photo-1518173946687-a4c036bc9982?w=800&h=600&fit=crop",
-    npcs: 24,
-    items: 45,
-    visibility: "gm-only", // "public" | "gm-only"
-    subtitle: "Heart of the sleeping fire titan",
-    locationPath: "Varionath → Southern Range → Ashen Rift",
-    description:
-      "A labyrinth of molten rock and obsidian ledges, where rivers of magma cast hellish light on ancient titan chains.",
-    state: "Corrupted / unstable",
-    campaign: "Chronicles of Varionath",
-    category: "Dungeon",
-    creator: "Magda",
-    tags: ["fire", "titan", "dungeon"],
-    lastUpdated: "2025-12-01",
-  },
-  2: {
-    id: 2,
-    name: "Enchanted Woods",
-    type: "Wilderness",
-    size: "Massive",
-    players: "1-20",
-    thumbnail:
-      "https://images.unsplash.com/photo-1448375240586-882707db888b?w=800&h=600&fit=crop",
-    npcs: 56,
-    items: 120,
-    visibility: "public",
-    subtitle: "Where the veil to the Fey thins",
-    locationPath: "Varionath → Greenwood Expanse → Whisperglade",
-    description:
-      "Misty groves, bioluminescent flowers and ancient oaks warped by Fey magic. The air hums with unseen bargains.",
-    state: "Mostly intact, low-level corruption",
-    campaign: "Chronicles of Varionath",
-    category: "Wilderness",
-    creator: "Magda",
-    tags: ["fey", "forest", "liminal"],
-    lastUpdated: "2025-12-01",
-  },
-  3: {
-    id: 3,
-    name: "Arena of Champions",
-    type: "PvP Arena",
-    size: "Small",
-    players: "2-16",
-    thumbnail:
-      "https://images.unsplash.com/photo-1519681393784-d120267933ba?w=800&h=600&fit=crop",
-    npcs: 4,
-    items: 20,
-    visibility: "public",
-    subtitle: "Where glory and death shake hands",
-    locationPath: "Varionath → Langendris → Lower Rings",
-    description:
-      "Stone terraces packed with roaring crowds, arcane wards flaring around a blood-stained sand pit.",
-    state: "Active / controlled",
-    campaign: "Chronicles of Varionath",
-    category: "City Interior",
-    creator: "Magda",
-    tags: ["arena", "city", "pvp"],
-    lastUpdated: "2025-12-01",
-  },
-  4: {
-    id: 4,
-    name: "Catacombs of Despair",
-    type: "Dungeon",
-    size: "Medium",
-    players: "3-5",
-    thumbnail:
-      "https://images.unsplash.com/photo-1509023464722-18d996393ca8?w=800&h=600&fit=crop",
-    npcs: 35,
-    items: 78,
-    visibility: "gm-only",
-    subtitle: "Bones of forgotten rebellions",
-    locationPath: "Varionath → Langendris → Beneath Old Quarter",
-    description:
-      "Endless rows of skulls, flooded corridors and shrines to banned gods, stitched together by desperate graffiti.",
-    state: "Haunted / unstable",
-    campaign: "Chronicles of Varionath",
-    category: "Dungeon",
-    creator: "Magda",
-    tags: ["underground", "undead", "rebel"],
-    lastUpdated: "2025-12-01",
-  },
-  5: {
-    id: 5,
-    name: "Crystal Kingdom",
-    type: "Region",
-    size: "Large",
-    players: "1-4",
-    thumbnail:
-      "https://images.unsplash.com/photo-1534447677768-be436bb09401?w=800&h=600&fit=crop",
-    npcs: 42,
-    items: 95,
-    visibility: "public",
-    subtitle: "Shattered throne of light",
-    locationPath: "Varionath → Northern Shards → Crystal Kingdom",
-    description:
-      "Floating crystal spires and broken causeways, refracting sunlight and magic into dangerous prismatic storms.",
-    state: "Fractured but inhabitable",
-    campaign: "Chronicles of Varionath",
-    category: "Region",
-    creator: "Magda",
-    tags: ["crystal", "ruins", "arcane"],
-    lastUpdated: "2025-12-01",
-  },
-  6: {
-    id: 6,
-    name: "Sunken Depths",
-    type: "Dungeon",
-    size: "Large",
-    players: "4-6",
-    thumbnail:
-      "https://images.unsplash.com/photo-1551244072-5d12893278ab?w=800&h=600&fit=crop",
-    npcs: 28,
-    items: 62,
-    visibility: "gm-only",
-    subtitle: "What the tide refused to keep",
-    locationPath: "Varionath → Western Sea → Drowned Trench",
-    description:
-      "Collapsed temples and barnacle-covered statues lit by eerie deep-sea glow, patrolled by silent silhouettes.",
-    state: "Crushing pressure / hostile",
-    campaign: "Chronicles of Varionath",
-    category: "Dungeon",
-    creator: "Magda",
-    tags: ["water", "ancient", "pressure"],
-    lastUpdated: "2025-12-01",
-  },
-};
 
 export default function MapProfile() {
   const { id } = useParams();
