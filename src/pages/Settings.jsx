@@ -1,7 +1,4 @@
 import React, { useState } from 'react';
-import GradientBackground from '../components/GradientBackground';
-import Sidebar from '../components/Sidebar';
-import TopBar from '../components/TopBar';
 import { 
   User, Bell, Shield, Palette, Database, Globe, 
   Moon, Sun, Volume2, VolumeX, Save, ChevronRight,

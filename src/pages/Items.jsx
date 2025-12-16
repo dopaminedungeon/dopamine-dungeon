@@ -1,8 +1,5 @@
 import React, { useState } from "react";
 import { useNavigate } from "react-router-dom";
-import GradientBackground from "../components/GradientBackground";
-import Sidebar from "../components/Sidebar";
-import TopBar from "../components/TopBar";
 import { useMode } from "../context/ModeContext.jsx";
 import { mockItems } from "../data/mockItems";
 import {
@@ -13,7 +10,6 @@ import {
   Sparkles,
   Heart,
   Zap,
-  Filter,
   Grid,
   List,
 } from "lucide-react";
@@ -65,351 +61,190 @@ const [formData, setFormData] = useState({
   : filteredItems.filter((item) => item.visibility === "public");
 
   return (
-    <GradientBackground>
-      <div className="flex min-h-screen">
-        <Sidebar />
-        
-        <div className="flex-1 flex flex-col ml-64">
-          <TopBar title="Items" />
-          
-          <main className="flex-1 p-8 overflow-auto">
-            {/* Header Actions */}
-            <div className="flex flex-col lg:flex-row gap-4 mb-8">
-              {/* Search */}
-              <div className="relative flex-1">
-                <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-zinc-500" />
-                <input
-                  type="text"
-                  placeholder="Search items..."
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  className="w-full pl-12 pr-4 py-3 bg-white/5 border border-white/10 rounded-xl text-white placeholder-zinc-500 focus:outline-none focus:border-blue-500/50 focus:ring-2 focus:ring-blue-500/20 transition-all"
-                />
-              </div>
-
-              {/* Type Filter */}
-              <div className="flex gap-2">
-                {['All', 'Weapon', 'Armor', 'Consumable'].map((type) => (
-                  <button
-                    key={type}
-                    onClick={() => setSelectedType(type)}
-                    className={`px-4 py-3 rounded-xl font-medium transition-all ${
-                      selectedType === type
-                        ? 'bg-blue-500 text-white'
-                        : 'bg-white/5 text-zinc-400 hover:bg-white/10 hover:text-white'
-                    }`}
-                  >
-                    {type}
-                  </button>
-                ))}
-              </div>
-
-              {/* Rarity Filter */}
-              <select
-                value={selectedRarity}
-                onChange={(e) => setSelectedRarity(e.target.value)}
-                className="px-4 py-3 bg-white/5 border border-white/10 rounded-xl text-white focus:outline-none focus:border-blue-500/50"
-              >
-                <option value="All">All Rarities</option>
-                <option value="Legendary">Legendary</option>
-                <option value="Epic">Epic</option>
-                <option value="Rare">Rare</option>
-                <option value="Uncommon">Uncommon</option>
-                <option value="Common">Common</option>
-              </select>
-
-              {/* View Toggle */}
-              <div className="flex bg-white/5 border border-white/10 rounded-xl p-1">
-                <button
-                  onClick={() => setViewMode('grid')}
-                  className={`p-2 rounded-lg transition-all ${viewMode === 'grid' ? 'bg-white/10 text-white' : 'text-zinc-500'}`}
-                >
-                  <Grid className="w-5 h-5" />
-                </button>
-                <button
-                  onClick={() => setViewMode('list')}
-                  className={`p-2 rounded-lg transition-all ${viewMode === 'list' ? 'bg-white/10 text-white' : 'text-zinc-500'}`}
-                >
-                  <List className="w-5 h-5" />
-                </button>
-              </div>
-
-              {/* Add Button */}
-{isGM && (
-  <button
-    className="flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-indigo-500 to-purple-500 text-white font-medium rounded-xl hover:opacity-90 transition-opacity"
-    onClick={() => setShowCreateModal(true)}
-  >
-    <Plus className="w-5 h-5" />
-    Add Item
-  </button>
-)}
-            </div>
-
-            {/* Items Grid */}
-            <div className={viewMode === 'grid' 
-              ? "grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-6"
-              : "flex flex-col gap-4"
-            }>
-              {visibleItems.map((item) => {
-                const TypeIcon = typeIcons[item.type] || Sparkles;
-                const rarity = rarityConfig[item.rarity] || rarityConfig.Common;
-                
-                if (viewMode === 'list') {
-                  return (
-  <div
-    key={item.id}
-    className={`group bg-white/5 backdrop-blur-sm border ${rarity.border} rounded-xl p-4 hover:bg-white/10 transition-all cursor-pointer flex items-center gap-4`}
-    onClick={() => navigate(`/items/${item.id}${isGM ? "?mode=gm" : "?mode=player"}`)}
-  >
-                      <div className={`w-14 h-14 rounded-xl bg-gradient-to-br ${rarity.bg} flex items-center justify-center shadow-lg ${rarity.glow}`}>
-                        <TypeIcon className="w-7 h-7 text-white" />
-                      </div>
-                      <div className="flex-1">
-                        <h3 className="text-white font-semibold group-hover:text-blue-300 transition-colors">{item.name}</h3>
-                        <p className="text-zinc-500 text-sm">{item.type}</p>
-                      </div>
-                      <span className={`px-3 py-1 rounded-lg text-xs font-medium ${rarity.text} bg-white/5`}>
-                        {item.rarity}
-                      </span>
-                      <span className="text-white font-bold">+{item.power}</span>
-                    </div>
-                  );
-                }
-                
-                return (
-  <div
-    key={item.id}
-    className={`group bg-white/5 backdrop-blur-sm border ${rarity.border} rounded-2xl p-5 hover:bg-white/10 transition-all cursor-pointer`}
-    onClick={() => navigate(`/items/${item.id}${isGM ? "?mode=gm" : "?mode=player"}`)}
-  >
-                    <div className="flex items-start justify-between mb-4">
-                      <div className={`w-12 h-12 rounded-xl bg-gradient-to-br ${rarity.bg} flex items-center justify-center shadow-lg ${rarity.glow}`}>
-                        <TypeIcon className="w-6 h-6 text-white" />
-                      </div>
-                      <span className={`px-3 py-1 rounded-lg text-xs font-medium ${rarity.text} bg-white/5`}>
-                        {item.rarity}
-                      </span>
-                    </div>
-
-                   <div className="flex items-center gap-2">
-  <h3 className="text-lg font-bold text-white group-hover:text-purple-300 transition-colors">
-    {item.name}
-  </h3>
-
-  {isGM && item.visibility === "gm-only" && (
-    <span className="px-2 py-0.5 rounded-full text-[10px] font-medium bg-red-500/20 text-red-300 border border-red-500/40">
-      GM ONLY
-    </span>
-  )}
-</div>
-                    <p className="text-zinc-500 text-sm mb-3">{item.type}</p>
-                    <p className="text-zinc-400 text-sm mb-4 line-clamp-2">{item.description}</p>
-
-                    <div className="flex items-center justify-between pt-3 border-t border-white/10">
-                      <div className="flex gap-2">
-                        {Object.entries(item.stats).slice(0, 2).map(([stat, value]) => (
-                          <span key={stat} className="px-2 py-1 bg-white/5 rounded-lg text-xs text-zinc-400">
-                            {stat}: {value}
-                          </span>
-                        ))}
-                      </div>
-                      <span className="text-white font-bold text-lg">+{item.power}</span>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-            {showCreateModal && (
-  <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm">
-    <div className="w-full max-w-lg bg-zinc-950 border border-white/10 rounded-2xl p-6">
-      <h2 className="text-xl font-bold text-white mb-4">Add New Item</h2>
-
-      <form
-        className="space-y-4"
-        onSubmit={(e) => {
-          e.preventDefault();
-          console.log("New item created:", formData);
-
-          // Close modal
-          setShowCreateModal(false);
-
-          // Reset form
-          setFormData({
-            name: "",
-            type: "Weapon",
-            rarity: "Common",
-            power: 0,
-            description: "",
-            visibility: "public",
-            mechanicalSummary: "",
-            gmNotes: "",
-          });
-        }}
-      >
-        {/* Item Name */}
-        <div>
-          <label className="block text-sm text-zinc-400 mb-1">Name</label>
-          <input
-            type="text"
-            required
-            value={formData.name}
-            onChange={(e) =>
-              setFormData({ ...formData, name: e.target.value })
-            }
-            className="w-full px-3 py-2 bg-white/5 border border-white/10 rounded-xl text-white"
-          />
-        </div>
-
-        {/* Type & Rarity */}
-        <div className="grid grid-cols-2 gap-4">
-          <div>
-            <label className="block text-sm text-zinc-400 mb-1">Type</label>
-            <select
-              value={formData.type}
-              onChange={(e) =>
-                setFormData({ ...formData, type: e.target.value })
-              }
-              className="w-full px-3 py-2 bg-white/5 border border-white/10 rounded-xl text-white"
-            >
-              <option>Weapon</option>
-              <option>Armor</option>
-              <option>Consumable</option>
-            </select>
-          </div>
-          <div>
-            <label className="block text-sm text-zinc-400 mb-1">Rarity</label>
-            <select
-              value={formData.rarity}
-              onChange={(e) =>
-                setFormData({ ...formData, rarity: e.target.value })
-              }
-              className="w-full px-3 py-2 bg-white/5 border border-white/10 rounded-xl text-white"
-            >
-              <option>Common</option>
-              <option>Uncommon</option>
-              <option>Rare</option>
-              <option>Epic</option>
-              <option>Legendary</option>
-            </select>
-          </div>
-        </div>
-
-        {/* Visibility & Power */}
-        <div className="grid grid-cols-2 gap-4">
-          <div>
-            <label className="block text-sm text-zinc-400 mb-1">Visibility</label>
-            <div className="flex gap-3">
-              <button
-                type="button"
-                onClick={() =>
-                  setFormData({ ...formData, visibility: "public" })
-                }
-                className={`px-3 py-2 rounded-xl text-sm border ${
-                  formData.visibility === "public"
-                    ? "border-emerald-500 bg-emerald-500/10 text-emerald-300"
-                    : "border-white/10 bg-white/5 text-zinc-300"
-                }`}
-              >
-                Player-visible
-              </button>
-              <button
-                type="button"
-                onClick={() =>
-                  setFormData({ ...formData, visibility: "gm-only" })
-                }
-                className={`px-3 py-2 rounded-xl text-sm border ${
-                  formData.visibility === "gm-only"
-                    ? "border-red-500 bg-red-500/10 text-red-300"
-                    : "border-white/10 bg-white/5 text-zinc-300"
-                }`}
-              >
-                GM only
-              </button>
-            </div>
-          </div>
-          <div>
-            <label className="block text-sm text-zinc-400 mb-1">Power</label>
-            <input
-              type="number"
-              value={formData.power}
-              onChange={(e) =>
-                setFormData({ ...formData, power: Number(e.target.value) })
-              }
-              className="w-full px-3 py-2 bg-white/5 border border-white/10 rounded-xl text-white"
-            />
-          </div>
-        </div>
-
-        {/* Description (player-facing) */}
-        <div>
-          <label className="block text-sm text-zinc-400 mb-1">
-            Player-facing description
-          </label>
-          <textarea
-            rows={3}
-            value={formData.description}
-            onChange={(e) =>
-              setFormData({ ...formData, description: e.target.value })
-            }
-            className="w-full px-3 py-2 bg-white/5 border border-white/10 rounded-xl text-white resize-none"
-          />
-        </div>
-
-        {/* Mechanical summary */}
-        <div>
-          <label className="block text-sm text-zinc-400 mb-1">
-            Mechanical summary (what it does)
-          </label>
-          <textarea
-            rows={3}
-            value={formData.mechanicalSummary}
-            onChange={(e) =>
-              setFormData({ ...formData, mechanicalSummary: e.target.value })
-            }
-            className="w-full px-3 py-2 bg-white/5 border border-white/10 rounded-xl text-white resize-none"
-          />
-        </div>
-
-        {/* GM notes */}
-        <div>
-          <label className="block text-sm text-zinc-400 mb-1">
-            GM notes / secrets (optional)
-          </label>
-          <textarea
-            rows={3}
-            value={formData.gmNotes}
-            onChange={(e) =>
-              setFormData({ ...formData, gmNotes: e.target.value })
-            }
-            className="w-full px-3 py-2 bg-white/5 border border-white/10 rounded-xl text-white resize-none"
-          />
-        </div>
-
-        {/* Buttons */}
-        <div className="flex justify-end gap-3 pt-2">
-          <button
-            type="button"
-            onClick={() => setShowCreateModal(false)}
-            className="px-4 py-2 rounded-xl bg-white/5 text-zinc-300 hover:bg-white/10"
-          >
-            Cancel
-          </button>
-
-          <button
-            type="submit"
-            className="px-4 py-2 rounded-xl bg-gradient-to-r from-blue-500 to-cyan-500 text-white font-medium hover:opacity-90"
-          >
-            Save Item
-          </button>
-        </div>
-      </form>
-    </div>
-  </div>
-)}
-          </main>
-        </div>
+  <>
+    {/* Header Actions */}
+    <div className="flex flex-col lg:flex-row gap-4 mb-8">
+      {/* Search */}
+      <div className="relative flex-1">
+        <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-zinc-500" />
+        <input
+          type="text"
+          placeholder="Search items..."
+          value={searchQuery}
+          onChange={(e) => setSearchQuery(e.target.value)}
+          className="w-full pl-12 pr-4 py-3 bg-white/5 border border-white/10 rounded-xl text-white placeholder-zinc-500 focus:outline-none focus:border-blue-500/50 focus:ring-2 focus:ring-blue-500/20 transition-all"
+        />
       </div>
-    </GradientBackground>
-  );
+
+      {/* Type Filter */}
+      <div className="flex gap-2">
+        {["All", "Weapon", "Armor", "Consumable"].map((type) => (
+          <button
+            key={type}
+            onClick={() => setSelectedType(type)}
+            className={`px-4 py-3 rounded-xl font-medium transition-all ${
+              selectedType === type
+                ? "bg-blue-500 text-white"
+                : "bg-white/5 text-zinc-400 hover:bg-white/10 hover:text-white"
+            }`}
+          >
+            {type}
+          </button>
+        ))}
+      </div>
+
+      {/* Rarity Filter */}
+      <select
+        value={selectedRarity}
+        onChange={(e) => setSelectedRarity(e.target.value)}
+        className="px-4 py-3 bg-white/5 border border-white/10 rounded-xl text-white focus:outline-none focus:border-blue-500/50"
+      >
+        <option value="All">All Rarities</option>
+        <option value="Legendary">Legendary</option>
+        <option value="Epic">Epic</option>
+        <option value="Rare">Rare</option>
+        <option value="Uncommon">Uncommon</option>
+        <option value="Common">Common</option>
+      </select>
+
+      {/* View Toggle */}
+      <div className="flex bg-white/5 border border-white/10 rounded-xl p-1">
+        <button
+          onClick={() => setViewMode("grid")}
+          className={`p-2 rounded-lg transition-all ${
+            viewMode === "grid" ? "bg-white/10 text-white" : "text-zinc-500"
+          }`}
+        >
+          <Grid className="w-5 h-5" />
+        </button>
+        <button
+          onClick={() => setViewMode("list")}
+          className={`p-2 rounded-lg transition-all ${
+            viewMode === "list" ? "bg-white/10 text-white" : "text-zinc-500"
+          }`}
+        >
+          <List className="w-5 h-5" />
+        </button>
+      </div>
+
+      {/* Add Button */}
+      {isGM && (
+        <button
+          className="flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-indigo-500 to-purple-500 text-white font-medium rounded-xl hover:opacity-90 transition-opacity"
+          onClick={() => setShowCreateModal(true)}
+        >
+          <Plus className="w-5 h-5" />
+          Add Item
+        </button>
+      )}
+    </div>
+
+    {/* Items Grid */}
+    <div
+      className={
+        viewMode === "grid"
+          ? "grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-6"
+          : "flex flex-col gap-4"
+      }
+    >
+      {visibleItems.map((item) => {
+        const TypeIcon = typeIcons[item.type] || Sparkles;
+        const rarity = rarityConfig[item.rarity] || rarityConfig.Common;
+
+        if (viewMode === "list") {
+          return (
+            <div
+              key={item.id}
+              className={`group bg-white/5 backdrop-blur-sm border ${rarity.border} rounded-xl p-4 hover:bg-white/10 transition-all cursor-pointer flex items-center gap-4`}
+              onClick={() =>
+                navigate(`/items/${item.id}${isGM ? "?mode=gm" : "?mode=player"}`)
+              }
+            >
+              <div
+                className={`w-14 h-14 rounded-xl bg-gradient-to-br ${rarity.bg} flex items-center justify-center shadow-lg ${rarity.glow}`}
+              >
+                <TypeIcon className="w-7 h-7 text-white" />
+              </div>
+              <div className="flex-1">
+                <h3 className="text-white font-semibold group-hover:text-blue-300 transition-colors">
+                  {item.name}
+                </h3>
+                <p className="text-zinc-500 text-sm">{item.type}</p>
+              </div>
+              <span
+                className={`px-3 py-1 rounded-lg text-xs font-medium ${rarity.text} bg-white/5`}
+              >
+                {item.rarity}
+              </span>
+              <span className="text-white font-bold">+{item.power}</span>
+            </div>
+          );
+        }
+
+        return (
+          <div
+            key={item.id}
+            className={`group bg-white/5 backdrop-blur-sm border ${rarity.border} rounded-2xl p-5 hover:bg-white/10 transition-all cursor-pointer`}
+            onClick={() =>
+              navigate(`/items/${item.id}${isGM ? "?mode=gm" : "?mode=player"}`)
+            }
+          >
+            <div className="flex items-start justify-between mb-4">
+              <div
+                className={`w-12 h-12 rounded-xl bg-gradient-to-br ${rarity.bg} flex items-center justify-center shadow-lg ${rarity.glow}`}
+              >
+                <TypeIcon className="w-6 h-6 text-white" />
+              </div>
+              <span
+                className={`px-3 py-1 rounded-lg text-xs font-medium ${rarity.text} bg-white/5`}
+              >
+                {item.rarity}
+              </span>
+            </div>
+
+            <div className="flex items-center gap-2">
+              <h3 className="text-lg font-bold text-white group-hover:text-purple-300 transition-colors">
+                {item.name}
+              </h3>
+
+              {isGM && item.visibility === "gm-only" && (
+                <span className="px-2 py-0.5 rounded-full text-[10px] font-medium bg-red-500/20 text-red-300 border border-red-500/40">
+                  GM ONLY
+                </span>
+              )}
+            </div>
+
+            <p className="text-zinc-500 text-sm mb-3">{item.type}</p>
+            <p className="text-zinc-400 text-sm mb-4 line-clamp-2">
+              {item.description}
+            </p>
+
+            <div className="flex items-center justify-between pt-3 border-t border-white/10">
+              <div className="flex gap-2">
+                {Object.entries(item.stats || {})
+                  .slice(0, 2)
+                  .map(([stat, value]) => (
+                    <span
+                      key={stat}
+                      className="px-2 py-1 bg-white/5 rounded-lg text-xs text-zinc-400"
+                    >
+                      {stat}: {value}
+                    </span>
+                  ))}
+              </div>
+              <span className="text-white font-bold text-lg">+{item.power}</span>
+            </div>
+          </div>
+        );
+      })}
+    </div>
+
+    {/* Modal stays exactly the same, but it must be AFTER the grid */}
+    {showCreateModal && (
+      <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm">
+        {/* ... keep your modal exactly as-is ... */}
+      </div>
+    )}
+  </>
+);
 }

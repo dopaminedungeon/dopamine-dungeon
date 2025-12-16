@@ -1,9 +1,6 @@
 // src/pages/Conditions.jsx
 import React, { useState } from "react";
 import { Link } from "react-router-dom";
-import Sidebar from "../components/Sidebar";
-import TopBar from "../components/TopBar";
-import GradientBackground from "../components/GradientBackground";
 import { mockConditions } from "../data/mockConditions";
 import { useMode } from "../context/ModeContext.jsx";
 
@@ -38,35 +35,20 @@ export default function Conditions() {
   );
 const isPlayerView = !isGM;
   if (isPlayerView) {
-      return (
-        <GradientBackground>
-          <div className="flex min-h-screen">
-            <Sidebar />
-            <div className="flex-1 flex flex-col ml-64">
-              <TopBar title="Condition Profile" />
-              <main className="flex-1 p-8 overflow-y-auto flex items-center justify-center">
-                <div className="max-w-xl bg-white/5 border border-white/10 rounded-2xl p-6 text-center">
-                  <h1 className="text-2xl font-bold text-white mb-2">
-                    GM-Only Dashboard
-                  </h1>
-                  <p className="text-zinc-400 text-sm">
-                    Players, this is not your domain. Please leave before I start writing scenes you’ll have to survive later. 💜
-                  </p>
-                </div>
-              </main>
-            </div>
-          </div>
-        </GradientBackground>
-      );
-    }
+    return (
+      <main className="flex-1 p-8 overflow-y-auto flex items-center justify-center">
+        <div className="max-w-xl bg-white/5 border border-white/10 rounded-2xl p-6 text-center">
+          <h1 className="text-2xl font-bold text-white mb-2">GM-Only Dashboard</h1>
+          <p className="text-zinc-400 text-sm">
+            Players, this is not your domain. Please leave before I start writing scenes you’ll have to survive later. 💜
+          </p>
+        </div>
+      </main>
+    );
+  }
 
   return (
-    <GradientBackground>
-      <div className="flex min-h-screen">
-        <Sidebar />
-        <div className="flex-1 flex flex-col ml-64">
-          <TopBar title="Conditions & Reputation" />
-          <main className="flex-1 p-8 overflow-y-auto space-y-8">
+    <main className="flex-1 p-8 overflow-y-auto space-y-8">
             {/* PC CONDITIONS & TRACKERS */}
             <section className="space-y-4">
               <div className="flex items-baseline justify-between gap-4">
@@ -459,9 +441,6 @@ const isPlayerView = !isGM;
                 </div>
               )}
             </section>
-          </main>
-        </div>
-      </div>
-    </GradientBackground>
+    </main>
   );
 }

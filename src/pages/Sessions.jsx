@@ -1,9 +1,6 @@
 import React, { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useMode } from "../context/ModeContext.jsx";
-import GradientBackground from "../components/GradientBackground";
-import Sidebar from "../components/Sidebar";
-import TopBar from "../components/TopBar";
 import {
   Search,
   Plus,
@@ -67,14 +64,7 @@ const [formData, setFormData] = useState({
   const totalPlayers = mockSessions.reduce((acc, s) => acc + s.players, 0);
 
   return (
-    <GradientBackground>
-      <div className="flex min-h-screen">
-        <Sidebar />
-        
-        <div className="flex-1 flex flex-col ml-64">
-          <TopBar title="Sessions" />
-          
-          <main className="flex-1 p-8 overflow-auto">
+    <div className="p-8 overflow-auto">
             {/* Stats */}
             <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-8">
               <div className="bg-white/5 border border-white/10 rounded-xl p-4 flex items-center gap-4">
@@ -440,9 +430,6 @@ const [formData, setFormData] = useState({
     </div>
   </div>
 )}
-          </main>
-        </div>
-      </div>
-    </GradientBackground>
+    </div>
   );
 }
