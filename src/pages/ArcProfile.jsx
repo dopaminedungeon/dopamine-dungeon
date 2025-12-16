@@ -1,9 +1,6 @@
 // src/pages/ArcProfile.jsx
 import { useParams, useNavigate, useSearchParams } from "react-router-dom";
 import { useState } from "react";
-import Sidebar from "../components/Sidebar";
-import TopBar from "../components/TopBar";
-import GradientBackground from "../components/GradientBackground";
 import { ArrowLeft } from "lucide-react";
 import { useMode } from "../context/ModeContext.jsx";
 import { mockArcs } from "../data/mockArcs";
@@ -66,9 +63,10 @@ export default function ArcProfile() {
 
 
   // later we'll fetch real data based on id
-  const [arcData, setArcData] = useState(defaultArc);
+  const initialArc = mockArcs?.find((a) => String(a.id) === String(id)) || defaultArc;
+  const [arcData, setArcData] = useState(initialArc);
   const [isEditing, setIsEditing] = useState(false);
-  const [tagInput, setTagInput] = useState((defaultArc.tags || []).join(", "));
+  const [tagInput, setTagInput] = useState((initialArc.tags || []).join(", "));
 
   const handleFieldChange = (field, value) => {
     setArcData((prev) => ({ ...prev, [field]: value }));
@@ -116,47 +114,32 @@ export default function ArcProfile() {
   // Arcs & timelines are a pure GM tool – no player access to this page.
   if (!isGmMode) {
     return (
-      <GradientBackground>
-        <div className="flex min-h-screen">
-          <Sidebar />
-          <div className="flex-1 flex flex-col ml-64">
-            <TopBar title="GM-Only – Arcs &amp; Timelines" />
-            <main className="flex-1 p-8 overflow-auto">
-              <button
-                className="flex items-center gap-2 text-zinc-400 hover:text-white mb-6"
-                onClick={() => navigate("/")}
-              >
-                <ArrowLeft className="w-5 h-5" />
-                Back to safer timelines
-              </button>
+      <main className="flex-1 p-8 overflow-auto">
+        <button
+          className="flex items-center gap-2 text-zinc-400 hover:text-white mb-6"
+          onClick={() => navigate("/")}
+        >
+          <ArrowLeft className="w-5 h-5" />
+          Back to safer timelines
+        </button>
 
-              <div className="bg-white/5 border border-white/10 rounded-2xl p-8 backdrop-blur-sm">
-                <h1 className="text-3xl font-bold text-white mb-2">
-                  This board is for Dungeon Masters only
-                </h1>
-                <p className="text-zinc-400 text-sm max-w-xl">
-                  Arcs and timelines are where the DM keeps all the red string, conspiracy notes, and
-                  &quot;secretly everyone is doomed&quot; plans. Players don&apos;t get to see this
-                  meta scaffold – you&apos;ll experience it the honest way: by walking into it face first. 💜
-                </p>
-              </div>
-            </main>
-          </div>
+        <div className="bg-white/5 border border-white/10 rounded-2xl p-8 backdrop-blur-sm">
+          <h1 className="text-3xl font-bold text-white mb-2">
+            This board is for Dungeon Masters only
+          </h1>
+          <p className="text-zinc-400 text-sm max-w-xl">
+            Arcs and timelines are where the DM keeps all the red string, conspiracy notes, and
+            &quot;secretly everyone is doomed&quot; plans. Players don&apos;t get to see this
+            meta scaffold – you&apos;ll experience it the honest way: by walking into it face first. 💜
+          </p>
         </div>
-      </GradientBackground>
+      </main>
     );
   }
 
 
   return (
-    <GradientBackground>
-      <div className="flex min-h-screen">
-        <Sidebar />
-
-        <div className="flex-1 flex flex-col ml-64">
-          <TopBar title={arcData.name} />
-
-          <main className="flex-1 p-8 overflow-auto">
+    <main className="flex-1 p-8 overflow-auto">
             {/* Back + Actions */}
             <div className="flex items-center justify-between mb-6">
               <button
@@ -606,9 +589,6 @@ export default function ArcProfile() {
                 </div>
               </section>
             )}
-          </main>
-        </div>
-      </div>
-    </GradientBackground>
+    </main>
   );
 }

@@ -1,100 +1,121 @@
 import React from "react";
-import { Link, useLocation } from "react-router-dom";
-import { 
-  LayoutDashboard, 
-  Users, 
-  Package, 
-  Clock, 
-  Map, 
-  Settings,
-  Gamepad2,
-  ChevronRight,
+import { NavLink } from "react-router-dom";
+import {
+  LayoutDashboard,
+  Users,
+  Package,
+  ScrollText,
   BookOpen,
+  Map,
+  ListTodo,
+  Network,
+  Sparkles,
+  Settings,
 } from "lucide-react";
-import { useMode } from "../context/ModeContext.jsx";
+
+const NavItem = ({ to, icon: Icon, label, isCollapsed }) => (
+  <NavLink
+    to={to}
+    end={to === "/"}
+    className={({ isActive }) =>
+      `flex items-center gap-3 px-3 py-2 rounded-xl transition-colors ${
+        isActive
+          ? "bg-gradient-to-r from-purple-500/20 to-pink-500/20 text-white border border-purple-500/30"
+          : "text-zinc-400 hover:text-white hover:bg-zinc-800/30"
+      }`
+    }
+  >
+    <Icon size={18} className="flex-shrink-0" />
+    {!isCollapsed && <span className="text-sm font-medium">{label}</span>}
+  </NavLink>
+);
 
 export default function Sidebar() {
-  const location = useLocation();
-  const currentPath = location.pathname;
-  const { isGM } = useMode();
+  const [isCollapsed, setIsCollapsed] = React.useState(false);
+  const [userRole, setUserRole] = React.useState("gm");
 
-  const baseNav = [
-    { icon: LayoutDashboard, label: "Dashboard", path: "/" },
-    { icon: Users, label: "NPCs", path: "/npcs" },
-    { icon: Package, label: "Items", path: "/items" },
-    { icon: Clock, label: "Sessions", path: "/sessions" },
-    { icon: Map, label: "Maps", path: "/maps" },
-    { icon: BookOpen, label: "Lore", path: "/lore" },
-    { icon: Settings, label: "Settings", path: "/settings" },
+  const baseNavItems = [
+    { to: "/", icon: LayoutDashboard, label: "Dashboard" },
+    { to: "/npcs", icon: Users, label: "NPCs" },
+    { to: "/items", icon: Package, label: "Items" },
+    { to: "/pcs", icon: ScrollText, label: "PCs" },
+    { to: "/sessions", icon: BookOpen, label: "Sessions" },
+    { to: "/maps", icon: Map, label: "Maps" },
+    { to: "/arcs", icon: Sparkles, label: "Arcs" },
+    { to: "/lore", icon: BookOpen, label: "Lore" },
   ];
-  const navItems = isGM
-    ? [
-        // Common entries
-        ...baseNav.slice(0, 5), // Dashboard, NPCs, Items, Sessions, Maps
 
-        // GM-only: Arcs
-        { icon: BookOpen, label: "Arcs", path: "/arcs" },
+  const gmOnlyItems = [
+    { to: "/quests", icon: ListTodo, label: "Quests" },
+    { to: "/relationships", icon: Network, label: "Relationships" },
+    { to: "/conditions", icon: Sparkles, label: "Conditions" },
+    { to: "/settings", icon: Settings, label: "Settings" },
+  ];
 
-        // Lore (shared)
-        baseNav[5],
-
-        // GM-only: Quests, Relationships, Conditions
-        { icon: BookOpen, label: "Quests", path: "/quests" },
-        { icon: BookOpen, label: "Relationships", path: "/relationships" },
-        { icon: BookOpen, label: "Conditions", path: "/conditions" },
-
-        // Settings (shared)
-        baseNav[6],
-      ]
-    : baseNav;
+  const navItems = userRole === "gm" ? [...baseNavItems, ...gmOnlyItems] : baseNavItems;
 
   return (
-    <aside className="fixed left-0 top-0 h-full w-64 bg-black/40 backdrop-blur-xl border-r border-white/5 flex flex-col z-50">
-      {/* Logo */}
-      <div className="p-6 border-b border-white/5">
-        <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-purple-500 to-pink-500 flex items-center justify-center shadow-lg shadow-purple-500/25">
-            <Gamepad2 className="w-5 h-5 text-white" />
+    <aside
+      className={`relative z-30 h-screen bg-zinc-900/20 border-r border-zinc-800/30 backdrop-blur-xl transition-all duration-300 ${
+        isCollapsed ? "w-16" : "w-64"
+      }`}
+    >
+      <div className="p-4">
+        <div className="flex items-center justify-between mb-8">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 bg-gradient-to-br from-purple-500 to-pink-500 rounded-xl flex items-center justify-center">
+              <span className="text-white font-bold">🎲</span>
+            </div>
+            {!isCollapsed && (
+              <div>
+                <h1 className="text-white font-bold">Dopamine</h1>
+                <p className="text-zinc-500 text-xs">Dungeon</p>
+              </div>
+            )}
           </div>
-          <div>
-            <h1 className="text-white font-bold text-lg tracking-tight">Dopamine</h1>
-            <p className="text-purple-400 text-xs font-medium">Dungeon</p>
-          </div>
+          <button
+            onClick={() => setIsCollapsed(!isCollapsed)}
+            className="text-zinc-500 hover:text-white transition-colors"
+            aria-label={isCollapsed ? "Expand sidebar" : "Collapse sidebar"}
+          >
+            <span className="text-lg">{isCollapsed ? "→" : "←"}</span>
+          </button>
         </div>
-      </div>
 
-      {/* Navigation */}
-      <nav className="flex-1 p-4 space-y-1 overflow-y-auto">
-        {navItems.map((item) => {
-          const Icon = item.icon;
-          const isActive =
-            item.path === "/"
-              ? currentPath === "/"
-              : currentPath === item.path || currentPath.startsWith(item.path + "/");
-          
-          return (
-            <Link
-              key={item.path}
-              to={item.path}
-              className={`flex items-center gap-3 px-4 py-3 rounded-xl transition-all group ${
-                isActive
-                  ? "bg-gradient-to-r from-purple-500/20 to-pink-500/20 text-white border border-purple-500/30"
-                  : "text-zinc-400 hover:text-white hover:bg-white/5"
-              }`}
-            >
-              <Icon
-                className={`w-5 h-5 ${
-                  isActive ? "text-purple-400" : "group-hover:text-purple-400"
-                } transition-colors`}
-              />
-              <span className="font-medium">{item.label}</span>
-              {isActive && (
-                <ChevronRight className="w-4 h-4 ml-auto text-purple-400" />
-              )}
-            </Link>
-          );
-        })}
-      </nav>
+        <nav className="space-y-1">
+          {navItems.map((item) => (
+            <NavItem key={item.to} {...item} isCollapsed={isCollapsed} />
+          ))}
+        </nav>
+
+        {!isCollapsed && (
+          <div className="mt-8 p-3 bg-zinc-800/20 rounded-xl border border-zinc-800/30">
+            <p className="text-zinc-400 text-xs mb-2">Role</p>
+            <div className="flex gap-2">
+              <button
+                onClick={() => setUserRole("player")}
+                className={`px-3 py-1 rounded-lg text-xs font-medium transition-colors ${
+                  userRole === "player"
+                    ? "bg-purple-500/20 text-purple-200"
+                    : "text-zinc-500 hover:text-white"
+                }`}
+              >
+                Player
+              </button>
+              <button
+                onClick={() => setUserRole("gm")}
+                className={`px-3 py-1 rounded-lg text-xs font-medium transition-colors ${
+                  userRole === "gm"
+                    ? "bg-pink-500/20 text-pink-200"
+                    : "text-zinc-500 hover:text-white"
+                }`}
+              >
+                GM
+              </button>
+            </div>
+          </div>
+        )}
+      </div>
     </aside>
   );
 }

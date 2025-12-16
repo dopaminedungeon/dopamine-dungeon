@@ -1,9 +1,6 @@
 import React, { useState } from "react";
-import Sidebar from "../components/Sidebar";
-import TopBar from "../components/TopBar";
-import GradientBackground from "../components/GradientBackground";
 import { useMode } from "../context/ModeContext";
-import { Link } from "react-router-dom";
+import { Link, Navigate } from "react-router-dom";
 import { Landmark, Users, ArrowRight } from "lucide-react";
 import { mockRelationships } from "../data/mockRelationships";
 
@@ -43,41 +40,24 @@ export default function Relationships() {
   // If the PLAYER somehow gets here: gently but firmly yeet them
   if (!isGM) {
     return (
-      <GradientBackground>
-        <div className="flex min-h-screen">
-          <Sidebar />
-
-          <div className="flex flex-col flex-1 ml-64">
-            <TopBar title="Relationships" />
-
-            <main className="flex-1 p-10 text-center">
-              <div className="max-w-lg mx-auto bg-white/5 border border-white/10 rounded-2xl p-8 backdrop-blur">
-                <h2 className="text-2xl font-bold text-white mb-2">
-                  DM-Only Secrets Zone
-                </h2>
-                <p className="text-zinc-400 text-sm">
-                  Players, this is not your domain.
-                  <br />
-                  Please leave before I start writing scenes you&apos;ll have to
-                  survive later. 💜
-                </p>
-              </div>
-            </main>
-          </div>
+      <main className="flex-1 p-10 text-center">
+        <div className="max-w-lg mx-auto bg-white/5 border border-white/10 rounded-2xl p-8 backdrop-blur">
+          <h2 className="text-2xl font-bold text-white mb-2">
+            DM-Only Secrets Zone
+          </h2>
+          <p className="text-zinc-400 text-sm">
+            Players, this is not your domain.
+            <br />
+            Please leave before I start writing scenes you&apos;ll have to survive later. 💜
+          </p>
         </div>
-      </GradientBackground>
+      </main>
     );
   }
 
   return (
-    <GradientBackground>
-      <div className="flex min-h-screen">
-        <Sidebar />
-
-        <div className="flex flex-col flex-1 ml-64">
-          <TopBar title="Relationships" />
-
-          <main className="flex-1 p-10 space-y-8 overflow-auto">
+    <div className="flex flex-col flex-1">
+      <main className="flex-1 p-10 space-y-8 overflow-auto">
             {/* HEADER */}
             <div className="flex justify-between items-center">
               <div>
@@ -282,9 +262,7 @@ export default function Relationships() {
                   ))}
               </div>
             </section>
-          </main>
-        </div>
-      </div>
+      </main>
 
       {isAddModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60">
@@ -307,7 +285,7 @@ export default function Relationships() {
           </div>
         </div>
       )}
-    </GradientBackground>
+    </div>
   );
 }
 

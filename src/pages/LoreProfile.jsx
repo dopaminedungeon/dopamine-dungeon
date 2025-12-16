@@ -1,9 +1,6 @@
 // src/pages/LoreProfile.jsx
 import React, { useState } from "react";
 import { useParams, useNavigate, useSearchParams } from "react-router-dom";
-import GradientBackground from "../components/GradientBackground";
-import Sidebar from "../components/Sidebar";
-import TopBar from "../components/TopBar";
 import { useMode } from "../context/ModeContext.jsx";
 import { ArrowLeft, Tag } from "lucide-react";
 import { MOCK_LORE } from "../data/mockLore";
@@ -572,26 +569,21 @@ export default function LoreProfile() {
 
   if (!lore) {
     return (
-      <GradientBackground>
-        <div className="flex min-h-screen">
-          <Sidebar />
-          <div className="flex-1 ml-64 p-8 text-white">
-            <button
-              className="flex items-center gap-2 text-zinc-400 hover:text-white mb-4"
-              onClick={() =>
-                navigate(`/lore${isGMMode ? "?mode=gm" : "?mode=player"}`)
-              }
-            >
-              <ArrowLeft className="w-5 h-5" />
-              Back to Lore Hub
-            </button>
-            <h1 className="text-3xl font-bold mb-2">Lore Entry Not Found</h1>
-            <p className="text-zinc-400 text-sm">
-              This lore ID doesn&apos;t exist in the mock data yet.
-            </p>
-          </div>
-        </div>
-      </GradientBackground>
+      <main className="flex-1 p-8 overflow-auto text-white">
+        <button
+          className="flex items-center gap-2 text-zinc-400 hover:text-white mb-4"
+          onClick={() =>
+            navigate(`/lore${isGMMode ? "?mode=gm" : "?mode=player"}`)
+          }
+        >
+          <ArrowLeft className="w-5 h-5" />
+          Back to Lore Hub
+        </button>
+        <h1 className="text-3xl font-bold mb-2">Lore Entry Not Found</h1>
+        <p className="text-zinc-400 text-sm">
+          This lore ID doesn&apos;t exist in the mock data yet.
+        </p>
+      </main>
     );
   }
 
@@ -614,14 +606,7 @@ export default function LoreProfile() {
   };
 
   return (
-    <GradientBackground>
-      <div className="flex min-h-screen">
-        <Sidebar />
-
-        <div className="flex-1 flex flex-col ml-64">
-          <TopBar title={effectiveData.title} />
-
-          <main className="flex-1 p-8 overflow-auto">
+    <main className="flex-1 p-8 overflow-auto">
             {/* Back link + Edit toggle */}
             <div className="flex items-center justify-between mb-6">
               <button
@@ -873,9 +858,6 @@ export default function LoreProfile() {
     </div>
   </>
 )}
-          </main>
-        </div>
-      </div>
-    </GradientBackground>
+    </main>
   );
 }

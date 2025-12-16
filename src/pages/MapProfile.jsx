@@ -1,8 +1,5 @@
 import React from "react";
 import { useParams, useNavigate, useSearchParams } from "react-router-dom";
-import GradientBackground from "../components/GradientBackground";
-import Sidebar from "../components/Sidebar";
-import TopBar from "../components/TopBar";
 import { useMode } from "../context/ModeContext.jsx";
 import { MOCK_MAP_DATA } from "../data/mockMaps.js";
 import {
@@ -29,27 +26,23 @@ export default function MapProfile() {
   const isGmView = isGM && searchParams.get("mode") !== "player";
 
   const map = MOCK_MAP_DATA[id];
-  const [editMode, setEditMode] = React.useState(false);
-  const [editableMap, setEditableMap] = React.useState({ ...map });
 
   if (!map) {
     return (
-      <GradientBackground>
-        <div className="flex min-h-screen">
-          <Sidebar />
-          <div className="flex-1 ml-64 p-8 text-white">
-            <h1 className="text-3xl font-bold">Map Not Found</h1>
-            <button
-              onClick={() => navigate(-1)}
-              className="mt-4 px-4 py-2 bg-white/10 rounded-xl text-zinc-300 hover:bg-white/20"
-            >
-              Go Back
-            </button>
-          </div>
-        </div>
-      </GradientBackground>
+      <main className="p-8 text-white">
+        <h1 className="text-3xl font-bold">Map Not Found</h1>
+        <button
+          onClick={() => navigate(-1)}
+          className="mt-4 px-4 py-2 bg-white/10 rounded-xl text-zinc-300 hover:bg-white/20"
+        >
+          Go Back
+        </button>
+      </main>
     );
   }
+
+  const [editMode, setEditMode] = React.useState(false);
+  const [editableMap, setEditableMap] = React.useState(() => ({ ...map }));
 
   // --- Placeholder data for new sections (will be replaced with real DB content later) ---
   const INITIAL_KEY_FEATURES = [
@@ -122,40 +115,33 @@ export default function MapProfile() {
   const [gmNotesText, setGmNotesText] = React.useState(() => gmNotes.join("\n"));
 
   return (
-    <GradientBackground>
-      <div className="flex min-h-screen">
-        <Sidebar />
-
-        <div className="flex-1 flex flex-col ml-64">
-          <TopBar title={map.name} />
-
-          <main className="flex-1 p-8 overflow-auto">
-            {/* Back + Edit/Done Buttons Row */}
-            <div className="flex items-center justify-between mb-6">
-              <button
-                className="flex items-center gap-2 text-zinc-400 hover:text-white"
-                onClick={() => navigate("/maps")}
-              >
-                <ArrowLeft className="w-5 h-5" />
-                Back to Maps
-              </button>
-              {isGmView && (
-                <button
-                  onClick={() => {
-                    if (!editMode) {
-                      setEditableMap({ ...map });
-                      setEditMode(true);
-                    } else {
-                      Object.assign(map, editableMap);
-                      setEditMode(false);
-                    }
-                  }}
-                  className="px-3 py-1 text-xs rounded-lg border border-white/30 text-zinc-200 bg-black/40 hover:bg-white/10 transition"
-                >
-                  {editMode ? "Done" : "Edit"}
-                </button>
-              )}
-            </div>
+    <main className="p-8 overflow-auto">
+      {/* Back + Edit/Done Buttons Row */}
+      <div className="flex items-center justify-between mb-6">
+        <button
+          className="flex items-center gap-2 text-zinc-400 hover:text-white"
+          onClick={() => navigate("/maps")}
+        >
+          <ArrowLeft className="w-5 h-5" />
+          Back to Maps
+        </button>
+        {isGmView && (
+          <button
+            onClick={() => {
+              if (!editMode) {
+                setEditableMap({ ...map });
+                setEditMode(true);
+              } else {
+                Object.assign(map, editableMap);
+                setEditMode(false);
+              }
+            }}
+            className="px-3 py-1 text-xs rounded-lg border border-white/30 text-zinc-200 bg-black/40 hover:bg-white/10 transition"
+          >
+            {editMode ? "Done" : "Edit"}
+          </button>
+        )}
+      </div>
 
             {/* HERO / CORE IDENTITY */}
             <div className="bg-white/5 border border-white/10 rounded-2xl overflow-hidden backdrop-blur-sm">
@@ -815,9 +801,6 @@ export default function MapProfile() {
                 )}
               </span>
             </div>
-          </main>
-        </div>
-      </div>
-    </GradientBackground>
+    </main>
   );
 }
