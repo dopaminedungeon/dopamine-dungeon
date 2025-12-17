@@ -1,6 +1,5 @@
 // src/App.jsx
 import { BrowserRouter, Routes, Route } from "react-router-dom";
-
 import AppLayout from "./layouts/AppLayout.jsx";
 
 import Dashboard from "./pages/DopamineDungeonDashboard.jsx";
@@ -25,34 +24,46 @@ import Conditions from "./pages/Conditions";
 import ConditionProfile from "./pages/ConditionProfile";
 import PCs from "./pages/PCs";
 import PCProfile from "./pages/PCProfile";
+import BagOfHolding from "./pages/BagOfHolding";
 
 function App() {
   return (
     <BrowserRouter>
       <Routes>
-        {/* ✅ FIRST MIGRATION: Items uses the new unified layout */}
         <Route element={<AppLayout />}>
-          <Route path="/items" element={<Items />} />
           <Route path="/" element={<Dashboard />} />
+
+          <Route path="/items" element={<Items />} />
           <Route path="/items/:id" element={<ItemProfile />} />
+
           <Route path="/npcs" element={<Npcs />} />
           <Route path="/npcs/:id" element={<NpcProfile />} />
+
           <Route path="/sessions" element={<Sessions />} />
           <Route path="/sessions/:id" element={<SessionProfile />} />
+
           <Route path="/maps" element={<Maps />} />
           <Route path="/maps/:id" element={<MapProfile />} />
+
           <Route path="/lore" element={<Lore />} />
           <Route path="/lore/:id" element={<LoreProfile />} />
+
           <Route path="/arcs" element={<Arcs />} />
           <Route path="/arcs/:id" element={<ArcProfile />} />
+
           <Route path="/quests" element={<Quests />} />
           <Route path="/quests/:id" element={<QuestProfile />} />
+
           <Route path="/relationships" element={<Relationships />} />
           <Route path="/relationships/:id" element={<RelationshipProfile />} />
+
           <Route path="/conditions" element={<Conditions />} />
           <Route path="/conditions/:id" element={<ConditionProfile />} />
+
           <Route path="/pcs" element={<PCs />} />
           <Route path="/pcs/:pcId" element={<PCProfile />} />
+          <Route path="/pcs/bag" element={<BagOfHolding />} />
+
           <Route path="/settings" element={<Settings />} />
         </Route>
       </Routes>
