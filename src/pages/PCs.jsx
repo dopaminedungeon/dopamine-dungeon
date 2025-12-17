@@ -1,5 +1,5 @@
 import React, { useMemo, useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, NavLink } from "react-router-dom";
 import { mockPCs } from "../data/mockPCs";
 
 const safeArray = (v) => (Array.isArray(v) ? v : []);
@@ -33,6 +33,35 @@ const PCs = () => {
     <div className="w-full text-white">
       {/* Page */}
       <main className="w-full px-6 py-6 md:px-10 md:py-8">
+        {/* Subsection nav */}
+        <div className="mb-4 flex items-center gap-2">
+          <NavLink
+            to="/pcs"
+            end
+            className={({ isActive }) =>
+              `px-3 py-2 rounded-xl text-sm border transition-colors ${
+                isActive
+                  ? "bg-indigo-500/20 border-indigo-400/50 text-white"
+                  : "bg-zinc-950/20 border-zinc-800/60 text-zinc-300 hover:text-white hover:bg-zinc-950/35"
+              }`
+            }
+          >
+            Characters
+          </NavLink>
+
+          <NavLink
+            to="/pcs/bag"
+            className={({ isActive }) =>
+              `px-3 py-2 rounded-xl text-sm border transition-colors ${
+                isActive
+                  ? "bg-indigo-500/20 border-indigo-400/50 text-white"
+                  : "bg-zinc-950/20 border-zinc-800/60 text-zinc-300 hover:text-white hover:bg-zinc-950/35"
+              }`
+            }
+          >
+            Bag of Holding
+          </NavLink>
+        </div>
         {/* Header */}
         <div className="mb-5 md:mb-7 flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
           <div>
