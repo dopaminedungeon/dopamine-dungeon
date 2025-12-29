@@ -1,7 +1,6 @@
 // src/App.jsx
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 import AppLayout from "./layouts/AppLayout.jsx";
-
 import Dashboard from "./pages/DopamineDungeonDashboard.jsx";
 import Npcs from "./pages/Npcs";
 import NpcProfile from "./pages/NpcProfile";
@@ -25,9 +24,12 @@ import ConditionProfile from "./pages/ConditionProfile";
 import PCs from "./pages/PCs";
 import PCProfile from "./pages/PCProfile";
 import BagOfHolding from "./pages/BagOfHolding";
+import { CampaignProvider } from "./context/CampaignContext.jsx";
+import CampaignSettings from "./pages/CampaignSettings.jsx";
 
 function App() {
   return (
+    <CampaignProvider>
     <BrowserRouter>
       <Routes>
         <Route element={<AppLayout />}>
@@ -65,9 +67,11 @@ function App() {
           <Route path="/pcs/bag" element={<BagOfHolding />} />
 
           <Route path="/settings" element={<Settings />} />
+          <Route path="/campaigns/settings" element={<CampaignSettings />} />
         </Route>
       </Routes>
     </BrowserRouter>
+    </CampaignProvider>
   );
 }
 

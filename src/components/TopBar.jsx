@@ -2,6 +2,7 @@ import React, { useState, useRef, useEffect } from "react";
 import { Bell, Search, User, ChevronDown } from "lucide-react";
 import { useMode } from "../context/ModeContext.jsx";
 import { Shield, Eye } from "lucide-react";
+import { useCampaign } from "../context/CampaignContext";
 
 export default function TopBar({ title }) {
   const { mode, setMode } = useMode();
@@ -11,6 +12,7 @@ export default function TopBar({ title }) {
 
   const notificationsRef = useRef(null);
   const profileRef = useRef(null);
+const { campaigns, activeCampaignId, setActiveCampaignId, addCampaign } = useCampaign();
 
   // Close popovers on outside click
   useEffect(() => {
@@ -76,6 +78,30 @@ export default function TopBar({ title }) {
                 </p>
               </div>
             )}
+          </div>
+          {/* Campaign selector */}
+          <div className="hidden md:block">
+            <select
+              value={activeCampaignId ?? ""}
+              onChange={(e) => {
+  if (e.target.value === "__new__") {
+    const name = prompt("Campaign name:");
+    if (!name) return;
+
+    addCampaign({ name });
+  } else {
+    setActiveCampaignId(e.target.value);
+  }
+}}
+              className="bg-zinc-950/40 border border-zinc-800/70 rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:ring-2 focus:ring-indigo-500/40"
+            >
+              {campaigns.map((c) => (
+                <option key={c.id} value={c.id}>
+                  {c.name}
+                </option>
+              ))}
+              <option value="__new__">+ New campaign…</option>
+            </select>
           </div>
                 {/* GM / Player toggle */}
       <div className="flex items-center gap-2 mr-4">

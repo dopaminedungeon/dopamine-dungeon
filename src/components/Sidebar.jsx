@@ -49,7 +49,7 @@ export default function Sidebar() {
     { to: "/quests", icon: ListTodo, label: "Quests" },
     { to: "/relationships", icon: Network, label: "Relationships" },
     { to: "/conditions", icon: Sparkles, label: "Conditions" },
-    { to: "/settings", icon: Settings, label: "Settings" },
+    { to: "/campaigns/settings", icon: Settings, label: "Campaign Settings" },
   ];
 
   const navItems = userRole === "gm" ? [...baseNavItems, ...gmOnlyItems] : baseNavItems;
