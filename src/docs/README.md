@@ -27,6 +27,12 @@ Diagrams are designed visually in MermaidChart and committed here as Markdown fo
 - **TopBar – Campaign Chooser** – global campaign selection via TopBar dropdown  
   `topbar.md`
 
+- **Conditions** – GM-only access, cards list, and conditions detail navigation  
+  `conditions.md`
+
+- **Items** – access for all, visibility based on ModeContext, cards list, and Items detail navigation  
+  `items.md`
+
 _(More page-level diagrams will be added as the system is mapped.)_
 
 ---
