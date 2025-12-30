@@ -23,4 +23,30 @@ flowchart LR
       AR_AP -- back --> AR_A
     end
 
+    %% -------- CampaignSettings subgraph (TO-BE) --------
+    n8 --> CS_P
+    subgraph CAMPAIGNSETTINGS_FLOW["CampaignSettings – TO-BE flow"]
+      direction LR
+      CS_P["[P] CampaignSettings"] --> CS_GM{"[G] GM Mode? (ModeContext)"}
+      CS_GM -- No --> CS_NA["[P] NotAuthorized"]
+      CS_GM -- Yes --> CS_SEL{"[G] Campaign selected? (CampaignContext)"}
+      CS_SEL -- No --> CS_MISS["[P] MissingCampaign"]
+      CS_SEL -- Yes --> CS_CTX["[CTX] CampaignContext"]
+      CS_CTX -- save success --> CS_P
+      CS_CTX -- save failure --> CS_P
+    end
+
+
+    %% -------- TopBar Campaign Chooser subgraph (TO-BE) --------
+    n6 --> TB_TB
+    subgraph TOPBAR_CAMPAIGN_CHOOSER_FLOW["TopBar – Campaign Chooser (TO-BE)"]
+      direction LR
+      TB_TB["[N] TopBar"] --> TB_CH["[N] CampaignChooser (dropdown)"]
+      TB_CH -- select campaign --> TB_CTX["[CTX] CampaignContext"]
+      TB_CH -- clear / none selected --> TB_CTX
+      TB_CTX --> TB_G{"[G] Campaign selected? (CampaignContext)"}
+      TB_G -- No --> TB_MISS["[P] MissingCampaign"]
+      TB_G -- Yes --> TB_PAGES["[P] Campaign-dependent pages"]
+    end
+    
     n2@{ shape: decision}
