@@ -33,6 +33,9 @@ Diagrams are designed visually in MermaidChart and committed here as Markdown fo
 - **Items** – access for all, visibility based on ModeContext, cards list, and Items detail navigation  
   `items.md`
 
+- **Lore** – access for all, visibility based on ModeContext, cards list, and lore detail navigation  
+  `lore.md`
+
 _(More page-level diagrams will be added as the system is mapped.)_
 
 ---
