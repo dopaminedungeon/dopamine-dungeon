@@ -45,8 +45,11 @@ Diagrams are designed visually in MermaidChart and committed here as Markdown fo
 - **PCs** – access for all, visibility based on ModeContext, cards list, and pcs detail navigation  
   `pcs.md`
 
-- **Quests** – GM-only access, cards list, and conditions detail navigation  
+- **Quests** – GM-only access, cards list, and quests detail navigation  
   `quests.md`
+
+- **Relationships** – GM-only access, cards list, and relationships detail navigation  
+  `relationships.md`
 
 _(More page-level diagrams will be added as the system is mapped.)_
 
