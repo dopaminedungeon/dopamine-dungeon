@@ -63,6 +63,12 @@ Diagrams are designed visually in MermaidChart and committed here as Markdown fo
 - **PCs** – access for all, visibility based on ModeContext, cards list, and pcs detail navigation  
   `pcs.md`
 
+- **PC Profile** – access for all, visibility based on ModeContext, PC details, edit mode and navigation 
+  `pcprofile.md`
+
+- **Bag of Holding** – access for all, visibility based on ModeContext, bag of holding contents, edit mode and navigation 
+  `bagofholding.md`
+
 - **Quests** – GM-only access, cards list, and quests detail navigation  
   `quests.md`
 
