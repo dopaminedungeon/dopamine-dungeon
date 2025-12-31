@@ -64,7 +64,7 @@ flowchart LR
     AP_EDIT -- Done --> AP_VIEW
   end
 ```
-  %% (rest of Master Flow is maintained in `docs/masterflow.md`)
+(rest of Master Flow is maintained in `docs/masterflow.md`)
 
 Full diagram (with all embedded flows): `docs/masterflow.md`
 
