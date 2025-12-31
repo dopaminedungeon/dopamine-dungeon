@@ -51,6 +51,9 @@ Diagrams are designed visually in MermaidChart and committed here as Markdown fo
 - **Maps** – access for all, visibility based on ModeContext, cards list, and maps detail navigation  
   `maps.md`
 
+- **Map Profile** – access for all, visibility based on ModeContext, map details, edit mode and navigation 
+  `mapprofile.md`
+
 - **NPCs** – access for all, visibility based on ModeContext, cards list, and npcs detail navigation  
   `npcs.md`
 
