@@ -78,6 +78,9 @@ Diagrams are designed visually in MermaidChart and committed here as Markdown fo
 - **Relationships** – GM-only access, cards list, and relationships detail navigation  
   `relationships.md`
 
+- **Relationship Profile** – GM-only access, edit mode and navigation
+  `relationshipprofile.md`
+
 - **Sessions** – access for all, visibility based on ModeContext, cards list, and sessions detail navigation  
   `sessions.md`
 
