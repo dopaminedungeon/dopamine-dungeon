@@ -84,7 +84,9 @@ Diagrams are designed visually in MermaidChart and committed here as Markdown fo
 - **Sessions** – access for all, visibility based on ModeContext, cards list, and sessions detail navigation  
   `sessions.md`
 
-_(More page-level diagrams will be added as the system is mapped.)_
+- **Session Profile** – access for all, visibility based on ModeContext, edit mode and navigation  
+  `sessionprofile.md`
+
 
 ---
 
