@@ -33,6 +33,9 @@ Diagrams are designed visually in MermaidChart and committed here as Markdown fo
 - **Conditions** – GM-only access, cards list, and conditions detail navigation  
   `conditions.md`
 
+- **Condition Profile** – GM-only access, edit mode and navigation  
+  `conditionprofile.md`
+
 - **Items** – access for all, visibility based on ModeContext, cards list, and Items detail navigation  
   `items.md`
 
