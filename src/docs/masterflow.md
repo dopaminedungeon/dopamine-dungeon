@@ -386,6 +386,25 @@ PC_INLINE --> PCP_ENTRY
       QU_PROF -- back --> QU_P
     end
 
+     %% ---- QuestProfile subgraph (nested detail) ----
+  subgraph QUEST_PROFILE_FLOW["QuestProfile – TO-BE flow (GM-only)"]
+    direction LR
+
+    QU_PROF --> QP_FOUND{"[G] Quest exists? (Data)"}
+
+    QP_FOUND -- No --> QP_404["[P] Quest Not Found"]
+    QP_404 -- back --> QP_BACK_LIST["[P] Quests"]
+
+    QP_FOUND -- Yes --> QP_GM{"[G] GM Mode? (ModeContext + ?mode override)"}
+
+    QP_GM -- No --> QP_NA["[P] NotAuthorized"]
+    QP_NA -- back --> QP_BACK_DASH["[P] DopamineDungeonDashboard / Quests"]
+
+    QP_GM -- Yes --> QP_VIEW["[P] QuestProfile (view mode)"]
+    QP_VIEW -- click Edit --> QP_EDIT["[C] Edit mode (inline fields)"]
+    QP_EDIT -- click Save --> QP_VIEW
+  end
+
         %% -------- Relationships subgraph (TO-BE, GM-only) --------
     n17 --> REL_P
     subgraph RELATIONSHIPS_FLOW["Relationships – TO-BE flow (GM-only)"]

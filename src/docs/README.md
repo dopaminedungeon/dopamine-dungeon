@@ -72,6 +72,9 @@ Diagrams are designed visually in MermaidChart and committed here as Markdown fo
 - **Quests** – GM-only access, cards list, and quests detail navigation  
   `quests.md`
 
+- **Quest Profile** – GM-only access, edit mode and navigation
+  `questprofile.md`
+
 - **Relationships** – GM-only access, cards list, and relationships detail navigation  
   `relationships.md`
 
