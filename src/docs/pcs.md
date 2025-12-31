@@ -5,22 +5,25 @@ config:
   layout: dagre
 ---
 flowchart LR
-  PC_P["[P] PCs"] --> PC_SEL{"[G] Campaign selected? (CampaignContext)"}
+  PC_P["[P] PCs (/pcs)"] --> PC_SEL{"[G] Campaign selected? (CampaignContext)"}
 
   PC_SEL -- No --> PC_MISS["[P] MissingCampaign"]
-  PC_SEL -- Yes --> PC_CTX["[CTX] CampaignContext"]
+  PC_SEL -- Yes --> PC_HOME["[P] PCs (Tabs: Characters | Bag of Holding)"]
 
-  PC_CTX --> PC_GM{"[G] GM Mode? (ModeContext)"}
+  %% Tabs (explicit)
+  PC_HOME -- tab: Characters --> PC_GM{"[G] GM Mode? (ModeContext)"}
+  PC_HOME -- tab: Bag of Holding --> PC_BAG["[P] PCs – BagOfHolding tab"]
 
-  PC_GM -- Yes --> PC_ALL["[P] PCs (all + gm-only visible)"]
-  PC_GM -- No --> PC_PUB["[P] PCs (public only)"]
-
+  %% Characters tab: GM view
+  PC_GM -- Yes --> PC_ALL["[P] Characters (GM: all profiles)"]
   PC_ALL -- click pc --> PC_PROF["[P] PCProfile (:pcId)"]
-  PC_PUB -- click pc --> PC_PROF
-
-  PC_PROF -- back --> PC_P
-
-  %% Optional: GM-only create/edit
   PC_GM -- Yes --> PC_ADD["[C] CreatePcModal"]
   PC_ADD -- create success --> PC_ALL
   PC_ADD -- cancel --> PC_ALL
+
+  %% Characters tab: Player view
+  PC_GM -- No --> PC_AUTH{"[G] Authenticated? (Auth)"}
+  PC_AUTH -- No --> PC_LOGIN["[P] Login"]
+  PC_AUTH -- Yes --> PC_ASSIGNED{"[G] Assigned PC? (CampaignContext/Auth)"}
+  PC_ASSIGNED -- No --> PC_NA["[P] NotAuthorized"]
+  PC_ASSIGNED -- Yes --> PC_SELF["[P] PCProfile (:myPcId)"]

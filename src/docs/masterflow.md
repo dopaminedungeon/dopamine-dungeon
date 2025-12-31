@@ -23,6 +23,19 @@ flowchart LR
       AR_AP -- back --> AR_A
     end
 
+     %% ---- ArcProfile subgraph (nested detail) ----
+  subgraph ARC_PROFILE_FLOW["ArcProfile – TO-BE flow (GM-only)"]
+    direction LR
+    AR_AP --> AP_GM{"[G] GM Mode? (ModeContext + ?mode override)"}
+
+    AP_GM -- No --> AP_NA["[P] NotAuthorized"]
+    AP_NA -- back --> AP_BACK["[P] DopamineDungeonDashboard / Arcs"]
+
+    AP_GM -- Yes --> AP_VIEW["[P] ArcProfile (view)"]
+    AP_VIEW -- toggle Edit/Done --> AP_EDIT["[C] Edit mode (inline fields)"]
+    AP_EDIT -- Done --> AP_VIEW
+  end
+
     %% -------- CampaignSettings subgraph (TO-BE) --------
     n8 --> CS_P
     subgraph CAMPAIGNSETTINGS_FLOW["CampaignSettings – TO-BE flow"]
@@ -163,28 +176,33 @@ flowchart LR
       NPC_ADD -- cancel --> NPC_ALL
     end
 
-        %% -------- PCs subgraph (TO-BE) --------
+    %% -------- PCs subgraph (TO-BE, tabs wired) --------
     n15 --> PC_P
-    subgraph PCS_FLOW["PCs – TO-BE flow"]
+    subgraph PCS_FLOW["PCs – TO-BE flow (tabs wired)"]
       direction LR
-      PC_P["[P] PCs"] --> PC_SEL{"[G] Campaign selected? (CampaignContext)"}
+
+      PC_P["[P] PCs (/pcs)"] --> PC_SEL{"[G] Campaign selected? (CampaignContext)"}
 
       PC_SEL -- No --> PC_MISS["[P] MissingCampaign"]
-      PC_SEL -- Yes --> PC_CTX["[CTX] CampaignContext"]
+      PC_SEL -- Yes --> PC_HOME["[P] PCs (Tabs: Characters | Bag of Holding)"]
 
-      PC_CTX --> PC_GM{"[G] GM Mode? (ModeContext)"}
+      %% Tabs
+      PC_HOME -- tab: Characters --> PC_GM{"[G] GM Mode? (ModeContext)"}
+      PC_HOME -- tab: Bag of Holding --> PC_BAG["[P] PCs – BagOfHolding tab"]
 
-      PC_GM -- Yes --> PC_ALL["[P] PCs (all + gm-only visible)"]
-      PC_GM -- No --> PC_PUB["[P] PCs (public only)"]
-
+      %% Characters tab: GM
+      PC_GM -- Yes --> PC_ALL["[P] Characters (GM: all profiles)"]
       PC_ALL -- click pc --> PC_PROF["[P] PCProfile (:pcId)"]
-      PC_PUB -- click pc --> PC_PROF
-
-      PC_PROF -- back --> PC_P
-
       PC_GM -- Yes --> PC_ADD["[C] CreatePcModal"]
       PC_ADD -- create success --> PC_ALL
       PC_ADD -- cancel --> PC_ALL
+
+      %% Characters tab: Player
+      PC_GM -- No --> PC_AUTH{"[G] Authenticated? (Auth)"}
+      PC_AUTH -- No --> PC_LOGIN["[P] Login"]
+      PC_AUTH -- Yes --> PC_ASSIGNED{"[G] Assigned PC? (CampaignContext/Auth)"}
+      PC_ASSIGNED -- No --> PC_NA["[P] NotAuthorized"]
+      PC_ASSIGNED -- Yes --> PC_SELF["[P] PCProfile (:myPcId)"]
     end
 
         %% -------- Quests subgraph (TO-BE, GM-only) --------

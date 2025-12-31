@@ -21,6 +21,9 @@ Diagrams are designed visually in MermaidChart and committed here as Markdown fo
 - **Arcs** – GM-only access, cards list, and arc detail navigation  
   `arcs.md`
 
+- **Arc Profiles** – GM-only access, edit mode and navigation  
+  `arcprofile.md`
+
 - **CampaignSettings** – GM-only campaign configuration, campaign selection gating  
   `campaignsettings.md`
 
