@@ -39,6 +39,9 @@ Diagrams are designed visually in MermaidChart and committed here as Markdown fo
 - **Items** – access for all, visibility based on ModeContext, cards list, and Items detail navigation  
   `items.md`
 
+- **Item Profile** – access for all, visibility based on ModeContext, item details, edit mode and navigation 
+  `itemprofile.md`
+
 - **Lore** – access for all, visibility based on ModeContext, cards list, and lore detail navigation  
   `lore.md`
 
