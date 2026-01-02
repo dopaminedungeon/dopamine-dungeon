@@ -275,5 +275,5 @@ GMOnlyPages ..> PageServices : calls
 PageServices --> Firestore : reads/writes
 
 %% Optional: note for special rule
-note for GMOnlyPages "Conditions*: hidden in Player mode,\nbut can show passive message if entered then switched"
+note for GMOnlyPages "Conditions*: hidden in Player mode,but can show passive message if entered then switched"
 ```
