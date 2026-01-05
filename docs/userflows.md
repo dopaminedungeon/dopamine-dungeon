@@ -165,57 +165,34 @@ config:
   theme: redux
   layout: dagre
 ---
-flowchart LR
-  START(["App Open"]) --> AUTH_STATE{"[G] Auth state?"}
-
-  %% --- Auth outcomes ---
-  AUTH_STATE -- "Not authenticated" --> LOGIN["[P] Login"]
-  AUTH_STATE -- "Authenticated" --> MODE_RESOLVE["[CTX] ModeContext</br>Resolve mode"]
-  AUTH_STATE -- "Auth failed" --> AUTH_ERR["[P] AuthError</br>Retry / Re-login"]
-
-  LOGIN -- "success" --> MODE_RESOLVE
-  LOGIN -- "failure" --> AUTH_ERR
-  AUTH_ERR -- "retry" --> AUTH_STATE
-
-  %% --- Tenant boundary (future-friendly) ---
-  MODE_RESOLVE --> TENANT{"[G] Tenant/Workspace resolved?</br>(TO-BE: orgId/tenantId)"}
-  TENANT -- "Yes" --> CAMPS_LOAD["[CTX] CampaignContext</br>Load accessible campaigns"]
-  TENANT -- "No / not applicable" --> CAMPS_LOAD
-
-  %% --- Accessible campaigns only ---
-  CAMPS_LOAD --> CAMPS_COUNT{"[G] Accessible campaigns count?"}
-
-  CAMPS_COUNT -- "0" --> NO_CAMP["[P] NoCampaignAccess</br>Request invite / Create (GM)"]
-  CAMPS_COUNT -- "1" --> AUTO_SELECT["[A] Auto-select only campaign"]
-  CAMPS_COUNT -- "2+" --> PICKER["[P] CampaignPicker</br>(only accessible campaigns)"]
-
-  AUTO_SELECT --> CAMPAIGN_READY["[CTX] Campaign selected"]
-  PICKER -- "select campaign" --> CAMPAIGN_READY
-  NO_CAMP -- "refresh/try again" --> CAMPS_LOAD
-
-  %% --- Campaign validation + network errors ---
-  CAMPAIGN_READY --> CAMP_OK{"[G] Campaign fetch OK?"}
-  CAMP_OK -- "Yes" --> SHELL["[L] AppShell</br>TopBar + Sidebar"]
-  CAMP_OK -- "Not found / access revoked" --> CAMP_ERR["[P] CampaignAccessError</br>Pick another"]
-  CAMP_OK -- "Network/backend error" --> NET_ERR["[P] NetworkError</br>Retry (keep context)"]
-
-  CAMP_ERR --> PICKER
-  NET_ERR -- "retry" --> CAMP_OK
-
-  %% --- Landing ---
-  SHELL --> HOME["[P] Dashboard / Home (default)"]
-
-  %% --- Styling (light) ---
-  classDef gate fill:#f7f7f7,stroke:#666,stroke-width:1px,color:#111;
-  classDef page fill:#ffffff,stroke:#999,stroke-width:1px,color:#111;
-  classDef shell fill:#ffffff,stroke:#444,stroke-width:2px,color:#111;
-  classDef err fill:#fff3f3,stroke:#cc6666,stroke-width:1px,color:#111;
-  classDef ctx fill:#f8fbff,stroke:#6b8bbd,stroke-width:1px,color:#111;
-
-  class AUTH_STATE,TENANT,CAMPS_COUNT,CAMP_OK gate;
-  class LOGIN,AUTH_ERR,NO_CAMP,PICKER,CAMP_ERR,NET_ERR,HOME page;
-  class SHELL shell;
-  class MODE_RESOLVE,CAMPS_LOAD,CAMPAIGN_READY ctx;
+flowchart TB
+    A0(["Start (App Load)"]) --> A1{"[G] Authenticated?"}
+    A1 -- No --> L0["[P] Login"]
+    L0 --> L1{"[G] Auth success?"}
+    L1 -- No --> L2["[S] AuthFailed</br>(show error + retry)"]
+    L2 --> L0
+    L1 -- Yes --> CTX_AUTH["[CTX] AuthContext resolved"]
+    A1 -- Yes --> CTX_AUTH
+    CTX_AUTH --> W0{"[G] Accessible workspaces?"}
+    W0 -- None --> W1["[P] NoWorkspace</br>(CTA: Request access / Create tenant later)"]
+    W0 -- Some --> W2{"[G] Exactly 1 workspace?"}
+    W2 -- Yes --> CTX_WS["[CTX] WorkspaceContext set (auto)"]
+    W2 -- No --> TB0["[N] TopBar</br>WorkspacePicker shows ONLY accessible workspaces"]
+    TB0 -- select workspace --> CTX_WS
+    CTX_WS --> C0{"[G] Accessible campaigns</br>in this workspace?"} & WP0["[CTX] WorkspacePermission resolved</br>(WorkspaceAdmin | WorkspaceMember)"]
+    C0 -- None --> C1["[P] NoCampaign</br>(CTA depends on WorkspacePermission)"]
+    C0 -- Some --> C2{"[G] Exactly 1 accessible campaign?"}
+    C2 -- Yes --> CTX_CAMP["[CTX] CampaignContext set (auto)"]
+    C2 -- No --> TB1["[N] TopBar</br>CampaignPicker shows ONLY accessible campaigns"]
+    TB1 -- select campaign --> CTX_CAMP
+    CTX_CAMP --> CR0["[CTX] CampaignRole resolved</br>(CampaignGM | CampaignPlayer)"]
+    CR0 --> M0{"[G] Mode resolved?"}
+    M0 -- "role=CampaignPlayer" --> M1["[CTX] Mode=Player (locked)"]
+    M0 -- "role=CampaignGM" --> M2["[CTX] Mode=GM (default) + toggle available"]
+    M1 --> SHELL["[L] AppShell"]
+    M2 --> SHELL
+    SHELL --> UI0["[N] Sidebar</br>(mode-filtered nav)"] & UI1["[N] TopBar</br>(workspace/campaign always reachable)"] & R0["[L] Routes (guarded)</br>(load Dashboard default)"]
+    R0 --> NOTE["[S] Default route = Dashboard</br>Fallback = NotFound for unknown URL"]
   ```
 
 ---
@@ -296,38 +273,37 @@ config:
   theme: redux
   layout: dagre
 ---
-flowchart LR
-  TRIGGER(["Campaign change triggered"]) --> LOAD["[CTX] CampaignContext</br>Load accessible campaigns"]
-
-  LOAD --> COUNT{"[G] Accessible campaigns?"}
-
-  COUNT -- "0" --> NO_ACCESS["[P] NoCampaignAccess</br>(request invite / create if GM)"]
-
-  COUNT -- "1" --> AUTO["[A] Auto-select only campaign"]
-  COUNT -- "2+" --> PICK["[P] CampaignPicker</br>(accessible only)"]
-
-  PICK -- "select campaign" --> SELECTED["[CTX] Campaign selected"]
-  AUTO --> SELECTED
-
-  SELECTED --> VALID{"[G] Campaign valid & accessible?"}
-
-  VALID -- "Yes" --> ROUTE_RESET["[A] Reset route</br>→ safe landing"]
-  VALID -- "Access revoked / deleted" --> ACCESS_ERR["[P] CampaignAccessError</br>pick another"]
-  VALID -- "Network error" --> NET_ERR["[P] NetworkError</br>retry"]
-
-  ACCESS_ERR --> PICK
-  NET_ERR -- "retry" --> VALID
-
-  ROUTE_RESET --> HOME["[P] Dashboard / Home</br>(new campaign scope)"]
-
-  %% Styling
-  classDef gate fill:#f7f7f7,stroke:#666,stroke-width:1px,color:#111;
-  classDef page fill:#ffffff,stroke:#999,stroke-width:1px,color:#111;
-  classDef ctx fill:#f8fbff,stroke:#6b8bbd,stroke-width:1px,color:#111;
-
-  class COUNT,VALID gate;
-  class PICK,NO_ACCESS,ACCESS_ERR,NET_ERR,HOME page;
-  class LOAD,SELECTED ctx;
+flowchart TB
+    S0["[L] AppShell (already running)"] --> TB["[N] TopBar<br>(workspace/campaign always reachable)"]
+    TB --> W0{"[G] User switches workspace?"} & MS0{"[G] User toggles mode?"}
+    W0 -- No --> C0{"[G] User switches campaign?"}
+    W0 -- Yes --> W1["[CTX] WorkspaceContext updated<br>(activeWorkspaceId)"]
+    W1 --> W2["[CTX] CampaignContext cleared"]
+    W2 --> W3{"[G] Accessible campaigns in new workspace?"}
+    W3 -- None --> W4["[P] NoCampaign<br>(CTA depends on WorkspacePermission)"]
+    W3 -- Some --> W5{"[G] Exactly 1 accessible campaign?"}
+    W5 -- Yes --> W6["[CTX] CampaignContext set (auto)"]
+    W5 -- No --> W7["[N] CampaignPicker<br>(shows ONLY accessible campaigns)"]
+    W7 -- select --> W6
+    W6 --> R0["[CTX] CampaignRole resolved for new campaign"]
+    R0 --> M0{"[G] Mode allowed?"}
+    M0 -- "role=CampaignPlayer" --> M1["[CTX] Mode=Player (locked)"]
+    M0 -- "role=CampaignGM" --> M2["[CTX] Mode stays as-is<br>(if GM previously, keep)<br>(toggle still available)"]
+    M1 --> ROUTES["[L] Routes re-evaluated<br>(guards rerun)"]
+    M2 --> ROUTES
+    C0 -- No --> END0["[S] No change"]
+    C0 -- Yes --> C1["[CTX] CampaignContext updated<br>(activeCampaignId)"]
+    C1 --> C2["[CTX] CampaignRole resolved<br>for selected campaign"]
+    C2 --> C3{"[G] Mode compatible with role?"}
+    C3 -- "role=CampaignPlayer" --> C4["[CTX] Force Mode=Player<br>(lock toggle)"]
+    C3 -- "role=CampaignGM" --> C5["[CTX] Keep current Mode<br>(GM or Player)"]
+    C4 --> ROUTES
+    C5 --> ROUTES
+    MS0 -- No --> END1["[S] Continue"]
+    MS0 -- Yes --> MS1{"[G] Role allows toggle?<br>(CampaignGM only)"}
+    MS1 -- No --> MS2["[S] No-op<br>(toggle hidden/disabled)"]
+    MS1 -- Yes --> MS3["[CTX] ModeContext toggled<br>(GM &lt;-&gt; Player)"]
+    MS3 --> ROUTES
   ```
 
 ---
@@ -435,54 +411,45 @@ config:
   theme: redux
   layout: dagre
 ---
-flowchart LR
-  NAV(["User navigates to route"]) --> AUTH{"[G] Authenticated?"}
-
-  AUTH -- "No" --> TO_LOGIN["[A] Redirect → /login"]
-  AUTH -- "Auth failed" --> AUTH_ERR["[P] AuthError</br>Retry / Re-login"]
-  AUTH -- "Yes" --> CAMP{"[G] Campaign required?"}
-
-  %% Campaign requirement
-  CAMP -- "No (Public/AuthOnly route)" --> POLICY
-  CAMP -- "Yes" --> CAMP_SEL{"[G] Campaign selected?"}
-
-  CAMP_SEL -- "No" --> CAMP_REQ["[P] CampaignRequired</br>Select campaign"]
-  CAMP_SEL -- "Yes" --> CAMP_OK{"[G] Campaign accessible?"}
-
-  CAMP_OK -- "No" --> CAMP_ERR["[P] CampaignAccessError</br>Pick another"]
-  CAMP_OK -- "Yes" --> POLICY{"[G] Route policy check"}
-
-  %% Route policy checks
-  POLICY -- "GMOnly" --> GM{"[G] GM mode?"}
-  GM -- "No" --> NA_GM["[P] NotAuthorized</br>(GM only)"]
-  GM -- "Yes" --> ENTITY
-
-  POLICY -- "PlayerAllowed / ReadOnly" --> ENTITY
-  POLICY -- "PlayerScoped" --> SCOPE{"[G] Scoped access OK?</br>(e.g. assigned PC)"}
-  SCOPE -- "No" --> NA_SCOPE["[P] NotAuthorized</br>(No assigned access)"]
-  SCOPE -- "Yes" --> ENTITY
-
-  %% Entity existence checks
-  ENTITY{"[G] Entity exists?</br>(:id routes)"} -- "No" --> NOT_FOUND["[P] NotFound"]
-  ENTITY -- "Yes / not applicable" --> RENDER["[P] Render route"]
-
-  %% Recovery links (conceptual)
-  NA_GM --> SAFE["[A] Go → Dashboard"]
-  NA_SCOPE --> SAFE
-  NOT_FOUND --> SAFE
-  CAMP_REQ -->|select campaign| NAV
-  CAMP_ERR -->|select campaign| NAV
-  AUTH_ERR -->|retry| NAV
-  SAFE --> NAV
-
-  %% Styling
-  classDef gate fill:#f7f7f7,stroke:#666,stroke-width:1px,color:#111;
-  classDef page fill:#ffffff,stroke:#999,stroke-width:1px,color:#111;
-  classDef act fill:#f2fff7,stroke:#55aa77,stroke-width:1px,color:#111;
-
-  class AUTH,CAMP,CAMP_SEL,CAMP_OK,POLICY,GM,SCOPE,ENTITY gate;
-  class AUTH_ERR,CAMP_REQ,CAMP_ERR,NA_GM,NA_SCOPE,NOT_FOUND,RENDER page;
-  class TO_LOGIN,SAFE act;
+flowchart TB
+    U0(["[E] User attempts navigation<br>(link / URL / deep-link / refresh)"]) --> G0["[L] RouteGuard pipeline"]
+    G0 --> G1{"[G] Authenticated?"}
+    G1 -- No --> A0["[P] Login<br>(+ returnUrl stored)"]
+    G1 -- Yes --> G2{"[G] Workspace resolved & accessible?"}
+    G2 -- No --> W0["[P] WorkspaceAccessDenied<br>(CTA: Switch workspace / Go Home)"]
+    G2 -- Yes --> G3{"[G] Campaign resolved & accessible?"}
+    G3 -- No --> C0["[P] CampaignRequiredOrAccessDenied<br>(CTA: Pick campaign via TopBar)"]
+    G3 -- Yes --> G4{"[G] CampaignRole allows route?"}
+    G4 -- No --> NA0["[P] NotAuthorized<br>(CTA: Go Home / Dashboard)"]
+    G4 -- Yes --> G5{"[G] Mode compatible with route?"}
+    G5 -- No --> MR0["[P] NotAuthorized or Redirect<br>(reason: wrong mode)<br>(CTA: Go Dashboard)"]
+    G5 -- Yes --> G6["[S] Policy passed → proceed to route"]
+    G6 --> E0{"[G] Route targets entity?<br>(/:id)"}
+    E0 -- No --> OK0["[S] Render page (safe)"]
+    E0 -- Yes --> E1["[DATA] Fetch entity<br>(scoped workspaceId+campaignId)"]
+    E1 --> E2{"[G] Network ok?"}
+    E2 -- No --> NET0["[P] NetworkError<br>(non-destructive)<br>(CTA: Retry)"]
+    NET0 -- Retry --> E1
+    E2 -- Yes --> E3{"[G] Entity exists?"}
+    E3 -- No --> NF0["[P] NotFound<br>(CTA: Go Home + Back to list)"]
+    E3 -- Yes --> OK1["[S] Render entity page"]
+    S1["[E] Player opens GM-only route"] --> G0
+    S2["[E] Player opens PCs (Characters tab)<br>with no assigned PC"] --> PC0{"[G] Assigned PC(s) exist?"}
+    PC0 -- No --> PC1["[P] Characters tab shows<br>No character assigned yet"]
+    PC0 -- Yes --> PC2["[S] Show player PC view"]
+    PC1 --> PC3["[S] Bag of Holding tab remains available"]
+    PC2 --> PC3
+    S3["[E] User toggles mode on GM-only route"] --> M0["[CTX] ModeContext updates"]
+    M0 --> G0
+    S4["[E] Campaign missing/invalid"] --> C0
+    S5["[E] Deep-link to missing entity"] --> E1
+    OK0 --> I0["[S] Invariants:<br>- Guards protect URLs, not only sidebar<br>- UI hiding ≠ security<br>- Policy checks happen before fetch<br>- No forbidden content flashes<br>- Every block has recovery CTA"]
+    OK1 --> I0
+    NA0 --> I0
+    NF0 --> I0
+    NET0 --> I0
+    C0 --> I0
+    W0 --> I0
 ```
 
 ### Unhappy Paths (Explicit Behaviours)
@@ -686,50 +653,44 @@ config:
   layout: dagre
 ---
 flowchart TB
-    START(["App Open"]) --> ENTRY["[A] Entry resolved (Auth + Campaign)"]
-    ENTRY --> SHELL["[L] AppShell (Player mode)"]
-    SHELL --> HOME["[P] Dashboard / Home"]
-    HOME --> PCS["[P] PCs"]
-    PCS --> CHAR_TAB["[T] Characters tab"]
-    CHAR_TAB --> PC_COUNT{"[G] Assigned PCs?"}
-    PC_COUNT -- 1 --> PC_AUTO["[P] PC Profile (auto-load)"]
-    PC_COUNT -- 2+ --> PC_LIST["[P] PC Cards"]
-    PC_LIST -- select PC --> PC_PROFILE["[P] PC Profile"]
-    PC_AUTO --> BAG["[T] Bag of Holding"]
-    PC_PROFILE --> BAG
-    BAG --> SESSIONS["[P] Sessions"]
-    SESSIONS --> SESSION_LIST["[P] Session List"]
-    SESSION_LIST --> SESSION_VIEW["[P] Session Profile</br>(read-only)"]
-    SESSION_VIEW --> WORLD["[P] World Reference"]
-    WORLD --> MAPS["Maps"] & LORE["Lore"] & ITEMS["Items"] & NPCS["NPCs"]
-    MAPS --> EXIT(["Exit / Close App"])
-    LORE --> EXIT
-    ITEMS --> EXIT
-    NPCS --> EXIT
-
-     ENTRY:::action
-     SHELL:::shell
-     HOME:::page
-     PCS:::page
-     CHAR_TAB:::tab
-     PC_COUNT:::gate
-     PC_AUTO:::page
-     PC_LIST:::page
-     PC_PROFILE:::page
-     BAG:::page
-     BAG:::tab
-     SESSIONS:::page
-     SESSION_LIST:::page
-     SESSION_VIEW:::page
-     MAPS:::page
-     LORE:::page
-     ITEMS:::page
-     NPCS:::page
-    classDef gate fill:#f7f7f7,stroke:#666,stroke-width:1px,color:#111
-    classDef page fill:#ffffff,stroke:#999,stroke-width:1px,color:#111
-    classDef shell fill:#ffffff,stroke:#444,stroke-width:2px,color:#111
-    classDef tab fill:#f9fafb,stroke:#aaa,stroke-width:1px,color:#111
-    classDef action fill:#f2fff7,stroke:#55aa77,stroke-width:1px,color:#111
+    P0(["Player opens Dopamine Dungeon"]) --> A1{"[G] Authenticated?"}
+    A1 -- No --> L0["[P] Login"]
+    L0 --> L1{"[G] Auth success?"}
+    L1 -- No --> L2["[S] AuthFailed<br>(show error + retry)"]
+    L2 --> L0
+    L1 -- Yes --> CTX_AUTH["[CTX] AuthContext resolved"]
+    A1 -- Yes --> CTX_AUTH
+    CTX_AUTH --> WS0{"[G] Accessible workspaces?"}
+    WS0 -- None --> WS1["[P] NoWorkspace<br>(CTA: Request access)"]
+    WS0 -- Some --> WS2{"[G] Exactly 1 workspace?"}
+    WS2 -- Yes --> CTX_WS["[CTX] WorkspaceContext set (auto)"]
+    WS2 -- No --> TB0["[N] TopBar WorkspacePicker<br>(shows only accessible)"]
+    TB0 -- select --> CTX_WS
+    CTX_WS --> C0{"[G] Accessible campaigns<br>in workspace?"}
+    C0 -- None --> C1["[P] NoCampaign<br>(CTA: Ask GM)"]
+    C0 -- Some --> C2{"[G] Exactly 1 accessible campaign?"}
+    C2 -- Yes --> CTX_CAMP["[CTX] CampaignContext set (auto)"]
+    C2 -- No --> TB1["[N] TopBar CampaignPicker<br>(shows only accessible)"]
+    TB1 -- select --> CTX_CAMP
+    CTX_CAMP --> ROLE0["[CTX] CampaignRole resolved = CampaignPlayer"]
+    ROLE0 --> MODE0["[CTX] Mode=Player (locked)"]
+    MODE0 --> SHELL["[L] AppShell"]
+    SHELL --> SIDEBAR["[N] Sidebar (Player view)<br>(hides GM-only pages)"] & TOPBAR["[N] TopBar<br>(Campaign switch always reachable)"] & HOME["[P] Dashboard (Player)"]
+    HOME --> PCS["[P] PCs (Player)"] & ITEMS["[P] Items"] & LORE["[P] Lore"] & MAPS["[P] Maps"] & NPCS["[P] NPCs"] & SESS["[P] Sessions"] & GMTRY["[E] Player tries GM-only URL"]
+    PCS --> TAB0["[N] Tabs: Characters | Bag of Holding"]
+    TAB0 --> CH0{"[G] Player has assigned PCs<br>in this campaign?"} & BAG["[P] Bag of Holding<br>(shared, campaign-scoped)"]
+    CH0 -- No --> CH1["[P] Characters tab:<br>No character assigned yet"]
+    CH0 -- Yes --> CH2{"[G] Exactly 1 assigned PC?"}
+    CH2 -- Yes --> CH3["[P] PCProfile (auto-load)<br>(read-only + allowed actions)"]
+    CH2 -- No --> CH4["[P] PC Cards list<br>(click to open)"]
+    CH4 --> CH5["[P] PCProfile (:pcId)"]
+    ITEMS --> ITEMP["[P] ItemProfile (:itemId)<br>(read-only)<br>+ optionally assign-to-self"]
+    LORE --> LOREP["[P] LoreProfile (:loreId)<br>(read-only)"]
+    MAPS --> MAPP["[P] MapProfile (:mapId)<br>(read-only)"]
+    NPCS --> NPCP["[P] NpcProfile (:npcId)<br>(read-only)"]
+    SESS --> SESP["[P] SessionProfile (:sessionId)<br>(read-only)"]
+    GMTRY --> NA["[P] NotAuthorized<br>(CTA: Go Home)"]
+    NA --> HOME
 ```
 ---
 
@@ -849,55 +810,92 @@ config:
   theme: redux
   layout: dagre
 ---
-flowchart LR
-  START(["App Open"]) --> ENTRY["[A] Entry resolved\n(Auth + GM mode + Campaign)"]
+flowchart TB
+    G0(["GM opens Dopamine Dungeon"]) --> A1{"[G] Authenticated?"}
+    A1 -- No --> L0["[P] Login"]
+    L0 --> L1{"[G] Auth success?"}
+    L1 -- No --> L2["[S] AuthFailed<br>(show error + retry)"]
+    L2 --> L0
+    L1 -- Yes --> CTX_AUTH["[CTX] AuthContext resolved"]
+    A1 -- Yes --> CTX_AUTH
+    CTX_AUTH --> WS0{"[G] Accessible workspaces?"}
+    WS0 -- None --> WS1["[P] NoWorkspace<br>(CTA: Create tenant later)"]
+    WS0 -- Some --> WS2{"[G] Exactly 1 workspace?"}
+    WS2 -- Yes --> CTX_WS["[CTX] WorkspaceContext set (auto)"]
+    WS2 -- No --> TB0["[N] TopBar WorkspacePicker<br>(only accessible)"]
+    TB0 -- select --> CTX_WS
+    CTX_WS --> WPERM["[CTX] WorkspacePermission resolved<br>(WorkspaceAdmin | WorkspaceMember)"] & C0{"[G] Accessible campaigns<br>in workspace?"}
+    WPERM --> CANCREATE{"[G] Can create campaigns?"}
+    CANCREATE -- Yes --> CREATEC["[P] Create Campaign (TO-BE)<br>(from NoCampaign or Settings)"]
+    CANCREATE -- No --> NOCAMP_CTA["[S] If no campaigns:<br>CTA = Ask Admin"]
+    C0 -- None --> C1["[P] NoCampaign<br>(CTA: Create if Admin, else Ask Admin)"]
+    C0 -- Some --> C2{"[G] Exactly 1 accessible campaign?"}
+    C2 -- Yes --> CTX_CAMP["[CTX] CampaignContext set (auto)"]
+    C2 -- No --> TB1["[N] TopBar CampaignPicker<br>(only accessible)"]
+    TB1 -- select --> CTX_CAMP
+    CTX_CAMP --> ROLE0["[CTX] CampaignRole resolved = CampaignGM"]
+    ROLE0 --> MODE0["[CTX] Mode=GM (default)<br>(toggle available)"]
+    MODE0 --> SHELL["[L] AppShell"]
+    SHELL --> SIDEBAR["[N] Sidebar (GM view)<br>(shows GM-only pages)"] & TOPBAR["[N] TopBar<br>(workspace/campaign + mode toggle)"] & HOME["[P] Dashboard (GM)"]
+    HOME --> CS["[P] CampaignSettings (GM-only)"] & ARCS["[P] Arcs (GM-only)"] & REL["[P] Relationships (GM-only)"] & QUESTS["[P] Quests (GM-only)"] & COND["[P] Conditions (GM-only)"] & PCS["[P] PCs (GM)"] & ITEMS["[P] Items"] & BAG["[P] Bag of Holding<br>(shared, campaign-scoped)"] & LORE["[P] Lore"] & MAPS["[P] Maps"] & NPCS["[P] NPCs"] & SESS["[P] Sessions"]
+    CS --> CS_SAVE["[S] Save settings<br>(success/fail handled inline)"]
+    ARCS --> ARCP["[P] ArcProfile (:arcId)<br>(view/edit toggle)"]
+    REL --> RELP["[P] RelationshipProfile (:relId)"]
+    QUESTS --> QUESTP["[P] QuestProfile (:questId)"]
+    COND --> CONDP["[P] ConditionProfile (:conditionId)<br>(edit)"]
+    PCS --> PC_CREATE["[A] Create New PC"] & PC_LIST["[P] PC Cards list<br>(all PCs in campaign)"]
+    PC_LIST --> PCP["[P] PCProfile (:pcId)<br>(edit)"]
+    PCP --> PC_ASSIGN["[A] Assign PC to player<br>(campaign membership link)"]
+    ITEMS --> ITEMP["[P] ItemProfile (:itemId)"]
+    ITEMP --> ITEM_ASSIGN["[A] Assign item to PC / Player<br>(allowed)"]
+    LORE --> LOREP["[P] LoreProfile (:loreId)"]
+    MAPS --> MAPP["[P] MapProfile (:mapId)"]
+    NPCS --> NPCP["[P] NpcProfile (:npcId)"]
+    SESS --> SESP["[P] SessionProfile (:sessionId)"]
+    TOPBAR --> TOGGLE{"[G] Toggle mode?"}
+    TOGGLE -- No --> END["[S] Continue in GM mode"]
+    TOGGLE -- Yes --> MODEP["[CTX] Mode=Player (preview)"]
+    MODEP --> GUARD["[L] Guards re-run<br>(block GM-only routes)"]
+    GUARD --> HOME_P["[P] Dashboard (Player view)"]
+    HOME_P --> P_ITEMS["[P] Items (Player)"] & P_PCS["[P] PCs (Player view)"] & P_SESS["[P] Sessions (Player)"]
+```
 
-  ENTRY --> SHELL["[L] AppShell\n(GM mode)"]
-  SHELL --> HOME["[P] Dashboard / Home"]
+---
 
-  %% --- Prep navigation ---
-  HOME --> SESSIONS["[P] Sessions"]
-  HOME --> ARCS["[P] Arcs"]
-  HOME --> NPCS["[P] NPCs"]
-  HOME --> MAPS["[P] Maps"]
-  HOME --> ITEMS["[P] Items"]
-  HOME --> CONDITIONS["[P] Conditions"]
-  HOME --> RELS["[P] Relationships"]
 
-  %% --- Entity interaction ---
-  SESSIONS --> SESSION_VIEW["[P] Session Profile\n(view mode)"]
-  ARCS --> ARC_VIEW["[P] Arc Profile\n(view mode)"]
-  NPCS --> NPC_VIEW["[P] NPC Profile\n(view mode)"]
+## Flow 6 - Operational Failure Mini-Flows
 
-  SESSION_VIEW --> EDIT_SESSION["[C] Edit mode (explicit)"]
-  ARC_VIEW --> EDIT_ARC["[C] Edit mode"]
-  NPC_VIEW --> EDIT_NPC["[C] Edit mode"]
-
-  EDIT_SESSION --> SESSION_VIEW
-  EDIT_ARC --> ARC_VIEW
-  EDIT_NPC --> NPC_VIEW
-
-  %% --- In-session reference ---
-  SESSION_VIEW --> REF["[A] Reference other entities"]
-  REF --> NPC_VIEW
-  REF --> MAPS
-  REF --> ITEMS
-  REF --> CONDITIONS
-  REF --> RELS
-
-  %% --- After session ---
-  SESSION_VIEW --> SAVE["[A] Save updates"]
-  SAVE --> HOME
-
-  %% --- Styling ---
-  classDef gate fill:#f7f7f7,stroke:#666,stroke-width:1px,color:#111;
-  classDef page fill:#ffffff,stroke:#999,stroke-width:1px,color:#111;
-  classDef shell fill:#ffffff,stroke:#444,stroke-width:2px,color:#111;
-  classDef action fill:#f2fff7,stroke:#55aa77,stroke-width:1px,color:#111;
-  classDef comp fill:#f9fafb,stroke:#aaa,stroke-width:1px,color:#111;
-
-  class HOME,SESSIONS,ARCS,NPCS,MAPS,ITEMS,CONDITIONS,RELS,SESSION_VIEW,ARC_VIEW,NPC_VIEW page;
-  class SHELL shell;
-  class ENTRY,SAVE,REF action;
-  class EDIT_SESSION,EDIT_ARC,EDIT_NPC comp;
+```mermaid
+---
+config:
+  theme: redux
+  layout: dagre
+---
+flowchart TB
+    O1["[E] User opens /campaign/:id route"] --> G0["[L] RouteGuard pipeline"]
+    G0 --> A{"[G] Authenticated?"}
+    A -- No --> L["[P] Login"]
+    A -- Yes --> W{"[G] Workspace accessible?"}
+    W -- No --> WDEN["[P] WorkspaceAccessDenied<br>(CTA: Switch workspace + Go Home)"]
+    W -- Yes --> C{"[G] Campaign accessible in workspace?"}
+    C -- No --> CDEN["[P] CampaignAccessDenied<br>(CTA: Pick campaign in TopBar)"]
+    C -- Yes --> OK["[S] Continue"]
+    O2["[E] App loads but backend/network unstable"] --> NET{"[G] Network ok?"}
+    NET -- No --> NETUI["[P] NetworkError (non-destructive)<br>- Keep AppShell visible<br>- Retry button<br>- Preserve intended route"]
+    NETUI -- Retry --> NET
+    NET -- Yes --> RESUME["[S] Resume current route"]
+    O3["[E] Data request rejected by rules"] --> PERM["[P] AccessDenied (data)<br>(CTA: Go Home + Report)"]
+    PERM --> SAFE["[S] No sensitive data shown"] & INV["[S] Invariants:<br>- Shell stays visible on recoverable failures<br>- Guards before fetch<br>- Recovery CTA always present<br>- No forbidden data flashes"]
+    O4["[E] GM switches to Player mode<br>while on GM-only route"] --> MODE["[CTX] ModeContext toggled"]
+    MODE --> REEVAL["[L] Guards re-run immediately"]
+    REEVAL --> BLOCK["[P] NotAuthorized<br>(CTA: Go Dashboard)"]
+    O5["[E] Deep-link /items/:id"] --> FETCH["[DATA] Fetch entity (scoped)"]
+    FETCH --> EXISTS{"[G] Exists?"}
+    EXISTS -- No --> NF["[P] NotFound<br>(CTA: Back to list + Go Home)"]
+    EXISTS -- Yes --> RENDER["[S] Render entity"]
+    BLOCK --> INV
+    NETUI --> INV
+    NF --> INV
+    CDEN --> INV
+    WDEN --> INV
 ```

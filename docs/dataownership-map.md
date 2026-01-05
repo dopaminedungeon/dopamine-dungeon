@@ -1,117 +1,197 @@
 # 🗃️ Data Ownership Map (Firestore) — TO-BE
 
-> Purpose: make **data scope, ownership, and write permissions** explicit and boringly clear.
+> Purpose: make **data scope, ownership, and write permissions** explicit and boringly clear.  
 > This document is the guardrail against accidental privilege leaks and future refactor pain.
 
 ---
 
-## 0) Scope Definitions
+## Scope Definitions
 
 | Scope | Meaning |
 |-----|--------|
 | **Global** | Shared across the entire app (avoid unless necessary) |
 | **User-scoped** | Belongs to a single authenticated user |
-| **Campaign-scoped** | Belongs to one campaign (default for DD) |
+| **Tenant-scoped** | Belongs to one workspace (Chinese wall boundary) |
+| **Campaign-scoped** | Belongs to one campaign within a tenant (default for DD) |
 | **PC-scoped** | Belongs to a character, always within a campaign |
 
 ---
 
-## 1) Ownership & Access Overview (Mermaid)
+## Logical Ownership & Access Model
 
 ```mermaid
 ---
 config:
-  theme: redux
+  layout: dagre
+  nodeSpacing: 90
+  rankSpacing: 140
 ---
-flowchart TB
+flowchart LR
 
-%% ================= USER / MEMBERSHIP =================
-subgraph U["User-scoped"]
-  U1["users/{uid}\n• displayName\n• email\n• prefs\n• lastCampaignId?\n• lastMode?"]
-  U2["memberships/{uid_campaignId}\n(or users/{uid}/memberships/{campaignId})\n• campaignId\n• role: GM | Player\n• assignedPcIds[]\n• status"]
+subgraph AUTH["Auth & Identity"]
+direction TB
+U["user (uid, email)"]:::core
 end
 
-%% ================= CAMPAIGN ROOT =================
-subgraph C["Campaign-scoped"]
-  C0["campaigns/{campaignId}\n• name\n• system\n• createdBy\n• createdAt"]
-  CS["campaignSettings/{campaignId}\n(GM-owned config)"]
-
-  %% ===== GM-ONLY CONTENT =====
-  subgraph CGM["GM-owned content"]
-    AR["arcs/{campaignId}/{arcId}"]
-    QU["quests/{campaignId}/{questId}"]
-    RL["relationships/{campaignId}/{relId}"]
-    CO["conditions/{campaignId}/{condId}\n(special rule)"]
-  end
-
-  %% ===== SHARED / READ-ONLY =====
-  subgraph CSH["Shared (read-mostly)"]
-    IT["items/{campaignId}/{itemId}\n(player can self-assign)"]
-    LO["lore/{campaignId}/{loreId}"]
-    MP["maps/{campaignId}/{mapId}"]
-    NP["npcs/{campaignId}/{npcId}"]
-    SE["sessions/{campaignId}/{sessionId}"]
-  end
-
-  %% ===== PC-SCOPED =====
-  subgraph CPC["PC-scoped"]
-    PC["pcs/{campaignId}/{pcId}"]
-  end
-
-  %% ===== SHARED INVENTORY =====
-  subgraph BAG["Shared inventory"]
-    BOH["bagOfHolding/{campaignId}\n• currency\n• items[]\n• history[]"]
-  end
+subgraph TEN["Tenant / Workspace Layer"]
+direction TB
+T["tenant (tenantId, name, ownerUid)"]:::core
+TM["tenantMembership (tenantId, uid, tenantPermissionLevel)"]:::core
 end
 
-%% ================= RELATIONSHIPS =================
-U2 -->|grants access| C0
-U2 -->|role + assignedPcIds| PC
-PC -->|links| BOH
-IT -->|assign to| PC
-CS -->|configures| CGM
+subgraph CAMP["Campaign Layer"]
+direction TB
+C["campaign (campaignId, tenantId, name)"]:::core
+CM["campaignMembership (campaignId, tenantId, uid, campaignRole)"]:::core
+end
+
+subgraph ENT["Campaign Entities (tenantId + campaignId scoped)"]
+direction TB
+PC["pc (pcId)"]:::ent
+NPC["npc (npcId)"]:::ent
+S["session (sessionId)"]:::ent
+I["item (itemId)"]:::ent
+COND["condition (conditionId)"]:::ent
+ARC["arc (arcId)"]:::ent
+REL["relationship (relId)"]:::ent
+Q["quest (questId)"]:::ent
+MAP["map (mapId)"]:::ent
+LORE["lore (loreId)"]:::ent
+end
+
+subgraph PLAYER_SCOPED["Player-scoped Views"]
+direction TB
+PCA["pcAssignment (campaignId, uid → pcId[])"]:::ent
+BOH["bagOfHolding (sharedInventory)"]:::ent
+end
+
+U --> TM --> T --> C
+U --> CM --> C
+
+C --> PC
+C --> NPC
+C --> S
+C --> I
+C --> COND
+C --> ARC
+C --> REL
+C --> Q
+C --> MAP
+C --> LORE
+
+CM --> PCA
+C --> BOH
+
+classDef core fill:#eef6ff,stroke:#6aa0d8,stroke-width:1.5px,color:#222;
+classDef ent fill:#f7f7f7,stroke:#bdbdbd,stroke-width:1.5px,color:#222;
+linkStyle default stroke:#777,stroke-width:2.4px
 ```
 
-## 2) Ownership & Permissions Matrix (Authoritative)
+---
 
-This table defines **where data lives**, **who owns it**, and **who may read/write it**.
-If something is unclear in code, this table wins.
+## Firestore Persistence Layer (Physical Model)
 
-| Domain | Firestore Location | Scope | Owner | Player Access | Player Write | GM Write | Notes |
-|------|-------------------|-------|-------|---------------|--------------|----------|------|
-| User profile | `users/{uid}` | User | System / User | n/a | limited (prefs) | n/a | Auth identity & UI prefs |
-| Membership | `users/{uid}/memberships/{campaignId}` | User ↔ Campaign | GM/Admin | read own | ❌ | ✅ | Role, assigned PCs, status |
-| Campaign | `campaigns/{campaignId}` | Campaign | GM/Admin | read | ❌ | ✅ | Top-level metadata |
-| Campaign settings | `campaignSettings/{campaignId}` | Campaign | GM | ❌ | ❌ | ✅ | Rules, toggles, system config |
-| PCs | `pcs/{campaignId}/{pcId}` | Campaign + PC | GM | read **assigned only** | ❌ | ✅ | Player sees 1 PC directly or list |
-| Bag of Holding | `bagOfHolding/{campaignId}` | Campaign | Shared | read | ✅ (limited) | ✅ | Tab inside PCs section |
-| Items | `items/{campaignId}/{itemId}` | Campaign | GM | read | ⚠️ assign-to-self | ✅ | Player cannot edit item |
-| Lore | `lore/{campaignId}/{loreId}` | Campaign | GM | read | ❌ | ✅ | Read-only for players |
-| Maps | `maps/{campaignId}/{mapId}` | Campaign | GM | read | ❌ | ✅ | Read-only |
-| NPCs | `npcs/{campaignId}/{npcId}` | Campaign | GM | read | ❌ | ✅ | Read-only |
-| Sessions | `sessions/{campaignId}/{sessionId}` | Campaign | GM | read | ❌ | ✅ | Read-only |
-| Arcs | `arcs/{campaignId}/{arcId}` | Campaign | GM | ❌ | ❌ | ✅ | GM-only |
-| Quests | `quests/{campaignId}/{questId}` | Campaign | GM | ❌ | ❌ | ✅ | GM-only |
-| Relationships | `relationships/{campaignId}/{relId}` | Campaign | GM | ❌ | ❌ | ✅ | GM-only |
-| Conditions | `conditions/{campaignId}/{condId}` | Campaign | GM | ⚠️ special | ❌ | ✅ | Hidden in Player mode unless entered via GM |
+This layer shows where data actually lives and how tenant isolation is enforced structurally.
 
-### Legend
-- ✅ = allowed  
-- ❌ = blocked  
-- ⚠️ = limited / special-case behavior
+```mermaid
+---
+config:
+  layout: dagre
+  nodeSpacing: 95
+  rankSpacing: 150
+---
+flowchart LR
 
-## 3) Write Paths (Explicit & Intentional)
+subgraph FS["Firestore Persistence Layer"]
+direction TB
 
-This section defines **who can write what, from where, and why**.
+FS_USERS["users/{uid}"]:::fs
+
+FS_TENANTS["tenants/{tenantId}"]:::fs
+FS_TMEM["tenants/{tenantId}/members/{uid}"]:::fs
+
+FS_CAMPS["tenants/{tenantId}/campaigns/{campaignId}"]:::fs
+FS_CMEM["tenants/{tenantId}/campaigns/{campaignId}/members/{uid}"]:::fs
+
+FS_PCS[".../pcs/{pcId}"]:::fs
+FS_NPCS[".../npcs/{npcId}"]:::fs
+FS_ITEMS[".../items/{itemId}"]:::fs
+FS_SESS[".../sessions/{sessionId}"]:::fs
+FS_MAPS[".../maps/{mapId}"]:::fs
+FS_LORE[".../lore/{loreId}"]:::fs
+FS_ARCS[".../arcs/{arcId}"]:::fs
+FS_QUESTS[".../quests/{questId}"]:::fs
+FS_RELS[".../relationships/{relId}"]:::fs
+FS_COND[".../conditions/{condId}"]:::fs
+
+FS_BOH[".../bagOfHolding"]:::fs
+
+FS_USERS --> FS_TMEM
+FS_TENANTS --> FS_CAMPS
+FS_CAMPS --> FS_PCS
+FS_CAMPS --> FS_ITEMS
+FS_CAMPS --> FS_SESS
+FS_CAMPS --> FS_MAPS
+FS_CAMPS --> FS_LORE
+FS_CAMPS --> FS_ARCS
+FS_CAMPS --> FS_QUESTS
+FS_CAMPS --> FS_RELS
+FS_CAMPS --> FS_COND
+FS_CAMPS --> FS_BOH
+
+classDef fs fill:#f3fdf6,stroke:#4caf50,stroke-width:1.5px,color:#1b5e20;
+linkStyle default stroke:#777,stroke-width:2.2px
+```
+
+**Hard rule:**
+All Firestore queries must include tenantId (path-level isolation).
+Cross-tenant reads are structurally impossible.
+
+---
+
+## Ownership & Permissions Matrix (Authoritative)
+
+This table defines **where data lives**, **who owns it**, and **who may read/write it**.  
+If something is unclear in code, **this table wins**.
+
+| Domain | Firestore Location | Scope | Owner | Player Read | Player Write | GM Write | Notes |
+|------|-------------------|-------|-------|-------------|--------------|----------|------|
+| User profile | `users/{uid}` | User | System / User | n/a | prefs only | n/a | Auth identity & UI prefs |
+| Tenant membership | `tenants/{tenantId}/members/{uid}` | Tenant | WorkspaceAdmin | read own | ❌ | ✅ | Workspace permission level |
+| Campaign | `tenants/{tenantId}/campaigns/{campaignId}` | Campaign | GM | read | ❌ | ✅ | Top-level campaign metadata |
+| Campaign members | `.../campaigns/{campaignId}/members/{uid}` | Campaign | GM | read own | ❌ | ✅ | Campaign role binding |
+| Campaign settings | `.../campaigns/{campaignId}/settings` | Campaign | GM | ❌ | ❌ | ✅ | Rules, toggles, system config |
+| PCs | `.../pcs/{pcId}` | Campaign + PC | GM | read assigned only | ❌ | ✅ | Player sees 1 PC or list |
+| Bag of Holding | `.../bagOfHolding` | Campaign | Shared | read | ⚠️ limited | ✅ | Shared inventory |
+| Items | `.../items/{itemId}` | Campaign | GM | read | ⚠️ assign-to-self | ✅ | Player never edits item |
+| Lore | `.../lore/{loreId}` | Campaign | GM | read | ❌ | ✅ | Read-only for players |
+| Maps | `.../maps/{mapId}` | Campaign | GM | read | ❌ | ✅ | Read-only |
+| NPCs | `.../npcs/{npcId}` | Campaign | GM | read | ❌ | ✅ | Read-only |
+| Sessions | `.../sessions/{sessionId}` | Campaign | GM | read | ❌ | ✅ | Read-only |
+| Arcs | `.../arcs/{arcId}` | Campaign | GM | ❌ | ❌ | ✅ | GM-only |
+| Quests | `.../quests/{questId}` | Campaign | GM | ❌ | ❌ | ✅ | GM-only |
+| Relationships | `.../relationships/{relId}` | Campaign | GM | ❌ | ❌ | ✅ | GM-only |
+| Conditions | `.../conditions/{condId}` | Campaign | GM | ⚠️ special | ❌ | ✅ | UX-restricted |
+
+**Legend:**  
+- ✅ allowed  
+- ❌ blocked  
+- ⚠️ limited / special-case behavior
+
+---
+
+## Write Paths (Explicit & Intentional)
+
+This section defines **who can write what, from where, and why**.  
 Any write path not listed here should be considered a bug.
 
 ---
 
-### 3.1 Player-Initiated Write Paths (Limited by Design)
+### Player-Initiated Write Paths (Limited by Design)
 
 Players are intentionally constrained. Their writes are **contextual actions**, not content creation.
 
-#### ✅ Bag of Holding (Campaign-scoped)
+#### Bag of Holding (Campaign-scoped)
 - **Who**: Player
 - **Where**: `/pcs` → *Bag of Holding tab*
 - **Writes**:
@@ -121,7 +201,7 @@ Players are intentionally constrained. Their writes are **contextual actions**, 
   - cannot delete items added by GM
   - write may record metadata: `{ addedBy, addedAt }`
 
-#### ⚠️ Items → Assign to Self
+#### Items → Assign to Self
 - **Who**: Player
 - **Where**: `/items/:itemId`
 - **Action**: “Assign to my character”
@@ -133,11 +213,11 @@ Players are intentionally constrained. Their writes are **contextual actions**, 
 
 ---
 
-### 3.2 GM-Initiated Write Paths (Authoritative)
+### GM-Initiated Write Paths (Authoritative)
 
 GMs are the sole creators and editors of campaign content.
 
-#### ✅ Campaign Structure
+#### Campaign Structure
 - create / edit:
   - Campaign
   - Campaign Settings
@@ -146,7 +226,7 @@ GMs are the sole creators and editors of campaign content.
   - Relationships
   - Conditions
 
-#### ✅ World Content
+#### World Content
 - create / edit:
   - Items
   - Lore
@@ -154,18 +234,18 @@ GMs are the sole creators and editors of campaign content.
   - NPCs
   - Sessions
 
-#### ✅ Characters
+#### Characters
 - create PCs
-- assign PCs to players (via Membership)
+- assign PCs to players (via campaign membership)
 - edit PC data
 
-#### ✅ Shared Inventory
+#### Shared Inventory
 - full control over Bag of Holding
 - override player-added entries if needed
 
 ---
 
-### 3.3 Explicit Non-Write Areas
+### Explicit Non-Write Areas (Players)
 
 The following are **never writable** by players:
 - Campaign Settings
@@ -180,16 +260,16 @@ If a player can write here, **permissions are broken**.
 
 ---
 
-## 4) Open Decisions & Deferred Design Choices
+## Open Decisions & Deferred Design Choices
 
 These are **known unknowns**. They are intentionally deferred until after routing, permissions, and refactors are complete.
 
----
-
-### 4.1 Membership Model
+### Membership Model
 **Decision pending:**
-- `memberships/{uid_campaignId}` (flat collection)
-- OR `users/{uid}/memberships/{campaignId}` (nested)
+- flat collection  
+  `campaignMemberships/{uid_campaignId}`
+- OR nested  
+  `users/{uid}/campaignMemberships/{campaignId}`
 
 **Impacts:**
 - permission checks
@@ -198,7 +278,7 @@ These are **known unknowns**. They are intentionally deferred until after routin
 
 ---
 
-### 4.2 Item ↔ PC Assignment Model
+### Item ↔ PC Assignment Model
 **Options:**
 - **Option A**: store `inventoryItemIds[]` on PC document
 - **Option B**: join collection  
@@ -210,11 +290,11 @@ These are **known unknowns**. They are intentionally deferred until after routin
 
 ---
 
-### 4.3 Conditions Visibility Rules
+### Conditions Visibility Rules
 Conditions currently have a **special-case UX rule**:
 - hidden in Player mode
 - visible if entered via GM, then switched
-- show passive-aggressive message
+- show contextual message
 
 **Decision pending:**
 - GM-only forever
@@ -223,7 +303,7 @@ Conditions currently have a **special-case UX rule**:
 
 ---
 
-### 4.4 Currency Rules (Bag of Holding)
+### Currency Rules (Bag of Holding)
 **Open questions:**
 - Can players add currency?
 - Can players remove currency?
@@ -231,7 +311,7 @@ Conditions currently have a **special-case UX rule**:
 
 ---
 
-### 4.5 Audit & History
+### Audit & History
 **Future consideration:**
 - write audit trail (`addedBy`, `editedBy`)
 - especially for:
@@ -243,8 +323,11 @@ Not required for MVP, but important for trust.
 
 ---
 
-> These decisions are **tracked, not blocking**.  
-> They will be resolved after:
-> - routing refactor
-> - permission guards finalized
-> - first real campaign usage
+## Invariants
+
+- Tenant boundaries are absolute
+- Campaigns never cross tenants
+- Roles grant permission; modes restrict behaviour
+- UI hiding is never security
+- A user’s identity never changes when switching mode
+- All access is path-scoped by tenant

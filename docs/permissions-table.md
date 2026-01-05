@@ -1,74 +1,65 @@
-# 🔐 Permission Matrix — GM vs Player
+## Permission Matrix (Campaign-scoped)
 
-> **Scope:** Campaign-scoped content  
-> **Legend:**  
-> - **Full** – view, create, edit, assign, admin  
-> - **Read-only** – view only  
-> - **Limited** – view + explicitly allowed action  
-> - **Blocked** – not visible / `NotAuthorized`
+Legend:
+- ✅ Allowed
+- 🚫 Blocked → NotAuthorized
+- 🟡 Allowed with conditions / special behaviour
+- ✍️ Limited write action
 
----
+### Pages & Profiles
 
-## 📄 Pages
+| Area | Route/Page | CampaignPlayer | CampaignGM | Notes |
+|---|---|---:|---:|---|
+| Core | Dashboard | ✅ | ✅ | Default landing page after guards pass |
+| PCs | PCs (section) | 🟡 | ✅ | Player: Characters tab behaviour depends on assignments |
+| PCs | PCProfile | 🟡 | ✅ | Player: auto-load if exactly 1 assigned PC; otherwise via cards list |
+| PCs | Bag of Holding | ✅ | ✅ | Always available to Player; shared, campaign-scoped |
+| Items | Items | ✅ | ✅ | Read-only list for Player |
+| Items | ItemProfile | ✅ | ✅ | Player can always assign item to self (✍️) |
+| Lore | Lore | ✅ | ✅ | Read-only |
+| Lore | LoreProfile | ✅ | ✅ | Read-only |
+| Maps | Maps | ✅ | ✅ | Read-only |
+| Maps | MapProfile | ✅ | ✅ | Read-only |
+| NPCs | NPCs | ✅ | ✅ | Read-only |
+| NPCs | NpcProfile | ✅ | ✅ | Read-only |
+| Sessions | Sessions | ✅ | ✅ | Read-only |
+| Sessions | SessionProfile | ✅ | ✅ | Read-only |
+| GM-only | Arcs | 🚫 | ✅ | Blocked for Player even if deep-linked |
+| GM-only | ArcProfile | 🚫 | ✅ | Same guard rule as Arcs |
+| GM-only | CampaignSettings | 🚫 | ✅ | Campaign-scoped settings |
+| GM-only | Conditions | 🚫 | ✅ | Hidden in Player sidebar; NotAuthorized if accessed via URL/mode switch |
+| GM-only | ConditionProfile | 🚫 | ✅ | Same as Conditions |
+| GM-only | Quests | 🚫 | ✅ | NotAuthorized for Player |
+| GM-only | QuestProfile | 🚫 | ✅ | NotAuthorized for Player |
+| GM-only | Relationships | 🚫 | ✅ | NotAuthorized for Player |
+| GM-only | RelationshipProfile | 🚫 | ✅ | NotAuthorized for Player |
 
-| Page | GM | Player | Notes |
-|----|----|----|----|
-| **Dashboard** | Full | Full | Entry point, campaign-aware |
-| **Arcs** | Full | ❌ Blocked | Narrative control is GM-only |
-| **Conditions** | Full | ❌ Blocked | Hidden entirely from players |
-| **Items** | Full | 🟣 Limited | Player can *self-assign* items |
-| **Lore** | Full | 🟡 Read-only | Campaign lore browsing |
-| **Maps** | Full | 🟡 Read-only | No editing, view only |
-| **NPCs** | Full | 🟡 Read-only | Player-facing NPC info |
-| **PCs – Characters tab** | Full | Full (own only) | Player sees only assigned PC(s) |
-| **PCs – Bag of Holding** | Full | Full | Shared party inventory |
-| **Quests** | Full | ❌ Blocked | GM-facing structure |
-| **Relationships** | Full | ❌ Blocked | GM narrative tooling |
-| **Sessions** | Full | 🟡 Read-only | Session logs / summaries |
-| **Campaign Settings** | Full | ❌ Blocked | Admin-level config |
+### Actions
 
----
+| Action | CampaignPlayer | CampaignGM | Notes |
+|---|---:|---:|---|
+| Assign item to self (ItemProfile) | ✍️ | ✅ | Always available for Player (future toggle possible) |
+| Create/edit Arcs | 🚫 | ✅ | GM-only |
+| Create/edit Quests | 🚫 | ✅ | GM-only |
+| Create/edit Relationships | 🚫 | ✅ | GM-only |
+| Create/edit Conditions | 🚫 | ✅ | GM-only |
+| Create new PC | 🚫 | ✅ | GM-only |
+| Assign PC to player | 🚫 | ✅ | GM-only (campaign membership assignment) |
+| Mode toggle (GM ↔ Player preview) | 🚫 | ✅ | Only CampaignGM can toggle; switching to Player mode blocks GM-only routes |
+| Access GM-only routes while in Player mode | 🚫 | 🚫 | Even GM role is blocked in Player mode (NotAuthorized) |
 
-## 🧬 Profiles
+### Player PC edge cases (PCs → Characters tab)
 
-| Profile | GM | Player | Notes |
-|----|----|----|----|
-| **ArcProfile** | Full | ❌ Blocked | GM-only editing |
-| **ConditionProfile** | Full | ❌ Blocked | Not visible to players |
-| **ItemProfile** | Full | 🟣 Limited | Player: assign item to self |
-| **LoreProfile** | Full | 🟡 Read-only | |
-| **MapProfile** | Full | 🟡 Read-only | |
-| **NpcProfile** | Full | 🟡 Read-only | |
-| **PCProfile** | Full | Full (own only) | Guarded by assignment |
-| **QuestProfile** | Full | ❌ Blocked | |
-| **RelationshipProfile** | Full | ❌ Blocked | |
-| **SessionProfile** | Full | 🟡 Read-only | |
+| Scenario | Behaviour |
+|---|---|
+| Player has **0** assigned PCs in campaign | Show “No character assigned yet” message in Characters tab; Bag of Holding remains available |
+| Player has **1** assigned PC | Characters tab auto-loads that PCProfile directly (no card list) |
+| Player has **2+** assigned PCs | Show card list; clicking opens PCProfile |
 
----
+### Security invariants (applies everywhere)
 
-## 🧠 Special Rules
-
-### PCs (Player Characters)
-- Player sees **only assigned PC(s)**
-- **0 PCs assigned** → `NotAuthorized`
-- **1 PC assigned** → auto-open `PCProfile`
-- **>1 PC assigned** → card list view
-
-### Items
-- Player **cannot create/edit/delete**
-- Player **can assign item to self**
-- All other mutations are GM-only
-
-### Bag of Holding
-- Always visible to **GM and Player**
-- Shared, party-level inventory
-
----
-
-## 🎯 Why this matters
-This matrix is the **single source of truth** for:
-- Route guards (`RequireGM`, `RequireAssignedPC`)
-- Firestore rules (read/write scopes)
-- Navigation visibility
-- `NotAuthorized` / EmptyState logic
-- QA scenarios & regression tests
+- Guards protect **URLs**, not just sidebar visibility
+- UI hiding is never trusted for security
+- Policy checks happen before entity fetch
+- No forbidden content flashes on screen
+- Every blocked/empty state provides a recovery CTA (Go Home / pick campaign in TopBar)

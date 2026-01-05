@@ -1,177 +1,273 @@
-# Error & Empty State Matrix
+# 🚨 Error & Empty State Matrix — Canonical UX Contract
 
-This document defines **expected error states, empty states, and recovery UX**
-across the Dopamine Dungeon app.
+> Purpose: define **every blocking, recoverable, and empty scenario** in the app  
+> so that errors are:
+> - predictable
+> - recoverable
+> - non-destructive
+> - boring (in the best possible way)
 
-Goal:
-- No silent failures
-- No blank screens
-- Clear guidance without over-explaining
-- Tone-aware (Player vs GM)
-
----
-
-## Global Principles
-
-- **Every page must render something**, even when data is missing
-- Errors should:
-  - explain *what happened*
-  - explain *what the user can do*
-- Players never see raw errors
-- GMs may see more diagnostic hints
-- Empty ≠ Error
+This document is **authoritative** for:
+- routing guards
+- UI fallback components
+- error boundaries
+- empty-state copy
+- recovery actions
 
 ---
 
-## Authentication & App Boot
+## Core Principles (Non-Negotiable)
 
-| Scenario | Type | Who | UI Behaviour |
-|--------|------|-----|--------------|
-| User not authenticated | Empty | All | Redirect to Login |
-| Auth loading | Empty | All | Full-page spinner |
-| Auth failed | Error | All | “Login failed. Try again.” |
-| User authenticated but no campaigns | Empty | All | “No campaigns yet” CTA |
-
----
-
-## Campaign Context
-
-| Scenario | Type | Who | UI Behaviour |
-|--------|------|-----|--------------|
-| No campaign selected | Empty | All | Campaign selector |
-| Campaign not found | Error | All | “Campaign not found” |
-| No access to campaign | Error | Player | “You don’t have access” |
-| Campaign loading | Empty | All | Skeleton UI |
+- Errors must **never destroy context** unless absolutely required
+- Shell (TopBar + Sidebar) stays visible whenever possible
+- Every error state provides **at least one recovery action**
+- UI hiding ≠ security
+- Guards protect **routes and data**, not just navigation links
 
 ---
 
-## Characters (PCs)
+## Error Categories (System-Level)
 
-### Characters List (Player)
-
-| Scenario | Type | UI |
-|-------|------|----|
-| 0 PCs | Empty | “No characters assigned yet” |
-| 1 PC | Empty | Auto-load PC profile |
-| >1 PC | Empty | Card selection view |
-| Failed to load PCs | Error | Retry + message |
-
----
-
-### PC Profile
-
-| Scenario | Type | Who | UI |
-|--------|------|-----|----|
-| PC not found | Error | All | “Character not found” |
-| Player opens another PC | Error | Player | “Not your character” |
-| Data loading | Empty | All | Skeleton |
-| No inventory | Empty | All | “Bag is empty” |
+| Category | Description | Shell Visible |
+|--------|------------|---------------|
+| AuthError | User not authenticated | ❌ |
+| TenantError | Tenant missing or inaccessible | ❌ |
+| CampaignError | Campaign missing or inaccessible | ✅ |
+| AuthorizationError | Role / permission violation | ✅ |
+| NetworkError | Fetch failed / timeout | ✅ |
+| NotFound | Entity does not exist | ✅ |
+| EmptyState | Valid state, no data | ✅ |
 
 ---
 
-## Bag of Holding
+## Blocking Errors (Hard Stops)
 
-| Scenario | Type | Who | UI |
-|--------|------|-----|----|
-| Empty bag | Empty | All | “Bag of Holding is empty” |
-| Add item success | Feedback | Player | Toast confirmation |
-| Add item failed | Error | Player | “Could not add item” |
-| Permission denied | Error | Player | “You can’t modify this” |
+### Authentication Failed
+**Scenario**
+- User not logged in
+- Token expired
+- Auth provider failure
 
----
+**Behaviour**
+- Block all routes
+- Redirect to `/login`
 
-## Items
+**UI**
+- Full-page AuthError
+- No app shell
 
-| Scenario | Type | Who | UI |
-|--------|------|-----|----|
-| No items in campaign | Empty | All | “No items yet” |
-| Item not found | Error | All | “Item not found” |
-| Player assigns item | Feedback | Player | “Item assigned” |
-| Assign failed | Error | Player | Retry CTA |
-
----
-
-## Lore
-
-| Scenario | Type | Who | UI |
-|--------|------|-----|----|
-| No lore entries | Empty | All | “No lore discovered yet” |
-| Lore loading | Empty | All | Skeleton |
-| Lore not found | Error | All | “Lore entry missing” |
+**Recovery**
+- Login
+- Retry authentication
 
 ---
 
-## Maps
+### Tenant Missing or Inaccessible
+**Scenario**
+- Tenant ID missing
+- User not a member of tenant
+- Tenant deleted
 
-| Scenario | Type | Who | UI |
-|--------|------|-----|----|
-| No maps | Empty | All | “No maps available” |
-| Map missing | Error | All | “Map not found” |
-| Map loading | Empty | All | Placeholder canvas |
+**Behaviour**
+- Block immediately
+- Redirect to Tenant Picker or Home
 
----
+**UI**
+- TenantAccessError
+- No shell
 
-## NPCs
-
-| Scenario | Type | Who | UI |
-|--------|------|-----|----|
-| No NPCs | Empty | All | “No NPCs yet” |
-| NPC not found | Error | All | “NPC not found” |
-| Restricted info | Empty | Player | “Some info hidden by GM” |
-
----
-
-## Sessions
-
-| Scenario | Type | Who | UI |
-|--------|------|-----|----|
-| No sessions | Empty | All | “No sessions recorded yet” |
-| Session missing | Error | All | “Session not found” |
-| Session loading | Empty | All | Skeleton |
+**Recovery**
+- Select another tenant
+- Go Home
 
 ---
 
-## Conditions (Special Case)
+## Authorization Errors (Role / Mode Violations)
 
-| Scenario | Type | Who | UI |
-|--------|------|-----|----|
-| Player opens Conditions | Error-like | Player | “GM-only information” |
-| GM opens Conditions | Normal | GM | Full editor |
-| Player affected by condition | Empty | Player | “You feel… something is wrong.” |
+### GM-only Page Opened by Player
+**Scenario**
+- Player navigates to GM-only route (URL paste, stale link, sidebar glitch)
 
----
+**Behaviour**
+- Guard blocks before render
+- No GM content flashes
 
-## Network & System Errors
+**UI**
+- NotAuthorized (GM-only messaging)
+- Shell visible
 
-| Scenario | Type | UI |
-|--------|------|----|
-| Firestore timeout | Error | Retry banner |
-| Permission error | Error | Friendly denial |
-| Unknown error | Error | “Something went wrong” |
-| Partial data | Empty | Render what exists |
+**Recovery**
+- CTA: “Go to Dashboard”
 
 ---
 
-## Developer / Debug States (GM-only or Dev)
+### Mode Switch Invalidates Route
+**Scenario**
+- User switches from GM mode → Player mode
+- Current route is GM-only
 
-| Scenario | Type | UI |
-|--------|------|----|
-| Missing config | Error | Debug hint |
-| Invalid route | Error | 404 page |
-| Feature flag disabled | Empty | “Coming soon” |
+**Behaviour**
+- Re-evaluate permissions immediately
+- Redirect or block
+
+**UI**
+- NotAuthorized or redirect to Dashboard
+
+**Recovery**
+- Dashboard
+- Switch back to GM mode (if role allows)
 
 ---
 
-## Definition of Done
+## Campaign Context Errors
 
-A page is **done** when:
-- It never renders blank
-- Loading is visible
-- Errors are understandable
-- Players are never confused about *why* something is missing
+### Campaign Missing / Invalid
+**Scenario**
+- Campaign ID missing
+- Campaign deleted
+- User lost access
 
-If users ask:
+**Behaviour**
+- Block entity fetch
+- Do not render page content
 
-> “Is this broken or is this intentional?”
+**UI**
+- CampaignRequired or CampaignAccessError
+- Shell visible
 
-Then the state is **not done yet**.
+**Recovery**
+- Campaign picker (always reachable via TopBar)
+- Go Home
+
+---
+
+### User Has Access to Exactly One Campaign
+**Scenario**
+- Campaign context not set
+- User belongs to only one campaign
+
+**Behaviour**
+- Auto-select campaign
+- No picker shown
+
+**UI**
+- Seamless transition (no empty or error state)
+
+---
+
+### User Has Access to Multiple Campaigns
+**Scenario**
+- Campaign context not set
+
+**Behaviour**
+- Require explicit campaign selection
+
+**UI**
+- Campaign Picker view
+
+**Recovery**
+- Select campaign
+
+---
+
+## Entity-Level Errors
+
+### Entity Not Found
+**Scenario**
+- Deep link to non-existent PC / Item / Session / etc.
+
+**Behaviour**
+- Block entity render
+
+**UI**
+- NotFound
+- Shell visible
+
+**Recovery**
+- Back to list
+- Go Home
+
+---
+
+### Player Opens PCs Page Without Assigned Character
+**Scenario**
+- Player role
+- No PC assigned
+
+**Behaviour**
+- Page allowed
+- PC content empty
+
+**UI**
+- Empty State:
+  - “No character assigned yet”
+- Bag of Holding tab remains visible
+
+**Recovery**
+- Informational only
+- No error CTA required
+
+---
+
+## Network & Fetch Errors (Non-Destructive)
+
+### Network Failure During Entity Fetch
+**Scenario**
+- Firestore timeout
+- Offline
+- Temporary backend issue
+
+**Behaviour**
+- Keep route and shell
+- Do not reset context
+
+**UI**
+- NetworkError (inline or page-level)
+- Loading skeleton may remain
+
+**Recovery**
+- Retry action
+- Automatic refetch on reconnect
+
+---
+
+## Empty States (Valid, Expected)
+
+Empty states are **not errors**.
+
+### Examples
+- No sessions yet
+- No items created
+- No NPCs
+- No lore entries
+
+**UI**
+- Friendly empty state
+- Contextual CTA (GM-only):
+  - “Create first session”
+  - “Add item”
+
+Player view:
+- Read-only informational messaging
+
+---
+
+## Invariants Established by This File
+
+- Guards protect URLs, not just UI
+- No forbidden content ever flashes
+- Shell persistence is intentional
+- All blocked states offer recovery
+- Empty ≠ error
+- Network errors never destroy navigation state
+
+---
+
+## Explicit Non-Goals
+
+This document does **not** define:
+- Error copy wording
+- Styling or illustration decisions
+- Logging or monitoring implementation
+
+These can evolve independently without breaking this contract.
