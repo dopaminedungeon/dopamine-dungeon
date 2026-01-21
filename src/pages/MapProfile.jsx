@@ -1,5 +1,5 @@
 import React from "react";
-import { useParams, useNavigate, useSearchParams } from "react-router-dom";
+import { useParams, useNavigate } from "react-router-dom";
 import { useMode } from "../context/ModeContext.jsx";
 import { MOCK_MAP_DATA } from "../data/mockMaps.js";
 import {
@@ -20,12 +20,30 @@ export default function MapProfile() {
   const { id } = useParams();
   const navigate = useNavigate();
   const { isGM } = useMode();
-  const [searchParams] = useSearchParams();
-
-  // GM can force "player view" via ?mode=player
-  const isGmView = isGM && searchParams.get("mode") !== "player";
+  
+  const isGmView = Boolean(isGM);
 
   const map = MOCK_MAP_DATA[id];
+
+  // Hard gate: players should not be able to open GM-only maps via direct URL.
+  if (!isGM && map && map.visibility === "gm-only") {
+    return (
+      <main className="flex-1 p-8 overflow-auto">
+        <div className="max-w-xl mx-auto bg-white/5 border border-white/10 rounded-2xl p-8 text-center">
+          <h1 className="text-2xl font-bold text-white mb-2">DM Eyes Only</h1>
+          <p className="text-zinc-400 text-sm mb-4">
+            This map is marked GM-only. Players don’t get to see it until it’s revealed in play. 💜
+          </p>
+          <button
+            className="mt-2 px-4 py-2 rounded-xl bg-white/10 text-white hover:bg-white/20"
+            onClick={() => navigate("/maps")}
+          >
+            Back to Maps
+          </button>
+        </div>
+      </main>
+    );
+  }
 
   if (!map) {
     return (
@@ -152,7 +170,7 @@ export default function MapProfile() {
                   alt={map.name}
                   className="w-full h-full object-cover"
                 />
-                <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent" />
+                <div className="absolute inset-0 bg-linear-to-t from-black/80 via-black/20 to-transparent" />
 
                 {/* Name + subtitle + location */}
                 <div className="absolute bottom-4 left-6 space-y-1">

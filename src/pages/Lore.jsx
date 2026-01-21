@@ -1,6 +1,6 @@
 // src/pages/Lore.jsx
 import React, { useMemo, useState } from "react";
-import { useNavigate, useSearchParams } from "react-router-dom";
+import { useNavigate } from "react-router-dom";
 import {
   BookText,
   Sparkles,
@@ -19,8 +19,6 @@ const RARITY_FILTERS = ["All", "Major", "Minor", "Obscure"];
 export default function Lore() {
   const navigate = useNavigate();
   const { isGM } = useMode();
-  const [searchParams] = useSearchParams();
-  const isGmMode = searchParams.get("mode") !== "player";
 
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedType, setSelectedType] = useState("All");
@@ -38,7 +36,7 @@ export default function Lore() {
 
   const filteredLore = useMemo(() => {
     const baseList =
-      isGM && isGmMode
+      isGM
         ? MOCK_LORE
         : MOCK_LORE.filter((entry) => entry.visibility === "public");
 
@@ -57,7 +55,7 @@ export default function Lore() {
 
       return matchesSearch && matchesType && matchesRarity;
     });
-  }, [searchQuery, selectedType, selectedRarity, isGM, isGmMode]);
+  }, [searchQuery, selectedType, selectedRarity, isGM]);
 
   const handleCreate = (e) => {
     e.preventDefault();
@@ -98,7 +96,7 @@ export default function Lore() {
     >
       <div className="flex items-start justify-between mb-3">
         <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-purple-500 to-indigo-500 flex items-center justify-center shadow-lg">
+          <div className="w-10 h-10 rounded-xl bg-linear-to-br from-purple-500 to-indigo-500 flex items-center justify-center shadow-lg">
             <BookText className="w-5 h-5 text-white" />
           </div>
           <div>
@@ -114,7 +112,7 @@ export default function Lore() {
           <span className="px-2 py-0.5 rounded-full text-[11px] font-medium bg-violet-500/10 text-violet-300 border border-violet-500/40">
             {entry.rarity}
           </span>
-          {isGM && isGmMode && visibilityPill(entry.visibility)}
+          {isGM && visibilityPill(entry.visibility)}
         </div>
       </div>
 
@@ -147,7 +145,7 @@ export default function Lore() {
                  hover:bg-white/10 hover:border-purple-400/40 transition-all flex items-center justify-between"
     >
       <div className="flex items-center gap-3">
-        <div className="w-8 h-8 rounded-xl bg-gradient-to-br from-purple-500 to-indigo-500 flex items-center justify-center shadow-lg">
+        <div className="w-8 h-8 rounded-xl bg-linear-to-br from-purple-500 to-indigo-500 flex items-center justify-center shadow-lg">
           <BookText className="w-4 h-4 text-white" />
         </div>
         <div>
@@ -158,7 +156,7 @@ export default function Lore() {
             <span className="px-2 py-0.5 rounded-full text-[11px] font-medium bg-violet-500/10 text-violet-300 border border-violet-500/40">
               {entry.rarity}
             </span>
-            {isGM && isGmMode && visibilityPill(entry.visibility)}
+            {isGM && visibilityPill(entry.visibility)}
           </div>
           <p className="text-xs text-zinc-400 line-clamp-1">
             {entry.category} • {entry.type} — {entry.synopsis}
@@ -195,7 +193,7 @@ export default function Lore() {
           {isGM && (
             <button
               onClick={() => setShowCreateModal(true)}
-              className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-gradient-to-r from-purple-500 to-pink-500 text-sm font-medium text-white hover:opacity-90 transition-opacity"
+              className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-linear-to-r from-purple-500 to-pink-500 text-sm font-medium text-white hover:opacity-90 transition-opacity"
             >
               <Plus className="w-4 h-4" />
               Add Lore Entry
@@ -408,7 +406,7 @@ export default function Lore() {
                 </button>
                 <button
                   type="submit"
-                  className="px-4 py-2 rounded-xl bg-gradient-to-r from-purple-500 to-pink-500 text-white font-medium hover:opacity-90"
+                  className="px-4 py-2 rounded-xl bg-linear-to-r from-purple-500 to-pink-500 text-white font-medium hover:opacity-90"
                 >
                   Save Lore Entry
                 </button>

@@ -1,14 +1,13 @@
-// src/main.jsx
 import React from "react";
 import ReactDOM from "react-dom/client";
 import App from "./App.jsx";
 import "./index.css";
-import { ModeProvider } from "./context/ModeContext.jsx";
+import AppProviders from "./context/AppProviders.jsx"; // adjust path if needed
 
 ReactDOM.createRoot(document.getElementById("root")).render(
   <React.StrictMode>
-    <ModeProvider>
+    <AppProviders>
       <App />
-    </ModeProvider>
+    </AppProviders>
   </React.StrictMode>
 );

@@ -62,15 +62,21 @@ export default function Quests() {
 
   if (!isGM) {
     return (
-      <div className="p-8 text-white">
+      <main className="flex-1 p-8 overflow-auto text-white">
         <div className="max-w-lg bg-white/5 border border-white/10 rounded-2xl p-8 text-center backdrop-blur-sm mx-auto mt-12">
           <h1 className="text-2xl font-bold text-white mb-2">GM-Only Plot Console</h1>
           <p className="text-sm text-zinc-400">
             Quests and plot threads live here, but this module is for the Dungeon Master only.
             Players will see quest info in their own session log instead of this page. 💜
           </p>
+          <button
+            className="mt-4 px-4 py-2 rounded-xl bg-white/10 text-white hover:bg-white/20"
+            onClick={() => navigate("/")}
+          >
+            Back to Dashboard
+          </button>
         </div>
-      </div>
+      </main>
     );
   }
 
@@ -79,7 +85,7 @@ export default function Quests() {
   };
 
   return (
-    <div className="p-8 overflow-auto text-white">
+    <main className="flex-1 p-8 overflow-auto text-white">
       <div className="mb-6">
         <h1 className="text-2xl font-bold">Quests & Plot Threads</h1>
         <p className="text-sm text-zinc-400">GM-only plot console.</p>
@@ -129,7 +135,7 @@ export default function Quests() {
                 // later: open "New Quest" modal
                 console.log("New quest modal – TODO");
               }}
-              className="inline-flex items-center gap-2 rounded-xl bg-gradient-to-r from-indigo-500 to-purple-500 px-4 py-2 text-sm font-medium text-white shadow-lg shadow-purple-500/25 hover:opacity-90 transition"
+              className="inline-flex items-center gap-2 rounded-xl bg-linear-to-r from-indigo-500 to-purple-500 px-4 py-2 text-sm font-medium text-white shadow-lg shadow-purple-500/25 hover:opacity-90 transition"
             >
               <Plus className="w-4 h-4" />
               New Quest
@@ -164,7 +170,7 @@ export default function Quests() {
           return (
             <section
               key={lane}
-              className="bg-white/5 border border-white/10 rounded-2xl p-4 flex flex-col min-h-[260px]"
+              className="bg-white/5 border border-white/10 rounded-2xl p-4 flex flex-col min-h-65"
             >
               {/* Lane header */}
               <div className="flex items-center justify-between mb-3">
@@ -188,7 +194,7 @@ export default function Quests() {
                   No {config.label.toLowerCase()} quests.
                 </div>
               ) : (
-                <div className="space-y-3 max-h-[480px] overflow-y-auto pr-1">
+                <div className="space-y-3 max-h-120 overflow-y-auto pr-1">
                   {laneQuests.map((quest) => {
                     const StatusIcon = statusConfig[quest.status].icon;
 
@@ -239,7 +245,7 @@ export default function Quests() {
                           </div>
                           <div className="h-1.5 w-full rounded-full bg-zinc-800 overflow-hidden">
                             <div
-                              className="h-full rounded-full bg-gradient-to-r from-purple-500 via-violet-400 to-pink-500 transition-all"
+                              className="h-full rounded-full bg-linear-to-r from-purple-500 via-violet-400 to-pink-500 transition-all"
                               style={{ width: `${quest.progress}%` }}
                             />
                           </div>
@@ -288,6 +294,6 @@ export default function Quests() {
           );
         })}
       </div>
-    </div>
+    </main>
   );
 }

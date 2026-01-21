@@ -74,7 +74,7 @@ const PCs = () => {
           </div>
 
           {/* Search */}
-          <div className="w-full md:w-[420px]">
+            <div className="w-full md:w-104">
             <label className="sr-only" htmlFor="pc-search">
               Search PCs
             </label>

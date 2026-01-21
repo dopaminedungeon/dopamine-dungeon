@@ -1,12 +1,13 @@
 import React, { useState } from "react";
 import { useMode } from "../context/ModeContext";
-import { Link, Navigate } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { Landmark, Users, ArrowRight } from "lucide-react";
 import { mockRelationships } from "../data/mockRelationships";
 
 
 export default function Relationships() {
   const { isGM } = useMode();
+  const navigate = useNavigate();
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
     // Derived entities for filters and matrix
   const pcNames = Array.from(
@@ -40,16 +41,18 @@ export default function Relationships() {
   // If the PLAYER somehow gets here: gently but firmly yeet them
   if (!isGM) {
     return (
-      <main className="flex-1 p-10 text-center">
-        <div className="max-w-lg mx-auto bg-white/5 border border-white/10 rounded-2xl p-8 backdrop-blur">
-          <h2 className="text-2xl font-bold text-white mb-2">
-            DM-Only Secrets Zone
-          </h2>
-          <p className="text-zinc-400 text-sm">
-            Players, this is not your domain.
-            <br />
-            Please leave before I start writing scenes you&apos;ll have to survive later. 💜
+      <main className="flex-1 p-8 overflow-auto">
+        <div className="max-w-xl mx-auto bg-white/5 border border-white/10 rounded-2xl p-8 text-center">
+          <h2 className="text-2xl font-bold text-white mb-2">DM Eyes Only</h2>
+          <p className="text-zinc-400 text-sm mb-4">
+            Players, this is not your domain. Please leave before I start writing scenes you’ll have to survive later. 💜
           </p>
+          <button
+            className="mt-2 px-4 py-2 rounded-xl bg-white/10 text-white hover:bg-white/20"
+            onClick={() => navigate("/")}
+          >
+            Back to Dashboard
+          </button>
         </div>
       </main>
     );

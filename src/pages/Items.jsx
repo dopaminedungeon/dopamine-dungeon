@@ -130,7 +130,7 @@ const [formData, setFormData] = useState({
       {/* Add Button */}
       {isGM && (
         <button
-          className="flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-indigo-500 to-purple-500 text-white font-medium rounded-xl hover:opacity-90 transition-opacity"
+          className="flex items-center gap-2 px-6 py-3 bg-linear-to-r from-indigo-500 to-purple-500 text-white font-medium rounded-xl hover:opacity-90 transition-opacity"
           onClick={() => setShowCreateModal(true)}
         >
           <Plus className="w-5 h-5" />
@@ -157,11 +157,11 @@ const [formData, setFormData] = useState({
               key={item.id}
               className={`group bg-white/5 backdrop-blur-sm border ${rarity.border} rounded-xl p-4 hover:bg-white/10 transition-all cursor-pointer flex items-center gap-4`}
               onClick={() =>
-                navigate(`/items/${item.id}${isGM ? "?mode=gm" : "?mode=player"}`)
+                navigate(`/items/${item.id}`)
               }
             >
               <div
-                className={`w-14 h-14 rounded-xl bg-gradient-to-br ${rarity.bg} flex items-center justify-center shadow-lg ${rarity.glow}`}
+                className={`w-14 h-14 rounded-xl bg-linear-to-br ${rarity.bg} flex items-center justify-center shadow-lg ${rarity.glow}`}
               >
                 <TypeIcon className="w-7 h-7 text-white" />
               </div>
@@ -186,12 +186,12 @@ const [formData, setFormData] = useState({
             key={item.id}
             className={`group bg-white/5 backdrop-blur-sm border ${rarity.border} rounded-2xl p-5 hover:bg-white/10 transition-all cursor-pointer`}
             onClick={() =>
-              navigate(`/items/${item.id}${isGM ? "?mode=gm" : "?mode=player"}`)
+              navigate(`/items/${item.id}`)
             }
           >
             <div className="flex items-start justify-between mb-4">
               <div
-                className={`w-12 h-12 rounded-xl bg-gradient-to-br ${rarity.bg} flex items-center justify-center shadow-lg ${rarity.glow}`}
+                className={`w-12 h-12 rounded-xl bg-linear-to-br ${rarity.bg} flex items-center justify-center shadow-lg ${rarity.glow}`}
               >
                 <TypeIcon className="w-6 h-6 text-white" />
               </div>

@@ -20,19 +20,18 @@ const NavItem = ({ to, icon: Icon, label, isCollapsed }) => (
     className={({ isActive }) =>
       `flex items-center gap-3 px-3 py-2 rounded-xl transition-colors ${
         isActive
-          ? "bg-gradient-to-r from-purple-500/20 to-pink-500/20 text-white border border-purple-500/30"
+          ? "bg-linear-to-r from-purple-500/20 to-pink-500/20 text-white border border-purple-500/30"
           : "text-zinc-400 hover:text-white hover:bg-zinc-800/30"
       }`
     }
   >
-    <Icon size={18} className="flex-shrink-0" />
+    <Icon size={18} className="shrink-0" />
     {!isCollapsed && <span className="text-sm font-medium">{label}</span>}
   </NavLink>
 );
 
 export default function Sidebar() {
   const [isCollapsed, setIsCollapsed] = React.useState(false);
-  const [userRole, setUserRole] = React.useState("gm");
 
   const baseNavItems = [
     { to: "/", icon: LayoutDashboard, label: "Dashboard" },
@@ -52,7 +51,7 @@ export default function Sidebar() {
     { to: "/campaigns/settings", icon: Settings, label: "Campaign Settings" },
   ];
 
-  const navItems = userRole === "gm" ? [...baseNavItems, ...gmOnlyItems] : baseNavItems;
+  const navItems = [...baseNavItems, ...gmOnlyItems];
 
   return (
     <aside
@@ -63,7 +62,7 @@ export default function Sidebar() {
       <div className="p-4">
         <div className="flex items-center justify-between mb-8">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 bg-gradient-to-br from-purple-500 to-pink-500 rounded-xl flex items-center justify-center">
+            <div className="w-10 h-10 bg-linear-to-br from-purple-500 to-pink-500 rounded-xl flex items-center justify-center">
               <span className="text-white font-bold">🎲</span>
             </div>
             {!isCollapsed && (
@@ -87,34 +86,6 @@ export default function Sidebar() {
             <NavItem key={item.to} {...item} isCollapsed={isCollapsed} />
           ))}
         </nav>
-
-        {!isCollapsed && (
-          <div className="mt-8 p-3 bg-zinc-800/20 rounded-xl border border-zinc-800/30">
-            <p className="text-zinc-400 text-xs mb-2">Role</p>
-            <div className="flex gap-2">
-              <button
-                onClick={() => setUserRole("player")}
-                className={`px-3 py-1 rounded-lg text-xs font-medium transition-colors ${
-                  userRole === "player"
-                    ? "bg-purple-500/20 text-purple-200"
-                    : "text-zinc-500 hover:text-white"
-                }`}
-              >
-                Player
-              </button>
-              <button
-                onClick={() => setUserRole("gm")}
-                className={`px-3 py-1 rounded-lg text-xs font-medium transition-colors ${
-                  userRole === "gm"
-                    ? "bg-pink-500/20 text-pink-200"
-                    : "text-zinc-500 hover:text-white"
-                }`}
-              >
-                GM
-              </button>
-            </div>
-          </div>
-        )}
       </div>
     </aside>
   );

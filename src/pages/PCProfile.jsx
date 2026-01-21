@@ -35,10 +35,31 @@ const skillConfig = [
 
 const PCProfile = () => {
   const { pcId } = useParams();
-  const mode = useMode();
-  const isGMMode = Boolean(mode?.isGMMode ?? mode?.isGM);
+  const { isGM } = useMode();
+  const isGMMode = Boolean(isGM);
 
   const pc = (Array.isArray(mockPCs) ? mockPCs : []).find((p) => p.id === pcId);
+
+  // Hard gate: players should not be able to open GM-only PCs via direct URL.
+  // This uses the existing `pc.isPlayerVisible` flag as the visibility indicator.
+  if (!isGM && pc && pc.isPlayerVisible === false) {
+    return (
+      <main className="flex-1 p-8 overflow-auto">
+        <div className="max-w-xl mx-auto bg-white/5 border border-white/10 rounded-2xl p-8 text-center">
+          <h1 className="text-2xl font-bold text-white mb-2">DM Eyes Only</h1>
+          <p className="text-zinc-400 text-sm mb-4">
+            This player character is marked GM-only. Players don’t get to see it until it’s revealed in play. 💜
+          </p>
+          <Link
+            to="/pcs"
+            className="inline-flex items-center justify-center mt-2 px-4 py-2 rounded-xl bg-white/10 text-white hover:bg-white/20"
+          >
+            Back to PCs
+          </Link>
+        </div>
+      </main>
+    );
+  }
 
   if (!pc) {
     return (
@@ -125,7 +146,7 @@ const PCProfile = () => {
         <section className="bg-white/5 border border-white/10 rounded-2xl p-4 md:p-5 flex flex-col md:flex-row gap-4 md:gap-6 shadow-[0_0_40px_rgba(15,23,42,0.75)] backdrop-blur-sm">
           {/* Left: avatar placeholder + identity */}
           <div className="flex items-start gap-4 flex-1">
-            <div className="w-20 h-20 md:w-24 md:h-24 rounded-2xl bg-gradient-to-br from-indigo-500/40 via-purple-500/30 to-emerald-400/30 border border-white/15 flex items-center justify-center text-xs text-zinc-100 uppercase tracking-wide">
+            <div className="w-20 h-20 md:w-24 md:h-24 rounded-2xl bg-linear-to-br from-indigo-500/40 via-purple-500/30 to-emerald-400/30 border border-white/15 flex items-center justify-center text-xs text-zinc-100 uppercase tracking-wide">
               {pc.name?.slice(0, 2)}
             </div>
 
@@ -172,7 +193,7 @@ const PCProfile = () => {
           </div>
 
           {/* Right: core combat stats */}
-          <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 md:gap-3 text-[11px] md:text-xs min-w-[200px]">
+          <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 md:gap-3 text-[11px] md:text-xs min-w-50">
             <div className="rounded-xl bg-black/50 border border-white/15 px-3 py-2 flex flex-col">
               <span className="text-[10px] uppercase tracking-wide text-zinc-500">
                 Hit Points
@@ -304,7 +325,7 @@ const PCProfile = () => {
                             Prof
                           </span>
                         )}
-                        <span className="font-semibold text-zinc-100 min-w-[2.5rem] text-right">
+                        <span className="font-semibold text-zinc-100 min-w-10 text-right">
                           {modLabel}
                         </span>
                       </div>

@@ -33,15 +33,22 @@ export default function Conditions() {
   const curseConditions = mockConditions.filter(
     (c) => (c.conditionFamily ?? "").toLowerCase() === "curse"
   );
-const isPlayerView = !isGM;
+
+  const isPlayerView = !isGM;
   if (isPlayerView) {
     return (
       <main className="flex-1 p-8 overflow-y-auto flex items-center justify-center">
         <div className="max-w-xl bg-white/5 border border-white/10 rounded-2xl p-6 text-center">
-          <h1 className="text-2xl font-bold text-white mb-2">GM-Only Dashboard</h1>
-          <p className="text-zinc-400 text-sm">
+          <h1 className="text-2xl font-bold text-white mb-2">DM Eyes Only</h1>
+          <p className="text-zinc-400 text-sm mb-4">
             Players, this is not your domain. Please leave before I start writing scenes you’ll have to survive later. 💜
           </p>
+          <Link
+            to="/"
+            className="inline-flex items-center justify-center mt-2 px-4 py-2 rounded-xl bg-white/10 text-white hover:bg-white/20"
+          >
+            Back to Dashboard
+          </Link>
         </div>
       </main>
     );
@@ -168,7 +175,7 @@ const isPlayerView = !isGM;
                         key={condition.id}
                         to={`/conditions/${condition.id}`}
                         className={`flex flex-col gap-3 rounded-xl border p-4 transition backdrop-blur-md 
-    bg-gradient-to-br from-rose-200/10 via-purple-300/10 to-indigo-400/10 
+    bg-linear-to-br from-rose-200/10 via-purple-300/10 to-indigo-400/10 
     border-white/10 hover:from-purple-300/20 hover:to-indigo-500/20 
     ${condition.severity === "Severe" ? "shadow-[0_0_15px_rgba(214,35,255,0.4)] border-purple-500/40" : ""}`}
                       >
@@ -199,7 +206,7 @@ const isPlayerView = !isGM;
                         {typeof condition.progress === "number" && (
                           <div className="h-1.5 w-full rounded-full bg-black/40 overflow-hidden">
                             <div
-                              className="h-full bg-gradient-to-r from-fuchsia-400 via-purple-400 to-emerald-300"
+                              className="h-full bg-linear-to-r from-fuchsia-400 via-purple-400 to-emerald-300"
                               style={{ width: `${condition.progress}%` }}
                             />
                           </div>
@@ -264,7 +271,7 @@ const isPlayerView = !isGM;
                         key={condition.id}
                         to={`/conditions/${condition.id}`}
                         className={`flex flex-col gap-3 rounded-xl border p-4 transition backdrop-blur-md 
-    bg-gradient-to-br from-rose-200/10 via-purple-300/10 to-indigo-400/10 
+    bg-linear-to-br from-rose-200/10 via-purple-300/10 to-indigo-400/10 
     border-white/10 hover:from-purple-300/20 hover:to-indigo-500/20 
     ${condition.severity === "Severe" ? "shadow-[0_0_15px_rgba(214,35,255,0.4)] border-purple-500/40" : ""}`}
                       >
@@ -295,7 +302,7 @@ const isPlayerView = !isGM;
                         {typeof condition.progress === "number" && (
                           <div className="h-1.5 w-full rounded-full bg-black/40 overflow-hidden">
                             <div
-                              className="h-full bg-gradient-to-r from-fuchsia-400 via-purple-400 to-emerald-300"
+                              className="h-full bg-linear-to-r from-fuchsia-400 via-purple-400 to-emerald-300"
                               style={{ width: `${condition.progress}%` }}
                             />
                           </div>
@@ -360,7 +367,7 @@ const isPlayerView = !isGM;
                         key={condition.id}
                         to={`/conditions/${condition.id}`}
                         className={`flex flex-col gap-3 rounded-xl border p-4 transition backdrop-blur-md 
-    bg-gradient-to-br from-rose-200/10 via-purple-300/10 to-indigo-400/10 
+    bg-linear-to-br from-rose-200/10 via-purple-300/10 to-indigo-400/10 
     border-white/10 hover:from-purple-300/20 hover:to-indigo-500/20 
     ${condition.severity === "Severe" ? "shadow-[0_0_15px_rgba(214,35,255,0.4)] border-purple-500/40" : ""}`}
                       >
@@ -391,7 +398,7 @@ const isPlayerView = !isGM;
                         {typeof condition.progress === "number" && (
                           <div className="h-1.5 w-full rounded-full bg-black/40 overflow-hidden">
                             <div
-                              className="h-full bg-gradient-to-r from-fuchsia-400 via-purple-400 to-emerald-300"
+                              className="h-full bg-linear-to-r from-fuchsia-400 via-purple-400 to-emerald-300"
                               style={{ width: `${condition.progress}%` }}
                             />
                           </div>

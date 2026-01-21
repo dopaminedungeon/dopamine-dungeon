@@ -23,8 +23,6 @@ export default function QuestProfile() {
   const { id } = useParams();
   const navigate = useNavigate();
   const { isGM } = useMode();
-
-
   const initialQuest = id === "1" ? mockQuest : {
     id,
     name: `Quest #${id}`,
@@ -94,7 +92,7 @@ export default function QuestProfile() {
   // Quests are GM-only for now – hard gate (must be after hooks to avoid hook-order issues)
   if (!isGM) {
     return (
-      <div className="p-8">
+      <main className="flex-1 p-8 overflow-auto">
         <button
           className="flex items-center gap-2 text-zinc-400 hover:text-white mb-6"
           onClick={() => navigate("/")}
@@ -114,12 +112,12 @@ export default function QuestProfile() {
             and go roleplay doing your laundry in-game.
           </p>
         </div>
-      </div>
+      </main>
     );
   }
 
   return (
-    <div className="p-8 overflow-auto">
+    <main className="flex-1 p-8 overflow-auto">
       {/* Back button and Edit toggle */}
       <div className="flex items-center justify-between mb-6">
         <button
@@ -167,7 +165,7 @@ export default function QuestProfile() {
             )}
           </div>
 
-          <div className="flex flex-col items-start md:items-end gap-3 min-w-[200px]">
+          <div className="flex flex-col items-start md:items-end gap-3 min-w-50">
             {/* Status pill options */}
             <div className="flex flex-wrap gap-2 justify-end">
               {statusOptions.map((status) => {
@@ -236,7 +234,7 @@ export default function QuestProfile() {
                 placeholder="What the party believes this quest is about."
               />
             ) : (
-              <p className="text-sm text-zinc-300 whitespace-pre-line min-h-[3rem]">
+              <p className="text-sm text-zinc-300 whitespace-pre-line min-h-12">
                 {quest.playerSummary ||
                   "No player-safe summary yet. Future you will appreciate a few sentences here."}
               </p>
@@ -279,7 +277,7 @@ export default function QuestProfile() {
                 placeholder="What the world clearly shows as consequences so far."
               />
             ) : (
-              <p className="text-sm text-zinc-300 whitespace-pre-line min-h-[3rem]">
+              <p className="text-sm text-zinc-300 whitespace-pre-line min-h-12">
                 {quest.visibleConsequences ||
                   "You can describe how the world visibly changes as the quest progresses."}
               </p>
@@ -298,7 +296,7 @@ export default function QuestProfile() {
                 placeholder="What rewards the players are aware of (or expect)."
               />
             ) : (
-              <p className="text-sm text-zinc-300 whitespace-pre-line min-h-[3rem]">
+              <p className="text-sm text-zinc-300 whitespace-pre-line min-h-12">
                 {quest.playerRewards ||
                   "Note down gold, boons, titles, or other rewards the party thinks they'll get."}
               </p>
@@ -319,7 +317,7 @@ export default function QuestProfile() {
                 placeholder="What this quest is actually about, from your evil architect POV."
               />
             ) : (
-              <p className="text-sm text-zinc-200 whitespace-pre-line min-h-[3rem]">
+              <p className="text-sm text-zinc-200 whitespace-pre-line min-h-12">
                 {quest.gmSummary ||
                   "Spell out the real purpose of this quest, including ties to arcs, deities, and Nexus bullshit."}
               </p>
@@ -358,7 +356,7 @@ export default function QuestProfile() {
                 placeholder="How this will blow up in their faces later, even if they succeed."
               />
             ) : (
-              <p className="text-sm text-zinc-200 whitespace-pre-line min-h-[3rem]">
+              <p className="text-sm text-zinc-200 whitespace-pre-line min-h-12">
                 {quest.gmConsequences || "Document the long-tail effects that only you know about (yet)."}
               </p>
             )}
@@ -375,7 +373,7 @@ export default function QuestProfile() {
                 placeholder="What this quest gives YOU as the DM: leverage, reveals, new toys."
               />
             ) : (
-              <p className="text-sm text-zinc-200 whitespace-pre-line min-h-[3rem]">
+              <p className="text-sm text-zinc-200 whitespace-pre-line min-h-12">
                 {quest.gmRewards || "Reward yourself too: note what this quest unlocks in terms of story power."}
               </p>
             )}
@@ -446,6 +444,6 @@ export default function QuestProfile() {
           </div>
         </div>
       </section>
-    </div>
+    </main>
   );
 }
