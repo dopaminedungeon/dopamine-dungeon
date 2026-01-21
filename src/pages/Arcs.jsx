@@ -105,7 +105,7 @@ export default function Arcs() {
           <h1 className="text-3xl font-bold text-white">Arcs & Timelines</h1>
           {isGM && (
             <button
-              className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-violet-600 to-violet-500 hover:from-violet-700 hover:to-violet-600 text-white rounded-xl"
+              className="flex items-center gap-2 px-4 py-2 bg-linear-to-r from-violet-600 to-violet-500 hover:from-violet-700 hover:to-violet-600 text-white rounded-xl"
               onClick={() => setShowCreateModal(true)}
             >
               <Plus className="w-4 h-4" />
@@ -185,7 +185,7 @@ export default function Arcs() {
                       </div>
                       <div className="w-full h-1.5 rounded-full bg-white/10 overflow-hidden">
                         <div
-                          className="h-full rounded-full bg-gradient-to-r from-violet-500 to-emerald-400"
+                          className="h-full rounded-full bg-linear-to-r from-violet-500 to-emerald-400"
                           style={{ width: `${arc.progress}%` }}
                         />
                       </div>

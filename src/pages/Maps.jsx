@@ -103,7 +103,7 @@ export default function Maps() {
         {/* Create Button */}
         {isGM && (
           <button
-            className="flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-indigo-500 to-purple-500 text-white font-medium rounded-xl hover:opacity-90 transition-opacity"
+            className="flex items-center gap-2 px-6 py-3 bg-linear-to-r from-indigo-500 to-purple-500 text-white font-medium rounded-xl hover:opacity-90 transition-opacity"
             onClick={() => setShowCreateModal(true)}
           >
             <Plus className="w-5 h-5" />
@@ -138,11 +138,11 @@ export default function Maps() {
                   alt={map.name}
                   className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500"
                 />
-                <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent" />
+                <div className="absolute inset-0 bg-linear-to-t from-black/80 via-black/20 to-transparent" />
 
                 {/* Type Badge */}
                 <div
-                  className={`absolute top-4 left-4 px-3 py-1.5 rounded-lg bg-gradient-to-r ${typeGradient} text-white text-xs font-medium`}
+                  className={`absolute top-4 left-4 px-3 py-1.5 rounded-lg bg-linear-to-r ${typeGradient} text-white text-xs font-medium`}
                 >
                   {map.type}
                 </div>
@@ -392,7 +392,7 @@ export default function Maps() {
                 </button>
                 <button
                   type="submit"
-                  className="px-4 py-2 rounded-xl bg-gradient-to-r from-indigo-500 to-purple-500 text-white font-medium hover:opacity-90"
+                  className="px-4 py-2 rounded-xl bg-linear-to-r from-indigo-500 to-purple-500 text-white font-medium hover:opacity-90"
                 >
                   Save Map
                 </button>

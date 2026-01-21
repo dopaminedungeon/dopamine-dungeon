@@ -4,14 +4,10 @@ import { useParams, useNavigate } from "react-router-dom";
 import { ArrowLeft, Users, Clock, Map } from "lucide-react";
 import { useMode } from "../context/ModeContext.jsx";
 import { MOCK_SESSION_DATA } from "../data/mockSessions.js";
-
-
 export default function SessionProfile() {
   const { id } = useParams();
   const navigate = useNavigate();
   const { isGM } = useMode();
-  // GM-only guard: allow only GMs to view GM-only sessions
-  const isGmView = isGM;
 
   const session = MOCK_SESSION_DATA[id];
 
@@ -43,7 +39,7 @@ export default function SessionProfile() {
   // No such session at all
   if (!session) {
     return (
-      <div className="p-8 overflow-auto text-white">
+      <main className="flex-1 p-8 overflow-auto text-white">
         <h1 className="text-3xl font-bold">Session Not Found</h1>
         <p className="text-zinc-400 mt-2">
           There is no session with this ID in the mock data.
@@ -54,14 +50,14 @@ export default function SessionProfile() {
         >
           Back to Sessions
         </button>
-      </div>
+      </main>
     );
   }
 
   // GM restriction guard: prevent players from viewing GM-only sessions
-  if (session.visibility === "gm-only" && !isGmView) {
+  if (session.visibility === "gm-only" && !isGM) {
     return (
-      <div className="p-8 overflow-auto">
+      <main className="flex-1 p-8 overflow-auto">
         <button
           className="flex items-center gap-2 text-zinc-400 hover:text-white mb-6"
           onClick={() => navigate("/sessions")}
@@ -69,20 +65,21 @@ export default function SessionProfile() {
           <ArrowLeft className="w-5 h-5" />
           Back to Sessions
         </button>
-
-        <div className="bg-white/5 border border-white/10 rounded-2xl p-8 backdrop-blur-sm">
-          <h1 className="text-3xl font-bold text-white mb-2">
-            Hidden by the Dungeon Master
-          </h1>
-          <p className="text-zinc-400 text-sm max-w-xl">
-            This session is GM-only. Nice try, chaos goblin 💜
+        <div className="max-w-xl mx-auto bg-white/5 border border-white/10 rounded-2xl p-8 text-center">
+          <h1 className="text-2xl font-bold text-white mb-2">DM Eyes Only</h1>
+          <p className="text-zinc-400 text-sm mb-4">
+            This session is marked GM-only. Players don’t get to see it until it’s revealed in play. 💜
           </p>
+          <button
+            className="mt-2 px-4 py-2 rounded-xl bg-white/10 text-white hover:bg-white/20"
+            onClick={() => navigate("/sessions")}
+          >
+            Back to Sessions
+          </button>
         </div>
-      </div>
+      </main>
     );
   }
-
-
 
   const viewSession = editMode ? editableSession : session;
   const isGmOnlyCurrent = viewSession.visibility === "gm-only";
@@ -101,10 +98,8 @@ export default function SessionProfile() {
       visibility,
     }));
   };
-
-
   return (
-    <div className="p-8 overflow-auto">
+    <main className="flex-1 p-8 overflow-auto">
       <button
         className="flex items-center gap-2 text-zinc-400 hover:text-white mb-6"
         onClick={() => navigate("/sessions")}
@@ -501,6 +496,6 @@ export default function SessionProfile() {
           </div>
         </div>
       </div>
-    </div>
+    </main>
   );
 }

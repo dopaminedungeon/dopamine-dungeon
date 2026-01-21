@@ -28,7 +28,7 @@ export default function DopamineDungeonDashboard() {
     <>
       {/* Stats Overview */}
       <section className="grid grid-cols-1 md:grid-cols-3 gap-6">
-        <div className="bg-gradient-to-br from-purple-600/20 to-purple-900/20 backdrop-blur-sm border border-purple-500/20 rounded-2xl p-6">
+        <div className="bg-linear-to-br from-purple-600/20 to-purple-900/20 backdrop-blur-sm border border-purple-500/20 rounded-2xl p-6">
           <div className="flex items-center gap-4">
             <div className="p-3 bg-purple-500/20 rounded-xl">
               <Users className="w-6 h-6 text-purple-400" />
@@ -40,7 +40,7 @@ export default function DopamineDungeonDashboard() {
           </div>
         </div>
 
-        <div className="bg-gradient-to-br from-blue-600/20 to-blue-900/20 backdrop-blur-sm border border-blue-500/20 rounded-2xl p-6">
+        <div className="bg-linear-to-br from-blue-600/20 to-blue-900/20 backdrop-blur-sm border border-blue-500/20 rounded-2xl p-6">
           <div className="flex items-center gap-4">
             <div className="p-3 bg-blue-500/20 rounded-xl">
               <Package className="w-6 h-6 text-blue-400" />
@@ -52,7 +52,7 @@ export default function DopamineDungeonDashboard() {
           </div>
         </div>
 
-        <div className="bg-gradient-to-br from-emerald-600/20 to-emerald-900/20 backdrop-blur-sm border border-emerald-500/20 rounded-2xl p-6">
+        <div className="bg-linear-to-br from-emerald-600/20 to-emerald-900/20 backdrop-blur-sm border border-emerald-500/20 rounded-2xl p-6">
           <div className="flex items-center gap-4">
             <div className="p-3 bg-emerald-500/20 rounded-xl">
               <Clock className="w-6 h-6 text-emerald-400" />
@@ -82,7 +82,7 @@ export default function DopamineDungeonDashboard() {
                 onClick={() => navigate(`/npcs/${npc.id}`)}
               >
                 <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-purple-500 to-pink-500 flex items-center justify-center">
+                  <div className="w-10 h-10 rounded-lg bg-linear-to-br from-purple-500 to-pink-500 flex items-center justify-center">
                     <span className="text-white font-bold text-sm">{npc.name[0]}</span>
                   </div>
                   <div>
@@ -118,10 +118,10 @@ export default function DopamineDungeonDashboard() {
                   <div
                     className={`w-10 h-10 rounded-lg flex items-center justify-center ${
                       item.rarity === "Legendary"
-                        ? "bg-gradient-to-br from-amber-500 to-orange-500"
+                        ? "bg-linear-to-br from-amber-500 to-orange-500"
                         : item.rarity === "Epic"
-                        ? "bg-gradient-to-br from-purple-500 to-violet-500"
-                        : "bg-gradient-to-br from-zinc-500 to-zinc-600"
+                        ? "bg-linear-to-br from-purple-500 to-violet-500"
+                        : "bg-linear-to-br from-zinc-500 to-zinc-600"
                     }`}
                   >
                     {item.name.includes("Sword") ? (
@@ -172,7 +172,7 @@ export default function DopamineDungeonDashboard() {
                 onClick={() => navigate(`/sessions/${session.id}`)}
               >
                 <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-emerald-500 to-teal-500 flex items-center justify-center">
+                  <div className="w-10 h-10 rounded-lg bg-linear-to-br from-emerald-500 to-teal-500 flex items-center justify-center">
                     <Clock className="w-5 h-5 text-white" />
                   </div>
                   <div>

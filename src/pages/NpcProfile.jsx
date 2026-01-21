@@ -26,6 +26,26 @@ export default function NpcProfile() {
   const baseNpc = MOCK_NPC_DATA[id];
   const npc = isEditing && editableNpc ? editableNpc : baseNpc;
 
+  // Hard gate: players should not be able to open GM-only NPCs via direct URL.
+  if (!isGM && npc && npc.visibility === "gm-only") {
+    return (
+      <main className="flex-1 p-8 overflow-auto">
+        <div className="max-w-xl mx-auto bg-white/5 border border-white/10 rounded-2xl p-8 text-center">
+          <h1 className="text-2xl font-bold text-white mb-2">DM Eyes Only</h1>
+          <p className="text-zinc-400 text-sm mb-4">
+            This NPC is marked GM-only. Players don’t get to see it until it’s revealed in play. 💜
+          </p>
+          <button
+            className="mt-2 px-4 py-2 rounded-xl bg-white/10 text-white hover:bg-white/20"
+            onClick={() => navigate("/npcs")}
+          >
+            Back to NPCs
+          </button>
+        </div>
+      </main>
+    );
+  }
+
   const handleFieldChange = (field, value) => {
     setEditableNpc((prev) => ({
       ...(prev || baseNpc || {}),
@@ -91,7 +111,7 @@ export default function NpcProfile() {
       <div className="bg-white/5 border border-white/10 rounded-2xl p-6 mb-6 backdrop-blur-sm">
         <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
           <div className="flex items-center gap-4">
-            <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-purple-500 to-pink-500 flex items-center justify-center text-white text-2xl font-bold">
+            <div className="w-14 h-14 rounded-2xl bg-linear-to-br from-purple-500 to-pink-500 flex items-center justify-center text-white text-2xl font-bold">
               {(editableNpc?.name || npc.name || "?").charAt(0)}
             </div>
             <div>

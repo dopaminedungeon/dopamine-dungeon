@@ -65,6 +65,26 @@ export default function ItemProfile() {
   const Icon = typeIcons[formData.type] || Sparkles;
   const visibility = formData.visibility || "public";
 
+  // Hard gate: players should not be able to open GM-only items via direct URL.
+  if (!isGM && visibility === "gm-only") {
+    return (
+      <main className="flex-1 p-8 overflow-auto">
+        <div className="max-w-xl mx-auto bg-white/5 border border-white/10 rounded-2xl p-8 text-center">
+          <h1 className="text-2xl font-bold text-white mb-2">DM Eyes Only</h1>
+          <p className="text-zinc-400 text-sm mb-4">
+            This item is marked GM-only. Players don’t get to see it until it’s discovered at the table. 💜
+          </p>
+          <button
+            className="mt-2 px-4 py-2 rounded-xl bg-white/10 text-white hover:bg-white/20"
+            onClick={() => navigate("/items")}
+          >
+            Back to Items
+          </button>
+        </div>
+      </main>
+    );
+  }
+
   return (
     <>
       {/* Page title (since TopBar is now provided by AppLayout) */}
@@ -100,7 +120,7 @@ export default function ItemProfile() {
         <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-6">
           <div className="flex items-center gap-4">
             <div
-              className={`w-20 h-20 rounded-2xl bg-gradient-to-br ${rarityBg} flex items-center justify-center text-white`}
+              className={`w-20 h-20 rounded-2xl bg-linear-to-br ${rarityBg} flex items-center justify-center text-white`}
             >
               <Icon className="w-10 h-10" />
             </div>
@@ -229,7 +249,7 @@ export default function ItemProfile() {
             <h2 className="text-lg font-semibold text-white mb-2">Item description</h2>
             {isEditing && isGM ? (
               <textarea
-                className="bg-transparent border border-white/20 rounded-lg px-2 py-1 text-zinc-200 w-full min-h-[80px]"
+                className="bg-transparent border border-white/20 rounded-lg px-2 py-1 text-zinc-200 w-full min-h-20"
                 value={formData.description}
                 onChange={(e) => handleFieldChange("description", e.target.value)}
               />
@@ -349,7 +369,7 @@ export default function ItemProfile() {
               <h2 className="text-lg font-semibold text-white mb-2">Hidden properties (GM only)</h2>
               {isEditing && isGM ? (
                 <textarea
-                  className="bg-transparent border border-white/20 rounded-lg px-2 py-1 text-zinc-200 w-full min-h-[60px]"
+                  className="bg-transparent border border-white/20 rounded-lg px-2 py-1 text-zinc-200 w-full min-h-15"
                   value={formData.hiddenEffects}
                   onChange={(e) => handleFieldChange("hiddenEffects", e.target.value)}
                 />
@@ -365,7 +385,7 @@ export default function ItemProfile() {
               <h2 className="text-lg font-semibold text-white mb-2">Curses & drawbacks</h2>
               {isEditing && isGM ? (
                 <textarea
-                  className="bg-transparent border border-white/20 rounded-lg px-2 py-1 text-zinc-200 w-full min-h-[60px]"
+                  className="bg-transparent border border-white/20 rounded-lg px-2 py-1 text-zinc-200 w-full min-h-15"
                   value={formData.curse}
                   onChange={(e) => handleFieldChange("curse", e.target.value)}
                 />
@@ -382,7 +402,7 @@ export default function ItemProfile() {
               <h2 className="text-lg font-semibold text-white mb-2">Upgrade path / evolution</h2>
               {isEditing && isGM ? (
                 <textarea
-                  className="bg-transparent border border-white/20 rounded-lg px-2 py-1 text-zinc-200 w-full min-h-[60px]"
+                  className="bg-transparent border border-white/20 rounded-lg px-2 py-1 text-zinc-200 w-full min-h-15"
                   value={formData.upgradePath}
                   onChange={(e) => handleFieldChange("upgradePath", e.target.value)}
                 />
@@ -398,7 +418,7 @@ export default function ItemProfile() {
               <h2 className="text-lg font-semibold text-white mb-2">Story hooks & links</h2>
               {isEditing && isGM ? (
                 <textarea
-                  className="bg-transparent border border-white/20 rounded-lg px-2 py-1 text-zinc-200 w-full min-h-[60px]"
+                  className="bg-transparent border border-white/20 rounded-lg px-2 py-1 text-zinc-200 w-full min-h-15"
                   value={formData.storyHooks}
                   onChange={(e) => handleFieldChange("storyHooks", e.target.value)}
                 />

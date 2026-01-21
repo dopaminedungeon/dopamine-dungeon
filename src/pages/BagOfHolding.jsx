@@ -94,8 +94,8 @@ export default function BagOfHolding() {
   };
 
   return (
-    <div className="flex-1 flex flex-col">
-              {/* Subsection nav */}
+    <main className="flex-1 p-8 overflow-auto">
+      {/* Subsection nav */}
       <div className="mb-4 flex items-center gap-2">
         <NavLink
           to="/pcs"
@@ -154,7 +154,7 @@ export default function BagOfHolding() {
 
         {canAdd && (
           <button
-            className="flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-indigo-500 to-purple-500 text-white font-medium rounded-xl hover:opacity-90 transition-opacity"
+            className="flex items-center gap-2 px-6 py-3 bg-linear-to-r from-indigo-500 to-purple-500 text-white font-medium rounded-xl hover:opacity-90 transition-opacity"
             onClick={() => setShowModal(true)}
           >
             <Plus className="w-5 h-5" />
@@ -309,7 +309,7 @@ export default function BagOfHolding() {
                 </button>
                 <button
                   type="submit"
-                  className="px-4 py-2 rounded-xl bg-gradient-to-r from-blue-500 to-cyan-500 text-white font-medium hover:opacity-90"
+                  className="px-4 py-2 rounded-xl bg-linear-to-r from-blue-500 to-cyan-500 text-white font-medium hover:opacity-90"
                 >
                   Add
                 </button>
@@ -318,6 +318,6 @@ export default function BagOfHolding() {
           </div>
         </div>
       )}
-    </div>
+    </main>
   );
 }

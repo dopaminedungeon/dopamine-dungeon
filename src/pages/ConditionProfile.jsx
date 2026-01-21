@@ -1,6 +1,6 @@
 // src/pages/ConditionProfile.jsx
 import React, { useState } from "react";
-import { Link, useParams, useSearchParams } from "react-router-dom";
+import { Link, useParams } from "react-router-dom";
 import { useMode } from "../context/ModeContext.jsx";
 import { mockConditions } from "../data/mockConditions";
 
@@ -34,8 +34,7 @@ const familyLabels = {
 
 export default function ConditionProfile() {
   const { isGM } = useMode();
-  const [searchParams] = useSearchParams();
-  const isPlayerView = !isGM || searchParams.get("mode") === "player";
+  const isPlayerView = !isGM;
   const { id } = useParams();
 
   const condition = mockConditions.find((c) => c.id === id);
@@ -162,7 +161,7 @@ export default function ConditionProfile() {
         </button>
       </div>
       <div
-        className={`mb-6 rounded-xl border p-5 backdrop-blur-md bg-gradient-to-br 
+        className={`mb-6 rounded-xl border p-5 backdrop-blur-md bg-linear-to-br 
           from-rose-200/10 via-purple-300/10 to-indigo-500/10 border-white/15 
           shadow-[0_0_25px_rgba(214,35,255,0.35)] relative overflow-hidden`}
       >
@@ -193,7 +192,7 @@ export default function ConditionProfile() {
               </span>
             </div>
           </div>
-          <div className="flex flex-col items-end gap-3 min-w-[180px]">
+          <div className="flex flex-col items-end gap-3 min-w-45">
             <div className="flex flex-wrap justify-end gap-2">
               <span
                 className={`inline-flex items-center gap-1 px-3 py-1 rounded-full text-xs font-semibold border ${
@@ -216,12 +215,12 @@ export default function ConditionProfile() {
               <div
                 className={`h-full ${
                   isCorruption
-                    ? "bg-gradient-to-r from-fuchsia-500 via-purple-500 to-indigo-500"
+                    ? "bg-linear-to-r from-fuchsia-500 via-purple-500 to-indigo-500"
                     : isCurse
-                    ? "bg-gradient-to-r from-rose-500 via-red-500 to-amber-400"
+                    ? "bg-linear-to-r from-rose-500 via-red-500 to-amber-400"
                     : isBoon
-                    ? "bg-gradient-to-r from-emerald-400 via-teal-300 to-sky-300"
-                    : "bg-gradient-to-r from-purple-300 via-indigo-300 to-slate-200"
+                    ? "bg-linear-to-r from-emerald-400 via-teal-300 to-sky-300"
+                    : "bg-linear-to-r from-purple-300 via-indigo-300 to-slate-200"
                 }`}
                 style={{
                   width:

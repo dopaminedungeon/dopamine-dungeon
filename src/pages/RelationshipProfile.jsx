@@ -10,14 +10,18 @@ export default function RelationshipProfile() {
 
   if (!isGM) {
     return (
-      <main className="flex-1 p-10 flex items-center justify-center">
-        <div className="max-w-lg mx-auto bg-white/5 border border-white/10 rounded-2xl p-8 backdrop-blur">
-          <h2 className="text-2xl font-bold text-white mb-2">DM-Only Secrets Zone</h2>
-          <p className="text-zinc-400 text-sm">
-            Players, this is not your domain.
-            <br />
-            Please leave before I start writing scenes you&apos;ll have to survive later. 💜
+      <main className="flex-1 p-8 overflow-auto">
+        <div className="max-w-xl mx-auto bg-white/5 border border-white/10 rounded-2xl p-8 text-center">
+          <h2 className="text-2xl font-bold text-white mb-2">DM Eyes Only</h2>
+          <p className="text-zinc-400 text-sm mb-4">
+            Players, this is not your domain. Please leave before I start writing scenes you’ll have to survive later. 💜
           </p>
+          <button
+            className="mt-2 px-4 py-2 rounded-xl bg-white/10 text-white hover:bg-white/20"
+            onClick={() => window.history.back()}
+          >
+            Go Back
+          </button>
         </div>
       </main>
     );
@@ -151,7 +155,7 @@ export default function RelationshipProfile() {
       </div>
 
       {/* HERO CARD */}
-      <div className="mb-6 rounded-xl border border-white/15 p-5 backdrop-blur-md bg-gradient-to-br from-purple-500/10 via-slate-900/60 to-black/80 shadow-[0_0_25px_rgba(88,28,135,0.45)]">
+      <div className="mb-6 rounded-xl border border-white/15 p-5 backdrop-blur-md bg-linear-to-br from-purple-500/10 via-slate-900/60 to-black/80 shadow-[0_0_25px_rgba(88,28,135,0.45)]">
         <div className="flex flex-col md:flex-row md:items-start md:justify-between gap-4">
           <div className="space-y-2">
             <span className="text-xs uppercase tracking-[0.18em] text-purple-200/80">
@@ -176,7 +180,7 @@ export default function RelationshipProfile() {
             </div>
           </div>
 
-          <div className="flex flex-col items-end gap-2 min-w-[180px] text-xs text-zinc-300">
+          <div className="flex flex-col items-end gap-2 min-w-45 text-xs text-zinc-300">
             <div>
               <span className="text-zinc-400">Intensity: </span>
               <span className="text-white font-semibold">{baseIntensity}/5</span>
@@ -271,11 +275,11 @@ export default function RelationshipProfile() {
                     }
                     return (
                       <div className="relative pl-4">
-                        <div className="absolute left-[6px] top-1 bottom-1 w-px bg-zinc-700/70" />
+                        <div className="absolute left-1.5 top-1 bottom-1 w-px bg-zinc-700/70" />
                         <ul className="space-y-2 text-zinc-300 text-sm">
                           {entries.map((entry, idx) => (
                             <li key={idx} className="relative flex gap-2">
-                              <span className="absolute -left-[6px] mt-1 h-2 w-2 rounded-full bg-purple-400 shadow-[0_0_6px_rgba(168,85,247,0.7)]" />
+                              <span className="absolute -left-1.5 mt-1 h-2 w-2 rounded-full bg-purple-400 shadow-[0_0_6px_rgba(168,85,247,0.7)]" />
                               <span>{entry}</span>
                             </li>
                           ))}

@@ -15,7 +15,6 @@ import {
 } from "lucide-react";
 import { mockSessions } from "../data/mockSessions.js";
 
-
 const statusConfig = {
   active: { color: 'bg-emerald-500', text: 'text-emerald-400', label: 'Live', icon: Play },
   paused: { color: 'bg-amber-500', text: 'text-amber-400', label: 'Paused', icon: Pause },
@@ -34,18 +33,18 @@ const difficultyColors = {
 export default function Sessions() {
   const [showCreateModal, setShowCreateModal] = useState(false);
 
-const [formData, setFormData] = useState({
-  name: "",
-  sessionNumber: 1,
-  map: "",
-  difficulty: "Normal",
-  players: 0,
-  maxPlayers: 4,
-  status: "scheduled",
-  startTime: "",
-  visibility: "public",
-  notes: "",
-});
+  const [formData, setFormData] = useState({
+    name: "",
+    sessionNumber: 1,
+    map: "",
+    difficulty: "Normal",
+    players: 0,
+    maxPlayers: 4,
+    status: "scheduled",
+    startTime: "",
+    visibility: "public",
+    notes: "",
+  });
   const navigate = useNavigate();
   const { isGM } = useMode();
   const [searchQuery, setSearchQuery] = useState("");
@@ -64,7 +63,7 @@ const [formData, setFormData] = useState({
   const totalPlayers = mockSessions.reduce((acc, s) => acc + s.players, 0);
 
   return (
-    <div className="p-8 overflow-auto">
+    <main className="flex-1 p-8 overflow-auto">
             {/* Stats */}
             <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-8">
               <div className="bg-white/5 border border-white/10 rounded-xl p-4 flex items-center gap-4">
@@ -139,7 +138,7 @@ const [formData, setFormData] = useState({
               {/* Create Button */}
               {isGM && (
   <button
-    className="flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-indigo-500 to-purple-500 text-white font-medium rounded-xl hover:opacity-90 transition-opacity"
+    className="flex items-center gap-2 px-6 py-3 bg-linear-to-r from-indigo-500 to-purple-500 text-white font-medium rounded-xl hover:opacity-90 transition-opacity"
     onClick={() => setShowCreateModal(true)}
   >
     <Plus className="w-5 h-5" />
@@ -164,7 +163,7 @@ const [formData, setFormData] = useState({
                     <div className="flex flex-col lg:flex-row lg:items-center gap-4">
                       {/* Session Info */}
                       <div className="flex items-center gap-4 flex-1">
-                        <div className={`w-12 h-12 rounded-xl bg-gradient-to-br from-emerald-500 to-teal-500 flex items-center justify-center`}>
+                        <div className={`w-12 h-12 rounded-xl bg-linear-to-br from-emerald-500 to-teal-500 flex items-center justify-center`}>
                           <StatusIcon className="w-6 h-6 text-white" />
                         </div>
                         <div>
@@ -219,7 +218,7 @@ const [formData, setFormData] = useState({
                         <div className="h-2 bg-white/10 rounded-full overflow-hidden">
                           <div 
                             className={`h-full rounded-full transition-all ${
-                              session.progress === 100 ? 'bg-zinc-500' : 'bg-gradient-to-r from-emerald-500 to-teal-500'
+                              session.progress === 100 ? 'bg-zinc-500' : 'bg-linear-to-r from-emerald-500 to-teal-500'
                             }`}
                             style={{ width: `${session.progress}%` }}
                           />
@@ -421,7 +420,7 @@ const [formData, setFormData] = useState({
           </button>
           <button
             type="submit"
-            className="px-4 py-2 rounded-xl bg-gradient-to-r from-purple-500 to-indigo-500 text-white font-medium hover:opacity-90"
+            className="px-4 py-2 rounded-xl bg-linear-to-r from-purple-500 to-indigo-500 text-white font-medium hover:opacity-90"
           >
             Save Session
           </button>
@@ -430,6 +429,6 @@ const [formData, setFormData] = useState({
     </div>
   </div>
 )}
-    </div>
+    </main>
   );
 }

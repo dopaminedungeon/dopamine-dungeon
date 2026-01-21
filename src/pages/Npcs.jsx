@@ -111,7 +111,7 @@ export default function Npcs() {
         {/* Add Button (GM only) */}
         {isGM && (
           <button
-            className="flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-indigo-500 to-purple-500 text-white font-medium rounded-xl hover:opacity-90 transition-opacity"
+            className="flex items-center gap-2 px-6 py-3 bg-linear-to-r from-indigo-500 to-purple-500 text-white font-medium rounded-xl hover:opacity-90 transition-opacity"
             onClick={() => setShowCreateModal(true)}
           >
             <Plus className="w-5 h-5" />
@@ -135,7 +135,7 @@ export default function Npcs() {
             >
               <div className="flex items-start justify-between mb-4">
                 <div
-                  className={`w-14 h-14 rounded-xl bg-gradient-to-br ${gradientColor} flex items-center justify-center shadow-lg`}
+                  className={`w-14 h-14 rounded-xl bg-linear-to-br ${gradientColor} flex items-center justify-center shadow-lg`}
                 >
                   <TypeIcon className="w-7 h-7 text-white" />
                 </div>
@@ -353,7 +353,7 @@ export default function Npcs() {
                 </button>
                 <button
                   type="submit"
-                  className="px-4 py-2 rounded-xl bg-gradient-to-r from-purple-500 to-pink-500 text-white font-medium hover:opacity-90"
+                  className="px-4 py-2 rounded-xl bg-linear-to-r from-purple-500 to-pink-500 text-white font-medium hover:opacity-90"
                 >
                   Save NPC
                 </button>

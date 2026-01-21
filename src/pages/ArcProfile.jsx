@@ -1,5 +1,5 @@
 // src/pages/ArcProfile.jsx
-import { useParams, useNavigate, useSearchParams } from "react-router-dom";
+import { useParams, useNavigate } from "react-router-dom";
 import { useState } from "react";
 import { ArrowLeft } from "lucide-react";
 import { useMode } from "../context/ModeContext.jsx";
@@ -57,9 +57,8 @@ export default function ArcProfile() {
   const { id } = useParams();
   const navigate = useNavigate();
   const { isGM } = useMode();
-  const [searchParams] = useSearchParams();
 
-  const isGmMode = isGM && searchParams.get("mode") !== "player";
+  const isGmMode = Boolean(isGM);
 
 
   // later we'll fetch real data based on id
@@ -81,7 +80,7 @@ export default function ArcProfile() {
   };
 
 
-    const handleAddTimelineEntry = () => {
+  const handleAddTimelineEntry = () => {
     setArcData((prev) => ({
       ...prev,
       timeline: [
@@ -279,7 +278,7 @@ export default function ArcProfile() {
                     </div>
                     <div className="w-full h-2 rounded-full bg-white/5 overflow-hidden">
                       <div
-                        className="h-full bg-gradient-to-r from-violet-500 to-emerald-400"
+                        className="h-full bg-linear-to-r from-violet-500 to-emerald-400"
                         style={{ width: `${safeProgress}%` }}
                       />
                     </div>
@@ -321,7 +320,7 @@ export default function ArcProfile() {
                   </h2>
                   {isGmMode && isEditing ? (
                     <textarea
-                      className="w-full bg-white/10 border border-white/10 text-white p-3 rounded-xl min-h-[120px]"
+                      className="w-full bg-white/10 border border-white/10 text-white p-3 rounded-xl min-h-30"
                       value={arcData.playerOverview}
                       onChange={(e) =>
                         handleFieldChange("playerOverview", e.target.value)
@@ -346,7 +345,7 @@ export default function ArcProfile() {
                   </h2>
                   {isGmMode && isEditing ? (
                     <textarea
-                      className="w-full bg-white/10 border border-white/10 text-white p-3 rounded-xl min-h-[80px]"
+                      className="w-full bg-white/10 border border-white/10 text-white p-3 rounded-xl min-h-20"
                       value={arcData.themes}
                       onChange={(e) =>
                         handleFieldChange("themes", e.target.value)
@@ -465,7 +464,7 @@ export default function ArcProfile() {
                     </h2>
                     {isEditing ? (
                       <textarea
-                        className="w-full bg-red-900/30 border border-red-800/60 text-red-100 p-3 rounded-xl min-h-[120px]"
+                        className="w-full bg-red-900/30 border border-red-800/60 text-red-100 p-3 rounded-xl min-h-30"
                         value={arcData.gmTruth}
                         onChange={(e) =>
                           handleFieldChange("gmTruth", e.target.value)
@@ -490,7 +489,7 @@ export default function ArcProfile() {
                     </h2>
                     {isEditing ? (
                       <textarea
-                        className="w-full bg-red-900/30 border border-red-800/60 text-red-100 p-3 rounded-xl min-h-[120px]"
+                        className="w-full bg-red-900/30 border border-red-800/60 text-red-100 p-3 rounded-xl min-h-30"
                         value={arcData.gmFuture}
                         onChange={(e) =>
                           handleFieldChange("gmFuture", e.target.value)
@@ -515,7 +514,7 @@ export default function ArcProfile() {
                     </h2>
                     {isEditing ? (
                       <textarea
-                        className="w-full bg-red-900/30 border border-red-800/60 text-red-100 p-3 rounded-xl min-h-[120px]"
+                        className="w-full bg-red-900/30 border border-red-800/60 text-red-100 p-3 rounded-xl min-h-30"
                         value={arcData.gmClues}
                         onChange={(e) =>
                           handleFieldChange("gmClues", e.target.value)

@@ -20,9 +20,9 @@ export default function CampaignSettings() {
     campaignCtx?.setActiveCampaignID ||
     null;
 
-  const activeCampaign = useMemo(() => {
-    return (campaigns || []).find((c) => c.id === activeCampaignId) || null;
-  }, [campaigns, activeCampaignId]);
+const activeCampaign = useMemo(() => {
+  return (campaigns || []).find((c) => (c.id ?? c.campaignId) === activeCampaignId) || null;
+}, [campaigns, activeCampaignId]);
 
   const [draft, setDraft] = useState(null);
   const [showCreate, setShowCreate] = useState(false);
@@ -98,7 +98,7 @@ export default function CampaignSettings() {
             <button
               type="button"
               onClick={() => setShowCreate(true)}
-              className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-gradient-to-r from-indigo-500 to-purple-500 text-white font-medium hover:opacity-90"
+              className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-linear-to-rrom-indigo-500 to-purple-500 text-white font-medium hover:opacity-90"
             >
               <Plus className="w-5 h-5" />
               Add campaign
@@ -167,7 +167,7 @@ export default function CampaignSettings() {
                   </button>
                   <button
                     type="submit"
-                    className="px-4 py-2 rounded-xl bg-gradient-to-r from-blue-500 to-cyan-500 text-white font-medium hover:opacity-90"
+                    className="px-4 py-2 rounded-xl bg-linear-to-rrom-blue-500 to-cyan-500 text-white font-medium hover:opacity-90"
                   >
                     Create
                   </button>
@@ -207,7 +207,7 @@ export default function CampaignSettings() {
             <button
               type="button"
               onClick={() => setShowCreate(true)}
-              className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-gradient-to-r from-indigo-500 to-purple-500 text-white font-medium hover:opacity-90"
+              className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-linear-to-r from-indigo-500 to-purple-500 text-white font-medium hover:opacity-90"
             >
               <Plus className="w-5 h-5" />
               Add campaign
@@ -224,7 +224,7 @@ export default function CampaignSettings() {
             <button
               type="button"
               onClick={onSave}
-              className="px-4 py-2 rounded-xl bg-gradient-to-r from-blue-500 to-cyan-500 text-white font-medium hover:opacity-90"
+              className="px-4 py-2 rounded-xl bg-linear-to-r from-blue-500 to-cyan-500 text-white font-medium hover:opacity-90"
             >
               Save (local)
             </button>
@@ -488,7 +488,7 @@ export default function CampaignSettings() {
                   </button>
                   <button
                     type="submit"
-                    className="px-4 py-2 rounded-xl bg-gradient-to-r from-blue-500 to-cyan-500 text-white font-medium hover:opacity-90"
+                    className="px-4 py-2 rounded-xl bg-linear-to-r from-blue-500 to-cyan-500 text-white font-medium hover:opacity-90"
                   >
                     Create
                   </button>

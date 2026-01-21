@@ -1,6 +1,6 @@
 // src/pages/LoreProfile.jsx
 import React, { useState } from "react";
-import { useParams, useNavigate, useSearchParams } from "react-router-dom";
+import { useParams, useNavigate } from "react-router-dom";
 import { useMode } from "../context/ModeContext.jsx";
 import { ArrowLeft, Tag } from "lucide-react";
 import { MOCK_LORE } from "../data/mockLore";
@@ -544,10 +544,7 @@ function renderGMColumn(kind, data, isEditing, handleFieldChange) {
 export default function LoreProfile() {
   const { id } = useParams();
   const navigate = useNavigate();
-  const [searchParams] = useSearchParams();
   const { isGM } = useMode();
-
-  const isGMMode = isGM && searchParams.get("mode") !== "player";
 
   const lore = MOCK_LORE[id];
 
@@ -572,9 +569,7 @@ export default function LoreProfile() {
       <main className="flex-1 p-8 overflow-auto text-white">
         <button
           className="flex items-center gap-2 text-zinc-400 hover:text-white mb-4"
-          onClick={() =>
-            navigate(`/lore${isGMMode ? "?mode=gm" : "?mode=player"}`)
-          }
+          onClick={() => navigate("/lore")}
         >
           <ArrowLeft className="w-5 h-5" />
           Back to Lore Hub
@@ -588,6 +583,27 @@ export default function LoreProfile() {
   }
 
   const effectiveData = { ...lore, ...formData };
+
+  // Hard gate: players should not be able to open GM-only lore entries via direct URL.
+  if (!isGM && effectiveData.visibility === "gm-only") {
+    return (
+      <main className="flex-1 p-8 overflow-auto">
+        <div className="max-w-xl mx-auto bg-white/5 border border-white/10 rounded-2xl p-8 text-center">
+          <h1 className="text-2xl font-bold text-white mb-2">DM Eyes Only</h1>
+          <p className="text-zinc-400 text-sm mb-4">
+            This lore entry is marked GM-only. Players don’t get to see it until it’s discovered in play. 💜
+          </p>
+          <button
+            className="mt-2 px-4 py-2 rounded-xl bg-white/10 text-white hover:bg-white/20"
+            onClick={() => navigate("/lore")}
+          >
+            Back to Lore Hub
+          </button>
+        </div>
+      </main>
+    );
+  }
+
   const templateKind = getTemplateKind(effectiveData);
   const templateLabel = TEMPLATE_LABELS[templateKind] || "Lore";
 
@@ -611,15 +627,13 @@ export default function LoreProfile() {
             <div className="flex items-center justify-between mb-6">
               <button
                 className="flex items-center gap-2 text-zinc-400 hover:text-white"
-                onClick={() =>
-                  navigate(`/lore${isGMMode ? "?mode=gm" : "?mode=player"}`)
-                }
+                onClick={() => navigate("/lore")}
               >
                 <ArrowLeft className="w-5 h-5" />
                 Back to Lore Hub
               </button>
 
-              {isGMMode && (
+              {isGM && (
                 <button
                   onClick={() => setIsEditing((prev) => !prev)}
                   className="px-4 py-1.5 rounded-full text-sm border border-white/15 bg-white/5 text-zinc-200 hover:bg-white/10 transition-colors"
@@ -635,7 +649,7 @@ export default function LoreProfile() {
                 <div className="space-y-2">
                   {/* Category • Type • Template label */}
                   <p className="text-xs uppercase tracking-wide text-zinc-500">
-                    {isGMMode && isEditing ? (
+                    {isGM && isEditing ? (
                       <span className="flex gap-2 items-center flex-wrap">
                         <select
                           value={effectiveData.category || ""}
@@ -692,7 +706,7 @@ export default function LoreProfile() {
                   </p>
 
                   {/* Title */}
-                  {isGMMode && isEditing ? (
+                  {isGM && isEditing ? (
                     <input
                       type="text"
                       value={effectiveData.title || ""}
@@ -708,7 +722,7 @@ export default function LoreProfile() {
                   )}
 
                   {/* Summary / tagline */}
-                  {isGMMode && isEditing ? (
+                  {isGM && isEditing ? (
                     <textarea
                       rows={3}
                       value={effectiveData.summary || ""}
@@ -727,7 +741,7 @@ export default function LoreProfile() {
                 {/* GM-only metadata on the right */}
                 <div className="flex flex-col items-end gap-2">
 
-                  {isGMMode && (
+                  {isGM && (
                     <>
                       {/* Visibility pills */}
                       {isEditing ? (
@@ -783,29 +797,29 @@ export default function LoreProfile() {
             {/* Two-column layout: Player vs GM */}
             <div
               className={`grid gap-6 ${
-                isGMMode ? "grid-cols-1 lg:grid-cols-2" : "grid-cols-1"
+                isGM ? "grid-cols-1 lg:grid-cols-2" : "grid-cols-1"
               }`}
             >
               {/* Player-facing */}
               {renderPlayerColumn(
                 templateKind,
                 effectiveData,
-                isEditing && isGMMode,
+                isEditing && isGM,
                 (field, value) => handleFieldChange(field, value)
               )}
 
               {/* GM-only column */}
-              {isGMMode &&
+              {isGM &&
                 renderGMColumn(
                   templateKind,
                   effectiveData,
-                  isEditing && isGMMode,
+                  isEditing && isGM,
                   (field, value) => handleFieldChange(field, value)
                 )}
             </div>
 
 {/* Metadata strip – GM ONLY */}
-{isGMMode && (
+{isGM && (
   <>
     <div className="mt-8 flex flex-wrap gap-4 text-[11px] text-zinc-500 border-t border-white/5 pt-4">
       <span>Campaign: Chronicles of Varionath (mock)</span>
