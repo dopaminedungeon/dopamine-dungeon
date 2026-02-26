@@ -1,5 +1,6 @@
 // src/App.jsx
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
+import { SpeedInsights } from "@vercel/speed-insights/react";
 import AppLayout from "./layouts/AppLayout.jsx";
 import Dashboard from "./pages/DopamineDungeonDashboard.jsx";
 import Npcs from "./pages/Npcs";
@@ -36,6 +37,7 @@ function App() {
     <BrowserRouter>
       <AppGate />
     </BrowserRouter>
+    <SpeedInsights />
   </AppProviders>
 );
 }
