@@ -4,6 +4,10 @@ import { useParams, useNavigate } from "react-router-dom";
 import { ArrowLeft, Users, Clock, Map } from "lucide-react";
 import { useMode } from "../context/ModeContext.jsx";
 import { MOCK_SESSION_DATA } from "../data/mockSessions.js";
+import { MOCK_ITEM_DATA } from "../data/mockItems.js";
+import { mockQuests as MOCK_QUEST_DATA } from "../data/mockQuests.js";
+import SessionEntityLinkManager from "../components/session/SessionEntityLinkManager.jsx";
+import { MOCK_NPC_DATA } from "../data/mockNpcs.js";
 export default function SessionProfile() {
   const { id } = useParams();
   const navigate = useNavigate();
@@ -83,6 +87,7 @@ export default function SessionProfile() {
 
   const viewSession = editMode ? editableSession : session;
   const isGmOnlyCurrent = viewSession.visibility === "gm-only";
+  const visibilityMode = isGM ? "GM" : "Player";
 
   const handleFieldChange = (field, value) => {
     setEditableSession((prev) => ({
@@ -136,11 +141,10 @@ export default function SessionProfile() {
                   type="button"
                   disabled={!editMode}
                   onClick={() => handleVisibilityChange("public")}
-                  className={`px-3 py-1 rounded-full text-xs font-medium transition ${
-                    viewSession.visibility === "public"
+                  className={`px-3 py-1 rounded-full text-xs font-medium transition ${viewSession.visibility === "public"
                       ? "bg-emerald-500 text-white"
                       : "text-zinc-300 hover:text-white hover:bg-white/10 disabled:opacity-40 disabled:hover:bg-transparent disabled:hover:text-zinc-400"
-                  }`}
+                    }`}
                 >
                   Player-visible
                 </button>
@@ -148,11 +152,10 @@ export default function SessionProfile() {
                   type="button"
                   disabled={!editMode}
                   onClick={() => handleVisibilityChange("gm-only")}
-                  className={`px-3 py-1 rounded-full text-xs font-medium transition ${
-                    viewSession.visibility === "gm-only"
+                  className={`px-3 py-1 rounded-full text-xs font-medium transition ${viewSession.visibility === "gm-only"
                       ? "bg-red-500 text-white"
                       : "text-zinc-300 hover:text-white hover:bg-white/10 disabled:opacity-40 disabled:hover:bg-transparent disabled:hover:text-zinc-400"
-                  }`}
+                    }`}
                 >
                   GM-only
                 </button>
@@ -191,6 +194,8 @@ export default function SessionProfile() {
                 <p className="text-zinc-300 text-sm whitespace-pre-line">{viewSession.summary}</p>
               )}
             </div>
+
+            {/* Linked entities (Session cross-links) */}
 
             {/* Attendance */}
             <div className="bg-white/5 rounded-xl border border-white/10 p-5">
@@ -231,28 +236,196 @@ export default function SessionProfile() {
 
             {/* Items discovered, Notable NPCs, timeline, Moments, Quotes, NPC relationships */}
             {/* Items (player-visible) */}
-            <div className="bg-white/5 rounded-xl border border-white/10 p-5">
-              <h2 className="text-lg font-semibold text-white mb-2">
-                Items discovered
-              </h2>
-              <p className="text-zinc-400 text-sm">
-                No items logged yet. You&apos;ll be able to track items as a
-                table (gained / refused / destroyed) once real data is wired
-                in.
-              </p>
-            </div>
+            <SessionEntityLinkManager
+              sessionId={id}
+              entityType="Item"
+              label="introduced"
+              sectionTitle="Items discovered"
+              isGM={isGM}
+              editMode={editMode}
+              visibilityMode={visibilityMode}
+              dataSource={MOCK_ITEM_DATA}
+              getEntityLabel={(item) => item.name}
+              renderCard={(item, link, helpers) => {
+                const { isGM, editMode, navigate, handleRemove } = helpers;
+
+                return (
+                  <div
+                    key={link.id}
+                    className="relative group bg-white/5 hover:bg-white/10 border border-white/10 rounded-xl p-4 transition flex flex-col justify-between"
+                  >
+                    {isGM && editMode && (
+                      <button
+                        type="button"
+                        onClick={() => handleRemove(link.id)}
+                        className="absolute top-2 right-2 text-[10px] text-red-400 hover:text-red-200 opacity-0 group-hover:opacity-100 transition-opacity"
+                      >
+                        Remove
+                      </button>
+                    )}
+
+                    <div
+                      role="button"
+                      onClick={() => navigate(`/items/${item.id}`)}
+                      className="cursor-pointer"
+                    >
+                      <p className="text-white font-semibold text-sm">
+                        {item.name}
+                      </p>
+                      {item.rarity && (
+                        <p className="text-zinc-400 text-xs mt-1">
+                          {item.rarity}
+                        </p>
+                      )}
+                    </div>
+
+                    <div className="flex items-center justify-end mt-3">
+                      {isGM && (
+                        <span
+                          className={`text-[10px] px-2 py-0.5 rounded-full ${link.visibility === "GM"
+                              ? "bg-red-500/20 text-red-300 border border-red-500/40"
+                              : "bg-emerald-500/20 text-emerald-300 border border-emerald-500/40"
+                            }`}
+                        >
+                          {link.visibility}
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                );
+              }}
+            />
 
             {/* Notable NPCs (player-visible) */}
-            <div className="bg-white/5 rounded-xl border border-white/10 p-5">
-              <h2 className="text-lg font-semibold text-white mb-2">
-                Notable NPCs
-              </h2>
-              <p className="text-zinc-400 text-sm">
-                Placeholder for a future NPC table: who appeared, what they
-                did this session, and the current relationship vibe with the
-                party.
-              </p>
-            </div>
+            <SessionEntityLinkManager
+              sessionId={id}
+              entityType="NPC"
+              label="present"
+              sectionTitle="Notable NPCs"
+              isGM={isGM}
+              editMode={editMode}
+              visibilityMode={visibilityMode}
+              dataSource={MOCK_NPC_DATA}
+              renderCard={(npc, link, helpers) => {
+                const { isGM, editMode, navigate, handleRemove } = helpers;
+
+                return (
+                  <div
+                    key={link.id}
+                    className="relative group bg-white/5 hover:bg-white/10 border border-white/10 rounded-xl p-4 transition flex flex-col justify-between"
+                  >
+                    {isGM && editMode && (
+                      <button
+                        type="button"
+                        onClick={() => handleRemove(link.id)}
+                        className="absolute top-2 right-2 text-[10px] text-red-400 hover:text-red-200 opacity-0 group-hover:opacity-100 transition-opacity"
+                      >
+                        Remove
+                      </button>
+                    )}
+
+                    <div
+                      role="button"
+                      onClick={() => navigate(`/npcs/${npc.id}`)}
+                      className="cursor-pointer"
+                    >
+                      <p className="text-white font-semibold text-sm">
+                        {npc.name}
+                      </p>
+                      {npc.location && (
+                        <p className="text-zinc-400 text-xs mt-1">
+                          {npc.location}
+                        </p>
+                      )}
+                    </div>
+
+                    <div className="flex items-center justify-end mt-3">
+                      {isGM && (
+                        <span
+                          className={`text-[10px] px-2 py-0.5 rounded-full ${link.visibility === "GM"
+                              ? "bg-red-500/20 text-red-300 border border-red-500/40"
+                              : "bg-emerald-500/20 text-emerald-300 border border-emerald-500/40"
+                            }`}
+                        >
+                          {link.visibility}
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                );
+              }}
+            />
+            <SessionEntityLinkManager
+              sessionId={id}
+              entityType="Quest"
+              allowedLabels={["started", "advanced", "completed", "failed"]}
+              defaultLabel="started"
+              sectionTitle="Related Quests"
+              isGM={isGM}
+              editMode={editMode}
+              visibilityMode={visibilityMode}
+              dataSource={MOCK_QUEST_DATA}
+              getEntityLabel={(quest) => quest.name}
+              renderCard={(quest, link, helpers) => {
+                const {
+                  isGM,
+                  editMode,
+                  navigate,
+                  handleRemove,
+                  handleUpdateLabel,
+                  allowedLabels,
+                } = helpers;
+
+                return (
+                  <div
+                    key={link.id}
+                    className="relative group bg-white/5 hover:bg-white/10 border border-white/10 rounded-xl p-4 transition flex flex-col justify-between"
+                  >
+                    {isGM && editMode && (
+                      <button
+                        type="button"
+                        onClick={() => handleRemove(link.id)}
+                        className="absolute top-2 right-2 text-[10px] text-red-400 hover:text-red-200 opacity-0 group-hover:opacity-100 transition-opacity"
+                      >
+                        Remove
+                      </button>
+                    )}
+
+                    <div
+                      role="button"
+                      onClick={() => navigate(`/quests/${quest.id}`)}
+                      className="cursor-pointer"
+                    >
+                      <p className="text-white font-semibold text-sm">
+                        {quest.name}
+                      </p>
+                    </div>
+
+                    <div className="flex items-center justify-end mt-3">
+                      {isGM && editMode && allowedLabels ? (
+                        <select
+                          value={link.label}
+                          onChange={(e) =>
+                            handleUpdateLabel(link, e.target.value)
+                          }
+                          className="text-[10px] bg-white/10 border border-white/20 rounded px-2 py-1 text-zinc-200"
+                        >
+                          {allowedLabels.map((l) => (
+                            <option key={l} value={l}>
+                              {l}
+                            </option>
+                          ))}
+                        </select>
+                      ) : (
+                        <span className="text-[10px] px-2 py-0.5 rounded-full bg-white/10 text-zinc-300">
+                          {link.label}
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                );
+              }}
+            />
 
             {/* Session timeline */}
             <div className="bg-white/5 rounded-xl border border-white/10 p-5">
