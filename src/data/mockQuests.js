@@ -1,6 +1,6 @@
 // Temporary mock quest data
 export const mockQuest = {
-  id: "1",
+  id: "q1",
   name: "Nexus Echoes in Langendris",
   tagline: "Unravel why the city hums with half-remembered dreams.",
   status: "active", // not-started | active | completed | failed
@@ -38,7 +38,7 @@ export const mockQuest = {
 // Temporary mock data – later this will be driven by Firebase
 export const mockQuests = [
   {
-    id: "q1",
+    id: "q2",
     name: "Whispers in the Moonlit Archive",
     status: "active", // active | completed | failed
     visibility: "public", // public | gm-only
@@ -60,7 +60,7 @@ export const mockQuests = [
     },
   },
   {
-    id: "q2",
+    id: "q3",
     name: "Roman's Quiet Debt",
     status: "active",
     visibility: "gm-only",
@@ -83,7 +83,7 @@ export const mockQuests = [
     },
   },
   {
-    id: "q3",
+    id: "q4",
     name: "Fix Karlach, Not Emotionally This Time",
     status: "completed",
     visibility: "public",
@@ -105,7 +105,7 @@ export const mockQuests = [
     },
   },
   {
-    id: "q4",
+    id: "q5",
     name: "The Contract Beneath Akumu's Dreams",
     status: "failed",
     visibility: "gm-only",
