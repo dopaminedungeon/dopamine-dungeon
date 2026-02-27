@@ -1,12 +1,31 @@
-import React, { useMemo, useState } from "react";
-import { Link, NavLink } from "react-router-dom";
-import { mockPCs } from "../data/mockPCs";
+import React, { useEffect, useMemo, useState } from "react";
+import { Link, NavLink, useLocation, useNavigate } from "react-router-dom";
 
 const safeArray = (v) => (Array.isArray(v) ? v : []);
 
 const PCs = () => {
-  const pcs = useMemo(() => safeArray(mockPCs), []);
+  const navigate = useNavigate();
+  const location = useLocation();
+
+  const pcs = useMemo(() => {
+    try {
+      const raw = localStorage.getItem("dd:pcs");
+      const parsed = raw ? JSON.parse(raw) : [];
+      return safeArray(parsed);
+    } catch {
+      return [];
+    }
+  }, []);
   const [query, setQuery] = useState("");
+
+  const hasPcs = pcs.length > 0;
+
+  useEffect(() => {
+    // v0.1: if no PCs exist yet, treat /pcs as the Bag hub
+    if (!hasPcs && location.pathname === "/pcs") {
+      navigate("/pcs/bag", { replace: true });
+    }
+  }, [hasPcs, location.pathname, navigate]);
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -35,19 +54,21 @@ const PCs = () => {
       <main className="w-full px-6 py-6 md:px-10 md:py-8">
         {/* Subsection nav */}
         <div className="mb-4 flex items-center gap-2">
-          <NavLink
-            to="/pcs"
-            end
-            className={({ isActive }) =>
-              `px-3 py-2 rounded-xl text-sm border transition-colors ${
-                isActive
-                  ? "bg-indigo-500/20 border-indigo-400/50 text-white"
-                  : "bg-zinc-950/20 border-zinc-800/60 text-zinc-300 hover:text-white hover:bg-zinc-950/35"
-              }`
-            }
-          >
-            Characters
-          </NavLink>
+          {hasPcs ? (
+            <NavLink
+              to="/pcs"
+              end
+              className={({ isActive }) =>
+                `px-3 py-2 rounded-xl text-sm border transition-colors ${
+                  isActive
+                    ? "bg-indigo-500/20 border-indigo-400/50 text-white"
+                    : "bg-zinc-950/20 border-zinc-800/60 text-zinc-300 hover:text-white hover:bg-zinc-950/35"
+                }`
+              }
+            >
+              Characters
+            </NavLink>
+          ) : null}
 
           <NavLink
             to="/pcs/bag"
@@ -69,27 +90,37 @@ const PCs = () => {
               Player Characters
             </h1>
             <p className="mt-1 text-xs md:text-sm text-zinc-400 max-w-2xl">
-              Character hub for stats, notes, relationships, conditions, arcs, and session links.
+              {hasPcs
+                ? "Character hub for stats, notes, relationships, conditions, arcs, and session links."
+                : "Party hub — Bag of Holding is available. Player character profiles will appear here once added."}
             </p>
           </div>
 
           {/* Search */}
+          {hasPcs ? (
             <div className="w-full md:w-104">
-            <label className="sr-only" htmlFor="pc-search">
-              Search PCs
-            </label>
-            <input
-              id="pc-search"
-              value={query}
-              onChange={(e) => setQuery(e.target.value)}
-              placeholder="Search by name, race, class, background…"
-              className="w-full rounded-xl bg-zinc-950/40 border border-zinc-800/70 px-3.5 py-2.5 text-sm text-white placeholder:text-zinc-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/40"
-            />
-          </div>
+              <label className="sr-only" htmlFor="pc-search">
+                Search PCs
+              </label>
+              <input
+                id="pc-search"
+                value={query}
+                onChange={(e) => setQuery(e.target.value)}
+                placeholder="Search by name, race, class, background…"
+                className="w-full rounded-xl bg-zinc-950/40 border border-zinc-800/70 px-3.5 py-2.5 text-sm text-white placeholder:text-zinc-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/40"
+              />
+            </div>
+          ) : null}
         </div>
 
-        {/* Empty state */}
-        {filtered.length === 0 ? (
+        {!hasPcs ? (
+          <div className="rounded-2xl border border-zinc-800/70 bg-zinc-950/40 p-6 text-zinc-300">
+            <div className="text-base font-semibold text-white mb-1">No PC profiles yet</div>
+            <div className="text-sm text-zinc-400">
+              PC profiles are not part of v0.1. Use the Bag of Holding tab to manage party inventory and currency.
+            </div>
+          </div>
+        ) : filtered.length === 0 ? (
           <div className="rounded-2xl border border-zinc-800/70 bg-zinc-950/40 p-6 text-zinc-300">
             <div className="text-base font-semibold text-white mb-1">No matches</div>
             <div className="text-sm text-zinc-400">

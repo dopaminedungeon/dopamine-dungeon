@@ -1,6 +1,5 @@
 // src/App.jsx
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
-import { SpeedInsights } from "@vercel/speed-insights/react";
 import AppLayout from "./layouts/AppLayout.jsx";
 import Dashboard from "./pages/DopamineDungeonDashboard.jsx";
 import Npcs from "./pages/Npcs";
@@ -30,6 +29,7 @@ import { useAuth } from "./context/AuthContext.jsx";
 import { useTenant } from "./context/TenantContext.jsx";
 import { useCampaign } from "./context/CampaignContext.jsx";
 import AppProviders from "./context/AppProviders.jsx";
+import { features } from "./config/features";
 
 function App() {
   return (
@@ -37,23 +37,19 @@ function App() {
     <BrowserRouter>
       <AppGate />
     </BrowserRouter>
-    <SpeedInsights />
   </AppProviders>
 );
 }
 
 function AppGate() {
-  // IMPORTANT: these hooks must only be used inside their Providers.
   const { authStatus, user } = useAuth();
   const { tenantStatus } = useTenant();
   const { campaignStatus } = useCampaign();
 
-  // --- Auth gate
   if (authStatus === "loading") return <div>Loading auth...</div>;
-  const isAuthed = authStatus === "authed" || Boolean(user);
+  const isAuthed = true; // v0.1: no auth
   if (!isAuthed) return <div>Login (mocked)</div>;
 
-  // --- Tenant gate
   if (tenantStatus === "loading" || tenantStatus === "unknown") {
     return <LoadingScreen label="Loading workspaces…" />;
   }
@@ -68,7 +64,6 @@ function AppGate() {
     return <TenantPickerScreen />;
   }
 
-  // --- Campaign gate
   if (campaignStatus === "loading" || campaignStatus === "unknown") {
     return <LoadingScreen label="Loading campaigns…" />;
   }
@@ -83,44 +78,87 @@ function AppGate() {
     return <CampaignChooser />;
   }
 
-  // --- App shell + routes
   return (
     <Routes>
       <Route element={<AppLayout />}>
+        {features.dashboard && (
+          <>
         <Route index element={<Dashboard />} />
         <Route path="/" element={<Navigate to="/" replace />} />
+        </>
+        )}
 
-        <Route path="/items" element={<Items />} />
-        <Route path="/items/:id" element={<ItemProfile />} />
+        {features.sessions && (
+          <>
+            <Route path="/sessions" element={<Sessions />} />
+            <Route path="/sessions/:id" element={<SessionProfile />} />
+          </>
+        )}
 
-        <Route path="/npcs" element={<Npcs />} />
-        <Route path="/npcs/:id" element={<NpcProfile />} />
+        {features.items && (
+          <>
+            <Route path="/items" element={<Items />} />
+            <Route path="/items/:id" element={<ItemProfile />} />
+          </>
+        )}
 
-        <Route path="/sessions" element={<Sessions />} />
-        <Route path="/sessions/:id" element={<SessionProfile />} />
+        {features.pcs && (
+          <>
+            <Route path="/pcs" element={<PCs />} />
+            <Route path="/pcs/bag" element={<BagOfHolding />} />
+            <Route path="/pcs/:pcId" element={<PCProfile />} />
+          </>
+        )}
 
-        <Route path="/maps" element={<Maps />} />
-        <Route path="/maps/:id" element={<MapProfile />} />
+        {/* Future modules (kept for later toggles) */}
+        {features.npcs && (
+          <>
+            <Route path="/npcs" element={<Npcs />} />
+            <Route path="/npcs/:id" element={<NpcProfile />} />
+          </>
+        )}
 
-        <Route path="/lore" element={<Lore />} />
-        <Route path="/lore/:id" element={<LoreProfile />} />
+        {features.maps && (
+          <>
+            <Route path="/maps" element={<Maps />} />
+            <Route path="/maps/:id" element={<MapProfile />} />
+          </>
+        )}
 
-        <Route path="/arcs" element={<Arcs />} />
-        <Route path="/arcs/:id" element={<ArcProfile />} />
+        {features.lore && (
+          <>
+            <Route path="/lore" element={<Lore />} />
+            <Route path="/lore/:id" element={<LoreProfile />} />
+          </>
+        )}
 
-        <Route path="/quests" element={<Quests />} />
-        <Route path="/quests/:id" element={<QuestProfile />} />
+        {features.arcs && (
+          <>
+            <Route path="/arcs" element={<Arcs />} />
+            <Route path="/arcs/:id" element={<ArcProfile />} />
+          </>
+        )}
 
-        <Route path="/relationships" element={<Relationships />} />
-        <Route path="/relationships/:id" element={<RelationshipProfile />} />
+        {features.quests && (
+          <>
+            <Route path="/quests" element={<Quests />} />
+            <Route path="/quests/:id" element={<QuestProfile />} />
+          </>
+        )}
 
-        <Route path="/conditions" element={<Conditions />} />
-        <Route path="/conditions/:id" element={<ConditionProfile />} />
+        {features.relationships && (
+          <>
+            <Route path="/relationships" element={<Relationships />} />
+            <Route path="/relationships/:id" element={<RelationshipProfile />} />
+          </>
+        )}
 
-        <Route path="/pcs" element={<PCs />} />
-        {/* IMPORTANT: place /pcs/bag before /pcs/:pcId so "bag" isn't treated as a pcId */}
-        <Route path="/pcs/bag" element={<BagOfHolding />} />
-        <Route path="/pcs/:pcId" element={<PCProfile />} />
+        {features.conditions && (
+          <>
+            <Route path="/conditions" element={<Conditions />} />
+            <Route path="/conditions/:id" element={<ConditionProfile />} />
+          </>
+        )}
 
         <Route path="/settings" element={<Settings />} />
         <Route path="/campaigns/settings" element={<CampaignSettings />} />
