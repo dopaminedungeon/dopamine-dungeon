@@ -68,7 +68,7 @@ export default function SessionProfile() {
   // No such session at all
   if (!normalizedSession) {
     return (
-      <main className="flex-1 p-8 overflow-auto text-white">
+      <main className="flex-1 overflow-auto text-white">
         <h1 className="text-3xl font-bold">Session Not Found</h1>
         <p className="text-zinc-400 mt-2">
           There is no session with this ID.
@@ -86,9 +86,9 @@ export default function SessionProfile() {
   // GM restriction guard: prevent players from viewing GM-only sessions
   if (normalizedSession?.visibility === "gm-only" && !isGM) {
     return (
-      <main className="flex-1 p-8 overflow-auto">
+      <main className="flex-1 overflow-auto">
         <button
-          className="flex items-center gap-2 text-zinc-400 hover:text-white mb-6"
+          className="flex items-center gap-2 text-zinc-400 hover:text-white mb-4 sm:mb-6"
           onClick={() => navigate("/sessions")}
         >
           <ArrowLeft className="w-5 h-5" />
@@ -128,20 +128,20 @@ export default function SessionProfile() {
     }));
   };
   return (
-    <main className="flex-1 p-8 overflow-auto">
+    <main className="flex-1 overflow-auto">
       <button
-        className="flex items-center gap-2 text-zinc-400 hover:text-white mb-6"
+        className="flex items-center gap-2 text-zinc-400 hover:text-white mb-4 sm:mb-6"
         onClick={() => navigate("/sessions")}
       >
         <ArrowLeft className="w-5 h-5" />
         Back to Sessions
       </button>
 
-      <div className="bg-white/5 border border-white/10 rounded-2xl p-8 backdrop-blur-sm space-y-6">
+      <div className="bg-white/5 border border-white/10 rounded-xl sm:rounded-2xl p-4 sm:p-8 backdrop-blur-sm space-y-5 sm:space-y-6">
         {/* Header */}
-        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 sm:gap-4">
           <div>
-            <h1 className="text-3xl font-bold text-white flex items-center gap-2">
+            <h1 className="text-2xl sm:text-3xl font-bold text-white flex flex-wrap items-center gap-2">
               {viewSession?.name || "Untitled session"}
               {isGmOnlyCurrent && (
                 <span className="px-2 py-1 text-[10px] rounded-full bg-red-500/20 text-red-300 border border-red-500/40">
@@ -159,8 +159,8 @@ export default function SessionProfile() {
           </div>
 
           {isGM && (
-            <div className="flex items-center gap-3 self-start">
-              <div className="flex items-center gap-1 bg-white/5 border border-white/10 rounded-full p-1">
+            <div className="flex flex-wrap items-center gap-2 sm:gap-3 self-start">
+              <div className="flex flex-wrap items-center gap-1 bg-white/5 border border-white/10 rounded-full p-1">
                 <button
                   type="button"
                   disabled={!editMode}
@@ -208,7 +208,7 @@ export default function SessionProfile() {
 
                   setEditMode((prev) => !prev);
                 }}
-                className="px-3 py-1.5 rounded-xl bg-white/5 border border-white/10 text-xs text-zinc-300 hover:bg-white/10 transition"
+                className="px-3 py-1.5 sm:px-3 sm:py-1.5 rounded-xl bg-white/5 border border-white/10 text-xs text-zinc-300 hover:bg-white/10 transition"
               >
                 {editMode ? "Done" : "Edit"}
               </button>
@@ -232,11 +232,11 @@ export default function SessionProfile() {
         </div>
 
         {/* Player & GM layout */}
-        <div className={`grid grid-cols-1 ${isGM ? "lg:grid-cols-2" : ""} gap-6 pt-2`}>
+        <div className={`grid grid-cols-1 ${isGM ? "lg:grid-cols-2" : ""} gap-4 sm:gap-6 pt-2`}>
           {/* LEFT: Player overview */}
           <div className="space-y-4">
             {/* Recap */}
-            <div className="bg-white/5 rounded-xl border border-white/10 p-5">
+            <div className="bg-white/5 rounded-xl border border-white/10 p-4 sm:p-5">
               <h2 className="text-lg font-semibold text-white mb-2">Session recap</h2>
               {isGM && editMode ? (
                 <textarea
@@ -253,7 +253,7 @@ export default function SessionProfile() {
             {/* Linked entities (Session cross-links) */}
 
             {/* Attendance */}
-            <div className="bg-white/5 rounded-xl border border-white/10 p-5">
+            <div className="bg-white/5 rounded-xl border border-white/10 p-4 sm:p-5">
               <h2 className="text-lg font-semibold text-white mb-2">Attendance</h2>
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-3">
@@ -350,13 +350,13 @@ export default function SessionProfile() {
 
             {/* Session timeline */}
             {(editMode || (viewSession?.timeline && viewSession.timeline.trim().length > 0)) && (
-              <div className="bg-white/5 rounded-xl border border-white/10 p-5">
+              <div className="bg-white/5 rounded-xl border border-white/10 p-4 sm:p-5">
                 <h2 className="text-lg font-semibold text-white mb-2">Session timeline</h2>
 
                 {isGM && editMode ? (
                   <textarea
                     className="w-full bg-transparent border border-white/15 rounded-xl px-3 py-2 text-sm text-zinc-100 focus:outline-none focus:border-purple-500/60"
-                    rows={4}
+                    rows={3}
                     value={editableSession?.timeline ?? ""}
                     onChange={(e) => handleFieldChange("timeline", e.target.value)}
                     placeholder="Key beats in order…"
@@ -371,7 +371,7 @@ export default function SessionProfile() {
 
             {/* Moments */}
             {(editMode || (viewSession?.moments && viewSession.moments.trim().length > 0)) && (
-              <div className="bg-white/5 rounded-xl border border-white/10 p-5">
+              <div className="bg-white/5 rounded-xl border border-white/10 p-4 sm:p-5">
                 <h2 className="text-lg font-semibold text-white mb-2">Moments</h2>
 
                 {isGM && editMode ? (
@@ -392,7 +392,7 @@ export default function SessionProfile() {
 
             {/* Quotes of the day */}
             {(editMode || (viewSession?.quotes && viewSession.quotes.trim().length > 0)) && (
-              <div className="bg-white/5 rounded-xl border border-white/10 p-5">
+              <div className="bg-white/5 rounded-xl border border-white/10 p-4 sm:p-5">
                 <h2 className="text-lg font-semibold text-white mb-2">Quotes of the day</h2>
 
                 {isGM && editMode ? (
@@ -416,7 +416,7 @@ export default function SessionProfile() {
           {isGM && (
             <div className="space-y-4">
               {/* Off-screen events / GM notes / secrets */}
-              <div className="bg-white/5 rounded-xl border border-purple-500/40 p-5">
+              <div className="bg-white/5 rounded-xl border border-purple-500/40 p-4 sm:p-5">
                 <h2 className="text-lg font-semibold text-purple-200 mb-2">
                   Off-screen events & GM notes
                 </h2>
@@ -454,7 +454,7 @@ export default function SessionProfile() {
                     </p>
                     <textarea
                       className="w-full bg-transparent border border-purple-500/25 rounded-xl px-3 py-2 text-sm text-zinc-100 focus:outline-none focus:border-purple-400/80"
-                      rows={4}
+                      rows={3}
                       value={gmPrepText}
                       onChange={(e) => setGmPrepText(e.target.value)}
                     />
@@ -480,7 +480,7 @@ export default function SessionProfile() {
         </div>
 
         {/* Metadata strip */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm text-zinc-400 pt-2">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-3 sm:gap-4 text-sm text-zinc-400 pt-2">
           <div className="flex items-center gap-3">
             <Users className="w-4 h-4 text-zinc-500" />
             <span>{Number(viewSession?.players) || 0} active players in this session.</span>

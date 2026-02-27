@@ -80,7 +80,7 @@ export default function Sessions() {
   const totalPlayers = sessions.reduce((acc, s) => acc + (Number(s.players) || 0), 0);
 
   return (
-    <main className="flex-1 p-8 overflow-auto">
+    <main className="flex-1 overflow-auto">
             {/* Stats */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-8">
               <div className="bg-white/5 border border-white/10 rounded-xl p-4 flex items-center gap-4">
@@ -113,17 +113,17 @@ export default function Sessions() {
                   placeholder="Search sessions..."
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
-                  className="w-full pl-12 pr-4 py-3 bg-white/5 border border-white/10 rounded-xl text-white placeholder-zinc-500 focus:outline-none focus:border-emerald-500/50 focus:ring-2 focus:ring-emerald-500/20 transition-all"
+                  className="w-full pl-11 pr-3 py-2.5 sm:pl-12 sm:pr-4 sm:py-3 bg-white/5 border border-white/10 rounded-xl text-white placeholder-zinc-500 focus:outline-none focus:border-emerald-500/50 focus:ring-2 focus:ring-emerald-500/20 transition-all"
                 />
               </div>
 
               {/* Status Filter */}
-              <div className="flex gap-2">
+              <div className="flex gap-2 overflow-x-auto whitespace-nowrap pr-1 [-webkit-overflow-scrolling:touch]">
                 {['All', 'Active', 'Paused', 'Scheduled', 'Completed'].map((status) => (
                   <button
                     key={status}
                     onClick={() => setSelectedStatus(status)}
-                    className={`px-4 py-3 rounded-xl font-medium transition-all ${
+                    className={`shrink-0 px-3 py-2.5 sm:px-4 sm:py-3 rounded-xl font-medium transition-all ${
                       selectedStatus === status
                         ? 'bg-emerald-500 text-white'
                         : 'bg-white/5 text-zinc-400 hover:bg-white/10 hover:text-white'
@@ -137,7 +137,7 @@ export default function Sessions() {
               {/* Create Button */}
               {isGM && (
   <button
-    className="flex items-center gap-2 px-6 py-3 bg-linear-to-r from-indigo-500 to-purple-500 text-white font-medium rounded-xl hover:opacity-90 transition-opacity"
+    className="w-full md:w-auto flex items-center justify-center gap-2 px-4 py-2.5 sm:px-6 sm:py-3 bg-linear-to-r from-indigo-500 to-purple-500 text-white font-medium rounded-xl hover:opacity-90 transition-opacity"
     onClick={() => setShowCreateModal(true)}
   >
     <Plus className="w-5 h-5" />
@@ -156,17 +156,17 @@ export default function Sessions() {
                 return (
                   <div
                     key={session.id}
-                    className="group bg-white/5 backdrop-blur-sm border border-white/10 rounded-2xl p-6 hover:border-purple-500/30 hover:bg-white/10 transition-all cursor-pointer"
+                    className="group bg-white/5 backdrop-blur-sm border border-white/10 rounded-xl sm:rounded-2xl p-4 sm:p-6 hover:border-purple-500/30 hover:bg-white/10 transition-all cursor-pointer"
                     onClick={() => navigate(`/sessions/${session.id}`)}
                   >
-                    <div className="flex flex-col lg:flex-row lg:items-center gap-4">
+                    <div className="flex flex-col lg:flex-row lg:items-center gap-3 sm:gap-4">
                       {/* Session Info */}
                       <div className="flex items-center gap-4 flex-1">
-                        <div className={`w-12 h-12 rounded-xl bg-linear-to-br from-emerald-500 to-teal-500 flex items-center justify-center`}>
+                        <div className={`w-10 h-10 sm:w-12 sm:h-12 rounded-xl bg-linear-to-br from-emerald-500 to-teal-500 flex items-center justify-center`}>
                           <StatusIcon className="w-6 h-6 text-white" />
                         </div>
                         <div>
-                          <div className="flex items-center gap-3">
+                          <div className="flex flex-wrap items-center gap-2 sm:gap-3">
                             <h3 className="text-lg font-bold text-white group-hover:text-emerald-300 transition-colors">
                               {session.name}
                             </h3>
@@ -194,7 +194,7 @@ export default function Sessions() {
                       </div>
 
                       {/* Session Details */}
-                      <div className="flex flex-wrap items-center gap-6">
+                      <div className="flex flex-wrap items-center gap-3 sm:gap-6">
                         <div className="flex items-center gap-2">
                           <Users className="w-4 h-4 text-zinc-500" />
                           <span className="text-white">{Number(session.players) || 0}/{Number(session.maxPlayers) || 0}</span>
@@ -209,8 +209,8 @@ export default function Sessions() {
                       </div>
 
                       {/* Progress Bar */}
-                      <div className="lg:w-32">
-                        <div className="flex items-center justify-between mb-1">
+                      <div className="w-full lg:w-32">
+                        <div className="flex items-center justify-between mb-1 min-w-0">
                           <span className="text-zinc-500 text-xs">Progress</span>
                           <span className="text-white text-xs font-medium">{progress}%</span>
                         </div>
@@ -229,9 +229,9 @@ export default function Sessions() {
               })}
             </div>
             {showCreateModal && (
-  <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm">
-    <div className="w-full max-w-xl bg-zinc-950 border border-white/10 rounded-2xl p-6">
-      <h2 className="text-xl font-bold text-white mb-4">Create New Session</h2>
+  <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4 overflow-auto">
+    <div className="w-full max-w-[92vw] sm:max-w-xl bg-zinc-950 border border-white/10 rounded-xl sm:rounded-2xl p-4 sm:p-6">
+      <h2 className="text-lg sm:text-xl font-bold text-white mb-4">Create New Session</h2>
 
       <form
         className="space-y-4"
@@ -288,7 +288,7 @@ export default function Sessions() {
           />
         </div>
 
-        <div className="grid grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
   <div>
     <label className="block text-sm text-zinc-400 mb-1">Session Number</label>
     <input
@@ -306,7 +306,7 @@ export default function Sessions() {
     <label className="block text-sm text-zinc-400 mb-1">
       Visibility
     </label>
-    <div className="flex gap-3">
+    <div className="grid grid-cols-1 sm:flex gap-2 sm:gap-3">
       <button
         type="button"
         onClick={() =>
@@ -348,7 +348,7 @@ export default function Sessions() {
           />
         </div>
 
-        <div className="grid grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
           <div>
             <label className="block text-sm text-zinc-400 mb-1">Difficulty</label>
             <select
@@ -383,7 +383,7 @@ export default function Sessions() {
           </div>
         </div>
 
-        <div className="grid grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
           <div>
             <label className="block text-sm text-zinc-400 mb-1">Players</label>
             <input
@@ -433,17 +433,17 @@ export default function Sessions() {
           />
         </div>
 
-        <div className="flex justify-end gap-3 pt-2">
+        <div className="grid grid-cols-1 sm:flex sm:justify-end gap-2 sm:gap-3 pt-2">
           <button
             type="button"
             onClick={() => setShowCreateModal(false)}
-            className="px-4 py-2 rounded-xl bg-white/5 text-zinc-300 hover:bg-white/10"
+            className="w-full sm:w-auto px-4 py-2 rounded-xl bg-white/5 text-zinc-300 hover:bg-white/10"
           >
             Cancel
           </button>
           <button
             type="submit"
-            className="px-4 py-2 rounded-xl bg-linear-to-r from-purple-500 to-indigo-500 text-white font-medium hover:opacity-90"
+            className="w-full sm:w-auto px-4 py-2 rounded-xl bg-linear-to-r from-purple-500 to-indigo-500 text-white font-medium hover:opacity-90"
           >
             Save Session
           </button>
