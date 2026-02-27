@@ -1,8 +1,10 @@
-import React, { useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { useMode } from "../context/ModeContext.jsx";
 import { ArrowLeft, Swords, Shield, Sparkles } from "lucide-react";
-import { MOCK_ITEM_DATA } from "../data/mockItems";
+import { itemsRepo } from "../data/items/items.repo";
+import { sessionsRepo } from "../data/sessions/sessions.repo";
+import { getLinksForEntity } from "../data/links/links.repo";
 
 
 const rarityColors = {
@@ -18,21 +20,40 @@ const typeIcons = {
   Armor: Shield,
   Consumable: Sparkles,
 };
+const formatSigned = (value) => {
+  const n = Number(value) || 0;
+  return n >= 0 ? `+${n}` : `${n}`;
+};
 
 export default function ItemProfile() {
   const { id } = useParams();
   const navigate = useNavigate();
   const { isGM } = useMode();
 
-  const rawItem = MOCK_ITEM_DATA[id];
+  const [items, setItems] = useState(() => itemsRepo.getAll());
+
+  const rawItem = useMemo(
+    () => items.find((it) => String(it.id) === String(id)) || null,
+    [items, id]
+  );
+
   const [formData, setFormData] = useState(rawItem || null);
+
+  useEffect(() => {
+    // refresh when navigating between items
+    setItems(itemsRepo.getAll());
+  }, [id]);
+
+  useEffect(() => {
+    setFormData(rawItem || null);
+  }, [rawItem]);
   const [isEditing, setIsEditing] = useState(false);
 
   if (!formData) {
     return (
       <div className="p-8 text-white">
         <h1 className="text-3xl font-bold">Item Not Found</h1>
-        <p className="mt-2 text-zinc-400">This item ID doesn’t exist in the mock dataset.</p>
+        <p className="mt-2 text-zinc-400">There is no item with this ID.</p>
         <button
           onClick={() => navigate(-1)}
           className="mt-4 px-4 py-2 bg-white/10 rounded-xl text-zinc-300 hover:bg-white/20"
@@ -60,10 +81,27 @@ export default function ItemProfile() {
   const handleVisibilityChange = (visibility) => {
     setFormData(prev => ({ ...prev, visibility }));
   };
+  const sessionsById = useMemo(() => {
+    const all = sessionsRepo.getAll();
+    return new Map(all.map((s) => [String(s.id), s]));
+  }, []);
 
   const rarityBg = rarityColors[formData.rarity] || rarityColors.Common;
   const Icon = typeIcons[formData.type] || Sparkles;
   const visibility = formData.visibility || "public";
+
+  // v0.1 cross-link panels
+  const itemLinks = getLinksForEntity("Item", String(id), isGM ? "GM" : "Player");
+  const linkedSessions = itemLinks
+    .filter((l) => l.entityA.type === "Session" || l.entityB.type === "Session")
+    .map((l) => {
+      const other = l.entityA.type === "Item" ? l.entityB : l.entityA;
+      return { sessionId: other.id, label: l.label, visibility: l.visibility, linkId: l.id };
+    });
+  const inBag = itemLinks.some((l) => {
+    const hasBag = l.entityA.type === "BagOfHolding" || l.entityB.type === "BagOfHolding";
+    return hasBag && l.label === "contained_in";
+  });
 
   // Hard gate: players should not be able to open GM-only items via direct URL.
   if (!isGM && visibility === "gm-only") {
@@ -107,7 +145,13 @@ export default function ItemProfile() {
         </button>
         {isGM && (
           <button
-            onClick={() => setIsEditing((prev) => !prev)}
+            onClick={() => {
+              if (isEditing && formData) {
+                itemsRepo.upsert(formData);
+                setItems(itemsRepo.getAll());
+              }
+              setIsEditing((prev) => !prev);
+            }}
             className="px-4 py-2 rounded-xl bg-white/10 text-zinc-200 hover:bg-white/20 text-sm font-medium"
           >
             {isEditing ? "Done" : "Edit"}
@@ -176,16 +220,16 @@ export default function ItemProfile() {
 
           <div className="grid grid-cols-2 md:grid-cols-3 gap-3 text-sm">
             <div className="bg-white/5 rounded-xl border border-white/10 px-4 py-3">
-              <p className="text-zinc-500 text-xs uppercase tracking-wide">Power</p>
+              <p className="text-zinc-500 text-xs uppercase tracking-wide">Bonus</p>
               {isEditing && isGM ? (
                 <input
                   type="number"
                   className="bg-transparent border border-white/20 rounded-lg px-2 py-1 text-xl font-bold text-white w-20"
-                  value={formData.power}
-                  onChange={(e) => handleFieldChange("power", Number(e.target.value))}
+                  value={formData.bonus}
+                  onChange={(e) => handleFieldChange("bonus", Number(e.target.value))}
                 />
               ) : (
-                <p className="text-white text-xl font-bold">+{formData.power}</p>
+                <p className="text-white text-xl font-bold">{formatSigned(formData.bonus)}</p>
               )}
             </div>
             <div className="bg-white/5 rounded-xl border border-white/10 px-4 py-3">
@@ -210,22 +254,20 @@ export default function ItemProfile() {
                   <button
                     type="button"
                     onClick={() => handleVisibilityChange("public")}
-                    className={`px-3 py-1 rounded-full text-xs font-medium border ${
-                      visibility === "public"
-                        ? "bg-emerald-500/20 border-emerald-400 text-emerald-200"
-                        : "bg-white/5 border-white/10 text-zinc-300"
-                    }`}
+                    className={`px-3 py-1 rounded-full text-xs font-medium border ${visibility === "public"
+                      ? "bg-emerald-500/20 border-emerald-400 text-emerald-200"
+                      : "bg-white/5 border-white/10 text-zinc-300"
+                      }`}
                   >
                     Player-visible
                   </button>
                   <button
                     type="button"
                     onClick={() => handleVisibilityChange("gm-only")}
-                    className={`px-3 py-1 rounded-full text-xs font-medium border ${
-                      visibility === "gm-only"
-                        ? "bg-red-500/20 border-red-400 text-red-200"
-                        : "bg-white/5 border-white/10 text-zinc-300"
-                    }`}
+                    className={`px-3 py-1 rounded-full text-xs font-medium border ${visibility === "gm-only"
+                      ? "bg-red-500/20 border-red-400 text-red-200"
+                      : "bg-white/5 border-white/10 text-zinc-300"
+                      }`}
                   >
                     GM only
                   </button>
@@ -254,7 +296,7 @@ export default function ItemProfile() {
                 onChange={(e) => handleFieldChange("description", e.target.value)}
               />
             ) : (
-              <p className="text-zinc-400">{formData.description}</p>
+              <p className="text-zinc-400">{formData.description || ""}</p>
             )}
           </section>
 
@@ -285,7 +327,7 @@ export default function ItemProfile() {
                     <option value="Common">Common</option>
                   </select>
                   <span className="px-3 py-1 rounded-lg bg-white/5 text-zinc-300 text-xs uppercase tracking-wide">
-                    Power +{formData.power}
+                    Bonus {formatSigned(formData.bonus)}
                   </span>
                 </>
               ) : (
@@ -297,7 +339,7 @@ export default function ItemProfile() {
                     {formData.rarity}
                   </span>
                   <span className="px-3 py-1 rounded-lg bg-white/5 text-zinc-300 text-xs uppercase tracking-wide">
-                    Power +{formData.power}
+                    Bonus {formatSigned(formData.bonus)}
                   </span>
                 </>
               )}
@@ -305,27 +347,27 @@ export default function ItemProfile() {
             <div className="flex flex-wrap gap-2">
               {isEditing && isGM
                 ? Object.entries(formData.stats || {}).map(([key, value]) => (
-                    <span
-                      key={key}
-                      className="flex items-center gap-1 px-2 py-1 rounded-lg bg-white/5 text-zinc-300 text-sm"
-                    >
-                      <span>{key}:</span>
-                      <input
-                        type="number"
-                        className="bg-transparent border border-white/20 rounded px-1 py-0.5 w-16 text-zinc-100"
-                        value={value}
-                        onChange={(e) => handleStatChange(key, e.target.value)}
-                      />
-                    </span>
-                  ))
+                  <span
+                    key={key}
+                    className="flex items-center gap-1 px-2 py-1 rounded-lg bg-white/5 text-zinc-300 text-sm"
+                  >
+                    <span>{key}:</span>
+                    <input
+                      type="number"
+                      className="bg-transparent border border-white/20 rounded px-1 py-0.5 w-16 text-zinc-100"
+                      value={value}
+                      onChange={(e) => handleStatChange(key, e.target.value)}
+                    />
+                  </span>
+                ))
                 : Object.entries(formData.stats || {}).map(([key, value]) => (
-                    <span
-                      key={key}
-                      className="px-3 py-1 rounded-lg bg-white/5 text-zinc-300 text-sm"
-                    >
-                      {key}: {value}
-                    </span>
-                  ))}
+                  <span
+                    key={key}
+                    className="px-3 py-1 rounded-lg bg-white/5 text-zinc-300 text-sm"
+                  >
+                    {key}: {value}
+                  </span>
+                ))}
             </div>
           </section>
 
@@ -358,6 +400,52 @@ export default function ItemProfile() {
             </p>
             <p className="text-zinc-500 text-xs mt-2">
               Later this card will auto-link to PCs, sessions and maps that reference this item.
+            </p>
+          </section>
+
+          {/* v0.1: cross-links */}
+          <section className="bg-white/5 border border-white/10 rounded-2xl p-5">
+            <h2 className="text-lg font-semibold text-white mb-2">Where it showed up</h2>
+            {linkedSessions.length === 0 ? (
+              <p className="text-zinc-400 text-sm">No sessions linked yet.</p>
+            ) : (
+              <div className="space-y-2">
+                {linkedSessions.map((s) => {
+                  const session = sessionsById.get(String(s.sessionId));
+                  const title = session?.name || `Session ${s.sessionId}`;
+                  return (
+                    <button
+                      key={s.linkId}
+                      className="w-full text-left px-3 py-2 rounded-xl bg-white/5 border border-white/10 hover:bg-white/10"
+                      onClick={() => navigate(`/sessions/${s.sessionId}`)}
+                    >
+                      <div className="flex items-center justify-between gap-3">
+                        <div>
+                          <div className="text-white font-medium text-sm">{title}</div>
+                          <div className="text-xs text-zinc-500">label: {s.label}</div>
+                        </div>
+                        {isGM && (
+                          <span
+                            className={`text-[10px] px-2 py-0.5 rounded-full border ${s.visibility === "GM"
+                              ? "bg-red-500/20 text-red-300 border-red-500/40"
+                              : "bg-emerald-500/20 text-emerald-300 border-emerald-500/40"
+                              }`}
+                          >
+                            {s.visibility}
+                          </span>
+                        )}
+                      </div>
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+          </section>
+
+          <section className="bg-white/5 border border-white/10 rounded-2xl p-5">
+            <h2 className="text-lg font-semibold text-white mb-2">Bag of Holding</h2>
+            <p className="text-sm text-zinc-400">
+              Status: {inBag ? <span className="text-emerald-300 font-medium">in party inventory</span> : <span className="text-zinc-400">not in bag</span>}
             </p>
           </section>
         </div>

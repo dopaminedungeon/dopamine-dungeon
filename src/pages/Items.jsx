@@ -1,15 +1,13 @@
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useMode } from "../context/ModeContext.jsx";
-import { mockItems } from "../data/mockItems";
+import { itemsRepo } from "../data/items/items.repo";
 import {
   Search,
   Plus,
   Swords,
   Shield,
   Sparkles,
-  Heart,
-  Zap,
   Grid,
   List,
 } from "lucide-react";
@@ -29,19 +27,37 @@ const rarityConfig = {
   Common: { bg: 'from-zinc-500 to-zinc-600', border: 'border-zinc-500/30', text: 'text-zinc-400', glow: 'shadow-zinc-500/20' },
 };
 
+function newId(prefix = "item") {
+  try {
+    return `${prefix}-${crypto.randomUUID()}`;
+  } catch {
+    return `${prefix}-${Date.now()}-${Math.random().toString(16).slice(2)}`;
+  }
+}
+
+function safeArray(value) {
+  return Array.isArray(value) ? value : [];
+}
+
 export default function Items() {
   const [showCreateModal, setShowCreateModal] = useState(false);
+  const [items, setItems] = useState(() => safeArray(itemsRepo.getAll()));
 
-const [formData, setFormData] = useState({
-  name: "",
-  type: "Weapon",
-  rarity: "Common",
-  power: 0,
-  description: "",
-  visibility: "public",
-  mechanicalSummary: "",
-  gmNotes: "",
-});
+  useEffect(() => {
+    setItems(safeArray(itemsRepo.getAll()));
+  }, [showCreateModal]);
+
+  const [formData, setFormData] = useState({
+    name: "",
+    type: "Weapon",
+    rarity: "Common",
+    power: 0,
+    description: "",
+    visibility: "public",
+    mechanicalSummary: "",
+    gmNotes: "",
+    stats: {},
+  });
   const navigate = useNavigate();
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedType, setSelectedType] = useState('All');
@@ -49,8 +65,8 @@ const [formData, setFormData] = useState({
   const [viewMode, setViewMode] = useState('grid');
   const { isGM } = useMode();
 
-  const filteredItems = mockItems.filter(item => {
-    const matchesSearch = item.name.toLowerCase().includes(searchQuery.toLowerCase());
+  const filteredItems = items.filter((item) => {
+    const matchesSearch = String(item.name || "").toLowerCase().includes(searchQuery.toLowerCase());
     const matchesType = selectedType === 'All' || item.type === selectedType;
     const matchesRarity = selectedRarity === 'All' || item.rarity === selectedRarity;
     return matchesSearch && matchesType && matchesRarity;
@@ -138,6 +154,17 @@ const [formData, setFormData] = useState({
         </button>
       )}
     </div>
+
+    {visibleItems.length === 0 && (
+      <div className="bg-white/5 border border-white/10 rounded-2xl p-6 text-zinc-300">
+        <p className="text-white font-semibold">No items yet.</p>
+        <p className="text-zinc-400 text-sm mt-1">
+          {isGM
+            ? "Add your first item to start linking it to sessions and the Bag of Holding."
+            : "Your GM hasn’t added any public items yet."}
+        </p>
+      </div>
+    )}
 
     {/* Items Grid */}
     <div
@@ -239,10 +266,174 @@ const [formData, setFormData] = useState({
       })}
     </div>
 
-    {/* Modal stays exactly the same, but it must be AFTER the grid */}
     {showCreateModal && (
-      <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm">
-        {/* ... keep your modal exactly as-is ... */}
+      <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4">
+        <div className="w-full max-w-2xl bg-zinc-950/90 border border-white/10 rounded-2xl shadow-xl">
+          <div className="flex items-center justify-between px-6 py-4 border-b border-white/10">
+            <h2 className="text-white font-semibold text-lg">Add Item</h2>
+            <button
+              type="button"
+              className="text-zinc-400 hover:text-white"
+              onClick={() => setShowCreateModal(false)}
+            >
+              ✕
+            </button>
+          </div>
+
+          <form
+            className="p-6 space-y-4"
+            onSubmit={(e) => {
+              e.preventDefault();
+
+              const id = newId("item");
+              const nextItem = {
+                id,
+                name: formData.name,
+                type: formData.type,
+                rarity: formData.rarity,
+                power: Number(formData.power) || 0,
+                description: formData.description,
+                visibility: formData.visibility,
+                mechanicalSummary: formData.mechanicalSummary,
+                gmNotes: formData.gmNotes,
+                stats: formData.stats || {},
+              };
+
+              itemsRepo.upsert(nextItem);
+              setItems(safeArray(itemsRepo.getAll()));
+
+              setShowCreateModal(false);
+              setFormData({
+                name: "",
+                type: "Weapon",
+                rarity: "Common",
+                power: 0,
+                description: "",
+                visibility: "public",
+                mechanicalSummary: "",
+                gmNotes: "",
+                stats: {},
+              });
+
+              navigate(`/items/${id}`);
+            }}
+          >
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <label className="block text-xs text-zinc-400 mb-1">Name</label>
+                <input
+                  value={formData.name}
+                  onChange={(e) => setFormData((p) => ({ ...p, name: e.target.value }))}
+                  className="w-full px-3 py-2 bg-white/5 border border-white/10 rounded-xl text-white focus:outline-none focus:border-purple-500/50"
+                  placeholder="e.g. Stormwrought Dagger"
+                  required
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs text-zinc-400 mb-1">Visibility</label>
+                <select
+                  value={formData.visibility}
+                  onChange={(e) => setFormData((p) => ({ ...p, visibility: e.target.value }))}
+                  className="w-full px-3 py-2 bg-white/5 border border-white/10 rounded-xl text-white focus:outline-none focus:border-purple-500/50"
+                >
+                  <option value="public">Public</option>
+                  <option value="gm-only">GM Only</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-xs text-zinc-400 mb-1">Type</label>
+                <select
+                  value={formData.type}
+                  onChange={(e) => setFormData((p) => ({ ...p, type: e.target.value }))}
+                  className="w-full px-3 py-2 bg-white/5 border border-white/10 rounded-xl text-white focus:outline-none focus:border-purple-500/50"
+                >
+                  <option value="Weapon">Weapon</option>
+                  <option value="Armor">Armor</option>
+                  <option value="Consumable">Consumable</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-xs text-zinc-400 mb-1">Rarity</label>
+                <select
+                  value={formData.rarity}
+                  onChange={(e) => setFormData((p) => ({ ...p, rarity: e.target.value }))}
+                  className="w-full px-3 py-2 bg-white/5 border border-white/10 rounded-xl text-white focus:outline-none focus:border-purple-500/50"
+                >
+                  {Object.keys(rarityConfig).map((r) => (
+                    <option key={r} value={r}>
+                      {r}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-xs text-zinc-400 mb-1">Power</label>
+                <input
+                  type="number"
+                  value={formData.power}
+                  onChange={(e) => setFormData((p) => ({ ...p, power: e.target.value }))}
+                  className="w-full px-3 py-2 bg-white/5 border border-white/10 rounded-xl text-white focus:outline-none focus:border-purple-500/50"
+                  min={0}
+                />
+              </div>
+
+              <div className="md:col-span-2">
+                <label className="block text-xs text-zinc-400 mb-1">Description</label>
+                <textarea
+                  value={formData.description}
+                  onChange={(e) => setFormData((p) => ({ ...p, description: e.target.value }))}
+                  className="w-full px-3 py-2 bg-white/5 border border-white/10 rounded-xl text-white focus:outline-none focus:border-purple-500/50"
+                  rows={3}
+                  placeholder="Short player-facing description"
+                />
+              </div>
+
+              <div className="md:col-span-2">
+                <label className="block text-xs text-zinc-400 mb-1">Mechanical Summary (optional)</label>
+                <textarea
+                  value={formData.mechanicalSummary}
+                  onChange={(e) => setFormData((p) => ({ ...p, mechanicalSummary: e.target.value }))}
+                  className="w-full px-3 py-2 bg-white/5 border border-white/10 rounded-xl text-white focus:outline-none focus:border-purple-500/50"
+                  rows={2}
+                  placeholder="Rules/mechanics notes"
+                />
+              </div>
+
+              {isGM && (
+                <div className="md:col-span-2">
+                  <label className="block text-xs text-zinc-400 mb-1">GM Notes (optional)</label>
+                  <textarea
+                    value={formData.gmNotes}
+                    onChange={(e) => setFormData((p) => ({ ...p, gmNotes: e.target.value }))}
+                    className="w-full px-3 py-2 bg-white/5 border border-white/10 rounded-xl text-white focus:outline-none focus:border-purple-500/50"
+                    rows={2}
+                    placeholder="Hidden GM notes"
+                  />
+                </div>
+              )}
+            </div>
+
+            <div className="flex items-center justify-end gap-2 pt-2">
+              <button
+                type="button"
+                onClick={() => setShowCreateModal(false)}
+                className="px-4 py-2 rounded-xl bg-white/5 border border-white/10 text-zinc-300 hover:bg-white/10"
+              >
+                Cancel
+              </button>
+              <button
+                type="submit"
+                className="px-4 py-2 rounded-xl bg-linear-to-r from-indigo-500 to-purple-500 text-white font-medium hover:opacity-90"
+              >
+                Save
+              </button>
+            </div>
+          </form>
+        </div>
       </div>
     )}
   </>

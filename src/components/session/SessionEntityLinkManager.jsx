@@ -123,8 +123,8 @@ export default function SessionEntityLinkManager({
   function handleLink(entityId) {
     try {
       const linkObj = createLink({
-        entityA: { type: "Session", id: sessionId },
-        entityB: { type: entityType, id: entityId },
+        entityA: { type: "Session", id: String(sessionId) },
+        entityB: { type: entityType, id: String(entityId) },
         label: defaultLabel || label,
         visibility: newLinkVisibility,
       });
@@ -149,8 +149,8 @@ export default function SessionEntityLinkManager({
 
     // Recreate with new label (preserve visibility)
     const updated = createLink({
-      entityA: linkObj.entityA,
-      entityB: linkObj.entityB,
+      entityA: { ...linkObj.entityA, id: String(linkObj.entityA.id) },
+      entityB: { ...linkObj.entityB, id: String(linkObj.entityB.id) },
       label: newLabel,
       visibility: linkObj.visibility,
     });

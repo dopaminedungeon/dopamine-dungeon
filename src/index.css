@@ -1,16 +1,8 @@
 @import "tailwindcss";
 
-/* Global tweaks */
-:root {
-  color-scheme: dark;
-}
+:root { color-scheme: dark; }
 
 @layer base {
-  body {
-    @apply bg-black text-zinc-100 antialiased;
-  }
-
-  #root {
-    @apply min-h-screen;
-  }
+  body { @apply bg-black text-zinc-100 antialiased; }
+  #root { @apply min-h-screen; }
 }

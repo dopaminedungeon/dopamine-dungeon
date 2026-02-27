@@ -5,6 +5,7 @@ import { Shield, Eye } from "lucide-react";
 import { useCampaign } from "../context/CampaignContext.jsx";
 import { useTenant } from "../context/TenantContext.jsx";
 import DebugPanel from "./DebugPanel";
+import { features } from "../config/features";
 
 export default function TopBar({ title }) {
   const { mode, setMode } = useMode();
@@ -118,6 +119,10 @@ export default function TopBar({ title }) {
               </div>
             )}
           </div>
+          <span className="hidden sm:block text-[10px] tracking-wide text-zinc-500">
+  Dopamine Dungeon v0.1
+</span>
+
           {/* Workspace + Campaign selectors */}
           <div className="hidden md:flex items-center gap-3">
             {/* Workspace selector */}
@@ -266,19 +271,29 @@ export default function TopBar({ title }) {
           </div>
         </div>
       </div>
-      <div className="px-8 pb-4">
-        <DebugPanel
-          context={{
-            mode,
-            activeTenantId,
-            activeCampaignId,
-            tenantsCount: tenants.length,
-            campaignsCount: campaigns.length,
-            tenantsSource: accessibleTenants ? "accessibleTenants" : legacyTenants ? "legacyTenants" : "none",
-            campaignsSource: accessibleCampaigns ? "accessibleCampaigns" : legacyCampaigns ? "legacyCampaigns" : "none",
-          }}
-        />
-      </div>
+      {features.debugPanel && (
+        <div className="px-8 pb-4">
+          <DebugPanel
+            context={{
+              mode,
+              activeTenantId,
+              activeCampaignId,
+              tenantsCount: tenants.length,
+              campaignsCount: campaigns.length,
+              tenantsSource: accessibleTenants
+                ? "accessibleTenants"
+                : legacyTenants
+                ? "legacyTenants"
+                : "none",
+              campaignsSource: accessibleCampaigns
+                ? "accessibleCampaigns"
+                : legacyCampaigns
+                ? "legacyCampaigns"
+                : "none",
+            }}
+          />
+        </div>
+      )}
     </header>
   );
 }

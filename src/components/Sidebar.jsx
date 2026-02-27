@@ -13,6 +13,9 @@ import {
   Settings,
 } from "lucide-react";
 
+import { useMode } from "../context/ModeContext.jsx";
+import { features } from "../config/features";
+
 const NavItem = ({ to, icon: Icon, label, isCollapsed }) => (
   <NavLink
     to={to}
@@ -32,24 +35,34 @@ const NavItem = ({ to, icon: Icon, label, isCollapsed }) => (
 
 export default function Sidebar() {
   const [isCollapsed, setIsCollapsed] = React.useState(false);
+  const { isGM } = useMode();
 
+  // v0.1: keep navigation intentionally tiny.
   const baseNavItems = [
-    { to: "/", icon: LayoutDashboard, label: "Dashboard" },
-    { to: "/npcs", icon: Users, label: "NPCs" },
-    { to: "/items", icon: Package, label: "Items" },
-    { to: "/pcs", icon: ScrollText, label: "PCs" },
-    { to: "/sessions", icon: BookOpen, label: "Sessions" },
-    { to: "/maps", icon: Map, label: "Maps" },
-    { to: "/arcs", icon: Sparkles, label: "Arcs" },
-    { to: "/lore", icon: BookOpen, label: "Lore" },
-  ];
+    { to: "/", icon: LayoutDashboard, label: "Dashboard", on: features.dashboard },
+    { to: "/sessions", icon: BookOpen, label: "Sessions", on: features.sessions },
+    { to: "/items", icon: Package, label: "Items", on: features.items },
+    // Bag is accessed via /pcs/bag today, but we expose it as a first-class nav item.
+    { to: "/bag", icon: ScrollText, label: "Bag of Holding", on: features.bagOfHolding },
 
-  const gmOnlyItems = [
-    { to: "/quests", icon: ListTodo, label: "Quests" },
-    { to: "/relationships", icon: Network, label: "Relationships" },
-    { to: "/conditions", icon: Sparkles, label: "Conditions" },
-    { to: "/campaigns/settings", icon: Settings, label: "Campaign Settings" },
-  ];
+    // Future modules (kept here for when you flip flags back on)
+    { to: "/npcs", icon: Users, label: "NPCs", on: features.npcs },
+    { to: "/pcs", icon: ScrollText, label: "PCs", on: features.pcs },
+    { to: "/maps", icon: Map, label: "Maps", on: features.maps },
+    { to: "/arcs", icon: Sparkles, label: "Arcs", on: features.arcs },
+    { to: "/lore", icon: BookOpen, label: "Lore", on: features.lore },
+  ].filter((x) => x.on);
+
+  const gmOnlyItems = (
+    isGM
+      ? [
+          { to: "/quests", icon: ListTodo, label: "Quests", on: features.quests },
+          { to: "/relationships", icon: Network, label: "Relationships", on: features.relationships },
+          { to: "/conditions", icon: Sparkles, label: "Conditions", on: features.conditions },
+          { to: "/campaigns/settings", icon: Settings, label: "Campaign Settings", on: true },
+        ].filter((x) => x.on)
+      : []
+  );
 
   const navItems = [...baseNavItems, ...gmOnlyItems];
 

@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useMode } from "../context/ModeContext.jsx";
 import {
@@ -10,10 +10,8 @@ import {
   Pause,
   Square,
   Calendar,
-  Timer,
-  TrendingUp,
 } from "lucide-react";
-import { mockSessions } from "../data/mockSessions.js";
+import { sessionsRepo } from "../data/sessions/sessions.repo";
 
 const statusConfig = {
   active: { color: 'bg-emerald-500', text: 'text-emerald-400', label: 'Live', icon: Play },
@@ -30,8 +28,27 @@ const difficultyColors = {
   Competitive: 'text-amber-400 bg-amber-500/10',
 };
 
+function newId(prefix = "session") {
+  try {
+    return `${prefix}-${crypto.randomUUID()}`;
+  } catch {
+    return `${prefix}-${Date.now()}-${Math.random().toString(16).slice(2)}`;
+  }
+}
+
+function safeArray(value) {
+  return Array.isArray(value) ? value : [];
+}
+
 export default function Sessions() {
   const [showCreateModal, setShowCreateModal] = useState(false);
+
+  const [sessions, setSessions] = useState(() => safeArray(sessionsRepo.getAll()));
+
+  useEffect(() => {
+    // keep in sync with repo changes that happen within this page
+    setSessions(safeArray(sessionsRepo.getAll()));
+  }, [showCreateModal]);
 
   const [formData, setFormData] = useState({
     name: "",
@@ -43,29 +60,29 @@ export default function Sessions() {
     status: "scheduled",
     startTime: "",
     visibility: "public",
-    notes: "",
+    gmNotes: "",
   });
   const navigate = useNavigate();
   const { isGM } = useMode();
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedStatus, setSelectedStatus] = useState('All');
-  
-  const filteredSessions = mockSessions.filter(session => {
-    const matchesSearch = session.name.toLowerCase().includes(searchQuery.toLowerCase());
+
+  const filteredSessions = sessions.filter((session) => {
+    const matchesSearch = String(session.name || "").toLowerCase().includes(searchQuery.toLowerCase());
     const matchesStatus = selectedStatus === 'All' || session.status === selectedStatus.toLowerCase();
     return matchesSearch && matchesStatus;
   });
   const visibleSessions = isGM
-  ? filteredSessions
-  : filteredSessions.filter((session) => session.visibility === "public");
+    ? filteredSessions
+    : filteredSessions.filter((session) => session.visibility === "public");
 
-  const activeSessions = mockSessions.filter(s => s.status === 'active').length;
-  const totalPlayers = mockSessions.reduce((acc, s) => acc + s.players, 0);
+  const activeSessions = sessions.filter((s) => s.status === "active").length;
+  const totalPlayers = sessions.reduce((acc, s) => acc + (Number(s.players) || 0), 0);
 
   return (
     <main className="flex-1 p-8 overflow-auto">
             {/* Stats */}
-            <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-8">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-8">
               <div className="bg-white/5 border border-white/10 rounded-xl p-4 flex items-center gap-4">
                 <div className="p-3 bg-emerald-500/20 rounded-xl">
                   <Play className="w-5 h-5 text-emerald-400" />
@@ -82,24 +99,6 @@ export default function Sessions() {
                 <div>
                   <p className="text-zinc-500 text-sm">Players Online</p>
                   <p className="text-2xl font-bold text-white">{totalPlayers}</p>
-                </div>
-              </div>
-              <div className="bg-white/5 border border-white/10 rounded-xl p-4 flex items-center gap-4">
-                <div className="p-3 bg-purple-500/20 rounded-xl">
-                  <Timer className="w-5 h-5 text-purple-400" />
-                </div>
-                <div>
-                  <p className="text-zinc-500 text-sm">Avg Duration</p>
-                  <p className="text-2xl font-bold text-white">1h 45m</p>
-                </div>
-              </div>
-              <div className="bg-white/5 border border-white/10 rounded-xl p-4 flex items-center gap-4">
-                <div className="p-3 bg-amber-500/20 rounded-xl">
-                  <TrendingUp className="w-5 h-5 text-amber-400" />
-                </div>
-                <div>
-                  <p className="text-zinc-500 text-sm">Today's Sessions</p>
-                  <p className="text-2xl font-bold text-white">24</p>
                 </div>
               </div>
             </div>
@@ -153,13 +152,13 @@ export default function Sessions() {
                 const status = statusConfig[session.status];
                 const StatusIcon = status.icon;
                 const isGmOnly = session.visibility === "gm-only";
-                
+                const progress = Number(session.progress) || 0;
                 return (
-    <div
-      key={session.id}
-      className="group bg-white/5 backdrop-blur-sm border border-white/10 rounded-2xl p-6 hover:border-purple-500/30 hover:bg-white/10 transition-all cursor-pointer"
-      onClick={() => navigate(`/sessions/${session.id}`)}
-    >
+                  <div
+                    key={session.id}
+                    className="group bg-white/5 backdrop-blur-sm border border-white/10 rounded-2xl p-6 hover:border-purple-500/30 hover:bg-white/10 transition-all cursor-pointer"
+                    onClick={() => navigate(`/sessions/${session.id}`)}
+                  >
                     <div className="flex flex-col lg:flex-row lg:items-center gap-4">
                       {/* Session Info */}
                       <div className="flex items-center gap-4 flex-1">
@@ -168,29 +167,29 @@ export default function Sessions() {
                         </div>
                         <div>
                           <div className="flex items-center gap-3">
-  <h3 className="text-lg font-bold text-white group-hover:text-emerald-300 transition-colors">
-    {session.name}
-  </h3>
+                            <h3 className="text-lg font-bold text-white group-hover:text-emerald-300 transition-colors">
+                              {session.name}
+                            </h3>
 
-  {/* GM-only badge – only visible in GM mode */}
-  {isGM && isGmOnly && (
-    <span className="px-2 py-0.5 rounded-full text-[10px] font-medium bg-red-500/20 text-red-300 border border-red-500/40">
-      GM ONLY
-    </span>
-  )}
+                            {/* GM-only badge – only visible in GM mode */}
+                            {isGM && isGmOnly && (
+                              <span className="px-2 py-0.5 rounded-full text-[10px] font-medium bg-red-500/20 text-red-300 border border-red-500/40">
+                                GM ONLY
+                              </span>
+                            )}
 
-  <span
-    className={`flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium ${status.text} bg-white/5`}
-  >
-    <span
-      className={`w-1.5 h-1.5 rounded-full ${status.color} ${
-        session.status === "active" ? "animate-pulse" : ""
-      }`}
-    />
-    {status.label}
-  </span>
-</div>
-                          <p className="text-zinc-500 text-sm">{session.map}</p>
+                            <span
+                              className={`flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium ${status.text} bg-white/5`}
+                            >
+                              <span
+                                className={`w-1.5 h-1.5 rounded-full ${status.color} ${
+                                  session.status === "active" ? "animate-pulse" : ""
+                                }`}
+                              />
+                              {status.label}
+                            </span>
+                          </div>
+                          <p className="text-zinc-500 text-sm">{session.map || ""}</p>
                         </div>
                       </div>
 
@@ -198,13 +197,13 @@ export default function Sessions() {
                       <div className="flex flex-wrap items-center gap-6">
                         <div className="flex items-center gap-2">
                           <Users className="w-4 h-4 text-zinc-500" />
-                          <span className="text-white">{session.players}/{session.maxPlayers}</span>
+                          <span className="text-white">{Number(session.players) || 0}/{Number(session.maxPlayers) || 0}</span>
                         </div>
                         <div className="flex items-center gap-2">
                           <Clock className="w-4 h-4 text-zinc-500" />
-                          <span className="text-white">{session.duration}</span>
+                          <span className="text-white">{session.duration || "—"}</span>
                         </div>
-                        <span className={`px-3 py-1 rounded-lg text-xs font-medium ${difficultyColors[session.difficulty]}`}>
+                        <span className={`px-3 py-1 rounded-lg text-xs font-medium ${difficultyColors[session.difficulty] || difficultyColors.Normal}`}>
                           {session.difficulty}
                         </span>
                       </div>
@@ -213,14 +212,14 @@ export default function Sessions() {
                       <div className="lg:w-32">
                         <div className="flex items-center justify-between mb-1">
                           <span className="text-zinc-500 text-xs">Progress</span>
-                          <span className="text-white text-xs font-medium">{session.progress}%</span>
+                          <span className="text-white text-xs font-medium">{progress}%</span>
                         </div>
                         <div className="h-2 bg-white/10 rounded-full overflow-hidden">
-                          <div 
+                          <div
                             className={`h-full rounded-full transition-all ${
-                              session.progress === 100 ? 'bg-zinc-500' : 'bg-linear-to-r from-emerald-500 to-teal-500'
+                              progress === 100 ? 'bg-zinc-500' : 'bg-linear-to-r from-emerald-500 to-teal-500'
                             }`}
-                            style={{ width: `${session.progress}%` }}
+                            style={{ width: `${progress}%` }}
                           />
                         </div>
                       </div>
@@ -238,7 +237,28 @@ export default function Sessions() {
         className="space-y-4"
         onSubmit={(e) => {
           e.preventDefault();
-          console.log("New session:", formData);
+
+          const id = newId("session");
+          const nextSession = {
+            id,
+            name: formData.name,
+            sessionNumber: Number(formData.sessionNumber) || 1,
+            map: formData.map,
+            difficulty: formData.difficulty,
+            players: Number(formData.players) || 0,
+            maxPlayers: Number(formData.maxPlayers) || 0,
+            status: formData.status,
+            startTime: formData.startTime,
+            visibility: formData.visibility,
+            gmNotes: formData.gmNotes,
+            summary: "",
+            duration: "—",
+            progress: 0,
+          };
+
+          sessionsRepo.upsert(nextSession);
+          setSessions(safeArray(sessionsRepo.getAll()));
+
           setShowCreateModal(false);
           setFormData({
             name: "",
@@ -250,8 +270,11 @@ export default function Sessions() {
             status: "scheduled",
             startTime: "",
             visibility: "public",
-            notes: "",
+            gmNotes: "",
           });
+
+          // Navigate straight to the new session
+          navigate(`/sessions/${id}`);
         }}
       >
         <div>
@@ -402,9 +425,9 @@ export default function Sessions() {
           <label className="block text-sm text-zinc-400 mb-1">GM notes / prep (optional)</label>
           <textarea
             rows={3}
-            value={formData.notes}
+            value={formData.gmNotes}
             onChange={(e) =>
-              setFormData({ ...formData, notes: e.target.value })
+              setFormData({ ...formData, gmNotes: e.target.value })
             }
             className="w-full px-3 py-2 bg-white/5 border border-white/10 rounded-xl text-white resize-none"
           />

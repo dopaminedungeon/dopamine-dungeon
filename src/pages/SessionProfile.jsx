@@ -1,52 +1,77 @@
-// src/pages/SessionProfile.jsx
-import React, { useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
-import { ArrowLeft, Users, Clock, Map } from "lucide-react";
+import { ArrowLeft, Users, Clock, Map, Trash2 } from "lucide-react";
 import { useMode } from "../context/ModeContext.jsx";
-import { MOCK_SESSION_DATA } from "../data/mockSessions.js";
-import { MOCK_ITEM_DATA } from "../data/mockItems.js";
-import { mockQuests as MOCK_QUEST_DATA } from "../data/mockQuests.js";
+import { sessionsRepo } from "../data/sessions/sessions.repo";
+import { itemsRepo } from "../data/items/items.repo";
 import SessionEntityLinkManager from "../components/session/SessionEntityLinkManager.jsx";
-import { MOCK_NPC_DATA } from "../data/mockNpcs.js";
 export default function SessionProfile() {
   const { id } = useParams();
   const navigate = useNavigate();
   const { isGM } = useMode();
 
-  const session = MOCK_SESSION_DATA[id];
+  const [allSessions, setAllSessions] = useState(() => sessionsRepo.getAll());
+
+  useEffect(() => {
+    setAllSessions(sessionsRepo.getAll());
+  }, [id]);
+  const session = useMemo(
+    () => allSessions.find((s) => String(s.id) === String(id)),
+    [allSessions, id]
+  );
+
+  const normalizedSession = useMemo(() => {
+    if (!session) return null;
+    const summary = session.summary ?? "";
+    return {
+      ...session,
+      summary,
+      timeline: session.timeline ?? "",
+      moments: session.moments ?? "",
+      quotes: session.quotes ?? "",
+      gmNotes: session.gmNotes ?? "",
+      gmSecrets: session.gmSecrets ?? "",
+      gmPrep: Array.isArray(session.gmPrep) ? session.gmPrep : [],
+    };
+  }, [session]);
 
   const [editMode, setEditMode] = useState(false);
-  const [editableSession, setEditableSession] = useState({ ...session });
+  const [editableSession, setEditableSession] = useState(() =>
+    normalizedSession ? { ...normalizedSession } : null
+  );
 
-  const [gmPrepText, setGmPrepText] = useState(
-    (session && session.gmPrep) ? session.gmPrep.join("\n") : ""
-  );
-  const [encounterStageText, setEncounterStageText] = useState(
-    "Placeholder for tracking the current encounter phase: which stat blocks are in play, objectives, map used, and what triggered this scene."
-  );
-  const [conditionTrackersText, setConditionTrackersText] = useState(
-    "Here you'll track things like Kriaxin's corruption, Roman's stress, Akumu's contract pressure, etc. For now this is a free-text placeholder until we wire real data."
-  );
-  const [futureHooksText, setFutureHooksText] = useState(
-    "Space for timers, foreshadowing notes, missed clues, and spoiler timelines tied to this session."
-  );
-  const [multiSessionText, setMultiSessionText] = useState(
-    "Placeholder for tracking how long arcs (Kiyomi, Ciara, Nexus corruption, etc.) advance with this session — later this can become progress bars per arc."
-  );
-  const [milestoneBibleText, setMilestoneBibleText] = useState(
-    "Slot for linking this session to your Milestone level / power progression notes. For now this is just a GM-only reminder panel."
-  );
-  const [dmToolsText, setDmToolsText] = useState(
-    "Future home for combat prep helpers, an initiative tracker, and quick dice tools specific to this session."
-  );
+  useEffect(() => {
+    if (normalizedSession) setEditableSession({ ...normalizedSession });
+  }, [normalizedSession]);
+
+  const normalizedEditable = useMemo(() => {
+    if (!editableSession) return null;
+    const summary = editableSession.summary ?? "";
+    return {
+      ...editableSession,
+      summary,
+      timeline: editableSession.timeline ?? "",
+      moments: editableSession.moments ?? "",
+      quotes: editableSession.quotes ?? "",
+      gmNotes: editableSession.gmNotes ?? "",
+      gmSecrets: editableSession.gmSecrets ?? "",
+      gmPrep: Array.isArray(editableSession.gmPrep) ? editableSession.gmPrep : [],
+    };
+  }, [editableSession]);
+
+  const [gmPrepText, setGmPrepText] = useState("");
+  useEffect(() => {
+    if (!normalizedSession) return;
+    setGmPrepText(normalizedSession.gmPrep.join("\n"));
+  }, [normalizedSession]);
 
   // No such session at all
-  if (!session) {
+  if (!normalizedSession) {
     return (
       <main className="flex-1 p-8 overflow-auto text-white">
         <h1 className="text-3xl font-bold">Session Not Found</h1>
         <p className="text-zinc-400 mt-2">
-          There is no session with this ID in the mock data.
+          There is no session with this ID.
         </p>
         <button
           onClick={() => navigate("/sessions")}
@@ -59,7 +84,7 @@ export default function SessionProfile() {
   }
 
   // GM restriction guard: prevent players from viewing GM-only sessions
-  if (session.visibility === "gm-only" && !isGM) {
+  if (normalizedSession?.visibility === "gm-only" && !isGM) {
     return (
       <main className="flex-1 p-8 overflow-auto">
         <button
@@ -85,15 +110,14 @@ export default function SessionProfile() {
     );
   }
 
-  const viewSession = editMode ? editableSession : session;
-  const isGmOnlyCurrent = viewSession.visibility === "gm-only";
-  const visibilityMode = isGM ? "GM" : "Player";
+  const viewSession = editMode ? (normalizedEditable ?? normalizedSession) : normalizedSession;
+  const isGmOnlyCurrent = viewSession?.visibility === "gm-only";
 
   const handleFieldChange = (field, value) => {
-    setEditableSession((prev) => ({
-      ...prev,
-      [field]: value,
-    }));
+    setEditableSession((prev) => {
+      const base = prev ?? (normalizedSession ? { ...normalizedSession } : {});
+      return { ...base, [field]: value };
+    });
   };
 
   const handleVisibilityChange = (visibility) => {
@@ -118,7 +142,7 @@ export default function SessionProfile() {
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
           <div>
             <h1 className="text-3xl font-bold text-white flex items-center gap-2">
-              {viewSession.name}
+              {viewSession?.name || "Untitled session"}
               {isGmOnlyCurrent && (
                 <span className="px-2 py-1 text-[10px] rounded-full bg-red-500/20 text-red-300 border border-red-500/40">
                   GM ONLY
@@ -126,7 +150,7 @@ export default function SessionProfile() {
               )}
             </h1>
             <p className="text-zinc-400 text-sm">
-              {viewSession.map}
+              {viewSession?.map || ""}
               {viewSession.sessionNumber && (
                 <> • Session #{viewSession.sessionNumber}</>
               )}
@@ -142,8 +166,8 @@ export default function SessionProfile() {
                   disabled={!editMode}
                   onClick={() => handleVisibilityChange("public")}
                   className={`px-3 py-1 rounded-full text-xs font-medium transition ${viewSession.visibility === "public"
-                      ? "bg-emerald-500 text-white"
-                      : "text-zinc-300 hover:text-white hover:bg-white/10 disabled:opacity-40 disabled:hover:bg-transparent disabled:hover:text-zinc-400"
+                    ? "bg-emerald-500 text-white"
+                    : "text-zinc-300 hover:text-white hover:bg-white/10 disabled:opacity-40 disabled:hover:bg-transparent disabled:hover:text-zinc-400"
                     }`}
                 >
                   Player-visible
@@ -153,8 +177,8 @@ export default function SessionProfile() {
                   disabled={!editMode}
                   onClick={() => handleVisibilityChange("gm-only")}
                   className={`px-3 py-1 rounded-full text-xs font-medium transition ${viewSession.visibility === "gm-only"
-                      ? "bg-red-500 text-white"
-                      : "text-zinc-300 hover:text-white hover:bg-white/10 disabled:opacity-40 disabled:hover:bg-transparent disabled:hover:text-zinc-400"
+                    ? "bg-red-500 text-white"
+                    : "text-zinc-300 hover:text-white hover:bg-white/10 disabled:opacity-40 disabled:hover:bg-transparent disabled:hover:text-zinc-400"
                     }`}
                 >
                   GM-only
@@ -163,15 +187,46 @@ export default function SessionProfile() {
               <button
                 type="button"
                 onClick={() => {
-                  if (editMode) {
-                    Object.assign(session, editableSession);
+                  if (editMode && normalizedEditable) {
+                    const gmPrep = gmPrepText
+                      .split("\n")
+                      .map((l) => l.trim())
+                      .filter(Boolean);
+
+                    const toSave = {
+                      ...normalizedEditable,
+                      summary: normalizedEditable.summary,
+                      timeline: normalizedEditable.timeline ?? "",
+                      moments: normalizedEditable.moments ?? "",
+                      quotes: normalizedEditable.quotes ?? "",
+                      gmPrep,
+                    };
+
+                    sessionsRepo.upsert(toSave);
+                    setAllSessions(sessionsRepo.getAll());
                   }
+
                   setEditMode((prev) => !prev);
                 }}
                 className="px-3 py-1.5 rounded-xl bg-white/5 border border-white/10 text-xs text-zinc-300 hover:bg-white/10 transition"
               >
                 {editMode ? "Done" : "Edit"}
               </button>
+              <button
+  type="button"
+  onClick={() => {
+    const ok = window.confirm("Delete this session? This cannot be undone.");
+    if (!ok) return;
+
+    sessionsRepo.remove(String(id));
+    navigate("/sessions");
+  }}
+  className="px-3 py-1.5 rounded-xl bg-red-500/15 border border-red-500/40 text-xs text-red-200 hover:bg-red-500/25 transition flex items-center gap-2"
+  title="Delete session"
+>
+  <Trash2 className="w-4 h-4" />
+  Delete
+</button>
             </div>
           )}
         </div>
@@ -187,11 +242,11 @@ export default function SessionProfile() {
                 <textarea
                   className="w-full bg-transparent border border-white/15 rounded-xl px-3 py-2 text-sm text-zinc-100 focus:outline-none focus:border-purple-500/60"
                   rows={4}
-                  value={editableSession.summary}
+                  value={editableSession?.summary ?? ""}
                   onChange={(e) => handleFieldChange("summary", e.target.value)}
                 />
               ) : (
-                <p className="text-zinc-300 text-sm whitespace-pre-line">{viewSession.summary}</p>
+                <p className="text-zinc-300 text-sm whitespace-pre-line">{viewSession?.summary || ""}</p>
               )}
             </div>
 
@@ -225,27 +280,28 @@ export default function SessionProfile() {
                       </div>
                     ) : (
                       <p className="text-white font-semibold text-lg">
-                        {viewSession.players} / {viewSession.maxPlayers}
+                        {Number(viewSession?.players) || 0} / {Number(viewSession?.maxPlayers) || 0}
                       </p>
                     )}
                   </div>
                 </div>
-                <p className="text-zinc-500 text-xs">(Detailed PC list & roles coming later)</p>
               </div>
             </div>
 
             {/* Items discovered, Notable NPCs, timeline, Moments, Quotes, NPC relationships */}
+            {/* Items discovered (player-visible) */}
             {/* Items (player-visible) */}
             <SessionEntityLinkManager
-              sessionId={id}
+              sessionId={String(id)}
               entityType="Item"
               label="introduced"
               sectionTitle="Items discovered"
               isGM={isGM}
               editMode={editMode}
-              visibilityMode={visibilityMode}
-              dataSource={MOCK_ITEM_DATA}
-              getEntityLabel={(item) => item.name}
+              visibilityMode={isGM ? "GM" : "Player"}
+              dataSource={itemsRepo.getAll()}
+              getEntityLabel={(item) => item?.name}
+              onAddNew={() => navigate("/items")}
               renderCard={(item, link, helpers) => {
                 const { isGM, editMode, navigate, handleRemove } = helpers;
 
@@ -269,13 +325,9 @@ export default function SessionProfile() {
                       onClick={() => navigate(`/items/${item.id}`)}
                       className="cursor-pointer"
                     >
-                      <p className="text-white font-semibold text-sm">
-                        {item.name}
-                      </p>
-                      {item.rarity && (
-                        <p className="text-zinc-400 text-xs mt-1">
-                          {item.rarity}
-                        </p>
+                      <p className="text-white font-semibold text-sm">{item?.name || "Untitled item"}</p>
+                      {item?.rarity && (
+                        <p className="text-zinc-400 text-xs mt-1">{item.rarity}</p>
                       )}
                     </div>
 
@@ -283,142 +335,11 @@ export default function SessionProfile() {
                       {isGM && (
                         <span
                           className={`text-[10px] px-2 py-0.5 rounded-full ${link.visibility === "GM"
-                              ? "bg-red-500/20 text-red-300 border border-red-500/40"
-                              : "bg-emerald-500/20 text-emerald-300 border border-emerald-500/40"
+                            ? "bg-red-500/20 text-red-300 border border-red-500/40"
+                            : "bg-emerald-500/20 text-emerald-300 border border-emerald-500/40"
                             }`}
                         >
                           {link.visibility}
-                        </span>
-                      )}
-                    </div>
-                  </div>
-                );
-              }}
-            />
-
-            {/* Notable NPCs (player-visible) */}
-            <SessionEntityLinkManager
-              sessionId={id}
-              entityType="NPC"
-              label="present"
-              sectionTitle="Notable NPCs"
-              isGM={isGM}
-              editMode={editMode}
-              visibilityMode={visibilityMode}
-              dataSource={MOCK_NPC_DATA}
-              renderCard={(npc, link, helpers) => {
-                const { isGM, editMode, navigate, handleRemove } = helpers;
-
-                return (
-                  <div
-                    key={link.id}
-                    className="relative group bg-white/5 hover:bg-white/10 border border-white/10 rounded-xl p-4 transition flex flex-col justify-between"
-                  >
-                    {isGM && editMode && (
-                      <button
-                        type="button"
-                        onClick={() => handleRemove(link.id)}
-                        className="absolute top-2 right-2 text-[10px] text-red-400 hover:text-red-200 opacity-0 group-hover:opacity-100 transition-opacity"
-                      >
-                        Remove
-                      </button>
-                    )}
-
-                    <div
-                      role="button"
-                      onClick={() => navigate(`/npcs/${npc.id}`)}
-                      className="cursor-pointer"
-                    >
-                      <p className="text-white font-semibold text-sm">
-                        {npc.name}
-                      </p>
-                      {npc.location && (
-                        <p className="text-zinc-400 text-xs mt-1">
-                          {npc.location}
-                        </p>
-                      )}
-                    </div>
-
-                    <div className="flex items-center justify-end mt-3">
-                      {isGM && (
-                        <span
-                          className={`text-[10px] px-2 py-0.5 rounded-full ${link.visibility === "GM"
-                              ? "bg-red-500/20 text-red-300 border border-red-500/40"
-                              : "bg-emerald-500/20 text-emerald-300 border border-emerald-500/40"
-                            }`}
-                        >
-                          {link.visibility}
-                        </span>
-                      )}
-                    </div>
-                  </div>
-                );
-              }}
-            />
-            <SessionEntityLinkManager
-              sessionId={id}
-              entityType="Quest"
-              allowedLabels={["started", "advanced", "completed", "failed"]}
-              defaultLabel="started"
-              sectionTitle="Related Quests"
-              isGM={isGM}
-              editMode={editMode}
-              visibilityMode={visibilityMode}
-              dataSource={MOCK_QUEST_DATA}
-              getEntityLabel={(quest) => quest.name}
-              renderCard={(quest, link, helpers) => {
-                const {
-                  isGM,
-                  editMode,
-                  navigate,
-                  handleRemove,
-                  handleUpdateLabel,
-                  allowedLabels,
-                } = helpers;
-
-                return (
-                  <div
-                    key={link.id}
-                    className="relative group bg-white/5 hover:bg-white/10 border border-white/10 rounded-xl p-4 transition flex flex-col justify-between"
-                  >
-                    {isGM && editMode && (
-                      <button
-                        type="button"
-                        onClick={() => handleRemove(link.id)}
-                        className="absolute top-2 right-2 text-[10px] text-red-400 hover:text-red-200 opacity-0 group-hover:opacity-100 transition-opacity"
-                      >
-                        Remove
-                      </button>
-                    )}
-
-                    <div
-                      role="button"
-                      onClick={() => navigate(`/quests/${quest.id}`)}
-                      className="cursor-pointer"
-                    >
-                      <p className="text-white font-semibold text-sm">
-                        {quest.name}
-                      </p>
-                    </div>
-
-                    <div className="flex items-center justify-end mt-3">
-                      {isGM && editMode && allowedLabels ? (
-                        <select
-                          value={link.label}
-                          onChange={(e) =>
-                            handleUpdateLabel(link, e.target.value)
-                          }
-                          className="text-[10px] bg-white/10 border border-white/20 rounded px-2 py-1 text-zinc-200"
-                        >
-                          {allowedLabels.map((l) => (
-                            <option key={l} value={l}>
-                              {l}
-                            </option>
-                          ))}
-                        </select>
-                      ) : (
-                        <span className="text-[10px] px-2 py-0.5 rounded-full bg-white/10 text-zinc-300">
-                          {link.label}
                         </span>
                       )}
                     </div>
@@ -428,50 +349,67 @@ export default function SessionProfile() {
             />
 
             {/* Session timeline */}
-            <div className="bg-white/5 rounded-xl border border-white/10 p-5">
-              <h2 className="text-lg font-semibold text-white mb-2">
-                Session timeline
-              </h2>
-              <p className="text-zinc-400 text-sm">
-                Placeholder for a chronological list of key beats in this
-                session (&quot;Arrived at Volcanic Caverns&quot; → &quot;Negotiated
-                with the dragon&quot; → &quot;Lair collapse escape&quot;).
-              </p>
-            </div>
+            {(editMode || (viewSession?.timeline && viewSession.timeline.trim().length > 0)) && (
+              <div className="bg-white/5 rounded-xl border border-white/10 p-5">
+                <h2 className="text-lg font-semibold text-white mb-2">Session timeline</h2>
+
+                {isGM && editMode ? (
+                  <textarea
+                    className="w-full bg-transparent border border-white/15 rounded-xl px-3 py-2 text-sm text-zinc-100 focus:outline-none focus:border-purple-500/60"
+                    rows={4}
+                    value={editableSession?.timeline ?? ""}
+                    onChange={(e) => handleFieldChange("timeline", e.target.value)}
+                    placeholder="Key beats in order…"
+                  />
+                ) : (
+                  <p className="text-zinc-300 text-sm whitespace-pre-line">
+                    {viewSession?.timeline || ""}
+                  </p>
+                )}
+              </div>
+            )}
 
             {/* Moments */}
-            <div className="bg-white/5 rounded-xl border border-white/10 p-5">
-              <h2 className="text-lg font-semibold text-white mb-2">
-                Moments
-              </h2>
-              <p className="text-zinc-400 text-sm">
-                Highlight reel placeholder for the most cinematic or
-                emotionally heavy moments of the session.
-              </p>
-            </div>
+            {(editMode || (viewSession?.moments && viewSession.moments.trim().length > 0)) && (
+              <div className="bg-white/5 rounded-xl border border-white/10 p-5">
+                <h2 className="text-lg font-semibold text-white mb-2">Moments</h2>
+
+                {isGM && editMode ? (
+                  <textarea
+                    className="w-full bg-transparent border border-white/15 rounded-xl px-3 py-2 text-sm text-zinc-100 focus:outline-none focus:border-purple-500/60"
+                    rows={3}
+                    value={editableSession?.moments ?? ""}
+                    onChange={(e) => handleFieldChange("moments", e.target.value)}
+                    placeholder="Cinematic highlights, emotional gut-punches…"
+                  />
+                ) : (
+                  <p className="text-zinc-300 text-sm whitespace-pre-line">
+                    {viewSession?.moments || ""}
+                  </p>
+                )}
+              </div>
+            )}
 
             {/* Quotes of the day */}
-            <div className="bg-white/5 rounded-xl border border-white/10 p-5">
-              <h2 className="text-lg font-semibold text-white mb-2">
-                Quotes of the day
-              </h2>
-              <p className="text-zinc-400 text-sm">
-                Space for Fizzy one-liners, Akumu drama, and other iconic
-                quotes. Eventually this can be a small list per session.
-              </p>
-            </div>
+            {(editMode || (viewSession?.quotes && viewSession.quotes.trim().length > 0)) && (
+              <div className="bg-white/5 rounded-xl border border-white/10 p-5">
+                <h2 className="text-lg font-semibold text-white mb-2">Quotes of the day</h2>
 
-            {/* NPC relationship tracker */}
-            <div className="bg-white/5 rounded-xl border border-white/10 p-5">
-              <h2 className="text-lg font-semibold text-white mb-2">
-                NPC relationships
-              </h2>
-              <p className="text-zinc-400 text-sm">
-                Placeholder for a relationship tracker summarising how this
-                session changed the party&apos;s ties to key NPCs. Later this
-                will sync with NPC profiles.
-              </p>
-            </div>
+                {isGM && editMode ? (
+                  <textarea
+                    className="w-full bg-transparent border border-white/15 rounded-xl px-3 py-2 text-sm text-zinc-100 focus:outline-none focus:border-purple-500/60"
+                    rows={3}
+                    value={editableSession?.quotes ?? ""}
+                    onChange={(e) => handleFieldChange("quotes", e.target.value)}
+                    placeholder="Best one-liners, table memes…"
+                  />
+                ) : (
+                  <p className="text-zinc-300 text-sm whitespace-pre-line">
+                    {viewSession?.quotes || ""}
+                  </p>
+                )}
+              </div>
+            )}
           </div>
 
           {/* RIGHT: GM-only zone */}
@@ -537,115 +475,6 @@ export default function SessionProfile() {
                   )
                 )}
               </div>
-
-              {/* Encounter stage */}
-              <div className="bg-white/5 rounded-xl border border-purple-500/40 p-5">
-                <h2 className="text-lg font-semibold text-purple-200 mb-2">
-                  Encounter stage
-                </h2>
-                {isGM && editMode ? (
-                  <textarea
-                    className="w-full bg-transparent border border-purple-500/25 rounded-xl px-3 py-2 text-sm text-zinc-100 focus:outline-none focus:border-purple-400/80"
-                    rows={3}
-                    value={encounterStageText}
-                    onChange={(e) => setEncounterStageText(e.target.value)}
-                  />
-                ) : (
-                  <p className="text-zinc-400 text-sm">{encounterStageText}</p>
-                )}
-              </div>
-
-              {/* Condition trackers (GM-only placeholder) */}
-              <div className="bg-white/5 rounded-xl border border-purple-500/40 p-5">
-                <h2 className="text-lg font-semibold text-purple-200 mb-2">
-                  Condition trackers
-                </h2>
-                {isGM && editMode ? (
-                  <textarea
-                    className="w-full bg-transparent border border-purple-500/25 rounded-xl px-3 py-2 text-sm text-zinc-100 focus:outline-none focus:border-purple-400/80"
-                    rows={3}
-                    value={conditionTrackersText}
-                    onChange={(e) => setConditionTrackersText(e.target.value)}
-                  />
-                ) : (
-                  <p className="text-zinc-400 text-sm">{conditionTrackersText}</p>
-                )}
-              </div>
-
-              {/* Future hooks / timers / foreshadowing */}
-              <div className="bg-white/5 rounded-xl border border-purple-500/40 p-5">
-                <h2 className="text-lg font-semibold text-purple-200 mb-2">
-                  Future hooks & timelines
-                </h2>
-                {isGM && editMode ? (
-                  <textarea
-                    className="w-full bg-transparent border border-purple-500/25 rounded-xl px-3 py-2 text-sm text-zinc-100 focus:outline-none focus:border-purple-400/80"
-                    rows={3}
-                    value={futureHooksText}
-                    onChange={(e) => setFutureHooksText(e.target.value)}
-                  />
-                ) : (
-                  <>
-                    <p className="text-zinc-400 text-sm mb-2">
-                      {futureHooksText}
-                    </p>
-                    <p className="text-zinc-500 text-xs">
-                      (Currently using gmPrep as a rough placeholder seed.)
-                    </p>
-                  </>
-                )}
-              </div>
-
-              {/* Multi-session arcs */}
-              <div className="bg-white/5 rounded-xl border border-purple-500/40 p-5">
-                <h2 className="text-lg font-semibold text-purple-200 mb-2">
-                  Multi-session arcs & progress
-                </h2>
-                {isGM && editMode ? (
-                  <textarea
-                    className="w-full bg-transparent border border-purple-500/25 rounded-xl px-3 py-2 text-sm text-zinc-100 focus:outline-none focus:border-purple-400/80"
-                    rows={3}
-                    value={multiSessionText}
-                    onChange={(e) => setMultiSessionText(e.target.value)}
-                  />
-                ) : (
-                  <p className="text-zinc-400 text-sm">{multiSessionText}</p>
-                )}
-              </div>
-
-              {/* Milestone Power Bible integration */}
-              <div className="bg-white/5 rounded-xl border border-purple-500/40 p-5">
-                <h2 className="text-lg font-semibold text-purple-200 mb-2">
-                  Milestone Power Bible
-                </h2>
-                {isGM && editMode ? (
-                  <textarea
-                    className="w-full bg-transparent border border-purple-500/25 rounded-xl px-3 py-2 text-sm text-zinc-100 focus:outline-none focus:border-purple-400/80"
-                    rows={3}
-                    value={milestoneBibleText}
-                    onChange={(e) => setMilestoneBibleText(e.target.value)}
-                  />
-                ) : (
-                  <p className="text-zinc-400 text-sm">{milestoneBibleText}</p>
-                )}
-              </div>
-
-              {/* DM tools */}
-              <div className="bg-white/5 rounded-xl border border-purple-500/40 p-5">
-                <h2 className="text-lg font-semibold text-purple-200 mb-2">
-                  DM tools
-                </h2>
-                {isGM && editMode ? (
-                  <textarea
-                    className="w-full bg-transparent border border-purple-500/25 rounded-xl px-3 py-2 text-sm text-zinc-100 focus:outline-none focus:border-purple-400/80"
-                    rows={3}
-                    value={dmToolsText}
-                    onChange={(e) => setDmToolsText(e.target.value)}
-                  />
-                ) : (
-                  <p className="text-zinc-400 text-sm">{dmToolsText}</p>
-                )}
-              </div>
             </div>
           )}
         </div>
@@ -654,16 +483,16 @@ export default function SessionProfile() {
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm text-zinc-400 pt-2">
           <div className="flex items-center gap-3">
             <Users className="w-4 h-4 text-zinc-500" />
-            <span>{viewSession.players} active players in this session.</span>
+            <span>{Number(viewSession?.players) || 0} active players in this session.</span>
           </div>
           <div className="flex items-center gap-3">
             <Map className="w-4 h-4 text-zinc-500" />
-            <span>Map: {viewSession.map}</span>
+            <span>Map: {viewSession?.map || ""}</span>
           </div>
           <div className="flex items-center gap-3">
             <Clock className="w-4 h-4 text-zinc-500" />
             <span>
-              Status: {viewSession.status} • Duration: {viewSession.duration} •
+              Status: {viewSession?.status || "—"} • Duration: {viewSession?.duration || "—"} •
               Visibility: {isGmOnlyCurrent ? "GM-only" : "Player-visible"}
             </span>
           </div>
