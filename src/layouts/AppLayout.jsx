@@ -6,14 +6,11 @@ import GradientBackground from "../components/GradientBackground";
 
 export default function AppLayout() {
   return (
-    <div className="min-h-screen flex bg-black text-white">
+    <div className="min-h-screen flex text-white relative">
       <Sidebar />
 
       <div className="flex-1 relative overflow-hidden">
-        {/* MUST be behind + non-clickable */}
-        <div className="absolute inset-0 -z-10 pointer-events-none">
-          <GradientBackground />
-        </div>
+        <GradientBackground />
 
         <TopBar />
 

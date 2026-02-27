@@ -283,7 +283,6 @@ export default function SessionProfile() {
                     )}
                   </div>
                 </div>
-                <p className="text-zinc-500 text-xs">(Detailed PC list & roles coming later)</p>
               </div>
             </div>
 
@@ -346,18 +345,6 @@ export default function SessionProfile() {
                 );
               }}
             />
-
-            {/* Notable NPCs (player-visible) */}
-            <div className="bg-white/5 rounded-xl border border-white/10 p-5">
-              <h2 className="text-lg font-semibold text-white mb-2">
-                Notable NPCs
-              </h2>
-              <p className="text-zinc-400 text-sm">
-                Placeholder for a future NPC table: who appeared, what they
-                did this session, and the current relationship vibe with the
-                party.
-              </p>
-            </div>
 
             {/* Session timeline */}
             {(editMode || (viewSession?.timeline && viewSession.timeline.trim().length > 0)) && (

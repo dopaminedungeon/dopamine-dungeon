@@ -119,6 +119,10 @@ export default function TopBar({ title }) {
               </div>
             )}
           </div>
+          <span className="hidden sm:block text-[10px] tracking-wide text-zinc-500">
+  Dopamine Dungeon v0.1
+</span>
+
           {/* Workspace + Campaign selectors */}
           <div className="hidden md:flex items-center gap-3">
             {/* Workspace selector */}
