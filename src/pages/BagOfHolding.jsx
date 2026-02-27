@@ -290,9 +290,9 @@ setBagState(next);
   }
 
   return (
-    <main className="flex-1 p-8 overflow-auto">
+    <main className="flex-1 overflow-auto">
       {/* Subsection nav */}
-      <div className="mb-4 flex items-center gap-2">
+      <div className="mb-4 flex flex-wrap items-center gap-2">
         {hasPcs ? (
           <NavLink
             to="/pcs"
@@ -321,23 +321,23 @@ setBagState(next);
         </NavLink>
       </div>
       {/* Header */}
-      <div className="flex flex-col lg:flex-row gap-4 mb-6">
+      <div className="flex flex-col lg:flex-row gap-3 sm:gap-4 mb-5 sm:mb-6">
         <div className="relative flex-1">
           <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-zinc-500" />
           <input
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             placeholder="Search party inventory..."
-            className="w-full pl-12 pr-4 py-3 bg-white/5 border border-white/10 rounded-xl text-white placeholder-zinc-500 focus:outline-none focus:border-blue-500/50 focus:ring-2 focus:ring-blue-500/20 transition-all"
+            className="w-full pl-11 pr-3 py-2.5 sm:pl-12 sm:pr-4 sm:py-3 bg-white/5 border border-white/10 rounded-xl text-white placeholder-zinc-500 focus:outline-none focus:border-blue-500/50 focus:ring-2 focus:ring-blue-500/20 transition-all"
           />
         </div>
 
-        <div className="flex gap-2 flex-wrap">
+        <div className="flex gap-2 overflow-x-auto whitespace-nowrap pr-1 [-webkit-overflow-scrolling:touch]">
           {bagTypes.map((t) => (
             <button
               key={t}
               onClick={() => setType(t)}
-              className={`px-4 py-3 rounded-xl font-medium transition-all ${type === t
+              className={`shrink-0 px-3 py-2.5 sm:px-4 sm:py-3 rounded-xl font-medium transition-all ${type === t
                 ? "bg-blue-500 text-white"
                 : "bg-white/5 text-zinc-400 hover:bg-white/10 hover:text-white"
                 }`}
@@ -348,16 +348,16 @@ setBagState(next);
         </div>
 
         {canAdd && (
-          <div className="flex gap-2">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 w-full lg:w-auto">
             <button
-              className="flex items-center gap-2 px-6 py-3 bg-linear-to-r from-indigo-500 to-purple-500 text-white font-medium rounded-xl hover:opacity-90 transition-opacity"
+              className="w-full flex items-center justify-center gap-2 px-4 py-2.5 sm:px-6 sm:py-3 bg-linear-to-r from-indigo-500 to-purple-500 text-white font-medium rounded-xl hover:opacity-90 transition-opacity"
               onClick={() => setShowModal(true)}
             >
               <Plus className="w-5 h-5" />
               Add loose item
             </button>
             <button
-              className="flex items-center gap-2 px-6 py-3 bg-white/5 border border-white/10 text-zinc-200 font-medium rounded-xl hover:bg-white/10 transition-colors"
+              className="w-full flex items-center justify-center gap-2 px-4 py-2.5 sm:px-6 sm:py-3 bg-white/5 border border-white/10 text-zinc-200 font-medium rounded-xl hover:bg-white/10 transition-colors"
               onClick={() => setShowLinkModal(true)}
             >
               + Link existing item
@@ -369,7 +369,7 @@ setBagState(next);
       {/* Treasury + Party Totals */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 mb-6">
         {/* Treasury */}
-        <div className="lg:col-span-2 bg-white/5 border border-white/10 rounded-2xl p-5">
+        <div className="lg:col-span-2 bg-white/5 border border-white/10 rounded-xl sm:rounded-2xl p-4 sm:p-5">
           <div className="flex items-start justify-between gap-4 mb-4">
             <div>
               <div className="text-sm font-semibold text-white">Treasury</div>
@@ -476,7 +476,7 @@ setBagState(next);
         </div>
 
         {/* Party Totals */}
-        <div className="bg-white/5 border border-white/10 rounded-2xl p-5 text-sm text-zinc-300">
+        <div className="bg-white/5 border border-white/10 rounded-xl sm:rounded-2xl p-4 sm:p-5 text-sm text-zinc-300">
           <div className="text-sm font-semibold text-white mb-3">Party Totals</div>
 
           <div className="grid grid-cols-2 gap-3">
@@ -499,7 +499,7 @@ setBagState(next);
       </div>
 
       {/* Storage */}
-      <div className="bg-white/5 border border-white/10 rounded-2xl p-5">
+      <div className="bg-white/5 border border-white/10 rounded-xl sm:rounded-2xl p-4 sm:p-5">
         <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3 mb-4">
           <div>
             <div className="text-sm font-semibold text-white">Storage</div>
@@ -529,16 +529,16 @@ setBagState(next);
               Add a loose item or link an existing item to start tracking party inventory.
             </div>
             {canAdd ? (
-              <div className="mt-4 flex items-center justify-center gap-2">
+              <div className="mt-4 grid grid-cols-1 sm:grid-cols-2 gap-2 w-full sm:max-w-xl mx-auto">
                 <button
-                  className="flex items-center gap-2 px-5 py-2.5 bg-linear-to-r from-indigo-500 to-purple-500 text-white font-medium rounded-xl hover:opacity-90 transition-opacity"
+                  className="w-full flex items-center justify-center gap-2 px-5 py-2.5 bg-linear-to-r from-indigo-500 to-purple-500 text-white font-medium rounded-xl hover:opacity-90 transition-opacity"
                   onClick={() => setShowModal(true)}
                 >
                   <Plus className="w-5 h-5" />
                   Add loose item
                 </button>
                 <button
-                  className="flex items-center gap-2 px-5 py-2.5 bg-white/5 border border-white/10 text-zinc-200 font-medium rounded-xl hover:bg-white/10 transition-colors"
+                  className="w-full flex items-center justify-center gap-2 px-5 py-2.5 bg-white/5 border border-white/10 text-zinc-200 font-medium rounded-xl hover:bg-white/10 transition-colors"
                   onClick={() => setShowLinkModal(true)}
                 >
                   + Link existing item
@@ -642,9 +642,9 @@ setBagState(next);
 
       {/* Modal */}
       {showModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm">
-          <div className="w-full max-w-lg bg-zinc-950 border border-white/10 rounded-2xl p-6">
-            <h2 className="text-xl font-bold text-white mb-4">Add to Bag of Holding</h2>
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4 overflow-auto">
+          <div className="w-full max-w-[92vw] sm:max-w-lg bg-zinc-950 border border-white/10 rounded-xl sm:rounded-2xl p-4 sm:p-6">
+            <h2 className="text-lg sm:text-xl font-bold text-white mb-4">Add to Bag of Holding</h2>
 
             <form className="space-y-4" onSubmit={onSubmit}>
               <div>
@@ -657,7 +657,7 @@ setBagState(next);
                 />
               </div>
 
-              <div className="grid grid-cols-3 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4">
                 <div>
                   <label className="block text-sm text-zinc-400 mb-1">Qty</label>
                   <input
@@ -714,9 +714,9 @@ setBagState(next);
 
       {/* Link existing Item modal */}
       {showLinkModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm">
-          <div className="w-full max-w-lg bg-zinc-950 border border-white/10 rounded-2xl p-6">
-            <h2 className="text-xl font-bold text-white mb-2">Link existing Item</h2>
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4 overflow-auto">
+          <div className="w-full max-w-[92vw] sm:max-w-lg bg-zinc-950 border border-white/10 rounded-xl sm:rounded-2xl p-4 sm:p-6">
+            <h2 className="text-lg sm:text-xl font-bold text-white mb-2">Link existing Item</h2>
             <p className="text-sm text-zinc-400 mb-4">
               This creates a real cross-link (Bag ↔ Item). It will show up later in the Item profile too.
             </p>

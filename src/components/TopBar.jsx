@@ -6,6 +6,7 @@ import { useCampaign } from "../context/CampaignContext.jsx";
 import { useTenant } from "../context/TenantContext.jsx";
 import DebugPanel from "./DebugPanel";
 import { features } from "../config/features";
+import { useNavigate } from "react-router-dom";
 
 export default function TopBar({ title }) {
   const { mode, setMode } = useMode();
@@ -69,19 +70,26 @@ export default function TopBar({ title }) {
   const notificationsRef = useRef(null);
   const profileRef = useRef(null);
 
+  const navigate = useNavigate();
+
   return (
     <header className="sticky top-0 z-40 bg-black/20 backdrop-blur-xl border-b border-white/5">
-      <div className="flex items-center justify-between px-8 py-4">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between px-4 py-3 sm:px-6 sm:py-4 md:px-8">
         {/* Title */}
-        <div>
-          <h1 className="text-2xl font-bold text-white">{title}</h1>
-          <p className="text-zinc-500 text-sm">
+        <div className="min-w-0">
+          <div className="flex items-baseline justify-between gap-3">
+            <h1 className="text-xl sm:text-2xl font-bold text-white truncate">{title}</h1>
+            <span className="hidden sm:block text-[10px] tracking-wide text-zinc-500 shrink-0">
+              Dopamine Dungeon v0.1
+            </span>
+          </div>
+          <p className="text-zinc-500 text-xs sm:text-sm">
             Welcome back, {mode === "GM" ? "Dungeon Master" : "Player"}
           </p>
         </div>
 
         {/* Actions */}
-        <div className="flex items-center gap-4">
+        <div className="flex flex-wrap items-center justify-end gap-2 sm:gap-4">
           {/* Search */}
           <div className="relative hidden md:block">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-500" />
@@ -104,7 +112,7 @@ export default function TopBar({ title }) {
           {/* Notifications */}
           <div className="relative" ref={notificationsRef}>
             <button
-              className="relative p-2.5 bg-white/5 border border-white/10 rounded-xl text-zinc-400 hover:text-white hover:bg-white/10 transition-all"
+              className="relative p-2 bg-white/5 border border-white/10 rounded-xl text-zinc-400 hover:text-white hover:bg-white/10 transition-all"
               onClick={() => setShowNotifications((v) => !v)}
             >
               <Bell className="w-5 h-5" />
@@ -119,9 +127,6 @@ export default function TopBar({ title }) {
               </div>
             )}
           </div>
-          <span className="hidden sm:block text-[10px] tracking-wide text-zinc-500">
-  Dopamine Dungeon v0.1
-</span>
 
           {/* Workspace + Campaign selectors */}
           <div className="hidden md:flex items-center gap-3">
@@ -208,37 +213,37 @@ export default function TopBar({ title }) {
               </option>
             </select>
           </div>
-                {/* GM / Player toggle */}
-      <div className="flex items-center gap-2 mr-4">
-        <button
-          type="button"
-          onClick={() => setMode("Player")}
-          className={`px-3 py-1.5 text-xs rounded-lg border ${
-            mode === "Player"
-              ? "bg-white/10 border-indigo-500 text-indigo-300"
-              : "bg-transparent border-white/10 text-zinc-400 hover:text-white"
-          }`}
-        >
-          <Eye className="inline w-3 h-3 mr-1" />
-          Player
-        </button>
-        <button
-          type="button"
-          onClick={() => setMode("GM")}
-          className={`px-3 py-1.5 text-xs rounded-lg border ${
-            mode === "GM"
-              ? "bg-indigo-500/80 border-indigo-400 text-white"
-              : "bg-transparent border-white/10 text-zinc-400 hover:text-white"
-          }`}
-        >
-          <Shield className="inline w-3 h-3 mr-1" />
-          GM
-        </button>
-      </div>
+          {/* GM / Player toggle */}
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => setMode("Player")}
+              className={`px-2.5 py-2 sm:px-3 sm:py-1.5 text-xs rounded-lg border ${
+                mode === "Player"
+                  ? "bg-white/10 border-indigo-500 text-indigo-300"
+                  : "bg-transparent border-white/10 text-zinc-400 hover:text-white"
+              }`}
+            >
+              <Eye className="inline w-3 h-3 sm:mr-1" />
+              <span className="hidden sm:inline">Player</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => setMode("GM")}
+              className={`px-2.5 py-2 sm:px-3 sm:py-1.5 text-xs rounded-lg border ${
+                mode === "GM"
+                  ? "bg-indigo-500/80 border-indigo-400 text-white"
+                  : "bg-transparent border-white/10 text-zinc-400 hover:text-white"
+              }`}
+            >
+              <Shield className="inline w-3 h-3 sm:mr-1" />
+              <span className="hidden sm:inline">GM</span>
+            </button>
+          </div>
           {/* Profile */}
           <div className="relative" ref={profileRef}>
             <button
-              className="flex items-center gap-3 p-2 pr-4 bg-white/5 border border-white/10 rounded-xl hover:bg-white/10 transition-all"
+              className="flex items-center gap-3 p-2 sm:pr-4 bg-white/5 border border-white/10 rounded-xl hover:bg-white/10 transition-all"
               onClick={() => setShowProfileMenu((v) => !v)}
             >
               <div className="w-8 h-8 rounded-lg bg-linear-to-br from-purple-500 to-pink-500 flex items-center justify-center">
@@ -253,18 +258,14 @@ export default function TopBar({ title }) {
 
             {showProfileMenu && (
               <div className="absolute right-0 mt-2 w-48 bg-black/90 border border-white/10 rounded-xl shadow-xl py-1 text-sm">
-                <button className="w-full text-left px-3 py-2 text-zinc-300 hover:bg-white/5">
-                  Profile (coming soon)
-                </button>
-                <button className="w-full text-left px-3 py-2 text-zinc-300 hover:bg-white/5">
-                  Settings
-                </button>
-                <div className="border-t border-white/10 my-1" />
                 <button
-                  className="w-full text-left px-3 py-2 text-zinc-500 cursor-not-allowed"
-                  disabled
+                  className="w-full text-left px-3 py-2 text-zinc-300 hover:bg-white/5"
+                  onClick={() => {
+                    setShowProfileMenu(false);
+                    navigate("/campaigns/settings");
+                  }}
                 >
-                  Log out (when we add auth)
+                  Settings
                 </button>
               </div>
             )}
