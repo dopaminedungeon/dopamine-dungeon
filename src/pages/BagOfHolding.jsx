@@ -1,48 +1,20 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { useMode } from "../context/ModeContext.jsx";
+import { useCampaign } from "../context/CampaignContext";
 import { Search, Plus } from "lucide-react";
 import { NavLink, useNavigate } from "react-router-dom";
 import { createLink } from "../domain/links/link.service";
+import { addLink, getLinksForEntity, removeLink } from "../data/links/links.repo";
 import { itemsRepo } from "../data/items/items.repo";
 import { bagRepo } from "../data/bag/bag.repo";
 
-function getActiveTenantId() {
-  try {
-    return localStorage.getItem("dd_activeTenantId") || "default";
-  } catch {
-    return "default";
-  }
-}
-
-function getActiveCampaignId() {
-  const tenantId = getActiveTenantId();
-  try {
-    return (
-      localStorage.getItem(`dd_activeCampaignId:${tenantId}`) ||
-      localStorage.getItem("dd_activeCampaignId") ||
-      "default"
-    );
-  } catch {
-    return "default";
-  }
-}
-
-function bagStorageKey() {
-  const tenantId = getActiveTenantId();
-  const campaignId = getActiveCampaignId();
-  return `dd_bag_v1:${tenantId}:${campaignId}`;
-}
-
-function getBagEntityId() {
-  // Stable per-campaign bag entity.
-  return `bag:${getActiveCampaignId()}`;
-}
 
 // v0.1: Bag is two things:
 // 1) Linked Items (BagOfHolding ↔ Item links) -> enables cross-linking
 // 2) Loose Items (ad-hoc entries) -> quick party inventory tracking
 export default function BagOfHolding() {
   const { isGM } = useMode();
+  const { selectedCampaignId } = useCampaign();
   const navigate = useNavigate();
   const hasPcs = useMemo(() => {
     try {
@@ -84,9 +56,11 @@ export default function BagOfHolding() {
         return "";
     }
   };
-  const [bagState, setBagState] = useState(() => bagRepo.get());
-  const currency = bagState.currency;
-  const looseItems = bagState.looseItems;
+  const [bagState, setBagState] = useState({ currency: {}, looseItems: [] });
+  const [allItems, setAllItems] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const currency = bagState?.currency || {};
+  const looseItems = Array.isArray(bagState?.looseItems) ? bagState.looseItems : [];
   const [pendingCurrency, setPendingCurrency] = useState(() => ({ gp: "", sp: "", cp: "", ep: "", pp: "" }));
 
   const pendingDelta = useMemo(() => {
@@ -103,11 +77,11 @@ export default function BagOfHolding() {
     return Object.values(pendingDelta).some((v) => v !== 0);
   }, [pendingDelta]);
 
-  const applyPendingCurrency = (mode = "add") => {
+  const applyPendingCurrency = async (mode = "add") => {
     if (!hasPendingDelta) return;
 
-    const next = bagRepo.applyCurrencyDelta(pendingDelta, mode);
-    setBagState(next);
+    const next = bagRepo.applyCurrencyDelta(bagState, pendingDelta, mode);
+    await persistBag(next);
 
     // Clear the inputs
     setPendingCurrency({ gp: "", sp: "", cp: "", ep: "", pp: "" });
@@ -118,12 +92,39 @@ export default function BagOfHolding() {
   const [showLinkModal, setShowLinkModal] = useState(false);
   const [linkQuery, setLinkQuery] = useState("");
   const [rerenderTick, setRerenderTick] = useState(0);
-  const [allItems, setAllItems] = useState(() => itemsRepo.getAll());
 
   useEffect(() => {
-    // Refresh items list when opening the link modal or when links change
-    setAllItems(itemsRepo.getAll());
-  }, [showLinkModal, rerenderTick]);
+    if (!selectedCampaignId) {
+      setBagState({ currency: {}, looseItems: [] });
+      setAllItems([]);
+      setLoading(false);
+      return;
+    }
+
+    async function load() {
+      setLoading(true);
+      try {
+        const [bagData, itemData] = await Promise.all([
+          Promise.resolve(bagRepo.get(selectedCampaignId)),
+          Promise.resolve(itemsRepo.getAll(selectedCampaignId)),
+        ]);
+
+        setBagState({
+          currency: bagData?.currency || {},
+          looseItems: Array.isArray(bagData?.looseItems) ? bagData.looseItems : [],
+        });
+        setAllItems(Array.isArray(itemData) ? itemData : []);
+      } catch (error) {
+        console.error("[BagOfHolding] Failed to load bag data", error);
+        setBagState({ currency: {}, looseItems: [] });
+        setAllItems([]);
+      } finally {
+        setLoading(false);
+      }
+    }
+
+    load();
+  }, [selectedCampaignId, rerenderTick]);
 
   const itemsById = useMemo(() => {
     return new Map((Array.isArray(allItems) ? allItems : []).map((it) => [String(it.id), it]));
@@ -136,7 +137,7 @@ export default function BagOfHolding() {
     type: "Other",
   });
 
-  const bagId = getBagEntityId();
+  const bagId = selectedCampaignId ? `bag:${selectedCampaignId}` : "bag:none";
   const visibilityMode = isGM ? "GM" : "Player";
 
   // GM sees both GM-only + Player-visible links.
@@ -233,7 +234,24 @@ export default function BagOfHolding() {
 
   const canAdd = true; // requirement: players can add
 
-  const onSubmit = (e) => {
+  async function persistBag(next) {
+    setBagState(next);
+    if (!selectedCampaignId) return;
+    if (typeof bagRepo.save === "function") {
+      await Promise.resolve(bagRepo.save(selectedCampaignId, next));
+    }
+  }
+
+  async function refreshItems() {
+    if (!selectedCampaignId) {
+      setAllItems([]);
+      return;
+    }
+    const data = await Promise.resolve(itemsRepo.getAll(selectedCampaignId));
+    setAllItems(Array.isArray(data) ? data : []);
+  }
+
+  const onSubmit = async (e) => {
     e.preventDefault();
 
     const name = form.name.trim();
@@ -249,8 +267,8 @@ export default function BagOfHolding() {
       createdAt: Date.now(),
     };
 
-    const next = bagRepo.addLooseItem(newItem);
-setBagState(next);
+    const next = bagRepo.addLooseItem(bagState, newItem);
+    await persistBag(next);
     setShowModal(false);
     setForm({ name: "", qty: 1, worth: "", type: "Other" });
   };
@@ -272,7 +290,7 @@ setBagState(next);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [linkQuery, allItems, containedLinks]);
 
-  function addLinkedItem(itemId) {
+  async function addLinkedItem(itemId) {
     const linkObj = createLink({
       entityA: { type: "BagOfHolding", id: bagId },
       entityB: { type: "Item", id: String(itemId) },
@@ -280,12 +298,30 @@ setBagState(next);
       visibility: "Player",
     });
     addLink(linkObj);
+    await refreshItems();
     setRerenderTick((v) => v + 1);
   }
 
-  function removeLinkedItem(linkId) {
+  async function removeLinkedItem(linkId) {
     removeLink(linkId);
+    await refreshItems();
     setRerenderTick((v) => v + 1);
+  }
+
+  if (!selectedCampaignId) {
+    return (
+      <main className="flex-1 overflow-auto flex items-center justify-center">
+        <div className="text-zinc-400">Select a campaign to view the Bag of Holding.</div>
+      </main>
+    );
+  }
+
+  if (loading) {
+    return (
+      <main className="flex-1 overflow-auto flex items-center justify-center">
+        <div className="text-zinc-400">Loading Bag of Holding...</div>
+      </main>
+    );
   }
 
   return (
@@ -622,7 +658,10 @@ setBagState(next);
 
                   <button
                     className="text-[11px] text-red-300 hover:text-red-200 opacity-0 group-hover:opacity-100 transition-opacity"
-                    onClick={() => setBagState(bagRepo.removeLooseItem(it.id))}
+                    onClick={async () => {
+                      const next = bagRepo.removeLooseItem(bagState, it.id);
+                      await persistBag(next);
+                    }}
                     type="button"
                   >
                     Remove
