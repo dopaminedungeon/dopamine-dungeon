@@ -1,11 +1,6 @@
 import React, { useState } from "react";
 import { createPortal } from "react-dom";
 import { createLink } from "../domain/links/link.service";
-import {
-  addLink,
-  getLinksForEntity,
-  clearLinks,
-} from "../data/links/links.repo";
 import { groupLinksBySection } from "../domain/links/link.sections";
 
 export default function DebugPanel({ context, enabled = true }) {

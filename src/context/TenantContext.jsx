@@ -1,125 +1,125 @@
-import React, { createContext, useContext, useEffect, useMemo, useState } from "react";
-import { useAuth } from "./AuthContext.jsx";
+import { createContext, useContext, useEffect, useState } from "react";
+import { collection, query, where, getDocs, addDoc, doc, getDoc } from "firebase/firestore";
+import { db } from "../firebase/firebase";
+import { useAuth } from "./AuthContext";
 
 const TenantContext = createContext(null);
-
-const STORAGE_KEY = "dd_activeTenantId";
-
-// Mocked tenant memberships for local dev (2 tenants scenario)
-const MOCK_TENANTS = [
-  {
-    tenantId: "t-magdas-tables",
-    name: "Magda’s Tables",
-    tenantPermissionLevel: "WorkspaceAdmin",
-  },
-  {
-    tenantId: "t-chaos-inc",
-    name: "Chaos Inc.",
-    tenantPermissionLevel: "WorkspaceMember",
-  },
-];
-
-function readStoredTenantId() {
-  try {
-    return localStorage.getItem(STORAGE_KEY);
-  } catch {
-    return null;
-  }
-}
-
-function writeStoredTenantId(tenantId) {
-  try {
-    if (tenantId) localStorage.setItem(STORAGE_KEY, tenantId);
-    else localStorage.removeItem(STORAGE_KEY);
-  } catch {
-    // ignore
-  }
-}
+const TENANT_STORAGE_KEY = "dd_selectedTenantId";
 
 export function TenantProvider({ children }) {
-  const { authStatus, user } = useAuth();
-
-  const [tenantStatus, setTenantStatus] = useState("loading");
+  const { user } = useAuth();
   const [tenants, setTenants] = useState([]);
-  const [selectedTenantId, setSelectedTenantId] = useState(() => readStoredTenantId());
+  const [tenantStatus, setTenantStatus] = useState("loading");
+  const [selectedTenantId, setSelectedTenantId] = useState(() => {
+    try {
+      return localStorage.getItem(TENANT_STORAGE_KEY) || null;
+    } catch {
+      return null;
+    }
+  });
 
   useEffect(() => {
-    const isAuthed = authStatus === "authed" && Boolean(user);
-    if (!isAuthed) {
-      setTenantStatus("loading");
+    if (!user) {
       setTenants([]);
-      return;
-    }
-
-    const available = [...MOCK_TENANTS];
-    setTenants(available);
-
-    if (available.length === 0) {
       setSelectedTenantId(null);
-      writeStoredTenantId(null);
-      setTenantStatus("none");
+      setTenantStatus("unknown");
       return;
     }
 
-    // keep stored tenant if valid
-    const stored = readStoredTenantId();
-    const preferred = selectedTenantId ?? stored;
-    const exists = preferred && available.some((t) => t.tenantId === preferred);
+    loadTenants();
+  }, [user]);
 
-    if (exists) {
-      setSelectedTenantId(preferred);
-      writeStoredTenantId(preferred);
+  const loadTenants = async () => {
+    setTenantStatus("loading");
+
+    try {
+      const q = query(
+        collection(db, "tenantMembers"),
+        where("uid", "==", user.uid)
+      );
+
+      const snap = await getDocs(q);
+
+      if (snap.empty) {
+        await createDefaultTenant();
+        return loadTenants();
+      }
+
+      const tenantIds = snap.docs.map((d) => d.data().tenantId).filter(Boolean);
+
+      const tenantDocs = await Promise.all(
+        tenantIds.map((id) => getDoc(doc(db, "tenants", id)))
+      );
+
+      const loaded = tenantDocs
+        .filter((d) => d.exists())
+        .map((d) => ({
+          tenantId: d.id,
+          ...d.data(),
+        }));
+
+      setTenants(loaded);
+
+      if (loaded.length === 0) {
+        setSelectedTenantId(null);
+        setTenantStatus("empty");
+        return;
+      }
+
+      const validSelected = loaded.find((t) => t.tenantId === selectedTenantId);
+      const nextTenantId = validSelected ? validSelected.tenantId : loaded[0].tenantId;
+
+      setSelectedTenantId(nextTenantId);
+      try {
+        localStorage.setItem(TENANT_STORAGE_KEY, nextTenantId);
+      } catch {
+        // ignore storage failures
+      }
+
       setTenantStatus("ready");
-      return;
+    } catch (error) {
+      console.error("[TenantContext] Failed to load tenants", error);
+      setTenantStatus("error");
     }
+  };
 
-    // auto-select if only one
-    if (available.length === 1) {
-      const only = available[0].tenantId;
-      setSelectedTenantId(only);
-      writeStoredTenantId(only);
-      setTenantStatus("ready");
-      return;
+  const createDefaultTenant = async () => {
+    const tenantRef = await addDoc(collection(db, "tenants"), {
+      name: `${user.displayName || "My"}'s Workspace`,
+      createdBy: user.uid,
+      createdAt: Date.now(),
+    });
+
+    await addDoc(collection(db, "tenantMembers"), {
+      tenantId: tenantRef.id,
+      uid: user.uid,
+      role: "owner",
+      createdAt: Date.now(),
+    });
+  };
+
+  const selectTenant = (tenantId) => {
+    setSelectedTenantId(tenantId);
+    try {
+      if (tenantId) localStorage.setItem(TENANT_STORAGE_KEY, tenantId);
+      else localStorage.removeItem(TENANT_STORAGE_KEY);
+    } catch {
+      // ignore storage failures
     }
+  };
 
-    // multiple: require explicit selection
-    setSelectedTenantId(null);
-    writeStoredTenantId(null);
-    setTenantStatus("none");
-  }, [authStatus, user]);
-
-  const selectedTenant = useMemo(() => {
-    return tenants.find((t) => t.tenantId === selectedTenantId) ?? null;
-  }, [tenants, selectedTenantId]);
-
-  function selectTenant(tenantId) {
-    const next = tenantId || null;
-    setSelectedTenantId(next);
-    writeStoredTenantId(next);
-    setTenantStatus(next ? "ready" : "none");
-  }
-
-  const value = useMemo(
-    () => ({
-      tenantStatus,
-      tenants,
-      selectedTenantId,
-      selectedTenant,
-      selectTenant,
-
-      // aliases for older code
-      accessibleTenants: tenants,
-      activeTenantId: selectedTenantId,
-      setActiveTenantId: selectTenant,
-    }),
-    [tenantStatus, tenants, selectedTenantId, selectedTenant]
+  return (
+    <TenantContext.Provider
+      value={{
+        tenants,
+        tenantStatus,
+        selectedTenantId,
+        selectTenant,
+      }}
+    >
+      {children}
+    </TenantContext.Provider>
   );
-
-  return <TenantContext.Provider value={value}>{children}</TenantContext.Provider>;
 }
 
-export function useTenant() {
-  const ctx = useContext(TenantContext);
-  if (!ctx) throw new Error("useTenant must be used within TenantProvider");
-  return ctx;
-}
+export const useTenant = () => useContext(TenantContext);

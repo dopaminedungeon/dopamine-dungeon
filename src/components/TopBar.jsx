@@ -15,8 +15,8 @@ export default function TopBar({ title }) {
   const {
     campaigns: legacyCampaigns,
     accessibleCampaigns,
-    activeCampaignId,
-    setActiveCampaignId,
+    selectedCampaignId,
+    selectCampaign,
     addCampaign,
     createCampaign,
   } = useCampaign();
@@ -24,8 +24,8 @@ export default function TopBar({ title }) {
   const {
     tenants: legacyTenants,
     accessibleTenants,
-    activeTenantId,
-    setActiveTenantId,
+    selectedTenantId,
+    selectTenant,
   } = useTenant();
 
   const tenantsRaw = accessibleTenants ?? legacyTenants ?? [];
@@ -80,11 +80,11 @@ export default function TopBar({ title }) {
           <div className="flex items-baseline justify-between gap-3">
             <h1 className="text-xl sm:text-2xl font-bold text-white truncate">{title}</h1>
             <span className="hidden sm:block text-[10px] tracking-wide text-zinc-500 shrink-0">
-              Dopamine Dungeon v0.1
+              Dopamine Dungeon v0.2
             </span>
           </div>
           <p className="text-zinc-500 text-xs sm:text-sm">
-            Welcome back, {mode === "GM" ? "Dungeon Master" : "Player"}
+            Welcome back, {String(mode).toLowerCase() === "gm" ? "Dungeon Master" : "Player"}
           </p>
         </div>
 
@@ -132,15 +132,15 @@ export default function TopBar({ title }) {
           <div className="hidden md:flex items-center gap-3">
             {/* Workspace selector */}
             <select
-              value={activeTenantId ?? ""}
+              value={selectedTenantId ?? ""}
               onChange={(e) => {
                 const nextTenantId = e.target.value || null;
-                if (typeof setActiveTenantId === "function") {
-                  setActiveTenantId(nextTenantId);
+                if (typeof selectTenant === "function") {
+                  selectTenant(nextTenantId);
                 }
                 // Switching workspace invalidates current campaign selection
-                if (typeof setActiveCampaignId === "function") {
-                  setActiveCampaignId(null);
+                if (typeof selectCampaign === "function") {
+                  selectCampaign(null);
                 }
               }}
               className="bg-zinc-950/40 border border-zinc-800/70 rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:ring-2 focus:ring-indigo-500/40"
@@ -163,12 +163,12 @@ export default function TopBar({ title }) {
 
             {/* Campaign selector */}
             <select
-              value={activeCampaignId ?? ""}
+              value={selectedCampaignId ?? ""}
               onChange={(e) => {
                 const next = e.target.value;
 
                 if (next === "__new__") {
-                  if (!activeTenantId) {
+                  if (!selectedTenantId) {
                     alert("Pick a workspace first.");
                     return;
                   }
@@ -176,10 +176,9 @@ export default function TopBar({ title }) {
                   const name = prompt("Campaign name:");
                   if (!name) return;
 
-                  // Support both old and new CampaignContext APIs
                   const fn = createCampaign ?? addCampaign;
                   if (typeof fn === "function") {
-                    fn({ name, tenantId: activeTenantId });
+                    fn({ name, tenantId: selectedTenantId });
                   } else {
                     console.warn(
                       "No campaign creation function available on CampaignContext (expected createCampaign or addCampaign)."
@@ -188,8 +187,8 @@ export default function TopBar({ title }) {
                   return;
                 }
 
-                if (typeof setActiveCampaignId === "function") {
-                  setActiveCampaignId(next || null);
+                if (typeof selectCampaign === "function") {
+                  selectCampaign(next || null);
                 }
               }}
               className="bg-zinc-950/40 border border-zinc-800/70 rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:ring-2 focus:ring-indigo-500/40"
@@ -208,7 +207,7 @@ export default function TopBar({ title }) {
                   </option>
                 ))
               )}
-              <option key="new-campaign" value="__new__" disabled={!activeTenantId}>
+              <option key="new-campaign" value="__new__" disabled={!selectedTenantId}>
                 + New campaign…
               </option>
             </select>
@@ -217,9 +216,9 @@ export default function TopBar({ title }) {
           <div className="flex items-center gap-2">
             <button
               type="button"
-              onClick={() => setMode("Player")}
+              onClick={() => setMode("player")}
               className={`px-2.5 py-2 sm:px-3 sm:py-1.5 text-xs rounded-lg border ${
-                mode === "Player"
+                String(mode).toLowerCase() === "player"
                   ? "bg-white/10 border-indigo-500 text-indigo-300"
                   : "bg-transparent border-white/10 text-zinc-400 hover:text-white"
               }`}
@@ -229,9 +228,9 @@ export default function TopBar({ title }) {
             </button>
             <button
               type="button"
-              onClick={() => setMode("GM")}
+              onClick={() => setMode("gm")}
               className={`px-2.5 py-2 sm:px-3 sm:py-1.5 text-xs rounded-lg border ${
-                mode === "GM"
+                String(mode).toLowerCase() === "gm"
                   ? "bg-indigo-500/80 border-indigo-400 text-white"
                   : "bg-transparent border-white/10 text-zinc-400 hover:text-white"
               }`}
@@ -277,8 +276,8 @@ export default function TopBar({ title }) {
           <DebugPanel
             context={{
               mode,
-              activeTenantId,
-              activeCampaignId,
+              activeTenantId: selectedTenantId,
+              activeCampaignId: selectedCampaignId,
               tenantsCount: tenants.length,
               campaignsCount: campaigns.length,
               tenantsSource: accessibleTenants

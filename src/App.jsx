@@ -30,6 +30,7 @@ import { useTenant } from "./context/TenantContext.jsx";
 import { useCampaign } from "./context/CampaignContext.jsx";
 import AppProviders from "./context/AppProviders.jsx";
 import { features } from "./config/features";
+import React from "react";
 
 function App() {
   return (
@@ -42,13 +43,21 @@ function App() {
 }
 
 function AppGate() {
-  const { authStatus, user } = useAuth();
+  const { authStatus, user, signInWithGoogle } = useAuth();
   const { tenantStatus } = useTenant();
   const { campaignStatus } = useCampaign();
 
-  if (authStatus === "loading") return <div>Loading auth...</div>;
-  const isAuthed = true; // v0.1: no auth
-  if (!isAuthed) return <div>Login (mocked)</div>;
+  if (authStatus === "loading") return <LoadingScreen label="Loading…" />;
+
+  // v0.2: real auth (Firebase)
+  if (!user) {
+    return (
+      <LoginScreen
+        onGoogle={() => signInWithGoogle?.()}
+        debug={{ authStatus, hasUser: false }}
+      />
+    );
+  }
 
   if (tenantStatus === "loading" || tenantStatus === "unknown") {
     return <LoadingScreen label="Loading workspaces…" />;
@@ -180,17 +189,35 @@ function LoadingScreen({ label }) {
   );
 }
 
-function LoginScreen({ debug }) {
+function LoginScreen({ debug, onGoogle }) {
   return (
-    <div style={{ padding: 24 }}>
-      <div style={{ fontSize: 18, fontWeight: 600 }}>Login</div>
-      <div style={{ opacity: 0.8, marginTop: 8, fontFamily: "monospace", fontSize: 12 }}>
-        debug: authStatus={String(debug?.authStatus)} hasUser={String(debug?.hasUser)}
+    <main className="min-h-screen flex items-center justify-center p-6 bg-black text-white">
+      <div className="w-full max-w-md bg-white/5 border border-white/10 rounded-2xl p-6">
+        <h1 className="text-2xl font-bold mb-2">Login</h1>
+        <p className="text-zinc-400 text-sm mb-4">
+          Sign in to access your campaign. Your data will sync across devices.
+        </p>
+
+        <div className="text-xs font-mono text-zinc-400 mb-4">
+          debug: authStatus={String(debug?.authStatus)} hasUser={String(debug?.hasUser)}
+        </div>
+
+        <button
+          onClick={onGoogle}
+          disabled={!onGoogle}
+          className="w-full px-4 py-3 rounded-xl bg-white/10 hover:bg-white/20 disabled:opacity-50"
+          title={!onGoogle ? "signInWithGoogle not wired in AuthContext yet" : ""}
+        >
+          Continue with Google
+        </button>
+
+        {!onGoogle && (
+          <div className="opacity-70 mt-2 text-xs font-mono">
+            Missing: useAuth().signInWithGoogle
+          </div>
+        )}
       </div>
-      <div style={{ opacity: 0.7, marginTop: 8 }}>
-        Auth is currently mocked. Once Firebase Auth is wired, this becomes a real login UI.
-      </div>
-    </div>
+    </main>
   );
 }
 

@@ -4,7 +4,7 @@ import { useMode } from "../context/ModeContext.jsx";
 import { ArrowLeft, Swords, Shield, Sparkles } from "lucide-react";
 import { itemsRepo } from "../data/items/items.repo";
 import { sessionsRepo } from "../data/sessions/sessions.repo";
-import { getLinksForEntity } from "../data/links/links.repo";
+import { useCampaign } from "../context/CampaignContext";
 
 
 const rarityColors = {
@@ -30,7 +30,9 @@ export default function ItemProfile() {
   const navigate = useNavigate();
   const { isGM } = useMode();
 
-  const [items, setItems] = useState(() => itemsRepo.getAll());
+  const { selectedCampaignId } = useCampaign();
+const [items, setItems] = useState([]);
+const [loading, setLoading] = useState(true);
 
   const rawItem = useMemo(
     () => items.find((it) => String(it.id) === String(id)) || null,
@@ -40,14 +42,30 @@ export default function ItemProfile() {
   const [formData, setFormData] = useState(rawItem || null);
 
   useEffect(() => {
-    // refresh when navigating between items
-    setItems(itemsRepo.getAll());
-  }, [id]);
+  if (!selectedCampaignId) return;
+
+  async function load() {
+    setLoading(true);
+    const data = await itemsRepo.getAll(selectedCampaignId);
+    setItems(data);
+    setLoading(false);
+  }
+
+  load();
+}, [selectedCampaignId]);
 
   useEffect(() => {
     setFormData(rawItem || null);
   }, [rawItem]);
   const [isEditing, setIsEditing] = useState(false);
+
+if (loading) {
+  return (
+    <div className="p-8 text-white">
+      <div className="text-zinc-400">Loading item...</div>
+    </div>
+  );
+}
 
   if (!formData) {
     return (
@@ -90,18 +108,7 @@ export default function ItemProfile() {
   const Icon = typeIcons[formData.type] || Sparkles;
   const visibility = formData.visibility || "public";
 
-  // v0.1 cross-link panels
-  const itemLinks = getLinksForEntity("Item", String(id), isGM ? "GM" : "Player");
-  const linkedSessions = itemLinks
-    .filter((l) => l.entityA.type === "Session" || l.entityB.type === "Session")
-    .map((l) => {
-      const other = l.entityA.type === "Item" ? l.entityB : l.entityA;
-      return { sessionId: other.id, label: l.label, visibility: l.visibility, linkId: l.id };
-    });
-  const inBag = itemLinks.some((l) => {
-    const hasBag = l.entityA.type === "BagOfHolding" || l.entityB.type === "BagOfHolding";
-    return hasBag && l.label === "contained_in";
-  });
+
 
   // Hard gate: players should not be able to open GM-only items via direct URL.
   if (!isGM && visibility === "gm-only") {
@@ -145,13 +152,14 @@ export default function ItemProfile() {
         </button>
         {isGM && (
           <button
-            onClick={() => {
-              if (isEditing && formData) {
-                itemsRepo.upsert(formData);
-                setItems(itemsRepo.getAll());
-              }
-              setIsEditing((prev) => !prev);
-            }}
+            onClick={async () => {
+  if (isEditing && formData) {
+    await itemsRepo.upsert(selectedCampaignId, formData);
+    const data = await itemsRepo.getAll(selectedCampaignId);
+    setItems(data);
+  }
+  setIsEditing((prev) => !prev);
+}}
             className="px-4 py-2 rounded-xl bg-white/10 text-zinc-200 hover:bg-white/20 text-sm font-medium"
           >
             {isEditing ? "Done" : "Edit"}
@@ -407,7 +415,9 @@ export default function ItemProfile() {
           <section className="bg-white/5 border border-white/10 rounded-2xl p-5">
             <h2 className="text-lg font-semibold text-white mb-2">Where it showed up</h2>
             {linkedSessions.length === 0 ? (
-              <p className="text-zinc-400 text-sm">No sessions linked yet.</p>
+              <p className="text-zinc-400 text-sm">
+  Session linking will return after Firestore link migration.
+</p>
             ) : (
               <div className="space-y-2">
                 {linkedSessions.map((s) => {
@@ -445,7 +455,7 @@ export default function ItemProfile() {
           <section className="bg-white/5 border border-white/10 rounded-2xl p-5">
             <h2 className="text-lg font-semibold text-white mb-2">Bag of Holding</h2>
             <p className="text-sm text-zinc-400">
-              Status: {inBag ? <span className="text-emerald-300 font-medium">in party inventory</span> : <span className="text-zinc-400">not in bag</span>}
+              Bag integration will return after Firestore bag migration.
             </p>
           </section>
         </div>

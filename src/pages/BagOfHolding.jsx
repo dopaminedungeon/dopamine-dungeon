@@ -3,7 +3,6 @@ import { useMode } from "../context/ModeContext.jsx";
 import { Search, Plus } from "lucide-react";
 import { NavLink, useNavigate } from "react-router-dom";
 import { createLink } from "../domain/links/link.service";
-import { addLink, getLinksForEntity, removeLink } from "../data/links/links.repo";
 import { itemsRepo } from "../data/items/items.repo";
 import { bagRepo } from "../data/bag/bag.repo";
 
