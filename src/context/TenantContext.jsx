@@ -1,5 +1,5 @@
 import { createContext, useContext, useEffect, useState } from "react";
-import { collection, query, where, getDocs, addDoc, doc, getDoc } from "firebase/firestore";
+import { collection, query, where, getDocs, addDoc, doc, getDoc, setDoc } from "firebase/firestore";
 import { db } from "../firebase/firebase";
 import { useAuth } from "./AuthContext";
 
@@ -90,7 +90,7 @@ export function TenantProvider({ children }) {
       createdAt: Date.now(),
     });
 
-    await addDoc(collection(db, "tenantMembers"), {
+    await setDoc(doc(db, "tenantMembers", `${tenantRef.id}_${user.uid}`), {
       tenantId: tenantRef.id,
       uid: user.uid,
       role: "owner",

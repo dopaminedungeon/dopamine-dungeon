@@ -169,7 +169,7 @@ function AppGate() {
           </>
         )}
 
-        <Route path="/settings" element={<Settings />} />
+        <Route path="/settings/profile" element={<Settings />} />
         <Route path="/campaigns/settings" element={<CampaignSettings />} />
 
         <Route path="*" element={<NotFoundScreen />} />

@@ -4,12 +4,14 @@ import { useMode } from "../context/ModeContext.jsx";
 import { Shield, Eye } from "lucide-react";
 import { useCampaign } from "../context/CampaignContext.jsx";
 import { useTenant } from "../context/TenantContext.jsx";
+import { useAuth } from "../context/AuthContext.jsx";
 import DebugPanel from "./DebugPanel";
 import { features } from "../config/features";
 import { useNavigate } from "react-router-dom";
 
 export default function TopBar({ title }) {
   const { mode, setMode } = useMode();
+  const { user, logout } = useAuth();
   const [showNotifications, setShowNotifications] = useState(false);
   const [showProfileMenu, setShowProfileMenu] = useState(false);
   const {
@@ -49,6 +51,9 @@ export default function TopBar({ title }) {
       __name: c.name ?? c.title ?? "(Unnamed campaign)",
     }))
     .filter((c) => c.__id);
+
+  const profileName = user?.displayName || user?.email || "Unknown user";
+  const profileRole = String(mode).toLowerCase() === "gm" ? "GM" : "Player";
 
   // Close popovers on outside click
   useEffect(() => {
@@ -248,23 +253,53 @@ export default function TopBar({ title }) {
               <div className="w-8 h-8 rounded-lg bg-linear-to-br from-purple-500 to-pink-500 flex items-center justify-center">
                 <User className="w-4 h-4 text-white" />
               </div>
-              <div className="hidden md:block text-left">
-                <p className="text-white text-sm font-medium">John Doe</p>
-                <p className="text-zinc-500 text-xs">Admin</p>
+              <div className="hidden md:block text-left max-w-45">
+                <p className="text-white text-sm font-medium truncate">{profileName}</p>
+                <p className="text-zinc-500 text-xs truncate">{profileRole}</p>
               </div>
               <ChevronDown className="w-4 h-4 text-zinc-500 hidden md:block" />
             </button>
 
             {showProfileMenu && (
-              <div className="absolute right-0 mt-2 w-48 bg-black/90 border border-white/10 rounded-xl shadow-xl py-1 text-sm">
+              <div className="absolute right-0 mt-2 w-56 bg-black/90 border border-white/10 rounded-xl shadow-xl py-1 text-sm">
+                <div className="px-3 py-2 border-b border-white/10">
+                  <p className="text-white text-sm font-medium truncate">{profileName}</p>
+                  <p className="text-zinc-500 text-xs truncate">{user?.email || "No email"}</p>
+                </div>
+
                 <button
                   className="w-full text-left px-3 py-2 text-zinc-300 hover:bg-white/5"
                   onClick={() => {
                     setShowProfileMenu(false);
-                    navigate("/campaigns/settings");
+                    navigate("/settings/profile");
                   }}
                 >
-                  Settings
+                  Profile Settings
+                </button>
+
+                {String(mode).toLowerCase() === "gm" && (
+                  <button
+                    className="w-full text-left px-3 py-2 text-zinc-300 hover:bg-white/5"
+                    onClick={() => {
+                      setShowProfileMenu(false);
+                      navigate("/campaigns/settings");
+                    }}
+                  >
+                    Campaign Settings
+                  </button>
+                )}
+
+                <div className="border-t border-white/10 my-1" />
+
+                <button
+                  className="w-full text-left px-3 py-2 text-red-300 hover:bg-white/5"
+                  onClick={async () => {
+                    setShowProfileMenu(false);
+                    await logout?.();
+                    navigate("/");
+                  }}
+                >
+                  Sign out
                 </button>
               </div>
             )}

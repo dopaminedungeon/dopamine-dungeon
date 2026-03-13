@@ -1,31 +1,41 @@
 // src/pages/CampaignSettings.jsx
 import React, { useMemo, useState, useEffect } from "react";
-import { Plus } from "lucide-react";
+import { Plus, CheckCircle2, AlertCircle, Trash2 } from "lucide-react";
+import {
+  addDoc,
+  collection,
+  doc,
+  updateDoc,
+  deleteDoc,
+  getDocs,
+  writeBatch,
+} from "firebase/firestore";
 import { useMode } from "../context/ModeContext.jsx";
 import { useCampaign } from "../context/CampaignContext.jsx";
+import { useTenant } from "../context/TenantContext.jsx";
+import { db } from "../firebase/firebase";
 
 const STATUS = ["active", "paused", "completed"];
 
 export default function CampaignSettings() {
   const { isGM } = useMode();
 
-  // Keep the whole context so we can support different setter names while we iterate.
-  const campaignCtx = useCampaign();
-  const { campaigns, activeCampaignId, setCampaigns } = campaignCtx;
+  const { accessibleCampaigns, selectedCampaignId, selectCampaign, campaignRole } = useCampaign();
+  const { selectedTenantId } = useTenant();
 
-  // Some versions of the context used different setter names.
-  const setActiveCampaign =
-    campaignCtx?.setActiveCampaignId ||
-    campaignCtx?.setActiveCampaign ||
-    campaignCtx?.setActiveCampaignID ||
-    null;
-
-const activeCampaign = useMemo(() => {
-  return (campaigns || []).find((c) => (c.id ?? c.campaignId) === activeCampaignId) || null;
-}, [campaigns, activeCampaignId]);
+  const activeCampaign = useMemo(() => {
+    return (
+      (accessibleCampaigns || []).find(
+        (c) => String(c.id ?? c.campaignId) === String(selectedCampaignId)
+      ) || null
+    );
+  }, [accessibleCampaigns, selectedCampaignId]);
 
   const [draft, setDraft] = useState(null);
   const [showCreate, setShowCreate] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+  const [saveState, setSaveState] = useState({ type: null, message: "" });
   const [createForm, setCreateForm] = useState({
     name: "",
     description: "",
@@ -33,18 +43,18 @@ const activeCampaign = useMemo(() => {
     system: "",
   });
 
-  const createCampaign = (e) => {
+  const createCampaign = async (e) => {
     e?.preventDefault?.();
 
     const name = (createForm.name || "").trim();
-    if (!name) return;
+    if (!name || !selectedTenantId) return;
 
     const newCampaign = {
-      id: `camp-${crypto.randomUUID()}`,
       name,
       description: createForm.description || "",
       status: createForm.status || "active",
       system: createForm.system || "",
+      tenantId: selectedTenantId,
       tags: "",
       startDate: "",
       endDate: "",
@@ -55,28 +65,36 @@ const activeCampaign = useMemo(() => {
       hiddenFactions: "",
       hiddenTimelines: "",
       metaCommentary: "",
+      createdAt: Date.now(),
       lastUpdated: Date.now(),
     };
 
-    setCampaigns?.((prev) => [newCampaign, ...(prev || [])]);
+    try {
+      setSaveState({ type: null, message: "" });
+      const ref = await addDoc(collection(db, "campaigns"), newCampaign);
+      const created = { ...newCampaign, id: ref.id, campaignId: ref.id };
 
-    // Auto-switch to the new campaign so TopBar selector + settings page reflect it immediately.
-    if (setActiveCampaign) setActiveCampaign(newCampaign.id);
+      if (typeof selectCampaign === "function") {
+        selectCampaign(ref.id);
+      }
 
-    // Update local draft immediately so the page shows the new campaign fields
-    setDraft({ ...newCampaign });
-
-    setShowCreate(false);
-    setCreateForm({ name: "", description: "", status: "active", system: "" });
+      setDraft(created);
+      setShowCreate(false);
+      setCreateForm({ name: "", description: "", status: "active", system: "" });
+      setSaveState({ type: "success", message: "Campaign created." });
+    } catch (error) {
+      console.error("[CampaignSettings] Failed to create campaign", error);
+      setSaveState({ type: "error", message: "Could not create campaign." });
+    }
   };
 
   useEffect(() => {
     // Sync the draft whenever the active campaign changes.
     // If there is no active campaign, keep whatever is in draft (e.g. right after creating).
     if (activeCampaign) setDraft({ ...activeCampaign });
-  }, [activeCampaignId, activeCampaign]);
+  }, [selectedCampaignId, activeCampaign]);
 
-  if (!isGM) {
+  if (!isGM || (campaignRole && campaignRole !== "owner" && campaignRole !== "gm")) {
     return (
       <div className="text-white p-6">
         <h1 className="text-2xl font-bold">Campaign Settings</h1>
@@ -98,7 +116,7 @@ const activeCampaign = useMemo(() => {
             <button
               type="button"
               onClick={() => setShowCreate(true)}
-              className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-linear-to-rrom-indigo-500 to-purple-500 text-white font-medium hover:opacity-90"
+              className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-linear-to-r from-indigo-500 to-purple-500 text-white font-medium hover:opacity-90"
             >
               <Plus className="w-5 h-5" />
               Add campaign
@@ -167,7 +185,7 @@ const activeCampaign = useMemo(() => {
                   </button>
                   <button
                     type="submit"
-                    className="px-4 py-2 rounded-xl bg-linear-to-rrom-blue-500 to-cyan-500 text-white font-medium hover:opacity-90"
+                    className="px-4 py-2 rounded-xl bg-linear-to-r from-blue-500 to-cyan-500 text-white font-medium hover:opacity-90"
                   >
                     Create
                   </button>
@@ -182,11 +200,78 @@ const activeCampaign = useMemo(() => {
 
   const update = (key, value) => setDraft((p) => ({ ...p, [key]: value }));
 
-  const onSave = () => {
-    // Local mock-save into CampaignContext state (Firebase later)
-    setCampaigns?.((prev) =>
-      prev.map((c) => (c.id === draft.id ? { ...draft, lastUpdated: Date.now() } : c))
+  async function deleteSubcollectionDocs(campaignId, subcollectionName) {
+    const snap = await getDocs(collection(db, "campaigns", campaignId, subcollectionName));
+    if (snap.empty) return;
+
+    const batch = writeBatch(db);
+    snap.docs.forEach((docSnap) => {
+      batch.delete(docSnap.ref);
+    });
+    await batch.commit();
+  }
+
+  const onDeleteCampaign = async () => {
+    const campaignId = draft?.id || draft?.campaignId || selectedCampaignId;
+    if (!campaignId) return;
+
+    const confirmed = window.confirm(
+      "Delete this campaign and all associated sessions, items, and bag data? This cannot be undone."
     );
+    if (!confirmed) return;
+
+    try {
+      setDeleting(true);
+      setSaveState({ type: null, message: "" });
+
+      await deleteSubcollectionDocs(campaignId, "sessions");
+      await deleteSubcollectionDocs(campaignId, "items");
+      await deleteSubcollectionDocs(campaignId, "meta");
+      await deleteDoc(doc(db, "campaigns", campaignId));
+
+      setDraft(null);
+      setSaveState({ type: "success", message: "Campaign deleted." });
+    } catch (error) {
+      console.error("[CampaignSettings] Failed to delete campaign", error);
+      setSaveState({ type: "error", message: "Could not delete campaign." });
+    } finally {
+      setDeleting(false);
+    }
+  };
+
+  const onSave = async () => {
+    const campaignId = draft?.id || draft?.campaignId || selectedCampaignId;
+    if (!draft || !campaignId) return;
+
+    try {
+      setSaving(true);
+      setSaveState({ type: null, message: "" });
+
+      await updateDoc(doc(db, "campaigns", campaignId), {
+        name: draft.name || "",
+        description: draft.description || "",
+        status: draft.status || "active",
+        system: draft.system || "",
+        playerSummary: draft.playerSummary || "",
+        publicLore: draft.publicLore || "",
+        gmNotes: draft.gmNotes || "",
+        privateLore: draft.privateLore || "",
+        hiddenFactions: draft.hiddenFactions || "",
+        hiddenTimelines: draft.hiddenTimelines || "",
+        metaCommentary: draft.metaCommentary || "",
+        tags: draft.tags || "",
+        startDate: draft.startDate || "",
+        endDate: draft.endDate || "",
+        lastUpdated: Date.now(),
+      });
+
+      setSaveState({ type: "success", message: "Campaign settings saved." });
+    } catch (error) {
+      console.error("[CampaignSettings] Failed to save campaign", error);
+      setSaveState({ type: "error", message: "Could not save campaign settings." });
+    } finally {
+      setSaving(false);
+    }
   };
 
   return (
@@ -215,7 +300,10 @@ const activeCampaign = useMemo(() => {
 
             <button
               type="button"
-              onClick={() => setDraft(activeCampaign ? { ...activeCampaign } : null)}
+              onClick={() => {
+                setDraft(activeCampaign ? { ...activeCampaign } : null);
+                setSaveState({ type: null, message: "" });
+              }}
               className="px-4 py-2 rounded-xl bg-white/5 text-zinc-300 hover:bg-white/10"
             >
               Reset
@@ -224,10 +312,34 @@ const activeCampaign = useMemo(() => {
             <button
               type="button"
               onClick={onSave}
-              className="px-4 py-2 rounded-xl bg-linear-to-r from-blue-500 to-cyan-500 text-white font-medium hover:opacity-90"
+              disabled={saving}
+              className="px-4 py-2 rounded-xl bg-linear-to-r from-blue-500 to-cyan-500 text-white font-medium hover:opacity-90 disabled:opacity-50"
             >
-              Save (local)
+              {saving ? "Saving..." : "Save"}
             </button>
+
+            <button
+              type="button"
+              onClick={onDeleteCampaign}
+              disabled={deleting}
+              className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-red-500/15 border border-red-500/40 text-red-200 hover:bg-red-500/25 disabled:opacity-50"
+            >
+              <Trash2 className="w-4 h-4" />
+              {deleting ? "Deleting..." : "Delete Campaign"}
+            </button>
+            {saveState.type === "success" && (
+              <div className="mb-4 inline-flex items-center gap-2 text-emerald-300 text-sm">
+                <CheckCircle2 className="w-4 h-4" />
+                {saveState.message}
+              </div>
+            )}
+
+            {saveState.type === "error" && (
+              <div className="mb-4 inline-flex items-center gap-2 text-red-300 text-sm">
+                <AlertCircle className="w-4 h-4" />
+                {saveState.message}
+              </div>
+            )}
           </div>
         </div>
 

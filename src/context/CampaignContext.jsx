@@ -1,5 +1,5 @@
 import { createContext, useContext, useEffect, useState } from "react";
-import { collection, query, where, getDocs, addDoc } from "firebase/firestore";
+import { collection, query, where, onSnapshot, addDoc } from "firebase/firestore";
 import { db } from "../firebase/firebase";
 import { useTenant } from "./TenantContext";
 
@@ -28,23 +28,17 @@ export function CampaignProvider({ children }) {
       return;
     }
 
-    loadCampaigns();
-  }, [selectedTenantId]);
-
-  const loadCampaigns = async () => {
     setCampaignStatus("loading");
 
-    try {
-      const q = query(
-        collection(db, "campaigns"),
-        where("tenantId", "==", selectedTenantId)
-      );
+    const q = query(
+      collection(db, "campaigns"),
+      where("tenantId", "==", selectedTenantId)
+    );
 
-      const snap = await getDocs(q);
-
+    const unsubscribe = onSnapshot(q, async (snap) => {
       if (snap.empty) {
         await createDefaultCampaign();
-        return loadCampaigns();
+        return;
       }
 
       const campaigns = snap.docs.map((d) => ({
@@ -54,36 +48,32 @@ export function CampaignProvider({ children }) {
 
       setAccessibleCampaigns(campaigns);
 
-      if (campaigns.length === 0) {
-        setSelectedCampaignId(null);
-        setCampaignRole(null);
-        setCampaignStatus("empty");
-        return;
-      }
-
       const validSelected = campaigns.find(
         (c) => c.campaignId === selectedCampaignId
       );
+
       const nextCampaignId = validSelected
         ? validSelected.campaignId
         : campaigns[0].campaignId;
 
       setSelectedCampaignId(nextCampaignId);
+
       // v0.2 bootstrap: logged-in user acts as campaign owner until per-campaign membership is added.
       setCampaignRole("owner");
+
       try {
         localStorage.setItem(CAMPAIGN_STORAGE_KEY, nextCampaignId);
-      } catch {
-        // ignore storage failures
-      }
+      } catch {}
 
       setCampaignStatus("ready");
-    } catch (error) {
-      console.error("[CampaignContext] Failed to load campaigns", error);
+    }, (error) => {
+      console.error("[CampaignContext] Failed to listen to campaigns", error);
       setCampaignRole(null);
       setCampaignStatus("error");
-    }
-  };
+    });
+
+    return () => unsubscribe();
+  }, [selectedTenantId]);
 
   const createDefaultCampaign = async () => {
     await addDoc(collection(db, "campaigns"), {
