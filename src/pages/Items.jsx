@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useMode } from "../context/ModeContext.jsx";
+import { useCampaign } from "../context/CampaignContext";
 import { itemsRepo } from "../data/items/items.repo";
 import {
   Search,
@@ -41,11 +42,32 @@ function safeArray(value) {
 
 export default function Items() {
   const [showCreateModal, setShowCreateModal] = useState(false);
-  const [items, setItems] = useState(() => safeArray(itemsRepo.getAll()));
+  const { selectedCampaignId } = useCampaign();
+  const [items, setItems] = useState([]);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    setItems(safeArray(itemsRepo.getAll()));
-  }, [showCreateModal]);
+    if (!selectedCampaignId) {
+      setItems([]);
+      setLoading(false);
+      return;
+    }
+
+    async function load() {
+      setLoading(true);
+      try {
+        const data = await itemsRepo.getAll(selectedCampaignId);
+        setItems(safeArray(data));
+      } catch (error) {
+        console.error("[Items] Failed to load items", error);
+        setItems([]);
+      } finally {
+        setLoading(false);
+      }
+    }
+
+    load();
+  }, [selectedCampaignId]);
 
   const [formData, setFormData] = useState({
     name: "",
@@ -64,6 +86,22 @@ export default function Items() {
   const [selectedRarity, setSelectedRarity] = useState('All');
   const [viewMode, setViewMode] = useState('grid');
   const { isGM } = useMode();
+
+  if (!selectedCampaignId) {
+    return (
+      <main className="flex-1 overflow-auto flex items-center justify-center">
+        <div className="text-zinc-400">Select a campaign to view items.</div>
+      </main>
+    );
+  }
+
+  if (loading) {
+    return (
+      <main className="flex-1 overflow-auto flex items-center justify-center">
+        <div className="text-zinc-400">Loading items...</div>
+      </main>
+    );
+  }
 
   const filteredItems = items.filter((item) => {
     const matchesSearch = String(item.name || "").toLowerCase().includes(searchQuery.toLowerCase());
@@ -282,8 +320,9 @@ export default function Items() {
 
           <form
             className="p-6 space-y-4"
-            onSubmit={(e) => {
+            onSubmit={async (e) => {
               e.preventDefault();
+              if (!selectedCampaignId) return;
 
               const id = newId("item");
               const nextItem = {
@@ -297,10 +336,13 @@ export default function Items() {
                 mechanicalSummary: formData.mechanicalSummary,
                 gmNotes: formData.gmNotes,
                 stats: formData.stats || {},
+                linkedSessionIds: [],
+                location: null,
               };
 
-              itemsRepo.upsert(nextItem);
-              setItems(safeArray(itemsRepo.getAll()));
+              await itemsRepo.upsert(selectedCampaignId, nextItem);
+              const data = await itemsRepo.getAll(selectedCampaignId);
+              setItems(safeArray(data));
 
               setShowCreateModal(false);
               setFormData({

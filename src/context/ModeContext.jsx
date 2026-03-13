@@ -17,6 +17,7 @@ function normalizeMode(v) {
 function normalizeRole(v) {
   if (!v) return null;
   const s = String(v).trim().toLowerCase();
+  if (s === "owner") return "gm";
   if (s === "campaigngm" || s === "gm" || s.includes("gm")) return "gm";
   if (s === "campaignplayer" || s === "player" || s.includes("player")) return "player";
   return null;
@@ -54,8 +55,8 @@ function writeStoredMode(storageKey, mode) {
 
 export function ModeProvider({ children }) {
   const { user } = useAuth();
-  const { activeTenantId } = useTenant();
-  const { activeCampaignId, campaignRole } = useCampaign();
+  const { selectedTenantId } = useTenant();
+  const { selectedCampaignId, campaignRole } = useCampaign();
 
   // Can the user act as GM in the *active campaign*?
   const canActAsGM = useMemo(() => {
@@ -65,17 +66,17 @@ export function ModeProvider({ children }) {
 
   // Storage key is scoped by active tenant + campaign.
   const storageKey = useMemo(() => {
-    const t = activeTenantId || "none";
-    const c = activeCampaignId || "none";
+    const t = selectedTenantId || "none";
+    const c = selectedCampaignId || "none";
     return `dd:mode:${t}:${c}`;
-  }, [activeTenantId, activeCampaignId]);
+  }, [selectedTenantId, selectedCampaignId]);
 
   // Default mode is derived from role once tenant+campaign are selected.
   const defaultMode = useMemo(() => {
     // If we don't have a campaign selected yet, don't force anything.
-    if (!activeCampaignId) return null;
+    if (!selectedCampaignId) return null;
     return canActAsGM ? "gm" : "player";
-  }, [activeCampaignId, canActAsGM]);
+  }, [selectedCampaignId, canActAsGM]);
 
   const [mode, setMode] = useState(null);
 
@@ -131,11 +132,11 @@ export function ModeProvider({ children }) {
     setMode: setModeSafe,
     canActAsGM,
     storageKey,
-    activeTenantId,
-    activeCampaignId,
+    activeTenantId: selectedTenantId,
+    activeCampaignId: selectedCampaignId,
     user,
   }),
-  [mode, setModeSafe, canActAsGM, storageKey, activeTenantId, activeCampaignId, user]
+  [mode, setModeSafe, canActAsGM, storageKey, selectedTenantId, selectedCampaignId, user]
 );
 
   return <ModeContext.Provider value={value}>{children}</ModeContext.Provider>;

@@ -3,8 +3,7 @@ import { useParams, useNavigate } from "react-router-dom";
 import { useMode } from "../context/ModeContext.jsx";
 import { ArrowLeft, Swords, Shield, Sparkles } from "lucide-react";
 import { itemsRepo } from "../data/items/items.repo";
-import { sessionsRepo } from "../data/sessions/sessions.repo";
-import { getLinksForEntity } from "../data/links/links.repo";
+import { useCampaign } from "../context/CampaignContext";
 
 
 const rarityColors = {
@@ -30,7 +29,9 @@ export default function ItemProfile() {
   const navigate = useNavigate();
   const { isGM } = useMode();
 
-  const [items, setItems] = useState(() => itemsRepo.getAll());
+  const { selectedCampaignId } = useCampaign();
+  const [items, setItems] = useState([]);
+  const [loading, setLoading] = useState(true);
 
   const rawItem = useMemo(
     () => items.find((it) => String(it.id) === String(id)) || null,
@@ -40,14 +41,41 @@ export default function ItemProfile() {
   const [formData, setFormData] = useState(rawItem || null);
 
   useEffect(() => {
-    // refresh when navigating between items
-    setItems(itemsRepo.getAll());
-  }, [id]);
+    if (!selectedCampaignId) {
+      setItems([]);
+      setLoading(false);
+      return;
+    }
+
+    async function load() {
+      setLoading(true);
+      try {
+        const data = await itemsRepo.getAll(selectedCampaignId);
+        setItems(Array.isArray(data) ? data : []);
+      } catch (error) {
+        console.error("[ItemProfile] Failed to load items", error);
+        setItems([]);
+      } finally {
+        setLoading(false);
+      }
+    }
+
+    load();
+  }, [selectedCampaignId]);
 
   useEffect(() => {
     setFormData(rawItem || null);
   }, [rawItem]);
   const [isEditing, setIsEditing] = useState(false);
+  const linkedSessions = [];
+
+  if (loading) {
+    return (
+      <div className="p-8 text-white">
+        <div className="text-zinc-400">Loading item...</div>
+      </div>
+    );
+  }
 
   if (!formData) {
     return (
@@ -81,27 +109,12 @@ export default function ItemProfile() {
   const handleVisibilityChange = (visibility) => {
     setFormData(prev => ({ ...prev, visibility }));
   };
-  const sessionsById = useMemo(() => {
-    const all = sessionsRepo.getAll();
-    return new Map(all.map((s) => [String(s.id), s]));
-  }, []);
 
-  const rarityBg = rarityColors[formData.rarity] || rarityColors.Common;
-  const Icon = typeIcons[formData.type] || Sparkles;
-  const visibility = formData.visibility || "public";
+  const rarityBg = rarityColors[formData?.rarity] || rarityColors.Common;
+  const Icon = typeIcons[formData?.type] || Sparkles;
+  const visibility = formData?.visibility || "public";
 
-  // v0.1 cross-link panels
-  const itemLinks = getLinksForEntity("Item", String(id), isGM ? "GM" : "Player");
-  const linkedSessions = itemLinks
-    .filter((l) => l.entityA.type === "Session" || l.entityB.type === "Session")
-    .map((l) => {
-      const other = l.entityA.type === "Item" ? l.entityB : l.entityA;
-      return { sessionId: other.id, label: l.label, visibility: l.visibility, linkId: l.id };
-    });
-  const inBag = itemLinks.some((l) => {
-    const hasBag = l.entityA.type === "BagOfHolding" || l.entityB.type === "BagOfHolding";
-    return hasBag && l.label === "contained_in";
-  });
+
 
   // Hard gate: players should not be able to open GM-only items via direct URL.
   if (!isGM && visibility === "gm-only") {
@@ -145,10 +158,11 @@ export default function ItemProfile() {
         </button>
         {isGM && (
           <button
-            onClick={() => {
-              if (isEditing && formData) {
-                itemsRepo.upsert(formData);
-                setItems(itemsRepo.getAll());
+            onClick={async () => {
+              if (isEditing && formData && selectedCampaignId) {
+                await itemsRepo.upsert(selectedCampaignId, formData);
+                const data = await itemsRepo.getAll(selectedCampaignId);
+                setItems(Array.isArray(data) ? data : []);
               }
               setIsEditing((prev) => !prev);
             }}
@@ -391,7 +405,7 @@ export default function ItemProfile() {
               {isEditing && isGM ? (
                 <input
                   className="bg-transparent border border-white/20 rounded-lg px-2 py-1 text-white/90"
-                  value={formData.location}
+                  value={formData.location || ""}
                   onChange={(e) => handleFieldChange("location", e.target.value)}
                 />
               ) : (
@@ -406,46 +420,15 @@ export default function ItemProfile() {
           {/* v0.1: cross-links */}
           <section className="bg-white/5 border border-white/10 rounded-2xl p-5">
             <h2 className="text-lg font-semibold text-white mb-2">Where it showed up</h2>
-            {linkedSessions.length === 0 ? (
-              <p className="text-zinc-400 text-sm">No sessions linked yet.</p>
-            ) : (
-              <div className="space-y-2">
-                {linkedSessions.map((s) => {
-                  const session = sessionsById.get(String(s.sessionId));
-                  const title = session?.name || `Session ${s.sessionId}`;
-                  return (
-                    <button
-                      key={s.linkId}
-                      className="w-full text-left px-3 py-2 rounded-xl bg-white/5 border border-white/10 hover:bg-white/10"
-                      onClick={() => navigate(`/sessions/${s.sessionId}`)}
-                    >
-                      <div className="flex items-center justify-between gap-3">
-                        <div>
-                          <div className="text-white font-medium text-sm">{title}</div>
-                          <div className="text-xs text-zinc-500">label: {s.label}</div>
-                        </div>
-                        {isGM && (
-                          <span
-                            className={`text-[10px] px-2 py-0.5 rounded-full border ${s.visibility === "GM"
-                              ? "bg-red-500/20 text-red-300 border-red-500/40"
-                              : "bg-emerald-500/20 text-emerald-300 border-emerald-500/40"
-                              }`}
-                          >
-                            {s.visibility}
-                          </span>
-                        )}
-                      </div>
-                    </button>
-                  );
-                })}
-              </div>
-            )}
+            <p className="text-zinc-400 text-sm">
+              Session linking will return after Firestore link migration.
+            </p>
           </section>
 
           <section className="bg-white/5 border border-white/10 rounded-2xl p-5">
             <h2 className="text-lg font-semibold text-white mb-2">Bag of Holding</h2>
             <p className="text-sm text-zinc-400">
-              Status: {inBag ? <span className="text-emerald-300 font-medium">in party inventory</span> : <span className="text-zinc-400">not in bag</span>}
+              Bag integration will return after Firestore bag migration.
             </p>
           </section>
         </div>

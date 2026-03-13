@@ -1,26 +1,29 @@
-import { readJson, writeJson } from "../storage/storage";
-import { storageKeys } from "../storage/storageKeys";
-
-export type Item = {
-  id: string;
-  name: string;
-  description?: string;
-  mechanics?: string;
-};
-
-const EMPTY: Item[] = [];
+import {
+  collection,
+  getDocs,
+  doc,
+  setDoc,
+  deleteDoc,
+} from "firebase/firestore";
+import { db } from "../../firebase/firebase";
 
 export const itemsRepo = {
-  getAll(): Item[] {
-    return readJson(storageKeys.items, EMPTY);
+  async getAll(campaignId: string) {
+    const snap = await getDocs(
+      collection(db, "campaigns", campaignId, "items")
+    );
+
+    return snap.docs?.map((d) => ({ id: d.id, ...d.data() })) ?? [];
   },
-  upsert(item: Item) {
-    const all = itemsRepo.getAll();
-    const idx = all.findIndex(i => i.id === item.id);
-    const next = idx >= 0 ? all.map(i => (i.id === item.id ? item : i)) : [item, ...all];
-    writeJson(storageKeys.items, next);
+
+  async upsert(campaignId: string, item: any) {
+    await setDoc(
+      doc(db, "campaigns", campaignId, "items", item.id),
+      item
+    );
   },
-  remove(id: string) {
-    writeJson(storageKeys.items, itemsRepo.getAll().filter(i => i.id !== id));
+
+  async remove(campaignId: string, id: string) {
+    await deleteDoc(doc(db, "campaigns", campaignId, "items", id));
   },
 };

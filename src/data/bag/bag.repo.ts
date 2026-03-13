@@ -1,103 +1,117 @@
-import { readJson, writeJson } from "../storage/storage";
-import { storageKeys } from "../storage/storageKeys";
+import { doc, getDoc, setDoc } from "firebase/firestore";
+import { db } from "../../firebase/firebase";
 
-export type Currency = {
-  gp: number;
-  sp: number;
-  cp: number;
-  ep: number;
-  pp: number;
-};
+type CoinKey = "gp" | "sp" | "cp" | "ep" | "pp";
+
+export type BagCurrency = Partial<Record<CoinKey, number>>;
 
 export type LooseBagItem = {
   id: string;
   name: string;
-  type?: "Weapon" | "Armor" | "Consumable" | "Other";
   qty?: number;
-  worth?: number; // gp value per entry (simple)
-  note?: string;
+  worth?: number;
+  type?: string;
   addedBy?: string;
   createdAt?: number;
+  notes?: string;
 };
 
 export type BagState = {
-  currency: Currency;
+  currency: BagCurrency;
   looseItems: LooseBagItem[];
 };
 
-const EMPTY: BagState = {
+const EMPTY_BAG: BagState = {
   currency: { gp: 0, sp: 0, cp: 0, ep: 0, pp: 0 },
   looseItems: [],
 };
 
-const clamp0 = (n: number) => (Number.isFinite(n) ? Math.max(0, n) : 0);
+function normalizeCurrency(input?: BagCurrency): BagCurrency {
+  return {
+    gp: Math.max(0, Number(input?.gp) || 0),
+    sp: Math.max(0, Number(input?.sp) || 0),
+    cp: Math.max(0, Number(input?.cp) || 0),
+    ep: Math.max(0, Number(input?.ep) || 0),
+    pp: Math.max(0, Number(input?.pp) || 0),
+  };
+}
 
-const normalizeCurrency = (c: Partial<Currency> | undefined): Currency => ({
-  gp: clamp0(Number(c?.gp ?? 0)),
-  sp: clamp0(Number(c?.sp ?? 0)),
-  cp: clamp0(Number(c?.cp ?? 0)),
-  ep: clamp0(Number(c?.ep ?? 0)),
-  pp: clamp0(Number(c?.pp ?? 0)),
-});
+function normalizeLooseItems(input?: LooseBagItem[]): LooseBagItem[] {
+  if (!Array.isArray(input)) return [];
+  return input.map((item) => ({
+    ...item,
+    qty: Math.max(1, Number(item?.qty) || 1),
+    worth: Math.max(0, Number(item?.worth) || 0),
+    type: item?.type || "Other",
+  }));
+}
 
-const normalizeState = (s: Partial<BagState> | undefined): BagState => {
-  const currency = normalizeCurrency(s?.currency);
-  const looseItems = Array.isArray(s?.looseItems) ? (s!.looseItems as LooseBagItem[]) : [];
-  return { currency, looseItems };
-};
+function normalizeBag(input?: Partial<BagState> | null): BagState {
+  return {
+    currency: normalizeCurrency(input?.currency),
+    looseItems: normalizeLooseItems(input?.looseItems),
+  };
+}
 
 export const bagRepo = {
-  get(): BagState {
-    // Backward compatible: older versions may only have looseItems
-    const raw = readJson(storageKeys.bag, EMPTY) as any;
-    return normalizeState(raw);
+  async get(campaignId: string): Promise<BagState> {
+    if (!campaignId) return { ...EMPTY_BAG };
+
+    const snap = await getDoc(doc(db, "campaigns", campaignId, "meta", "bag"));
+    if (!snap.exists()) return { ...EMPTY_BAG };
+
+    return normalizeBag(snap.data() as Partial<BagState>);
   },
 
-  save(next: BagState) {
-    writeJson(storageKeys.bag, next);
+  async save(campaignId: string, bag: BagState): Promise<void> {
+    if (!campaignId) return;
+    await setDoc(doc(db, "campaigns", campaignId, "meta", "bag"), normalizeBag(bag));
   },
 
-  setCurrency(nextCurrency: Partial<Currency>) {
-    const state = bagRepo.get();
-    const merged: BagState = {
-      ...state,
-      currency: normalizeCurrency({ ...state.currency, ...nextCurrency }),
+  addLooseItem(bag: BagState, newItem: LooseBagItem): BagState {
+    const current = normalizeBag(bag);
+    return {
+      ...current,
+      looseItems: [
+        ...current.looseItems,
+        {
+          ...newItem,
+          qty: Math.max(1, Number(newItem?.qty) || 1),
+          worth: Math.max(0, Number(newItem?.worth) || 0),
+          type: newItem?.type || "Other",
+        },
+      ],
     };
-    bagRepo.save(merged);
-    return merged;
   },
 
-  applyCurrencyDelta(delta: Partial<Currency>, mode: "add" | "spend") {
-    const state = bagRepo.get();
+  removeLooseItem(bag: BagState, itemId: string): BagState {
+    const current = normalizeBag(bag);
+    return {
+      ...current,
+      looseItems: current.looseItems.filter(
+        (item) => String(item.id) !== String(itemId)
+      ),
+    };
+  },
+
+  applyCurrencyDelta(
+    bag: BagState,
+    delta: BagCurrency,
+    mode: "add" | "spend" = "add"
+  ): BagState {
+    const current = normalizeBag(bag);
+    const normalizedDelta = normalizeCurrency(delta);
     const sign = mode === "spend" ? -1 : 1;
 
-    const next: Currency = {
-      gp: clamp0(state.currency.gp + sign * (Number(delta.gp) || 0)),
-      sp: clamp0(state.currency.sp + sign * (Number(delta.sp) || 0)),
-      cp: clamp0(state.currency.cp + sign * (Number(delta.cp) || 0)),
-      ep: clamp0(state.currency.ep + sign * (Number(delta.ep) || 0)),
-      pp: clamp0(state.currency.pp + sign * (Number(delta.pp) || 0)),
+    return {
+      ...current,
+      currency: {
+        gp: Math.max(0, (current.currency.gp || 0) + sign * (normalizedDelta.gp || 0)),
+        sp: Math.max(0, (current.currency.sp || 0) + sign * (normalizedDelta.sp || 0)),
+        cp: Math.max(0, (current.currency.cp || 0) + sign * (normalizedDelta.cp || 0)),
+        ep: Math.max(0, (current.currency.ep || 0) + sign * (normalizedDelta.ep || 0)),
+        pp: Math.max(0, (current.currency.pp || 0) + sign * (normalizedDelta.pp || 0)),
+      },
     };
-
-    const merged: BagState = { ...state, currency: next };
-    bagRepo.save(merged);
-    return merged;
-  },
-
-  addLooseItem(item: LooseBagItem) {
-    const state = bagRepo.get();
-    const next: BagState = { ...state, looseItems: [item, ...(state.looseItems || [])] };
-    bagRepo.save(next);
-    return next;
-  },
-
-  removeLooseItem(id: string) {
-    const state = bagRepo.get();
-    const next: BagState = {
-      ...state,
-      looseItems: (state.looseItems || []).filter((x) => String(x.id) !== String(id)),
-    };
-    bagRepo.save(next);
-    return next;
   },
 };
