@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { useMode } from "../context/ModeContext.jsx";
-import { ArrowLeft, Swords, Shield, Sparkles } from "lucide-react";
+import { ArrowLeft, Swords, Shield, Sparkles, Trash2 } from "lucide-react";
 import { itemsRepo } from "../data/items/items.repo";
 import { useCampaign } from "../context/CampaignContext";
 
@@ -156,20 +156,43 @@ export default function ItemProfile() {
           <ArrowLeft className="w-5 h-5" />
           Back to Items
         </button>
-        {isGM && (
-          <button
-            onClick={async () => {
-              if (isEditing && formData && selectedCampaignId) {
-                await itemsRepo.upsert(selectedCampaignId, formData);
-                const data = await itemsRepo.getAll(selectedCampaignId);
-                setItems(Array.isArray(data) ? data : []);
-              }
-              setIsEditing((prev) => !prev);
-            }}
-            className="px-4 py-2 rounded-xl bg-white/10 text-zinc-200 hover:bg-white/20 text-sm font-medium"
-          >
-            {isEditing ? "Done" : "Edit"}
-          </button>
+                {isGM && (
+          <div className="flex w-full sm:w-auto flex-col sm:flex-row gap-2">
+            <button
+              onClick={async () => {
+                if (isEditing && formData && selectedCampaignId) {
+                  await itemsRepo.upsert(selectedCampaignId, formData);
+                  const data = await itemsRepo.getAll(selectedCampaignId);
+                  setItems(Array.isArray(data) ? data : []);
+                }
+                setIsEditing((prev) => !prev);
+              }}
+              className="w-full sm:w-auto px-4 py-2 rounded-xl bg-white/10 text-zinc-200 hover:bg-white/20 text-sm font-medium"
+            >
+              {isEditing ? "Done" : "Edit"}
+            </button>
+
+            <button
+              type="button"
+              onClick={async () => {
+                if (!selectedCampaignId || !formData?.id) return;
+                const ok = window.confirm("Delete this item? This cannot be undone.");
+                if (!ok) return;
+
+                try {
+                  await itemsRepo.remove(selectedCampaignId, String(formData.id));
+                  navigate("/items");
+                } catch (error) {
+                  console.error("[ItemProfile] Failed to delete item", error);
+                  alert("Could not delete item. Please try again.");
+                }
+              }}
+              className="w-full sm:w-auto px-4 py-2 rounded-xl bg-red-500/15 border border-red-500/40 text-red-200 hover:bg-red-500/25 text-sm font-medium inline-flex items-center justify-center gap-2"
+            >
+              <Trash2 className="w-4 h-4" />
+              Delete
+            </button>
+          </div>
         )}
       </div>
 
