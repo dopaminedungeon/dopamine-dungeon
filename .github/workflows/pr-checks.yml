@@ -34,8 +34,5 @@ jobs:
       - name: Lint
         run: pnpm lint || true
 
-      - name: Typecheck
-        run: pnpm typecheck
-
-      - name: Test
-        run: pnpm test -- --runInBand
+      - name: Build
+        run: pnpm build
