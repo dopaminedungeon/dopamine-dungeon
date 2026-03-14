@@ -5,16 +5,45 @@ import { useMode } from "../context/ModeContext.jsx";
 import { sessionsRepo } from "../data/sessions/sessions.repo";
 import { itemsRepo } from "../data/items/items.repo";
 import SessionEntityLinkManager from "../components/session/SessionEntityLinkManager.jsx";
+import { useCampaign } from "../context/CampaignContext";
 export default function SessionProfile() {
   const { id } = useParams();
   const navigate = useNavigate();
   const { isGM } = useMode();
 
-  const [allSessions, setAllSessions] = useState(() => sessionsRepo.getAll());
+  const { selectedCampaignId } = useCampaign();
+  const [allSessions, setAllSessions] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [allItems, setAllItems] = useState([]);
 
   useEffect(() => {
-    setAllSessions(sessionsRepo.getAll());
-  }, [id]);
+    if (!selectedCampaignId) {
+      setAllSessions([]);
+      setAllItems([]);
+      setLoading(false);
+      return;
+    }
+
+    async function load() {
+      setLoading(true);
+      try {
+        const [sessionData, itemData] = await Promise.all([
+          sessionsRepo.getAll(selectedCampaignId),
+          itemsRepo.getAll(selectedCampaignId),
+        ]);
+        setAllSessions(Array.isArray(sessionData) ? sessionData : []);
+        setAllItems(Array.isArray(itemData) ? itemData : []);
+      } catch (error) {
+        console.error("[SessionProfile] Failed to load session data", error);
+        setAllSessions([]);
+        setAllItems([]);
+      } finally {
+        setLoading(false);
+      }
+    }
+
+    load();
+  }, [selectedCampaignId]);
   const session = useMemo(
     () => allSessions.find((s) => String(s.id) === String(id)),
     [allSessions, id]
@@ -65,6 +94,13 @@ export default function SessionProfile() {
     setGmPrepText(normalizedSession.gmPrep.join("\n"));
   }, [normalizedSession]);
 
+  if (loading) {
+    return (
+      <main className="flex-1 overflow-auto flex items-center justify-center">
+        <div className="text-zinc-400">Loading session...</div>
+      </main>
+    );
+  }
   // No such session at all
   if (!normalizedSession) {
     return (
@@ -186,7 +222,7 @@ export default function SessionProfile() {
               </div>
               <button
                 type="button"
-                onClick={() => {
+                onClick={async () => {
                   if (editMode && normalizedEditable) {
                     const gmPrep = gmPrepText
                       .split("\n")
@@ -202,8 +238,9 @@ export default function SessionProfile() {
                       gmPrep,
                     };
 
-                    sessionsRepo.upsert(toSave);
-                    setAllSessions(sessionsRepo.getAll());
+                    await sessionsRepo.upsert(selectedCampaignId, toSave);
+                    const data = await sessionsRepo.getAll(selectedCampaignId);
+                    setAllSessions(data);
                   }
 
                   setEditMode((prev) => !prev);
@@ -213,20 +250,20 @@ export default function SessionProfile() {
                 {editMode ? "Done" : "Edit"}
               </button>
               <button
-  type="button"
-  onClick={() => {
-    const ok = window.confirm("Delete this session? This cannot be undone.");
-    if (!ok) return;
+                type="button"
+                onClick={async () => {
+                  const ok = window.confirm("Delete this session? This cannot be undone.");
+                  if (!ok) return;
 
-    sessionsRepo.remove(String(id));
-    navigate("/sessions");
-  }}
-  className="px-3 py-1.5 rounded-xl bg-red-500/15 border border-red-500/40 text-xs text-red-200 hover:bg-red-500/25 transition flex items-center gap-2"
-  title="Delete session"
->
-  <Trash2 className="w-4 h-4" />
-  Delete
-</button>
+                  await sessionsRepo.remove(selectedCampaignId, String(id));
+                  navigate("/sessions");
+                }}
+                className="px-3 py-1.5 rounded-xl bg-red-500/15 border border-red-500/40 text-xs text-red-200 hover:bg-red-500/25 transition flex items-center gap-2"
+                title="Delete session"
+              >
+                <Trash2 className="w-4 h-4" />
+                Delete
+              </button>
             </div>
           )}
         </div>
@@ -299,7 +336,7 @@ export default function SessionProfile() {
               isGM={isGM}
               editMode={editMode}
               visibilityMode={isGM ? "GM" : "Player"}
-              dataSource={itemsRepo.getAll()}
+              dataSource={allItems}
               getEntityLabel={(item) => item?.name}
               onAddNew={() => navigate("/items")}
               renderCard={(item, link, helpers) => {

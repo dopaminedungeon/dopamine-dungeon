@@ -1,38 +1,43 @@
-// src/context/AuthContext.jsx
 import { createContext, useContext, useEffect, useState } from "react";
+import { auth } from "../firebase/firebase";
+import {
+  GoogleAuthProvider,
+  signInWithPopup,
+  signOut,
+  onAuthStateChanged,
+} from "firebase/auth";
 
 const AuthContext = createContext(null);
 
 export function AuthProvider({ children }) {
-  const [authStatus, setAuthStatus] = useState("loading");
   const [user, setUser] = useState(null);
+  const [authStatus, setAuthStatus] = useState("loading");
 
   useEffect(() => {
-    // 🔥 MOCKED AUTH — THIS IS STEP 1 🔥
-    // Pretend the user is logged in
-    const fakeUser = {
-      uid: "dev-user",
-      email: "magda@dm.test",
-      displayName: "Magda (Dev)",
-      
-    };
-    console.log("[AuthProvider] setting fake user + authed");
+    const unsub = onAuthStateChanged(auth, (firebaseUser) => {
+      setUser(firebaseUser ?? null);
+      setAuthStatus("ready");
+    });
 
-    setUser(fakeUser);
-    setAuthStatus("authed");
+    return () => unsub();
   }, []);
 
+  const signInWithGoogle = async () => {
+    const provider = new GoogleAuthProvider();
+    await signInWithPopup(auth, provider);
+  };
+
+  const logout = async () => {
+    await signOut(auth);
+  };
+
   return (
-    <AuthContext.Provider value={{ user, authStatus }}>
+    <AuthContext.Provider
+      value={{ user, authStatus, signInWithGoogle, logout }}
+    >
       {children}
     </AuthContext.Provider>
   );
 }
 
-export function useAuth() {
-  const ctx = useContext(AuthContext);
-  if (!ctx) {
-    throw new Error("useAuth must be used within AuthProvider");
-  }
-  return ctx;
-}
+export const useAuth = () => useContext(AuthContext);

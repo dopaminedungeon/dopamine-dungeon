@@ -1,154 +1,112 @@
-import React, { createContext, useContext, useEffect, useMemo, useState } from "react";
-import { useAuth } from "./AuthContext.jsx";
-import { useTenant } from "./TenantContext.jsx";
+import { createContext, useContext, useEffect, useState } from "react";
+import { collection, query, where, onSnapshot, addDoc } from "firebase/firestore";
+import { db } from "../firebase/firebase";
+import { useTenant } from "./TenantContext";
 
 const CampaignContext = createContext(null);
-
-const STORAGE_KEY = "dd_activeCampaignId";
-
-// Tenant-scoped storage helpers (fixes multitenancy bleed)
-function storageKeyForTenant(tenantId) {
-  return tenantId ? `${STORAGE_KEY}:${tenantId}` : STORAGE_KEY;
-}
-
-function readStoredCampaignId(tenantId) {
-  try {
-    return localStorage.getItem(storageKeyForTenant(tenantId));
-  } catch {
-    return null;
-  }
-}
-
-function writeStoredCampaignId(tenantId, campaignId) {
-  try {
-    const key = storageKeyForTenant(tenantId);
-    if (campaignId) localStorage.setItem(key, campaignId);
-    else localStorage.removeItem(key);
-  } catch {
-    // ignore
-  }
-}
-
-const MOCK_CAMPAIGNS_BY_TENANT = {
-  "t-magdas-tables": [
-    {
-      tenantId: "t-magdas-tables",
-      campaignId: "varionath",
-      name: "Chronicles of Varionath",
-      campaignRole: "CampaignGM", // <- this is what unlocks GM pages
-    },
-    {
-      tenantId: "t-magdas-tables",
-      campaignId: "oneshot",
-      name: "One-shot Playground",
-      campaignRole: "CampaignPlayer",
-    },
-  ],
-  "t-chaos-inc": [
-    {
-      tenantId: "t-chaos-inc",
-      campaignId: "chaos-demo",
-      name: "Chaos Demo",
-      campaignRole: "CampaignPlayer",
-    },
-  ],
-};
+const CAMPAIGN_STORAGE_KEY = "dd_selectedCampaignId";
 
 export function CampaignProvider({ children }) {
-  const { authStatus, user } = useAuth();
-  const { tenantStatus, selectedTenantId, activeTenantId: activeTenantIdAlias } = useTenant();
-
-  const activeTenantId = selectedTenantId ?? activeTenantIdAlias ?? null;
-
+  const { selectedTenantId } = useTenant();
   const [campaignStatus, setCampaignStatus] = useState("loading");
   const [accessibleCampaigns, setAccessibleCampaigns] = useState([]);
-  const [selectedCampaignId, setSelectedCampaignId] = useState(() => readStoredCampaignId(activeTenantId));
+  const [campaignRole, setCampaignRole] = useState(null);
+  const [selectedCampaignId, setSelectedCampaignId] = useState(() => {
+    try {
+      return localStorage.getItem(CAMPAIGN_STORAGE_KEY) || null;
+    } catch {
+      return null;
+    }
+  });
 
   useEffect(() => {
-    const isAuthed = authStatus === "authed" && Boolean(user);
-    const tenantReady = tenantStatus === "ready" && Boolean(activeTenantId);
-
-    if (!isAuthed || !tenantReady) {
-      setCampaignStatus(tenantReady ? "loading" : "blocked");
+    if (!selectedTenantId) {
       setAccessibleCampaigns([]);
-      return;
-    }
-
-    const list = MOCK_CAMPAIGNS_BY_TENANT[activeTenantId] ?? [];
-    setAccessibleCampaigns(list);
-
-    if (list.length === 0) {
       setSelectedCampaignId(null);
-      writeStoredCampaignId(activeTenantId, null);
-      setCampaignStatus("none");
+      setCampaignRole(null);
+      setCampaignStatus("unknown");
       return;
     }
 
-    const stored = readStoredCampaignId(activeTenantId);
-    const preferred = selectedCampaignId ?? stored;
-    const exists = preferred && list.some((c) => c.campaignId === preferred);
+    setCampaignStatus("loading");
 
-    if (exists) {
-      setSelectedCampaignId(preferred);
-      writeStoredCampaignId(activeTenantId, preferred);
+    const q = query(
+      collection(db, "campaigns"),
+      where("tenantId", "==", selectedTenantId)
+    );
+
+    const unsubscribe = onSnapshot(q, async (snap) => {
+      if (snap.empty) {
+        await createDefaultCampaign();
+        return;
+      }
+
+      const campaigns = snap.docs.map((d) => ({
+        campaignId: d.id,
+        ...d.data(),
+      }));
+
+      setAccessibleCampaigns(campaigns);
+
+      const validSelected = campaigns.find(
+        (c) => c.campaignId === selectedCampaignId
+      );
+
+      const nextCampaignId = validSelected
+        ? validSelected.campaignId
+        : campaigns[0].campaignId;
+
+      setSelectedCampaignId(nextCampaignId);
+
+      // v0.2 bootstrap: logged-in user acts as campaign owner until per-campaign membership is added.
+      setCampaignRole("owner");
+
+      try {
+        localStorage.setItem(CAMPAIGN_STORAGE_KEY, nextCampaignId);
+      } catch {}
+
       setCampaignStatus("ready");
-      return;
+    }, (error) => {
+      console.error("[CampaignContext] Failed to listen to campaigns", error);
+      setCampaignRole(null);
+      setCampaignStatus("error");
+    });
+
+    return () => unsubscribe();
+  }, [selectedTenantId]);
+
+  const createDefaultCampaign = async () => {
+    await addDoc(collection(db, "campaigns"), {
+      tenantId: selectedTenantId,
+      name: "Chronicles of Varionath",
+      createdAt: Date.now(),
+    });
+  };
+
+  const selectCampaign = (campaignId) => {
+    setSelectedCampaignId(campaignId);
+    try {
+      if (campaignId) localStorage.setItem(CAMPAIGN_STORAGE_KEY, campaignId);
+      else localStorage.removeItem(CAMPAIGN_STORAGE_KEY);
+    } catch {
+      // ignore storage failures
     }
+  };
 
-    if (list.length === 1) {
-      const only = list[0].campaignId;
-      setSelectedCampaignId(only);
-      writeStoredCampaignId(activeTenantId, only);
-      setCampaignStatus("ready");
-      return;
-    }
-
-    setSelectedCampaignId(null);
-    writeStoredCampaignId(activeTenantId, null);
-    setCampaignStatus("none");
-  }, [authStatus, user, tenantStatus, activeTenantId, selectedCampaignId]);
-
-  const selectedCampaign = useMemo(() => {
-    return accessibleCampaigns.find((c) => c.campaignId === selectedCampaignId) ?? null;
-  }, [accessibleCampaigns, selectedCampaignId]);
-
-  const campaignRole = selectedCampaign?.campaignRole ?? null;
-
-  function selectCampaign(campaignId) {
-    const next = campaignId || null;
-    setSelectedCampaignId(next);
-    writeStoredCampaignId(activeTenantId, next);
-    setCampaignStatus(next ? "ready" : "none");
-  }
-
-  const value = useMemo(
-    () => ({
-      campaignStatus,
-      accessibleCampaigns,
-      selectedCampaignId,
-      selectedCampaign,
-      campaignRole,
-      selectCampaign,
-
-      // allow local editing in settings (Firebase later)
-      setCampaigns: setAccessibleCampaigns,
-
-      // aliases so old pages / TopBar code still works
-      campaigns: (accessibleCampaigns || []).map((c) => ({
-        ...c,
-        id: c.id ?? c.campaignId,
-      })),
-      activeCampaignId: selectedCampaignId,
-      setActiveCampaignId: selectCampaign,
-    }),
-    [campaignStatus, accessibleCampaigns, selectedCampaignId, selectedCampaign, campaignRole, selectCampaign, setAccessibleCampaigns]
+  return (
+    <CampaignContext.Provider
+      value={{
+        campaigns: accessibleCampaigns,
+        accessibleCampaigns,
+        campaignStatus,
+        selectedCampaignId,
+        selectCampaign,
+        campaignRole,
+      }}
+    >
+      {children}
+    </CampaignContext.Provider>
   );
-
-  return <CampaignContext.Provider value={value}>{children}</CampaignContext.Provider>;
 }
 
-export function useCampaign() {
-  const ctx = useContext(CampaignContext);
-  if (!ctx) throw new Error("useCampaign must be used within CampaignProvider");
-  return ctx;
-}
+export const useCampaign = () => useContext(CampaignContext);
