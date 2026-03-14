@@ -1,8 +1,14 @@
 name: PR Checks
 
 on:
+  push:
+    branches: [dev]
   pull_request:
-    branches: [main]
+    branches: [main, dev]
+
+concurrency:
+  group: pr-checks-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   checks:

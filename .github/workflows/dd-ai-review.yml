@@ -2,8 +2,12 @@ name: DD AI Review
 
 on:
   pull_request:
-    branches: [main]
+    branches: [main, dev]
     types: [opened, synchronize, reopened]
+
+concurrency:
+  group: dd-ai-review-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
 
 permissions:
   contents: read
