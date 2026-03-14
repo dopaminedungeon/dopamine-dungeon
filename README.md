@@ -94,4 +94,4 @@ Build:
 - `[N]` – Navigation component (Sidebar, TopBar, etc.)
 - `[C]` – UI component
 - `[CTX]` – Context / state container (React Context)
-- `[G]` – Gate / Decision (auth, mode, permissions)
+- `[G]` – Gate / Decision (auth, mode, permissions)# CI test
