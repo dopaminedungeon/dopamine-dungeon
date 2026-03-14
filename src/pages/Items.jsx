@@ -305,8 +305,8 @@ export default function Items() {
     </div>
 
     {showCreateModal && (
-      <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4">
-        <div className="w-[92vw] max-w-2xl max-h-[85vh] overflow-y-auto bg-zinc-950/90 border border-white/10 rounded-2xl shadow-xl">
+      <div className="fixed inset-0 z-50 flex items-start sm:items-center justify-center bg-black/70 backdrop-blur-sm p-4 pt-6 pb-28 sm:pb-6 overflow-y-auto">
+        <div className="w-[92vw] max-w-2xl max-h-[85vh] overflow-y-auto my-auto bg-zinc-950/90 border border-white/10 rounded-2xl shadow-xl">
           <div className="flex items-center justify-between px-6 py-4 border-b border-white/10">
             <h2 className="text-white font-semibold text-lg">Add Item</h2>
             <button
