@@ -8,10 +8,6 @@ import { addLink, getLinksForEntity, removeLink } from "../data/links/links.repo
 import { itemsRepo } from "../data/items/items.repo";
 import { bagRepo } from "../data/bag/bag.repo";
 
-
-// v0.1: Bag is two things:
-// 1) Linked Items (BagOfHolding ↔ Item links) -> enables cross-linking
-// 2) Loose Items (ad-hoc entries) -> quick party inventory tracking
 export default function BagOfHolding() {
   const { isGM } = useMode();
   const { selectedCampaignId } = useCampaign();
@@ -284,6 +280,7 @@ export default function BagOfHolding() {
 
     return (Array.isArray(allItems) ? allItems : [])
       .filter((it) => it?.id)
+      .filter((it) => isGM || it?.visibility !== "gm-only")
       .filter((it) => !linkedIds.has(String(it.id)))
       .filter((it) => (!q ? true : String(it.name || "").toLowerCase().includes(q)))
       .slice(0, 30);
@@ -327,7 +324,7 @@ export default function BagOfHolding() {
   return (
     <main className="flex-1 overflow-auto">
       {/* Subsection nav */}
-      <div className="mb-4 flex flex-wrap items-center gap-2">
+      <div className="mb-4 flex flex-wrap items-center gap-2 overflow-x-auto whitespace-nowrap pr-1 [-webkit-overflow-scrolling:touch]">
         {hasPcs ? (
           <NavLink
             to="/pcs"
@@ -356,7 +353,7 @@ export default function BagOfHolding() {
         </NavLink>
       </div>
       {/* Header */}
-      <div className="flex flex-col lg:flex-row gap-3 sm:gap-4 mb-5 sm:mb-6">
+      <div className="flex flex-col gap-3 sm:gap-4 mb-5 sm:mb-6">
         <div className="relative flex-1">
           <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-zinc-500" />
           <input
@@ -367,7 +364,7 @@ export default function BagOfHolding() {
           />
         </div>
 
-        <div className="flex gap-2 overflow-x-auto whitespace-nowrap pr-1 [-webkit-overflow-scrolling:touch]">
+        <div className="flex gap-2 overflow-x-auto whitespace-nowrap pr-1 pb-1 [-webkit-overflow-scrolling:touch]">
           {bagTypes.map((t) => (
             <button
               key={t}
@@ -383,7 +380,7 @@ export default function BagOfHolding() {
         </div>
 
         {canAdd && (
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 w-full lg:w-auto">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 w-full">
             <button
               className="w-full flex items-center justify-center gap-2 px-4 py-2.5 sm:px-6 sm:py-3 bg-linear-to-r from-indigo-500 to-purple-500 text-white font-medium rounded-xl hover:opacity-90 transition-opacity"
               onClick={() => setShowModal(true)}
@@ -402,10 +399,10 @@ export default function BagOfHolding() {
       </div>
 
       {/* Treasury + Party Totals */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 mb-6">
+      <div className="grid grid-cols-1 xl:grid-cols-3 gap-4 mb-6">
         {/* Treasury */}
-        <div className="lg:col-span-2 bg-white/5 border border-white/10 rounded-xl sm:rounded-2xl p-4 sm:p-5">
-          <div className="flex items-start justify-between gap-4 mb-4">
+        <div className="xl:col-span-2 bg-white/5 border border-white/10 rounded-xl sm:rounded-2xl p-4 sm:p-5">
+          <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3 sm:gap-4 mb-4">
             <div>
               <div className="text-sm font-semibold text-white">Treasury</div>
               <div className="text-xs text-zinc-500 mt-0.5">
@@ -413,13 +410,13 @@ export default function BagOfHolding() {
               </div>
             </div>
 
-            <div className="px-3 py-1.5 rounded-xl bg-black/20 border border-white/10 text-sm text-zinc-300">
+            <div className="w-full sm:w-auto px-3 py-2 rounded-xl bg-black/20 border border-white/10 text-sm text-zinc-300">
               Total: <span className="text-white font-semibold">{gpFmt(currencyTotals.totalGp)} gp</span>
             </div>
           </div>
 
           {/* Current holdings */}
-          <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
             {([
               ["gp", "Gold"],
               ["sp", "Silver"],
@@ -442,21 +439,20 @@ export default function BagOfHolding() {
 
           {/* Add to treasury */}
           <div className="mt-4 rounded-2xl border border-white/10 bg-black/20 p-4">
-            <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3 mb-3">
+            <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-3 mb-3">
               <div>
                 <div className="text-sm font-semibold text-white">Add currency</div>
                 <div className="text-xs text-zinc-500 mt-0.5">Enter what you’re adding, click Add. Inputs clear automatically.</div>
               </div>
-              <div className="flex items-center gap-2">
+              <div className="grid grid-cols-2 gap-2 w-full sm:w-auto">
                 <button
                   type="button"
                   disabled={!hasPendingDelta}
                   onClick={() => applyPendingCurrency("spend")}
-                  className={`px-4 py-2 rounded-xl border border-white/10 font-medium transition-colors ${
-                    hasPendingDelta
+                  className={`w-full px-4 py-2.5 rounded-xl border border-white/10 font-medium transition-colors ${hasPendingDelta
                       ? "bg-red-500/15 text-red-200 hover:bg-red-500/25"
                       : "bg-white/5 text-zinc-500 cursor-not-allowed"
-                  }`}
+                    }`}
                 >
                   Spend
                 </button>
@@ -465,18 +461,17 @@ export default function BagOfHolding() {
                   type="button"
                   disabled={!hasPendingDelta}
                   onClick={() => applyPendingCurrency("add")}
-                  className={`px-4 py-2 rounded-xl font-medium transition-opacity ${
-                    hasPendingDelta
+                  className={`w-full px-4 py-2.5 rounded-xl font-medium transition-opacity ${hasPendingDelta
                       ? "bg-linear-to-r from-indigo-500 to-purple-500 text-white hover:opacity-90"
                       : "bg-white/5 text-zinc-500 cursor-not-allowed"
-                  }`}
+                    }`}
                 >
                   Add
                 </button>
               </div>
             </div>
 
-            <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
+            <div className="grid grid-cols-2 lg:grid-cols-5 gap-3">
               {([
                 ["gp", "Gold"],
                 ["sp", "Silver"],
@@ -511,7 +506,7 @@ export default function BagOfHolding() {
         </div>
 
         {/* Party Totals */}
-        <div className="bg-white/5 border border-white/10 rounded-xl sm:rounded-2xl p-4 sm:p-5 text-sm text-zinc-300">
+        <div className="bg-white/5 border border-white/10 rounded-xl sm:rounded-2xl p-4 sm:p-5 text-sm text-zinc-300 xl:self-start">
           <div className="text-sm font-semibold text-white mb-3">Party Totals</div>
 
           <div className="grid grid-cols-2 gap-3">
@@ -535,7 +530,7 @@ export default function BagOfHolding() {
 
       {/* Storage */}
       <div className="bg-white/5 border border-white/10 rounded-xl sm:rounded-2xl p-4 sm:p-5">
-        <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3 mb-4">
+        <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-3 mb-4">
           <div>
             <div className="text-sm font-semibold text-white">Storage</div>
             <div className="text-xs text-zinc-500 mt-0.5">
@@ -587,11 +582,11 @@ export default function BagOfHolding() {
             {filteredLinked.map(({ item, linkObj }) => (
               <div
                 key={linkObj.id}
-                className={`group rounded-2xl bg-black/20 border border-white/10 p-4 transition hover:bg-white/5 hover:border-white/20 border-l-4 ${typeAccent(item.type || "Other")}`}
+                className={`group rounded-2xl bg-black/20 border border-white/10 p-3 sm:p-4 transition hover:bg-white/5 hover:border-white/20 border-l-4 min-h-28 ${typeAccent(item.type || "Other")}`}
               >
                 <div className="flex items-start justify-between gap-3">
                   <div className="min-w-0">
-                    <div className="flex items-center gap-2">
+                    <div className="grid grid-cols-2 gap-2 w-full sm:w-auto">
                       <span className="text-[10px] px-2 py-0.5 rounded-full bg-indigo-500/15 text-indigo-200 border border-indigo-400/40">
                         🔗 Linked
                       </span>
@@ -603,7 +598,7 @@ export default function BagOfHolding() {
                     <div
                       role="button"
                       onClick={() => navigate(`/items/${item.id}`)}
-                      className="mt-2 text-white font-semibold truncate cursor-pointer hover:underline"
+                      className="mt-2 text-white font-semibold wrap-break-word leading-snug cursor-pointer hover:underline"
                       title={item.name}
                     >
                       {item.name}
@@ -615,7 +610,7 @@ export default function BagOfHolding() {
                   </div>
 
                   <button
-                    className="text-[11px] text-red-300 hover:text-red-200 opacity-0 group-hover:opacity-100 transition-opacity"
+                    className="text-[11px] text-red-300 hover:text-red-200 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity"
                     onClick={() => removeLinkedItem(linkObj.id)}
                     type="button"
                   >
@@ -634,11 +629,11 @@ export default function BagOfHolding() {
             {filteredLoose.map((it) => (
               <div
                 key={it.id}
-                className={`group rounded-2xl bg-black/20 border border-white/10 p-4 transition hover:bg-white/5 hover:border-white/20 border-l-4 ${typeAccent(it.type)}`}
+                className={`group rounded-2xl bg-black/20 border border-white/10 p-3 sm:p-4 transition hover:bg-white/5 hover:border-white/20 border-l-4 min-h-28 ${typeAccent(it.type)}`}
               >
                 <div className="flex items-start justify-between gap-3">
                   <div className="min-w-0">
-                    <div className="flex items-center gap-2">
+                    <div className="grid grid-cols-2 gap-2 w-full sm:w-auto">
                       <span className="text-[10px] px-2 py-0.5 rounded-full bg-amber-500/15 text-amber-200 border border-amber-400/40">
                         🧾 Loose
                       </span>
@@ -647,7 +642,7 @@ export default function BagOfHolding() {
                       </span>
                     </div>
 
-                    <div className="mt-2 text-white font-semibold truncate" title={it.name}>
+                    <div className="mt-2 text-white font-semibold wrap-break-word leading-snug" title={it.name}>
                       {it.name}
                     </div>
 
@@ -657,7 +652,7 @@ export default function BagOfHolding() {
                   </div>
 
                   <button
-                    className="text-[11px] text-red-300 hover:text-red-200 opacity-0 group-hover:opacity-100 transition-opacity"
+                    className="text-[11px] text-red-300 hover:text-red-200 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity"
                     onClick={async () => {
                       const next = bagRepo.removeLooseItem(bagState, it.id);
                       await persistBag(next);
@@ -681,7 +676,7 @@ export default function BagOfHolding() {
       {/* Modal */}
       {showModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4 overflow-auto">
-          <div className="w-full max-w-[92vw] sm:max-w-lg bg-zinc-950 border border-white/10 rounded-xl sm:rounded-2xl p-4 sm:p-6">
+          <div className="w-[92vw] max-w-lg max-h-[85vh] overflow-y-auto bg-zinc-950 border border-white/10 rounded-xl sm:rounded-2xl p-4 sm:p-6">
             <h2 className="text-lg sm:text-xl font-bold text-white mb-4">Add to Bag of Holding</h2>
 
             <form className="space-y-4" onSubmit={onSubmit}>
@@ -730,17 +725,17 @@ export default function BagOfHolding() {
                 </div>
               </div>
 
-              <div className="flex justify-end gap-3 pt-2">
+              <div className="flex flex-col-reverse sm:flex-row sm:justify-end gap-3 pt-2">
                 <button
                   type="button"
                   onClick={() => setShowModal(false)}
-                  className="px-4 py-2 rounded-xl bg-white/5 text-zinc-300 hover:bg-white/10"
+                  className="w-full sm:w-auto px-4 py-2.5 rounded-xl bg-white/5 text-zinc-300 hover:bg-white/10"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
-                  className="px-4 py-2 rounded-xl bg-linear-to-r from-blue-500 to-cyan-500 text-white font-medium hover:opacity-90"
+                  className="w-full sm:w-auto px-4 py-2.5 rounded-xl bg-linear-to-r from-blue-500 to-cyan-500 text-white font-medium hover:opacity-90"
                 >
                   Add
                 </button>
@@ -753,7 +748,7 @@ export default function BagOfHolding() {
       {/* Link existing Item modal */}
       {showLinkModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4 overflow-auto">
-          <div className="w-full max-w-[92vw] sm:max-w-lg bg-zinc-950 border border-white/10 rounded-xl sm:rounded-2xl p-4 sm:p-6">
+          <div className="w-[92vw] max-w-lg max-h-[85vh] overflow-y-auto bg-zinc-950 border border-white/10 rounded-xl sm:rounded-2xl p-4 sm:p-6">
             <h2 className="text-lg sm:text-xl font-bold text-white mb-2">Link existing Item</h2>
             <p className="text-sm text-zinc-400 mb-4">
               This creates a real cross-link (Bag ↔ Item). It will show up later in the Item profile too.
@@ -787,14 +782,14 @@ export default function BagOfHolding() {
               )}
             </div>
 
-            <div className="flex justify-end gap-3 pt-4">
+            <div className="flex flex-col-reverse sm:flex-row sm:justify-end gap-3 pt-4">
               <button
                 type="button"
                 onClick={() => {
                   setShowLinkModal(false);
                   setLinkQuery("");
                 }}
-                className="px-4 py-2 rounded-xl bg-white/5 text-zinc-300 hover:bg-white/10"
+                className="w-full sm:w-auto px-4 py-2.5 rounded-xl bg-white/5 text-zinc-300 hover:bg-white/10"
               >
                 Close
               </button>

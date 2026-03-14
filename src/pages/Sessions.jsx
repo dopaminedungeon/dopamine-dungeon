@@ -263,8 +263,8 @@ if (loading) {
         })}
       </div>
       {showCreateModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4 overflow-auto">
-          <div className="w-full max-w-[92vw] sm:max-w-xl bg-zinc-950 border border-white/10 rounded-xl sm:rounded-2xl p-4 sm:p-6">
+        <div className="fixed inset-0 z-50 flex items-start sm:items-center justify-center bg-black/70 backdrop-blur-sm p-4 pt-6 pb-28 sm:pb-6 overflow-y-auto">
+          <div className="w-[92vw] max-w-xl max-h-[85vh] overflow-y-auto my-auto bg-zinc-950 border border-white/10 rounded-xl sm:rounded-2xl p-4 sm:p-6">
             <h2 className="text-lg sm:text-xl font-bold text-white mb-4">Create New Session</h2>
 
             <form
