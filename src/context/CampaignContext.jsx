@@ -1,5 +1,5 @@
-import { createContext, useContext, useEffect, useState } from "react";
-import { collection, query, where, onSnapshot, addDoc } from "firebase/firestore";
+import { createContext, useCallback, useContext, useEffect, useState } from "react";
+import { collection, query, where, getDocs } from "firebase/firestore";
 import { db } from "../firebase/firebase";
 import { useTenant } from "./TenantContext";
 
@@ -7,7 +7,7 @@ const CampaignContext = createContext(null);
 const CAMPAIGN_STORAGE_KEY = "dd_selectedCampaignId";
 
 export function CampaignProvider({ children }) {
-  const { selectedTenantId } = useTenant();
+  const { selectedTenantId, tenantStatus } = useTenant();
   const [campaignStatus, setCampaignStatus] = useState("loading");
   const [accessibleCampaigns, setAccessibleCampaigns] = useState([]);
   const [campaignRole, setCampaignRole] = useState(null);
@@ -19,7 +19,7 @@ export function CampaignProvider({ children }) {
     }
   });
 
-  useEffect(() => {
+  const loadCampaigns = useCallback(async () => {
     if (!selectedTenantId) {
       setAccessibleCampaigns([]);
       setSelectedCampaignId(null);
@@ -30,14 +30,19 @@ export function CampaignProvider({ children }) {
 
     setCampaignStatus("loading");
 
-    const q = query(
-      collection(db, "campaigns"),
-      where("tenantId", "==", selectedTenantId)
-    );
+    try {
+      const q = query(
+        collection(db, "campaigns"),
+        where("tenantId", "==", selectedTenantId)
+      );
 
-    const unsubscribe = onSnapshot(q, async (snap) => {
+      const snap = await getDocs(q);
+
       if (snap.empty) {
-        await createDefaultCampaign();
+        setAccessibleCampaigns([]);
+        setSelectedCampaignId(null);
+        setCampaignRole(null);
+        setCampaignStatus("empty");
         return;
       }
 
@@ -58,30 +63,27 @@ export function CampaignProvider({ children }) {
 
       setSelectedCampaignId(nextCampaignId);
 
-      // v0.2 bootstrap: logged-in user acts as campaign owner until per-campaign membership is added.
-      setCampaignRole("owner");
-
       try {
         localStorage.setItem(CAMPAIGN_STORAGE_KEY, nextCampaignId);
-      } catch {}
+      } catch {
+        // ignore storage failures
+      }
 
+      // Temporary until campaign membership records are introduced in this sprint.
+      setCampaignRole("owner");
       setCampaignStatus("ready");
-    }, (error) => {
-      console.error("[CampaignContext] Failed to listen to campaigns", error);
+    } catch (error) {
+      console.error("[CampaignContext] Failed to load campaigns", error);
+      setAccessibleCampaigns([]);
       setCampaignRole(null);
       setCampaignStatus("error");
-    });
+    }
+  }, [selectedTenantId, selectedCampaignId, tenantStatus]);
 
-    return () => unsubscribe();
-  }, [selectedTenantId]);
+  useEffect(() => {
+    loadCampaigns();
+  }, [loadCampaigns]);
 
-  const createDefaultCampaign = async () => {
-    await addDoc(collection(db, "campaigns"), {
-      tenantId: selectedTenantId,
-      name: "Chronicles of Varionath",
-      createdAt: Date.now(),
-    });
-  };
 
   const selectCampaign = (campaignId) => {
     setSelectedCampaignId(campaignId);
@@ -101,6 +103,7 @@ export function CampaignProvider({ children }) {
         campaignStatus,
         selectedCampaignId,
         selectCampaign,
+        refreshCampaigns: loadCampaigns,
         campaignRole,
       }}
     >

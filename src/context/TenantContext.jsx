@@ -1,5 +1,5 @@
-import { createContext, useContext, useEffect, useState } from "react";
-import { collection, query, where, getDocs, addDoc, doc, getDoc, setDoc } from "firebase/firestore";
+import { createContext, useCallback, useContext, useEffect, useState } from "react";
+import { collection, query, where, getDocs, doc, getDoc } from "firebase/firestore";
 import { db } from "../firebase/firebase";
 import { useAuth } from "./AuthContext";
 
@@ -18,7 +18,7 @@ export function TenantProvider({ children }) {
     }
   });
 
-  useEffect(() => {
+  const loadTenants = useCallback(async () => {
     if (!user) {
       setTenants([]);
       setSelectedTenantId(null);
@@ -26,23 +26,21 @@ export function TenantProvider({ children }) {
       return;
     }
 
-    loadTenants();
-  }, [user]);
-
-  const loadTenants = async () => {
     setTenantStatus("loading");
 
     try {
       const q = query(
         collection(db, "tenantMembers"),
-        where("uid", "==", user.uid)
+        where("userId", "==", user.uid)
       );
 
       const snap = await getDocs(q);
 
       if (snap.empty) {
-        await createDefaultTenant();
-        return loadTenants();
+        setTenants([]);
+        setSelectedTenantId(null);
+        setTenantStatus("empty");
+        return;
       }
 
       const tenantIds = snap.docs.map((d) => d.data().tenantId).filter(Boolean);
@@ -81,22 +79,11 @@ export function TenantProvider({ children }) {
       console.error("[TenantContext] Failed to load tenants", error);
       setTenantStatus("error");
     }
-  };
+  }, [user, selectedTenantId]);
 
-  const createDefaultTenant = async () => {
-    const tenantRef = await addDoc(collection(db, "tenants"), {
-      name: `${user.displayName || "My"}'s Workspace`,
-      createdBy: user.uid,
-      createdAt: Date.now(),
-    });
-
-    await setDoc(doc(db, "tenantMembers", `${tenantRef.id}_${user.uid}`), {
-      tenantId: tenantRef.id,
-      uid: user.uid,
-      role: "owner",
-      createdAt: Date.now(),
-    });
-  };
+  useEffect(() => {
+    loadTenants();
+  }, [loadTenants]);
 
   const selectTenant = (tenantId) => {
     setSelectedTenantId(tenantId);
@@ -115,6 +102,7 @@ export function TenantProvider({ children }) {
         tenantStatus,
         selectedTenantId,
         selectTenant,
+        refreshTenants: loadTenants,
       }}
     >
       {children}
