@@ -2,12 +2,14 @@ import { createContext, useCallback, useContext, useEffect, useState } from "rea
 import { collection, query, where, getDocs } from "firebase/firestore";
 import { db } from "../firebase/firebase";
 import { useTenant } from "./TenantContext";
+import { useAuth } from "./AuthContext";
 
 const CampaignContext = createContext(null);
 const CAMPAIGN_STORAGE_KEY = "dd_selectedCampaignId";
 
 export function CampaignProvider({ children }) {
   const { selectedTenantId, tenantStatus } = useTenant();
+  const { user } = useAuth();
   const [campaignStatus, setCampaignStatus] = useState("loading");
   const [accessibleCampaigns, setAccessibleCampaigns] = useState([]);
   const [campaignRole, setCampaignRole] = useState(null);
@@ -20,6 +22,13 @@ export function CampaignProvider({ children }) {
   });
 
   const loadCampaigns = useCallback(async () => {
+    if (!user?.uid) {
+      setAccessibleCampaigns([]);
+      setSelectedCampaignId(null);
+      setCampaignRole(null);
+      setCampaignStatus("unknown");
+      return;
+    }
     if (!selectedTenantId) {
       setAccessibleCampaigns([]);
       setSelectedCampaignId(null);
@@ -38,6 +47,12 @@ export function CampaignProvider({ children }) {
 
       const snap = await getDocs(q);
 
+      // Fetch campaign memberships for this user (across tenants), filter in app
+      const membershipsSnap = await getDocs(
+        query(collection(db, "campaignMembers"), where("userId", "==", user.uid))
+      );
+      const memberships = membershipsSnap.docs.map((d) => ({ id: d.id, ...d.data() }));
+
       if (snap.empty) {
         setAccessibleCampaigns([]);
         setSelectedCampaignId(null);
@@ -46,10 +61,18 @@ export function CampaignProvider({ children }) {
         return;
       }
 
-      const campaigns = snap.docs.map((d) => ({
-        campaignId: d.id,
-        ...d.data(),
-      }));
+      const campaigns = snap.docs.map((d) => {
+        const data = d.data();
+        const membership = memberships.find(
+          (m) => m.campaignId === d.id && m.tenantId === selectedTenantId
+        );
+
+        return {
+          campaignId: d.id,
+          ...data,
+          role: membership?.role ?? null,
+        };
+      });
 
       setAccessibleCampaigns(campaigns);
 
@@ -63,14 +86,15 @@ export function CampaignProvider({ children }) {
 
       setSelectedCampaignId(nextCampaignId);
 
+      const selectedCampaign = campaigns.find((c) => c.campaignId === nextCampaignId) ?? null;
+      setCampaignRole(selectedCampaign?.role ?? null);
+
       try {
         localStorage.setItem(CAMPAIGN_STORAGE_KEY, nextCampaignId);
       } catch {
         // ignore storage failures
       }
 
-      // Temporary until campaign membership records are introduced in this sprint.
-      setCampaignRole("owner");
       setCampaignStatus("ready");
     } catch (error) {
       console.error("[CampaignContext] Failed to load campaigns", error);
@@ -78,7 +102,7 @@ export function CampaignProvider({ children }) {
       setCampaignRole(null);
       setCampaignStatus("error");
     }
-  }, [selectedTenantId, selectedCampaignId, tenantStatus]);
+  }, [selectedTenantId, selectedCampaignId, tenantStatus, user]);
 
   useEffect(() => {
     loadCampaigns();
@@ -87,6 +111,8 @@ export function CampaignProvider({ children }) {
 
   const selectCampaign = (campaignId) => {
     setSelectedCampaignId(campaignId);
+    const selected = accessibleCampaigns.find((c) => c.campaignId === campaignId) ?? null;
+    setCampaignRole(selected?.role ?? null);
     try {
       if (campaignId) localStorage.setItem(CAMPAIGN_STORAGE_KEY, campaignId);
       else localStorage.removeItem(CAMPAIGN_STORAGE_KEY);

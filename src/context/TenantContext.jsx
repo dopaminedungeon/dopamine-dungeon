@@ -10,6 +10,7 @@ export function TenantProvider({ children }) {
   const { user } = useAuth();
   const [tenants, setTenants] = useState([]);
   const [tenantStatus, setTenantStatus] = useState("loading");
+  const [workspaceRole, setWorkspaceRole] = useState(null);
   const [selectedTenantId, setSelectedTenantId] = useState(() => {
     try {
       return localStorage.getItem(TENANT_STORAGE_KEY) || null;
@@ -23,6 +24,7 @@ export function TenantProvider({ children }) {
       setTenants([]);
       setSelectedTenantId(null);
       setTenantStatus("unknown");
+      setWorkspaceRole(null);
       return;
     }
 
@@ -35,11 +37,13 @@ export function TenantProvider({ children }) {
       );
 
       const snap = await getDocs(q);
+      const memberships = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
 
       if (snap.empty) {
         setTenants([]);
         setSelectedTenantId(null);
         setTenantStatus("empty");
+        setWorkspaceRole(null);
         return;
       }
 
@@ -51,23 +55,31 @@ export function TenantProvider({ children }) {
 
       const loaded = tenantDocs
         .filter((d) => d.exists())
-        .map((d) => ({
-          tenantId: d.id,
-          ...d.data(),
-        }));
+        .map((d) => {
+          const membership = memberships.find((m) => m.tenantId === d.id);
+
+          return {
+            tenantId: d.id,
+            ...d.data(),
+            role: membership?.role ?? null,
+          };
+        });
 
       setTenants(loaded);
 
       if (loaded.length === 0) {
         setSelectedTenantId(null);
         setTenantStatus("empty");
+        setWorkspaceRole(null);
         return;
       }
 
       const validSelected = loaded.find((t) => t.tenantId === selectedTenantId);
       const nextTenantId = validSelected ? validSelected.tenantId : loaded[0].tenantId;
+      const selectedTenant = loaded.find((t) => t.tenantId === nextTenantId) ?? null;
 
       setSelectedTenantId(nextTenantId);
+      setWorkspaceRole(selectedTenant?.role ?? null);
       try {
         localStorage.setItem(TENANT_STORAGE_KEY, nextTenantId);
       } catch {
@@ -77,6 +89,7 @@ export function TenantProvider({ children }) {
       setTenantStatus("ready");
     } catch (error) {
       console.error("[TenantContext] Failed to load tenants", error);
+      setWorkspaceRole(null);
       setTenantStatus("error");
     }
   }, [user, selectedTenantId]);
@@ -87,6 +100,8 @@ export function TenantProvider({ children }) {
 
   const selectTenant = (tenantId) => {
     setSelectedTenantId(tenantId);
+    const selectedTenant = tenants.find((t) => t.tenantId === tenantId) ?? null;
+    setWorkspaceRole(selectedTenant?.role ?? null);
     try {
       if (tenantId) localStorage.setItem(TENANT_STORAGE_KEY, tenantId);
       else localStorage.removeItem(TENANT_STORAGE_KEY);
@@ -101,6 +116,7 @@ export function TenantProvider({ children }) {
         tenants,
         tenantStatus,
         selectedTenantId,
+        workspaceRole,
         selectTenant,
         refreshTenants: loadTenants,
       }}
