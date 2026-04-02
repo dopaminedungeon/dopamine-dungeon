@@ -8,6 +8,9 @@ import { useAuth } from "../context/AuthContext.jsx";
 import DebugPanel from "./DebugPanel";
 import { features } from "../config/features";
 import { useNavigate } from "react-router-dom";
+{import.meta.env.MODE !== "production" && (
+  <div className="text-xs text-red-400">DEV</div>
+)}
 
 export default function TopBar({ title }) {
   const { mode, setMode } = useMode();
