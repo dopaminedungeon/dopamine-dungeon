@@ -3,9 +3,11 @@ import { db } from "../../firebase/firebase";
 import {
   createInvitation,
   getPendingInvitationsByEmail,
+  getPendingInvitationsByEmail as getPendingInvitationsByNormalizedEmail,
 } from "../../data/invitations/invitations.repo";
 import { getTenantById } from "../../data/tenants/tenant.repo";
 import { getCampaignById } from "../../data/campaigns/campaigns.repo";
+import { getCampaignMembershipForUserInCampaign } from "../../data/campaignMembers/campaignMembers.repo";
 import { createMail } from "../../data/mail/mail.repo";
 import { buildInviteEmailHtml } from "../mail/inviteEmail.template";
 import type { Invitation } from "./invitation.types";
@@ -29,6 +31,18 @@ function normalizeEmail(email: string): string {
   return email.trim().toLowerCase();
 }
 
+function matchesInvitationScope(
+  invitation: Pick<Invitation, "tenantId" | "campaignId" | "status">,
+  tenantId: string,
+  campaignId: string | null
+): boolean {
+  return (
+    invitation.status === "pending" &&
+    invitation.tenantId === tenantId &&
+    invitation.campaignId === campaignId
+  );
+}
+
 export async function invitePlayerToCampaign({
   email,
   tenantId,
@@ -39,6 +53,15 @@ export async function invitePlayerToCampaign({
 
   if (!normalizedEmail) {
     throw new Error("Invite email cannot be empty.");
+  }
+
+  const existingPendingInvitations = await getPendingInvitationsByNormalizedEmail(normalizedEmail);
+  const duplicatePendingInvitation = existingPendingInvitations.find((invitation) =>
+    matchesInvitationScope(invitation, tenantId, campaignId)
+  );
+
+  if (duplicatePendingInvitation) {
+    throw new Error("There is already a pending invite for this player in this campaign.");
   }
   const invitation = await createInvitation({
     email: email.trim(),
@@ -52,12 +75,12 @@ export async function invitePlayerToCampaign({
   const tenant = await getTenantById(tenantId);
   const campaign = campaignId ? await getCampaignById(campaignId) : null;
 
-  const inviteLink = window.location.origin;
+  const inviteLink = `${window.location.origin}/welcome?invited=true`;
 
   await createMail({
     to: [invitation.email],
     message: {
-      subject: "You’ve been summoned to a campaign",
+      subject: "✨You’ve been summoned to a campaign✨",
       html: buildInviteEmailHtml({
         campaignName: campaign?.name ?? "a campaign",
         workspaceName: tenant?.name ?? "Dopamine Dungeon",
@@ -117,19 +140,27 @@ export async function acceptPendingInvitationsForUser({
       if (!uniqueCampaignKeys.has(campaignKey)) {
         uniqueCampaignKeys.add(campaignKey);
 
-        const campaignMemberId = crypto.randomUUID();
-        const campaignMember: CampaignMember = {
-          id: campaignMemberId,
-          tenantId: invitation.tenantId,
-          campaignId: invitation.campaignId,
-          userId,
-          role: invitation.campaignRole ?? "player",
-          characterId: null,
-          createdAt: now,
-          createdBy: invitation.invitedBy,
-        };
+        const existingCampaignMembership = await getCampaignMembershipForUserInCampaign(
+          invitation.tenantId,
+          invitation.campaignId,
+          userId
+        );
 
-        batch.set(doc(db, "campaignMembers", campaignMemberId), campaignMember);
+        if (!existingCampaignMembership) {
+          const campaignMemberId = crypto.randomUUID();
+          const campaignMember: CampaignMember = {
+            id: campaignMemberId,
+            tenantId: invitation.tenantId,
+            campaignId: invitation.campaignId,
+            userId,
+            role: invitation.campaignRole ?? "player",
+            characterId: null,
+            createdAt: now,
+            createdBy: invitation.invitedBy,
+          };
+
+          batch.set(doc(db, "campaignMembers", campaignMemberId), campaignMember);
+        }
       }
     }
 

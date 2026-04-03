@@ -8,9 +8,6 @@ import { useAuth } from "../context/AuthContext.jsx";
 import DebugPanel from "./DebugPanel";
 import { features } from "../config/features";
 import { useNavigate } from "react-router-dom";
-{import.meta.env.MODE !== "production" && (
-  <div className="text-xs text-red-400">DEV</div>
-)}
 
 export default function TopBar({ title }) {
   const { mode, setMode } = useMode();
@@ -58,6 +55,30 @@ export default function TopBar({ title }) {
   const profileName = user?.displayName || user?.email || "Unknown user";
   const profileRole = String(mode).toLowerCase() === "gm" ? "GM" : "Player";
 
+  const isGmMode = String(mode).toLowerCase() === "gm";
+
+  const topBarTheme = isGmMode
+    ? {
+        shell: "border-fuchsia-400/15 bg-black/25",
+        glow: "bg-[radial-gradient(circle_at_20%_20%,rgba(217,70,239,0.18),transparent_28%),radial-gradient(circle_at_80%_20%,rgba(168,85,247,0.14),transparent_24%)]",
+        searchRing: "focus:border-fuchsia-400/50 focus:ring-fuchsia-500/20",
+        selectRing: "focus:ring-fuchsia-500/40",
+        activePlayer: "bg-white/10 border-white/10 text-zinc-400 hover:text-white",
+        activeGm: "bg-fuchsia-500/80 border-fuchsia-400 text-white shadow-[0_0_18px_rgba(217,70,239,0.28)]",
+        badge: "text-fuchsia-300/90",
+        profileOrb: "from-fuchsia-500 via-violet-500 to-rose-400",
+      }
+    : {
+        shell: "border-cyan-400/10 bg-black/20",
+        glow: "bg-[radial-gradient(circle_at_20%_20%,rgba(139,92,246,0.14),transparent_28%),radial-gradient(circle_at_80%_20%,rgba(34,211,238,0.12),transparent_24%)]",
+        searchRing: "focus:border-purple-500/50 focus:ring-purple-500/20",
+        selectRing: "focus:ring-indigo-500/40",
+        activePlayer: "bg-white/10 border-indigo-500 text-indigo-300 shadow-[0_0_16px_rgba(99,102,241,0.2)]",
+        activeGm: "bg-transparent border-white/10 text-zinc-400 hover:text-white",
+        badge: "text-cyan-300/90",
+        profileOrb: "from-purple-500 to-pink-500",
+      };
+
   // Close popovers on outside click
   useEffect(() => {
     function handleClickOutside(e) {
@@ -81,19 +102,19 @@ export default function TopBar({ title }) {
   const navigate = useNavigate();
 
   return (
-    <header className="sticky top-0 z-40 bg-black/20 backdrop-blur-xl border-b border-white/5">
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between px-4 py-3 sm:px-6 sm:py-4 md:px-8">
+    <header className={`sticky top-0 z-40 border-b backdrop-blur-xl transition-colors duration-500 ${topBarTheme.shell}`}>
+      <div className={`pointer-events-none absolute inset-0 ${topBarTheme.glow}`} />
+      <div className="relative z-10 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between px-4 py-3 sm:px-6 sm:py-4 md:px-8">
         {/* Title */}
         <div className="min-w-0">
           <div className="flex items-baseline justify-between gap-3">
             <h1 className="text-xl sm:text-2xl font-bold text-white truncate">{title}</h1>
-            <span className="hidden sm:block text-[10px] tracking-wide text-zinc-500 shrink-0">
-              Dopamine Dungeon v0.2
-            </span>
           </div>
-          <p className="text-zinc-500 text-xs sm:text-sm">
-            Welcome back, {String(mode).toLowerCase() === "gm" ? "Dungeon Master" : "Player"}
-          </p>
+          <div className="flex flex-wrap items-center gap-2 text-xs sm:text-sm">
+            <p className="text-zinc-400">
+              Welcome back, {String(mode).toLowerCase() === "gm" ? "Dungeon Master" : "Player"}
+            </p>
+          </div>
         </div>
 
         {/* Actions */}
@@ -104,7 +125,7 @@ export default function TopBar({ title }) {
             <input
               type="text"
               placeholder="Quick search..."
-              className="w-64 pl-10 pr-4 py-2.5 bg-white/5 border border-white/10 rounded-xl text-white text-sm placeholder-zinc-500 focus:outline-none focus:border-purple-500/50 focus:ring-2 focus:ring-purple-500/20 transition-all"
+              className={`w-64 pl-10 pr-4 py-2.5 bg-white/5 border border-white/10 rounded-xl text-white text-sm placeholder-zinc-500 focus:outline-none focus:ring-2 transition-all shadow-inner shadow-black/20 ${topBarTheme.searchRing}`}
               onKeyDown={(e) => {
                 if (e.key === "Enter") {
                   // later we can hook this into real search
@@ -120,7 +141,7 @@ export default function TopBar({ title }) {
           {/* Notifications */}
           <div className="relative" ref={notificationsRef}>
             <button
-              className="relative p-2 bg-white/5 border border-white/10 rounded-xl text-zinc-400 hover:text-white hover:bg-white/10 transition-all"
+              className="relative p-2 bg-white/5 border border-white/10 rounded-xl text-zinc-400 hover:text-white hover:bg-white/10 hover:shadow-[0_0_18px_rgba(139,92,246,0.18)] transition-all"
               onClick={() => setShowNotifications((v) => !v)}
             >
               <Bell className="w-5 h-5" />
@@ -128,7 +149,7 @@ export default function TopBar({ title }) {
             </button>
 
             {showNotifications && (
-              <div className="absolute right-0 mt-2 w-64 bg-black/90 border border-white/10 rounded-xl shadow-xl p-3 text-sm">
+              <div className="absolute right-0 mt-2 w-64 bg-black/90 backdrop-blur-xl border border-white/10 rounded-xl shadow-xl shadow-violet-950/20 p-3 text-sm">
                 <p className="text-zinc-400">
                   No notifications yet. Go cause some chaos in your campaign ✨
                 </p>
@@ -151,7 +172,7 @@ export default function TopBar({ title }) {
                   selectCampaign(null);
                 }
               }}
-              className="bg-zinc-950/40 border border-zinc-800/70 rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:ring-2 focus:ring-indigo-500/40"
+              className={`bg-zinc-950/50 border border-zinc-800/80 rounded-xl px-3 py-2 text-sm text-white shadow-inner shadow-black/20 focus:outline-none focus:ring-2 transition-all ${topBarTheme.selectRing}`}
             >
               <option key="tenant-placeholder" value="" disabled>
                 Select workspace…
@@ -199,7 +220,7 @@ export default function TopBar({ title }) {
                   selectCampaign(next || null);
                 }
               }}
-              className="bg-zinc-950/40 border border-zinc-800/70 rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:ring-2 focus:ring-indigo-500/40"
+              className={`bg-zinc-950/50 border border-zinc-800/80 rounded-xl px-3 py-2 text-sm text-white shadow-inner shadow-black/20 focus:outline-none focus:ring-2 transition-all ${topBarTheme.selectRing}`}
             >
               <option key="campaign-placeholder" value="" disabled>
                 Select campaign…
@@ -225,10 +246,10 @@ export default function TopBar({ title }) {
             <button
               type="button"
               onClick={() => setMode("player")}
-              className={`px-2.5 py-2 sm:px-3 sm:py-1.5 text-xs rounded-lg border ${
+              className={`px-2.5 py-2 sm:px-3 sm:py-1.5 text-xs rounded-lg border transition-all ${
                 String(mode).toLowerCase() === "player"
-                  ? "bg-white/10 border-indigo-500 text-indigo-300"
-                  : "bg-transparent border-white/10 text-zinc-400 hover:text-white"
+                  ? topBarTheme.activePlayer
+                  : "bg-transparent border-white/10 text-zinc-400 hover:text-white hover:bg-white/5"
               }`}
             >
               <Eye className="inline w-3 h-3 sm:mr-1" />
@@ -237,10 +258,10 @@ export default function TopBar({ title }) {
             <button
               type="button"
               onClick={() => setMode("gm")}
-              className={`px-2.5 py-2 sm:px-3 sm:py-1.5 text-xs rounded-lg border ${
+              className={`px-2.5 py-2 sm:px-3 sm:py-1.5 text-xs rounded-lg border transition-all ${
                 String(mode).toLowerCase() === "gm"
-                  ? "bg-indigo-500/80 border-indigo-400 text-white"
-                  : "bg-transparent border-white/10 text-zinc-400 hover:text-white"
+                  ? topBarTheme.activeGm
+                  : "bg-transparent border-white/10 text-zinc-400 hover:text-white hover:bg-white/5"
               }`}
             >
               <Shield className="inline w-3 h-3 sm:mr-1" />
@@ -253,7 +274,7 @@ export default function TopBar({ title }) {
               className="flex items-center gap-3 p-2 sm:pr-4 bg-white/5 border border-white/10 rounded-xl hover:bg-white/10 transition-all"
               onClick={() => setShowProfileMenu((v) => !v)}
             >
-              <div className="w-8 h-8 rounded-lg bg-linear-to-br from-purple-500 to-pink-500 flex items-center justify-center">
+              <div className={`w-8 h-8 rounded-lg bg-linear-to-br ${topBarTheme.profileOrb} flex items-center justify-center shadow-[0_0_18px_rgba(139,92,246,0.2)]`}>
                 <User className="w-4 h-4 text-white" />
               </div>
               <div className="hidden md:block text-left max-w-45">
@@ -264,7 +285,7 @@ export default function TopBar({ title }) {
             </button>
 
             {showProfileMenu && (
-              <div className="absolute right-0 mt-2 w-56 bg-black/90 border border-white/10 rounded-xl shadow-xl py-1 text-sm">
+              <div className="absolute right-0 mt-2 w-56 bg-black/90 backdrop-blur-xl border border-white/10 rounded-xl shadow-xl shadow-violet-950/20 py-1 text-sm">
                 <div className="px-3 py-2 border-b border-white/10">
                   <p className="text-white text-sm font-medium truncate">{profileName}</p>
                   <p className="text-zinc-500 text-xs truncate">{user?.email || "No email"}</p>
