@@ -21,7 +21,9 @@ const NavItem = ({ to, icon: Icon, label, isCollapsed }) => (
     to={to}
     end={to === "/"}
     className={({ isActive }) =>
-      `flex items-center gap-3 px-3 py-2 rounded-xl transition-colors ${
+      `flex items-center gap-3 rounded-xl transition-colors min-h-11 ${
+        isCollapsed ? "justify-center px-0 w-11 mx-auto" : "px-3 py-2"
+      } ${
         isActive
           ? "bg-linear-to-r from-purple-500/20 to-pink-500/20 text-white border border-purple-500/30"
           : "text-zinc-400 hover:text-white hover:bg-zinc-800/30"
@@ -40,7 +42,7 @@ export default function Sidebar() {
 
   // v0.1: keep navigation intentionally tiny.
   const baseNavItems = [
-    { to: "/", icon: LayoutDashboard, label: "Dashboard", on: features.dashboard },
+    { to: "/", icon: LayoutDashboard, label: "Home", on: features.dashboard },
     { to: "/sessions", icon: BookOpen, label: "Sessions", on: features.sessions },
     { to: "/items", icon: Package, label: "Items", on: features.items },
     // Bag is accessed via /pcs/bag today, but we expose it as a first-class nav item.
@@ -48,7 +50,7 @@ export default function Sidebar() {
 
     // Future modules (kept here for when you flip flags back on)
     { to: "/npcs", icon: Users, label: "NPCs", on: features.npcs },
-    { to: "/pcs", icon: ScrollText, label: "PCs", on: features.pcs },
+    { to: "/pcs", icon: Users, label: "PCs", on: features.pcs },
     { to: "/maps", icon: Map, label: "Maps", on: features.maps },
     { to: "/arcs", icon: Sparkles, label: "Arcs", on: features.arcs },
     { to: "/lore", icon: BookOpen, label: "Lore", on: features.lore },
@@ -86,24 +88,38 @@ export default function Sidebar() {
         }`}
       >
         <div className="p-4">
-          <div className="flex items-center justify-between mb-8">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 bg-linear-to-br from-purple-500 to-pink-500 rounded-xl flex items-center justify-center">
-                <span className="text-white font-bold">🎲</span>
+          <div
+            className={`mb-8 ${
+              isCollapsed
+                ? "flex flex-col items-center gap-3"
+                : "flex items-center justify-between"
+            }`}
+          >
+            <div className={`flex items-center gap-3 ${isCollapsed ? "justify-center" : ""}`}>
+              <div className="w-10 h-10 rounded-xl bg-white/5 ring-1 ring-white/10 flex items-center justify-center overflow-hidden">
+                <img
+                  src="/logo/dd-app-icon-master.png"
+                  alt="Dopamine Dungeon"
+                  className="w-8 h-8 object-contain"
+                />
               </div>
               {!isCollapsed && (
-                <div>
-                  <h1 className="text-white font-bold">Dopamine</h1>
-                  <p className="text-zinc-500 text-xs">Dungeon</p>
+                <div className="leading-tight min-w-0">
+                  <h1 className="text-violet-100 font-bold tracking-tight text-sm leading-tight">
+                    Dopamine
+                  </h1>
+                  <p className="text-violet-100 font-bold tracking-tight text-sm leading-tight">
+                    Dungeon
+                  </p>
                 </div>
               )}
             </div>
             <button
               onClick={() => setIsCollapsed(!isCollapsed)}
-              className="text-zinc-500 hover:text-white transition-colors"
+              className="inline-flex h-8 w-8 items-center justify-center rounded-xl border border-white/10 bg-white/5 text-zinc-300 hover:text-white hover:bg-white/10 transition-colors shrink-0"
               aria-label={isCollapsed ? "Expand sidebar" : "Collapse sidebar"}
             >
-              <span className="text-lg">{isCollapsed ? "→" : "←"}</span>
+              <span className="text-base leading-none">{isCollapsed ? "→" : "←"}</span>
             </button>
           </div>
 
