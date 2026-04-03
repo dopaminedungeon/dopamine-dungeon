@@ -1,6 +1,6 @@
 
 
-import { collection, doc, getDocs, query, setDoc, where } from "firebase/firestore";
+import { collection, doc, getDoc, getDocs, query, setDoc, where } from "firebase/firestore";
 import { db } from "../../firebase/firebase";
 import type { Campaign } from "../../domain/campaigns/campaign.types";
 
@@ -23,4 +23,16 @@ export async function getCampaignsForTenant(tenantId: string): Promise<Campaign[
     id: docSnap.id,
     ...(docSnap.data() as Omit<Campaign, "id">),
   }));
+}
+
+export async function getCampaignById(campaignId: string): Promise<Campaign | null> {
+  const ref = doc(db, CAMPAIGNS_COLLECTION, campaignId);
+  const snapshot = await getDoc(ref);
+
+  if (!snapshot.exists()) return null;
+
+  return {
+    id: snapshot.id,
+    ...(snapshot.data() as Omit<Campaign, "id">),
+  };
 }

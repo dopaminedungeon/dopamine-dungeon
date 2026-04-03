@@ -1,10 +1,13 @@
-import { doc, setDoc, writeBatch } from "firebase/firestore";
+import { doc, writeBatch } from "firebase/firestore";
 import { db } from "../../firebase/firebase";
 import {
   createInvitation,
   getPendingInvitationsByEmail,
-  markInvitationAccepted,
 } from "../../data/invitations/invitations.repo";
+import { getTenantById } from "../../data/tenants/tenant.repo";
+import { getCampaignById } from "../../data/campaigns/campaigns.repo";
+import { createMail } from "../../data/mail/mail.repo";
+import { buildInviteEmailHtml } from "../mail/inviteEmail.template";
 import type { Invitation } from "./invitation.types";
 import type { TenantMember } from "../tenants/tenant.types";
 import type { CampaignMember } from "../campaigns/campaign.types";
@@ -37,8 +40,7 @@ export async function invitePlayerToCampaign({
   if (!normalizedEmail) {
     throw new Error("Invite email cannot be empty.");
   }
-
-  return createInvitation({
+  const invitation = await createInvitation({
     email: email.trim(),
     tenantId,
     campaignId,
@@ -46,6 +48,27 @@ export async function invitePlayerToCampaign({
     campaignRole: campaignId ? "player" : null,
     invitedBy,
   });
+
+  const tenant = await getTenantById(tenantId);
+  const campaign = campaignId ? await getCampaignById(campaignId) : null;
+
+  const inviteLink = window.location.origin;
+
+  await createMail({
+    to: [invitation.email],
+    message: {
+      subject: "You’ve been summoned to a campaign",
+      html: buildInviteEmailHtml({
+        campaignName: campaign?.name ?? "a campaign",
+        workspaceName: tenant?.name ?? "Dopamine Dungeon",
+        inviteEmail: invitation.email,
+        inviteLink,
+        inviterName: "Dungeon Master",
+      }),
+    },
+  });
+
+  return invitation;
 }
 
 export async function acceptPendingInvitationsForUser({
