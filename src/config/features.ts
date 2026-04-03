@@ -1,7 +1,7 @@
 export const features = {
     arcs: false,
     conditions: false,
-    dashboard: false,
+    dashboard: true,
     items: true,
     lore: false,
     maps: false,

@@ -1,11 +1,12 @@
 import { createContext, useContext, useEffect, useState } from "react";
-import { auth } from "../firebase/firebase";
+import { auth, db } from "../firebase/firebase";
 import {
   GoogleAuthProvider,
   signInWithPopup,
   signOut,
   onAuthStateChanged,
 } from "firebase/auth";
+import { doc, setDoc } from "firebase/firestore";
 
 const AuthContext = createContext(null);
 
@@ -14,8 +15,28 @@ export function AuthProvider({ children }) {
   const [authStatus, setAuthStatus] = useState("loading");
 
   useEffect(() => {
-    const unsub = onAuthStateChanged(auth, (firebaseUser) => {
+    const unsub = onAuthStateChanged(auth, async (firebaseUser) => {
       setUser(firebaseUser ?? null);
+
+      if (firebaseUser) {
+        try {
+          await setDoc(
+            doc(db, "users", firebaseUser.uid),
+            {
+              id: firebaseUser.uid,
+              email: firebaseUser.email ?? "",
+              displayName: firebaseUser.displayName ?? "",
+              photoURL: firebaseUser.photoURL ?? "",
+              onboardingState: "active",
+              lastLoginAt: Date.now(),
+            },
+            { merge: true }
+          );
+        } catch (error) {
+          console.error("[AuthContext] Failed to sync user profile", error);
+        }
+      }
+
       setAuthStatus("ready");
     });
 
