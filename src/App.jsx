@@ -25,6 +25,8 @@ import PCs from "./pages/PCs";
 import PCProfile from "./pages/PCProfile";
 import BagOfHolding from "./pages/BagOfHolding";
 import CampaignSettings from "./pages/CampaignSettings.jsx";
+import BootstrapWorkspace from "./pages/BootstrapWorkspace.jsx";
+import BootstrapCampaign from "./pages/BootstrapCampaign.jsx";
 import { useAuth } from "./context/AuthContext.jsx";
 import { useTenant } from "./context/TenantContext.jsx";
 import { useCampaign } from "./context/CampaignContext.jsx";
@@ -34,12 +36,12 @@ import React from "react";
 
 function App() {
   return (
-  <AppProviders>
-    <BrowserRouter>
-      <AppGate />
-    </BrowserRouter>
-  </AppProviders>
-);
+    <AppProviders>
+      <BrowserRouter>
+        <AppGate />
+      </BrowserRouter>
+    </AppProviders>
+  );
 }
 
 function AppGate() {
@@ -63,11 +65,11 @@ function AppGate() {
     return <LoadingScreen label="Loading workspaces…" />;
   }
 
-  const hasTenant =
-    tenantStatus === "selected" ||
-    tenantStatus === "ready" ||
-    tenantStatus === "resolved" ||
-    tenantStatus === "ok";
+  if (tenantStatus === "empty") {
+    return <BootstrapWorkspace />;
+  }
+
+  const hasTenant = tenantStatus === "ready";
 
   if (!hasTenant) {
     return <TenantPickerScreen />;
@@ -77,11 +79,11 @@ function AppGate() {
     return <LoadingScreen label="Loading campaigns…" />;
   }
 
-  const hasCampaign =
-    campaignStatus === "selected" ||
-    campaignStatus === "ready" ||
-    campaignStatus === "resolved" ||
-    campaignStatus === "ok";
+  if (campaignStatus === "empty") {
+    return <BootstrapCampaign />;
+  }
+
+  const hasCampaign = campaignStatus === "ready";
 
   if (!hasCampaign) {
     return <CampaignChooser />;
@@ -92,9 +94,9 @@ function AppGate() {
       <Route element={<AppLayout />}>
         {features.dashboard && (
           <>
-        <Route index element={<Dashboard />} />
-        <Route path="/" element={<Navigate to="/" replace />} />
-        </>
+            <Route index element={<Dashboard />} />
+            <Route path="/" element={<Navigate to="/" replace />} />
+          </>
         )}
 
         {features.sessions && (
@@ -245,7 +247,7 @@ function TenantPickerScreen() {
           >
             <div style={{ fontWeight: 600 }}>{t.name}</div>
             <div style={{ opacity: 0.7, fontSize: 12 }}>
-              {t.tenantPermissionLevel} • {t.tenantId}
+              {t.role ?? "member"} • {t.tenantId}
             </div>
           </button>
         ))}
@@ -281,7 +283,7 @@ function CampaignChooser() {
           >
             <div style={{ fontWeight: 600 }}>{c.name}</div>
             <div style={{ opacity: 0.7, fontSize: 12 }}>
-              {c.campaignRole} • {c.campaignId}
+              {c.role ?? "gm"} • {c.campaignId}
             </div>
           </button>
         ))}

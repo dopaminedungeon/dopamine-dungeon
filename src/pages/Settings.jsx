@@ -33,7 +33,7 @@ function getProviderLabel(user) {
 export default function Settings() {
   const { user, logout } = useAuth();
   const { mode } = useMode();
-  const { tenants, selectedTenantId } = useTenant();
+  const { tenants, selectedTenantId, workspaceRole } = useTenant();
   const { accessibleCampaigns, selectedCampaignId, campaignRole } = useCampaign();
 
   const [profile, setProfile] = useState(EMPTY_PROFILE);
@@ -258,6 +258,11 @@ export default function Settings() {
                 <div>
                   <p className="text-zinc-500">Workspace</p>
                   <p className="text-white font-medium">{selectedTenant?.name || "No workspace selected"}</p>
+                </div>
+
+                <div>
+                  <p className="text-zinc-500">Workspace role</p>
+                  <p className="text-white font-medium">{workspaceRole || "Unknown"}</p>
                 </div>
 
                 <div>
