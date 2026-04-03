@@ -1,5 +1,6 @@
 // src/pages/CampaignSettings.jsx
 import React, { useMemo, useState, useEffect } from "react";
+import InvitePlayerForm from "../components/invitations/InvitePlayerForm.jsx";
 import { Plus, CheckCircle2, AlertCircle, Trash2 } from "lucide-react";
 import {
   addDoc,
@@ -489,6 +490,14 @@ export default function CampaignSettings() {
                 <p className="text-xs text-zinc-500">
                   Later: default visibility rules for new Sessions / Lore / Items, etc.
                 </p>
+              </div>
+
+              <div className="rounded-xl border border-zinc-800/70 bg-zinc-950/40 p-4">
+                <p className="text-sm text-zinc-300 font-medium mb-3">Invite player</p>
+                <p className="mb-4 text-xs text-zinc-500">
+                  Create a pending invitation for the active campaign.
+                </p>
+                <InvitePlayerForm />
               </div>
             </div>
           </section>
