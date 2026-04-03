@@ -21,7 +21,13 @@ const STATUS = ["active", "paused", "completed"];
 export default function CampaignSettings() {
   const { isGM } = useMode();
 
-  const { accessibleCampaigns, selectedCampaignId, selectCampaign, campaignRole } = useCampaign();
+  const {
+    accessibleCampaigns,
+    selectedCampaignId,
+    selectCampaign,
+    campaignRole,
+    refreshCampaigns,
+  } = useCampaign();
   const { selectedTenantId } = useTenant();
 
   const activeCampaign = useMemo(() => {
@@ -75,8 +81,12 @@ export default function CampaignSettings() {
       const ref = await addDoc(collection(db, "campaigns"), newCampaign);
       const created = { ...newCampaign, id: ref.id, campaignId: ref.id };
 
+      if (typeof refreshCampaigns === "function") {
+        await refreshCampaigns();
+      }
+
       if (typeof selectCampaign === "function") {
-        selectCampaign(ref.id);
+        await Promise.resolve(selectCampaign(ref.id));
       }
 
       setDraft(created);
@@ -230,6 +240,10 @@ export default function CampaignSettings() {
       await deleteSubcollectionDocs(campaignId, "meta");
       await deleteDoc(doc(db, "campaigns", campaignId));
 
+      if (typeof refreshCampaigns === "function") {
+        await refreshCampaigns();
+      }
+
       setDraft(null);
       setSaveState({ type: "success", message: "Campaign deleted." });
     } catch (error) {
@@ -265,6 +279,14 @@ export default function CampaignSettings() {
         endDate: draft.endDate || "",
         lastUpdated: Date.now(),
       });
+
+      if (typeof refreshCampaigns === "function") {
+        await refreshCampaigns();
+      }
+
+      if (typeof selectCampaign === "function") {
+        await Promise.resolve(selectCampaign(campaignId));
+      }
 
       setSaveState({ type: "success", message: "Campaign settings saved." });
     } catch (error) {

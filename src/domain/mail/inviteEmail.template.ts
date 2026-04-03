@@ -28,34 +28,15 @@ export function buildInviteEmailHtml({
       "
     >
 
-      <!-- LOGO -->
+      <!-- BANNER -->
       <tr>
-        <td style="text-align:center;padding:32px 24px 16px 24px;">
+        <td style="padding:0;">
           <img 
-            src="https://dopamine-dungeon.vercel.app/email/dd-logo.png"
+            src="https://dopamine-dungeon.vercel.app/email/dd-banner.png"
             alt="Dopamine Dungeon"
-            width="120"
-            style="display:block;margin:0 auto;"
+            width="600"
+            style="display:block;width:100%;height:auto;"
           />
-        </td>
-      </tr>
-
-      <!-- HEADER -->
-      <tr>
-        <td style="
-          text-align:center;
-          padding:16px 24px 24px 24px;
-          color:white;
-        ">
-          <h1 style="
-            margin:0;
-            font-size:22px;
-            background:linear-gradient(90deg,#a855f7,#6366f1);
-            -webkit-background-clip:text;
-            -webkit-text-fill-color:transparent;
-          ">
-            Dopamine Dungeon
-          </h1>
         </td>
       </tr>
 
@@ -64,11 +45,15 @@ export function buildInviteEmailHtml({
         <td style="padding:32px;color:#e5e7eb;">
           
           <h2 style="margin-top:0;color:white;">
-            You’ve been summoned ✨
+            You have been ✨dramatically summoned✨
           </h2>
 
           <p style="margin:16px 0;">
-            ${inviterName ?? "A Dungeon Master"} has invited you to join:
+            ${inviterName ?? "Some suspiciously powerful Dungeon Master"} has decided your fate is no longer your own.
+          </p>
+
+          <p style="margin:16px 0;">
+            You are hereby invited (read: emotionally blackmailed) to join:
           </p>
 
           <p style="
@@ -81,7 +66,21 @@ export function buildInviteEmailHtml({
           </p>
 
           <p style="margin:16px 0;color:#9ca3af;">
-            Workspace: <strong style="color:white;">${workspaceName}</strong>
+            Inside the dangerously addictive workspace:
+            <br/>
+            <strong style="color:white;">${workspaceName}</strong>
+          </p>
+
+          <p style="margin:16px 0; color:#9ca3af;">
+            Side effects may include: emotional attachment to fictional characters, poor life choices, and yelling at dice.
+          </p>
+
+          <p style="margin:24px 0 8px 0; color:#9ca3af; font-size:13px;">
+            May your rolls be high and your consequences narratively devastating.
+          </p>
+
+          <p style="margin:0 0 24px 0; color:#a855f7; font-weight:bold;">
+            — Your Dungeon Master (who is absolutely not emotionally attached… probably)
           </p>
 
           <!-- CTA -->
@@ -89,14 +88,17 @@ export function buildInviteEmailHtml({
             <a href="${inviteLink}" 
               style="
                 display:inline-block;
-                padding:14px 32px;
-                background:linear-gradient(135deg,#7c3aed,#6366f1);
+                padding:16px 36px;
+                background:linear-gradient(135deg,#9333ea,#6366f1,#22d3ee);
                 color:white;
                 text-decoration:none;
-                border-radius:10px;
+                border-radius:12px;
                 font-weight:bold;
+                font-size:15px;
+                box-shadow:0 0 0 1px rgba(255,255,255,0.05), 0 10px 30px rgba(124,58,237,0.6);
+                letter-spacing:0.3px;
               ">
-              Join Campaign
+              ✨ Enter the Dungeon ✨
             </a>
           </div>
 

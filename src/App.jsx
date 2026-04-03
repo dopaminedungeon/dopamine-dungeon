@@ -33,6 +33,7 @@ import { useCampaign } from "./context/CampaignContext.jsx";
 import AppProviders from "./context/AppProviders.jsx";
 import { features } from "./config/features";
 import React from "react";
+import Welcome from "./pages/Welcome";
 
 function App() {
   return (
@@ -92,12 +93,10 @@ function AppGate() {
   return (
     <Routes>
       <Route element={<AppLayout />}>
-        {features.dashboard && (
-          <>
-            <Route index element={<Dashboard />} />
-            <Route path="/" element={<Navigate to="/" replace />} />
-          </>
-        )}
+        <Route index element={<RootRedirect />} />
+        <Route path="/welcome" element={<Welcome />} />
+
+        {features.dashboard && <Route path="/home" element={<Dashboard />} />}
 
         {features.sessions && (
           <>
@@ -174,10 +173,19 @@ function AppGate() {
         <Route path="/settings/profile" element={<Settings />} />
         <Route path="/campaigns/settings" element={<CampaignSettings />} />
 
+        <Route path="/" element={<RootRedirect />} />
         <Route path="*" element={<NotFoundScreen />} />
       </Route>
     </Routes>
   );
+}
+
+function RootRedirect() {
+  const params = new URLSearchParams(window.location.search);
+  const invited = params.get("invited") === "true";
+  const homePath = features.dashboard ? "/home" : "/sessions";
+
+  return <Navigate to={invited ? "/welcome" : homePath} replace />;
 }
 
 function LoadingScreen({ label }) {
