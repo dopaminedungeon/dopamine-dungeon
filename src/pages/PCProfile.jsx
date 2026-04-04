@@ -1,7 +1,8 @@
-// src/pages/PCProfile.jsx
+import { useEffect, useState } from "react";
 import { useParams, Link } from "react-router-dom";
 import { useMode } from "../context/ModeContext.jsx";
-import { mockPCs } from "../data/mockPCs";
+import { useAuth } from "../context/AuthContext";
+import { getCharacterById } from "../data/characters/characters.repo";
 
 const abilityLabels = {
   str: "STR",
@@ -36,13 +37,45 @@ const skillConfig = [
 const PCProfile = () => {
   const { pcId } = useParams();
   const { isGM } = useMode();
+  const { user } = useAuth();
   const isGMMode = Boolean(isGM);
 
-  const pc = (Array.isArray(mockPCs) ? mockPCs : []).find((p) => p.id === pcId);
+  const [pc, setPc] = useState(null);
+  const [isLoading, setIsLoading] = useState(true);
 
-  // Hard gate: players should not be able to open GM-only PCs via direct URL.
-  // This uses the existing `pc.isPlayerVisible` flag as the visibility indicator.
-  if (!isGM && pc && pc.isPlayerVisible === false) {
+  useEffect(() => {
+    const loadPc = async () => {
+      if (!pcId) {
+        setPc(null);
+        setIsLoading(false);
+        return;
+      }
+
+      try {
+        setIsLoading(true);
+        const character = await getCharacterById(pcId);
+        setPc(character);
+      } catch (error) {
+        console.error("[PCProfile] Failed to load character", error);
+        setPc(null);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    loadPc();
+  }, [pcId]);
+
+  const canPlayerViewPc =
+    isGMMode ||
+    !pc ||
+    pc.visibility === "player" ||
+    pc.isPlayerVisible === true ||
+    (pc.ownerUserId && pc.ownerUserId === user?.uid);
+
+  // Hard gate: players should not be able to open GM-only / restricted PCs via direct URL
+  // unless the character is explicitly theirs.
+  if (!canPlayerViewPc && pc) {
     return (
       <main className="flex-1 p-8 overflow-auto">
         <div className="max-w-xl mx-auto bg-white/5 border border-white/10 rounded-2xl p-8 text-center">
@@ -58,6 +91,19 @@ const PCProfile = () => {
           </Link>
         </div>
       </main>
+    );
+  }
+
+  if (isLoading) {
+    return (
+      <div className="p-8 text-white">
+        <div className="max-w-md space-y-3">
+          <h1 className="text-xl font-semibold">Loading PC…</h1>
+          <p className="text-sm text-zinc-400">
+            Pulling the character profile from the dungeon archives.
+          </p>
+        </div>
+      </div>
     );
   }
 
@@ -114,7 +160,9 @@ const PCProfile = () => {
             <h1 className="text-2xl md:text-3xl font-semibold tracking-tight flex items-center gap-3">
               {pc.name}
               <span className="inline-flex items-center rounded-full bg-indigo-500/20 border border-indigo-400/40 px-3 py-1 text-[11px] font-medium text-indigo-100">
-                Level {pc.level} {pc.race} {pc.class}
+                {pc.level ? `Level ${pc.level} ` : ""}
+                {pc.race || pc.type || "Character"}
+                {pc.class ? ` ${pc.class}` : ""}
               </span>
             </h1>
             <p className="text-xs md:text-sm text-zinc-400 max-w-2xl">
@@ -137,7 +185,7 @@ const PCProfile = () => {
               Player Character
             </span>
             <span className="text-[11px] text-zinc-400">
-              {isGMMode ? "GM mode: full details visible" : "Player mode: some sections may be hidden"}
+              {isGMMode ? "GM mode: full details visible" : "Player mode: visibility rules apply"}
             </span>
           </div>
         </header>
@@ -156,7 +204,8 @@ const PCProfile = () => {
                   {pc.name}
                 </h2>
                 <p className="text-[11px] md:text-xs text-zinc-300">
-                  {pc.race} · {pc.class}
+                  {pc.race || pc.type || "—"}
+                  {pc.class ? ` · ${pc.class}` : ""}
                   {pc.subclass ? ` — ${pc.subclass}` : ""}
                 </p>
               </div>
@@ -247,7 +296,7 @@ const PCProfile = () => {
             Mode: {isGMMode ? "GM" : "Player"}
           </span>
           <span className="inline-flex items-center gap-1 rounded-full bg-black/50 border border-emerald-400/40 px-2 py-0.5 text-emerald-200">
-            Visibility: {pc.isPlayerVisible ? "Player-visible" : "GM-only"}
+            Visibility: {pc.visibility || (pc.isPlayerVisible ? "player" : "gm")}
           </span>
         </section>
 

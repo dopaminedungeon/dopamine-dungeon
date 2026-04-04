@@ -7,7 +7,8 @@ export type Invitation = {
   tenantId: string;
   campaignId: string | null;
   workspaceRole: "member";
-  campaignRole: "player" | null;
+  campaignRole: "player" | "gm" | null;
+  characterIds?: string[];
   status: InvitationStatus;
   invitedBy: string;
   createdAt: number;

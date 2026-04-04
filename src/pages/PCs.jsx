@@ -1,31 +1,64 @@
 import React, { useEffect, useMemo, useState } from "react";
-import { Link, NavLink, useLocation, useNavigate } from "react-router-dom";
-
-const safeArray = (v) => (Array.isArray(v) ? v : []);
+import { Link, NavLink } from "react-router-dom";
+import { getCharactersByCampaign } from "../data/characters/characters.repo";
+import { useCampaign } from "../context/CampaignContext";
+import { useMode } from "../context/ModeContext";
+import { useAuth } from "../context/AuthContext";
 
 const PCs = () => {
-  const navigate = useNavigate();
-  const location = useLocation();
+  const { selectedCampaignId } = useCampaign();
+  const { mode } = useMode();
+  const { user } = useAuth();
 
-  const pcs = useMemo(() => {
-    try {
-      const raw = localStorage.getItem("dd:pcs");
-      const parsed = raw ? JSON.parse(raw) : [];
-      return safeArray(parsed);
-    } catch {
-      return [];
-    }
-  }, []);
+  const [pcs, setPcs] = useState([]);
+  const [isLoading, setIsLoading] = useState(true);
   const [query, setQuery] = useState("");
 
-  const hasPcs = pcs.length > 0;
-
   useEffect(() => {
-    // v0.1: if no PCs exist yet, treat /pcs as the Bag hub
-    if (!hasPcs && location.pathname === "/pcs") {
-      navigate("/pcs/bag", { replace: true });
-    }
-  }, [hasPcs, location.pathname, navigate]);
+    const loadCharacters = async () => {
+      if (!selectedCampaignId) {
+        setPcs([]);
+        setIsLoading(false);
+        return;
+      }
+
+      try {
+        setIsLoading(true);
+        const characters = await getCharactersByCampaign(selectedCampaignId);
+
+        const playerVisibleCharacters = characters.filter((character) => {
+          if (character.type !== "pc") {
+            return false;
+          }
+
+          if (String(mode).toLowerCase() === "gm") {
+            return true;
+          }
+
+          if (character.ownerUserId && character.ownerUserId === user?.uid) {
+            return true;
+          }
+
+          if (character.visibility === "player") {
+            return true;
+          }
+
+          return character.isPlayerVisible === true;
+        });
+
+        setPcs(playerVisibleCharacters);
+      } catch (error) {
+        console.error("[PCs] Failed to load characters", error);
+        setPcs([]);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    loadCharacters();
+  }, [selectedCampaignId, mode, user?.uid]);
+
+  const hasPcs = pcs.length > 0;
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -59,10 +92,9 @@ const PCs = () => {
               to="/pcs"
               end
               className={({ isActive }) =>
-                `px-3 py-2 rounded-xl text-sm border transition-colors ${
-                  isActive
-                    ? "bg-indigo-500/20 border-indigo-400/50 text-white"
-                    : "bg-zinc-950/20 border-zinc-800/60 text-zinc-300 hover:text-white hover:bg-zinc-950/35"
+                `px-3 py-2 rounded-xl text-sm border transition-colors ${isActive
+                  ? "bg-indigo-500/20 border-indigo-400/50 text-white"
+                  : "bg-zinc-950/20 border-zinc-800/60 text-zinc-300 hover:text-white hover:bg-zinc-950/35"
                 }`
               }
             >
@@ -73,10 +105,9 @@ const PCs = () => {
           <NavLink
             to="/pcs/bag"
             className={({ isActive }) =>
-              `px-3 py-2 rounded-xl text-sm border transition-colors ${
-                isActive
-                  ? "bg-indigo-500/20 border-indigo-400/50 text-white"
-                  : "bg-zinc-950/20 border-zinc-800/60 text-zinc-300 hover:text-white hover:bg-zinc-950/35"
+              `px-3 py-2 rounded-xl text-sm border transition-colors ${isActive
+                ? "bg-indigo-500/20 border-indigo-400/50 text-white"
+                : "bg-zinc-950/20 border-zinc-800/60 text-zinc-300 hover:text-white hover:bg-zinc-950/35"
               }`
             }
           >
@@ -90,9 +121,11 @@ const PCs = () => {
               Player Characters
             </h1>
             <p className="mt-1 text-xs md:text-sm text-zinc-400 max-w-2xl">
-              {hasPcs
-                ? "Character hub for stats, notes, relationships, conditions, arcs, and session links."
-                : "Party hub — Bag of Holding is available. Player character profiles will appear here once added."}
+              {isLoading
+                ? "Loading character profiles for the active campaign…"
+                : hasPcs
+                  ? "Character hub for stats, notes, relationships, conditions, arcs, and session links."
+                  : "Party hub — Bag of Holding is available. Player character profiles will appear here once added to this campaign."}
             </p>
           </div>
 
@@ -113,12 +146,16 @@ const PCs = () => {
           ) : null}
         </div>
 
-        {!hasPcs ? (
+        {isLoading ? (
+          <div className="rounded-2xl border border-zinc-800/70 bg-zinc-950/40 p-6 text-zinc-300">
+            <div className="text-base font-semibold text-white mb-1">Loading characters</div>
+            <div className="text-sm text-zinc-400">
+              Pulling character profiles for the active campaign.
+            </div>
+          </div>
+        ) : !hasPcs ? (
           <div className="rounded-2xl border border-zinc-800/70 bg-zinc-950/40 p-6 text-zinc-300">
             <div className="text-base font-semibold text-white mb-1">No PC profiles yet</div>
-            <div className="text-sm text-zinc-400">
-              PC profiles are not part of v0.1. Use the Bag of Holding tab to manage party inventory and currency.
-            </div>
           </div>
         ) : filtered.length === 0 ? (
           <div className="rounded-2xl border border-zinc-800/70 bg-zinc-950/40 p-6 text-zinc-300">
@@ -138,13 +175,14 @@ const PCs = () => {
                         {pc.name || "Unnamed PC"}
                       </h2>
                       <p className="mt-0.5 text-[11px] md:text-xs text-zinc-400 truncate">
-                        {pc.race || "—"} · {pc.class || "—"}
+                        {pc.race || pc.type || "—"}
+                        {pc.class ? ` · ${pc.class}` : ""}
                         {pc.subclass ? ` — ${pc.subclass}` : ""}
                       </p>
                     </div>
 
                     <span className="shrink-0 inline-flex items-center justify-center rounded-full border border-indigo-400/70 bg-indigo-500/15 px-2.5 py-0.5 text-[10px] font-medium text-indigo-100 whitespace-nowrap">
-                      Lv {pc.level ?? "?"}
+                      {pc.level ? `Lv ${pc.level}` : (pc.status || "PC")}
                     </span>
                   </div>
 
