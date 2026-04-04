@@ -1,7 +1,15 @@
 // src/pages/CampaignSettings.jsx
 import React, { useMemo, useState, useEffect } from "react";
 import InvitePlayerForm from "../components/invitations/InvitePlayerForm.jsx";
-import { Plus, CheckCircle2, AlertCircle, Trash2 } from "lucide-react";
+import {
+  Plus,
+  CheckCircle2,
+  AlertCircle,
+  Trash2,
+  MoreHorizontal,
+  UserMinus,
+  MailX,
+} from "lucide-react";
 import {
   addDoc,
   collection,
@@ -10,6 +18,8 @@ import {
   deleteDoc,
   getDocs,
   writeBatch,
+  query,
+  where,
 } from "firebase/firestore";
 import { useMode } from "../context/ModeContext.jsx";
 import { useCampaign } from "../context/CampaignContext.jsx";
@@ -49,6 +59,10 @@ export default function CampaignSettings() {
     status: "active",
     system: "",
   });
+  const [campaignPeople, setCampaignPeople] = useState([]);
+  const [campaignPeopleLoading, setCampaignPeopleLoading] = useState(false);
+  const [openActionsId, setOpenActionsId] = useState(null);
+  const [campaignPeopleVersion, setCampaignPeopleVersion] = useState(0);
 
   const createCampaign = async (e) => {
     e?.preventDefault?.();
@@ -105,11 +119,157 @@ export default function CampaignSettings() {
     if (activeCampaign) setDraft({ ...activeCampaign });
   }, [selectedCampaignId, activeCampaign]);
 
+  useEffect(() => {
+    const loadCampaignPeople = async () => {
+      if (!selectedCampaignId) {
+        setCampaignPeople([]);
+        return;
+      }
+
+      try {
+        setCampaignPeopleLoading(true);
+
+        const [membersSnap, invitesSnap, assignmentsSnap, tenantMembersSnap] = await Promise.all([
+          getDocs(query(collection(db, "campaignMembers"), where("campaignId", "==", selectedCampaignId))),
+          getDocs(query(collection(db, "invitations"), where("campaignId", "==", selectedCampaignId))),
+          getDocs(query(collection(db, "characterAssignments"), where("campaignId", "==", selectedCampaignId))),
+          getDocs(query(collection(db, "tenantMembers"), where("tenantId", "==", selectedTenantId))),
+        ]);
+
+        const members = membersSnap.docs.map((docSnap) => ({
+          docId: docSnap.id,
+          ...docSnap.data(),
+        }));
+
+        const invites = invitesSnap.docs.map((docSnap) => ({
+          docId: docSnap.id,
+          ...docSnap.data(),
+        }));
+
+        const assignments = assignmentsSnap.docs.map((docSnap) => ({
+          docId: docSnap.id,
+          ...docSnap.data(),
+        }));
+
+        const tenantMembers = tenantMembersSnap.docs.map((docSnap) => ({
+          docId: docSnap.id,
+          ...docSnap.data(),
+        }));
+
+        const assignedCharacterIdsByUserId = assignments.reduce((acc, assignment) => {
+          const key = String(assignment.userId || "");
+          if (!key) return acc;
+          if (!acc[key]) acc[key] = [];
+          if (assignment.characterId && !acc[key].includes(assignment.characterId)) {
+            acc[key].push(assignment.characterId);
+          }
+          return acc;
+        }, {});
+
+        const userIds = Array.from(
+          new Set(members.map((member) => String(member.userId || "")).filter(Boolean))
+        );
+
+        const userDocs = await Promise.all(
+          userIds.map(async (userId) => {
+            const snap = await getDocs(query(collection(db, "users"), where("id", "==", userId)));
+            const first = snap.docs[0];
+            return first ? { userId, ...first.data() } : { userId };
+          })
+        );
+
+        const usersById = userDocs.reduce((acc, user) => {
+          acc[String(user.userId)] = user;
+          return acc;
+        }, {});
+
+        const workspaceRoleByUserId = tenantMembers.reduce((acc, member) => {
+          const key = String(member.userId || "");
+          if (!key) return acc;
+          acc[key] = member.role || "member";
+          return acc;
+        }, {});
+
+        const acceptedRows = members.map((member) => {
+          const userId = String(member.userId || "");
+          const user = usersById[userId] || {};
+          return {
+            id: `member-${member.docId}`,
+            docId: member.docId,
+            type: "member",
+            status: "accepted",
+            email: user.email || "—",
+            label: user.displayName || user.email || userId || "Unknown user",
+            userId,
+            workspaceRole: workspaceRoleByUserId[userId] || "member",
+            campaignRole: member.role || "player",
+            characterIds: assignedCharacterIdsByUserId[userId] || [],
+          };
+        });
+
+        const acceptedUserIds = new Set(
+          members.map((member) => String(member.userId || "")).filter(Boolean)
+        );
+
+        const acceptedEmails = new Set(
+          members
+            .map((member) => {
+              const userId = String(member.userId || "");
+              const user = usersById[userId] || {};
+              return String(user.normalizedEmail || user.email || "").toLowerCase();
+            })
+            .filter(Boolean)
+        );
+
+        const pendingRows = invites
+          .filter((invite) => {
+            if ((invite.status || "pending") !== "pending") return false;
+
+            const acceptedByUserId = String(invite.acceptedByUserId || "");
+            const normalizedInviteEmail = String(
+              invite.normalizedEmail || invite.email || ""
+            ).toLowerCase();
+
+            if (acceptedByUserId && acceptedUserIds.has(acceptedByUserId)) {
+              return false;
+            }
+
+            if (normalizedInviteEmail && acceptedEmails.has(normalizedInviteEmail)) {
+              return false;
+            }
+
+            return true;
+          })
+          .map((invite) => ({
+            id: `invite-${invite.docId}`,
+            docId: invite.docId,
+            type: "invite",
+            status: invite.status || "pending",
+            email: invite.email || "—",
+            label: invite.email || "Pending invite",
+            userId: null,
+            workspaceRole: invite.workspaceRole || "member",
+            campaignRole: invite.campaignRole || "player",
+            characterIds: Array.isArray(invite.characterIds) ? invite.characterIds : [],
+          }));
+
+        setCampaignPeople([...acceptedRows, ...pendingRows]);
+      } catch (error) {
+        console.error("[CampaignSettings] Failed to load campaign people", error);
+        setCampaignPeople([]);
+      } finally {
+        setCampaignPeopleLoading(false);
+      }
+    };
+
+    loadCampaignPeople();
+  }, [selectedCampaignId, selectedTenantId, saveState.type, saveState.message, campaignPeopleVersion]);
+
   if (!isGM || (campaignRole && campaignRole !== "owner" && campaignRole !== "gm")) {
     return (
       <div className="text-white p-6">
         <h1 className="text-2xl font-bold">Campaign Settings</h1>
-        <p className="text-zinc-400 mt-2">GM-only. Nice try though 😈</p>
+        <p className="text-zinc-300/75 mt-2">GM-only. Nice try though 😈</p>
       </div>
     );
   }
@@ -120,7 +280,7 @@ export default function CampaignSettings() {
         <div className="flex items-center justify-between gap-3">
           <div>
             <h1 className="text-2xl font-bold">Campaign Settings</h1>
-            <p className="text-zinc-400 mt-2">No active campaign selected.</p>
+            <p className="text-zinc-300/75 mt-2">No active campaign selected.</p>
           </div>
 
           {isGM && (
@@ -143,7 +303,7 @@ export default function CampaignSettings() {
 
               <form className="space-y-4" onSubmit={createCampaign}>
                 <div>
-                  <label className="block text-sm text-zinc-400 mb-1">Name</label>
+                  <label className="block text-sm text-zinc-300/75 mb-1">Name</label>
                   <input
                     value={createForm.name}
                     onChange={(e) => setCreateForm((p) => ({ ...p, name: e.target.value }))}
@@ -153,7 +313,7 @@ export default function CampaignSettings() {
                 </div>
 
                 <div>
-                  <label className="block text-sm text-zinc-400 mb-1">Description</label>
+                  <label className="block text-sm text-zinc-300/75 mb-1">Description</label>
                   <textarea
                     value={createForm.description}
                     onChange={(e) => setCreateForm((p) => ({ ...p, description: e.target.value }))}
@@ -164,7 +324,7 @@ export default function CampaignSettings() {
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div>
-                    <label className="block text-sm text-zinc-400 mb-1">Status</label>
+                    <label className="block text-sm text-zinc-300/75 mb-1">Status</label>
                     <select
                       value={createForm.status}
                       onChange={(e) => setCreateForm((p) => ({ ...p, status: e.target.value }))}
@@ -176,7 +336,7 @@ export default function CampaignSettings() {
                     </select>
                   </div>
                   <div>
-                    <label className="block text-sm text-zinc-400 mb-1">System / ruleset</label>
+                    <label className="block text-sm text-zinc-300/75 mb-1">System / ruleset</label>
                     <input
                       value={createForm.system}
                       onChange={(e) => setCreateForm((p) => ({ ...p, system: e.target.value }))}
@@ -297,21 +457,55 @@ export default function CampaignSettings() {
     }
   };
 
+  const onRevokeInvite = async (inviteDocId) => {
+    if (!inviteDocId) return;
+
+    const confirmed = window.confirm("Revoke this pending invitation?");
+    if (!confirmed) return;
+
+    try {
+      await deleteDoc(doc(db, "invitations", inviteDocId));
+      setOpenActionsId(null);
+      setCampaignPeopleVersion((value) => value + 1);
+      setSaveState({ type: "success", message: "Invitation revoked." });
+    } catch (error) {
+      console.error("[CampaignSettings] Failed to revoke invitation", error);
+      setSaveState({ type: "error", message: "Could not revoke invitation." });
+    }
+  };
+
+  const onRemoveCampaignMember = async (memberDocId) => {
+    if (!memberDocId) return;
+
+    const confirmed = window.confirm("Remove this member from the campaign?");
+    if (!confirmed) return;
+
+    try {
+      await deleteDoc(doc(db, "campaignMembers", memberDocId));
+      setOpenActionsId(null);
+      setCampaignPeopleVersion((value) => value + 1);
+      setSaveState({ type: "success", message: "Campaign member removed." });
+    } catch (error) {
+      console.error("[CampaignSettings] Failed to remove campaign member", error);
+      setSaveState({ type: "error", message: "Could not remove campaign member." });
+    }
+  };
+
   return (
     <div className="w-full text-white">
-      <main className="w-full px-6 py-6 md:px-10 md:py-8">
+      <main className="w-full px-6 py-5 md:px-8 md:py-6">
         {/* Header */}
-        <div className="mb-6 flex flex-col gap-2 md:flex-row md:items-end md:justify-between">
+        <div className="mb-5 flex flex-col gap-2 md:flex-row md:items-end md:justify-between">
           <div>
-            <h1 className="text-2xl md:text-3xl font-semibold tracking-tight">
+            <h1 className="text-2xl font-semibold tracking-tight">
               Campaign Settings
             </h1>
-            <p className="mt-1 text-sm text-zinc-400">
+            <p className="mt-1 text-sm text-zinc-300/85 max-w-xl">
               Configure the active campaign. (GM-only)
             </p>
           </div>
 
-          <div className="flex gap-3 flex-wrap">
+          <div className="flex gap-2.5 flex-wrap">
             <button
               type="button"
               onClick={() => setShowCreate(true)}
@@ -351,14 +545,14 @@ export default function CampaignSettings() {
               {deleting ? "Deleting..." : "Delete Campaign"}
             </button>
             {saveState.type === "success" && (
-              <div className="mb-4 inline-flex items-center gap-2 text-emerald-300 text-sm">
+              <div className="mb-4 inline-flex items-center gap-2 rounded-full border border-emerald-400/20 bg-emerald-400/10 px-3 py-1.5 text-emerald-200 text-sm">
                 <CheckCircle2 className="w-4 h-4" />
                 {saveState.message}
               </div>
             )}
 
             {saveState.type === "error" && (
-              <div className="mb-4 inline-flex items-center gap-2 text-red-300 text-sm">
+              <div className="mb-4 inline-flex items-center gap-2 rounded-full border border-red-400/20 bg-red-400/10 px-3 py-1.5 text-red-200 text-sm">
                 <AlertCircle className="w-4 h-4" />
                 {saveState.message}
               </div>
@@ -366,207 +560,363 @@ export default function CampaignSettings() {
           </div>
         </div>
 
-        {/* Main columns */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
-          {/* Player-safe column */}
-          <section className="rounded-2xl bg-zinc-950/35 border border-zinc-800/70 p-5">
-            <h2 className="text-lg font-semibold mb-4">Public (player-safe)</h2>
+        {/* Main sections */}
+        <div className="space-y-4">
+          {/* Player-safe campaign info */}
+          <section className="relative overflow-hidden rounded-3xl border border-fuchsia-500/20 bg-zinc-950/55 p-5 shadow-[0_0_0_1px_rgba(168,85,247,0.05),0_0_48px_rgba(99,102,241,0.10)] before:pointer-events-none before:absolute before:inset-0 before:bg-[radial-gradient(circle_at_top_left,rgba(168,85,247,0.18),transparent_34%),radial-gradient(circle_at_75%_35%,rgba(59,130,246,0.12),transparent_30%),radial-gradient(circle_at_bottom_center,rgba(168,85,247,0.08),transparent_38%)] before:opacity-100 before:content-['']">
+            <div className="relative z-10">
+              <h2 className="text-lg font-semibold mb-2">Campaign overview</h2>
+              <p className="mb-4 text-sm text-zinc-300/70">
+                Public-facing campaign identity and player-safe summary.
+              </p>
 
-            <div className="space-y-4">
-              <div>
-                <label className="block text-sm text-zinc-400 mb-1">Name</label>
-                <input
-                  value={draft.name || ""}
-                  onChange={(e) => update("name", e.target.value)}
-                  className="w-full rounded-xl bg-zinc-950/40 border border-zinc-800/70 px-3.5 py-2.5 text-sm text-white placeholder:text-zinc-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/40"
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm text-zinc-400 mb-1">Description</label>
-                <textarea
-                  value={draft.description || ""}
-                  onChange={(e) => update("description", e.target.value)}
-                  rows={3}
-                  className="w-full rounded-xl bg-zinc-950/40 border border-zinc-800/70 px-3.5 py-2.5 text-sm text-white placeholder:text-zinc-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/40"
-                />
-              </div>
-
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="space-y-3">
                 <div>
-                  <label className="block text-sm text-zinc-400 mb-1">Status</label>
-                  <select
-                    value={draft.status || "active"}
-                    onChange={(e) => update("status", e.target.value)}
-                    className="w-full rounded-xl bg-zinc-950/40 border border-zinc-800/70 px-3.5 py-2.5 text-sm text-white focus:outline-none focus:ring-2 focus:ring-indigo-500/40"
-                  >
-                    {STATUS.map((s) => (
-                      <option key={s} value={s}>
-                        {s}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-
-                <div>
-                  <label className="block text-sm text-zinc-400 mb-1">
-                    System / ruleset (optional)
-                  </label>
+                  <label className="block text-sm text-zinc-200/95 mb-1">Name</label>
                   <input
-                    value={draft.system || ""}
-                    onChange={(e) => update("system", e.target.value)}
-                    placeholder="e.g. D&D 5e, Pathfinder 2e…"
-                    className="w-full rounded-xl bg-zinc-950/40 border border-zinc-800/70 px-3.5 py-2.5 text-sm text-white placeholder:text-zinc-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/40"
+                    value={draft.name || ""}
+                    onChange={(e) => update("name", e.target.value)}
+                    className="w-full rounded-xl border border-white/10 bg-white/[0.03] px-3.5 py-2.5 text-sm text-white placeholder:text-zinc-400/80 shadow-inner shadow-black/10 focus:outline-none focus:ring-2 focus:ring-fuchsia-400/20"
                   />
                 </div>
-              </div>
 
-              <div>
-                <label className="block text-sm text-zinc-400 mb-1">Player summary</label>
-                <textarea
-                  value={draft.playerSummary || ""}
-                  onChange={(e) => update("playerSummary", e.target.value)}
-                  rows={4}
-                  placeholder="What players generally know / the elevator pitch…"
-                  className="w-full rounded-xl bg-zinc-950/40 border border-zinc-800/70 px-3.5 py-2.5 text-sm text-white placeholder:text-zinc-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/40"
-                />
-              </div>
+                <div>
+                  <label className="block text-sm text-zinc-200/95 mb-1">Description</label>
+                  <textarea
+                    value={draft.description || ""}
+                    onChange={(e) => update("description", e.target.value)}
+                    rows={3}
+                    className="w-full rounded-xl border border-white/10 bg-white/[0.03] px-3.5 py-2.5 text-sm text-white placeholder:text-zinc-400/80 shadow-inner shadow-black/10 focus:outline-none focus:ring-2 focus:ring-fuchsia-400/20"
+                  />
+                </div>
 
-              <div>
-                <label className="block text-sm text-zinc-400 mb-1">High-level intro / lore</label>
-                <textarea
-                  value={draft.publicLore || ""}
-                  onChange={(e) => update("publicLore", e.target.value)}
-                  rows={5}
-                  placeholder="Public-facing intro lore / campaign premise…"
-                  className="w-full rounded-xl bg-zinc-950/40 border border-zinc-800/70 px-3.5 py-2.5 text-sm text-white placeholder:text-zinc-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/40"
-                />
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-sm text-zinc-200/95 mb-1">Status</label>
+                    <select
+                      value={draft.status || "active"}
+                      onChange={(e) => update("status", e.target.value)}
+                      className="w-full rounded-xl border border-white/10 bg-white/[0.03] px-3.5 py-2.5 text-sm text-white shadow-inner shadow-black/10 focus:outline-none focus:ring-2 focus:ring-fuchsia-400/20"
+                    >
+                      {STATUS.map((s) => (
+                        <option key={s} value={s}>
+                          {s}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="block text-sm text-zinc-200/95 mb-1">
+                      System / ruleset (optional)
+                    </label>
+                    <input
+                      value={draft.system || ""}
+                      onChange={(e) => update("system", e.target.value)}
+                      placeholder="e.g. D&D 5e, Pathfinder 2e…"
+                      className="w-full rounded-xl border border-white/10 bg-white/[0.03] px-3.5 py-2.5 text-sm text-white placeholder:text-zinc-400/80 shadow-inner shadow-black/10 focus:outline-none focus:ring-2 focus:ring-fuchsia-400/20"
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-sm text-zinc-200/95 mb-1">Player summary</label>
+                  <textarea
+                    value={draft.playerSummary || ""}
+                    onChange={(e) => update("playerSummary", e.target.value)}
+                    rows={4}
+                    placeholder="What players generally know / the elevator pitch…"
+                    className="w-full rounded-xl border border-white/10 bg-white/[0.03] px-3.5 py-2.5 text-sm text-white placeholder:text-zinc-400/80 shadow-inner shadow-black/10 focus:outline-none focus:ring-2 focus:ring-fuchsia-400/20"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm text-zinc-200/95 mb-1">High-level intro / lore</label>
+                  <textarea
+                    value={draft.publicLore || ""}
+                    onChange={(e) => update("publicLore", e.target.value)}
+                    rows={5}
+                    placeholder="Public-facing intro lore / campaign premise…"
+                    className="w-full rounded-xl border border-white/10 bg-white/[0.03] px-3.5 py-2.5 text-sm text-white placeholder:text-zinc-400/80 shadow-inner shadow-black/10 focus:outline-none focus:ring-2 focus:ring-fuchsia-400/20"
+                  />
+                </div>
               </div>
             </div>
           </section>
 
-          {/* GM-only column */}
-          <section className="rounded-2xl bg-zinc-950/35 border border-purple-500/30 p-5">
-            <h2 className="text-lg font-semibold mb-4">GM-only</h2>
+          {/* GM-only notes */}
+          <section className="relative overflow-hidden rounded-3xl border border-fuchsia-500/22 bg-zinc-950/55 p-5 shadow-[0_0_0_1px_rgba(217,70,239,0.05),0_0_44px_rgba(168,85,247,0.10)] before:pointer-events-none before:absolute before:inset-0 before:bg-[radial-gradient(circle_at_top_left,rgba(217,70,239,0.15),transparent_34%),radial-gradient(circle_at_bottom_right,rgba(99,102,241,0.12),transparent_36%),radial-gradient(circle_at_center,rgba(168,85,247,0.07),transparent_42%)] before:opacity-100 before:content-['']">
+            <div className="relative z-10">
+              <h2 className="text-lg font-semibold mb-2">GM-only notes</h2>
+              <p className="mb-4 text-sm text-zinc-300/70">
+                Hidden campaign truth, prep notes, secret timelines, and anything the players are not supposed to see.
+              </p>
 
-            <div className="space-y-4">
-              <div>
-                <label className="block text-sm text-zinc-400 mb-1">GM notes</label>
-                <textarea
-                  value={draft.gmNotes || ""}
-                  onChange={(e) => update("gmNotes", e.target.value)}
-                  rows={4}
-                  placeholder="Private prep notes, reminders, table meta…"
-                  className="w-full rounded-xl bg-zinc-950/40 border border-zinc-800/70 px-3.5 py-2.5 text-sm text-white placeholder:text-zinc-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/40"
-                />
+              <div className="space-y-3">
+                <div>
+                  <label className="block text-sm text-zinc-200/95 mb-1">GM notes</label>
+                  <textarea
+                    value={draft.gmNotes || ""}
+                    onChange={(e) => update("gmNotes", e.target.value)}
+                    rows={4}
+                    placeholder="Private prep notes, reminders, table meta…"
+                    className="w-full rounded-xl border border-white/10 bg-white/[0.03] px-3.5 py-2.5 text-sm text-white placeholder:text-zinc-400/80 shadow-inner shadow-black/10 focus:outline-none focus:ring-2 focus:ring-fuchsia-400/20"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm text-zinc-200/95 mb-1">Private campaign lore</label>
+                  <textarea
+                    value={draft.privateLore || ""}
+                    onChange={(e) => update("privateLore", e.target.value)}
+                    rows={4}
+                    placeholder="Secrets, true history, hidden truths…"
+                    className="w-full rounded-xl border border-white/10 bg-white/[0.03] px-3.5 py-2.5 text-sm text-white placeholder:text-zinc-400/80 shadow-inner shadow-black/10 focus:outline-none focus:ring-2 focus:ring-fuchsia-400/20"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm text-zinc-200/95 mb-1">Hidden factions / arcs</label>
+                  <textarea
+                    value={draft.hiddenFactions || ""}
+                    onChange={(e) => update("hiddenFactions", e.target.value)}
+                    rows={3}
+                    placeholder="Who is pulling strings? Which arcs are actually happening?"
+                    className="w-full rounded-xl border border-white/10 bg-white/[0.03] px-3.5 py-2.5 text-sm text-white placeholder:text-zinc-400/80 shadow-inner shadow-black/10 focus:outline-none focus:ring-2 focus:ring-fuchsia-400/20"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm text-zinc-200/95 mb-1">Hidden timelines</label>
+                  <textarea
+                    value={draft.hiddenTimelines || ""}
+                    onChange={(e) => update("hiddenTimelines", e.target.value)}
+                    rows={3}
+                    placeholder="Off-screen events / clocks / what advances between sessions…"
+                    className="w-full rounded-xl border border-white/10 bg-white/[0.03] px-3.5 py-2.5 text-sm text-white placeholder:text-zinc-400/80 shadow-inner shadow-black/10 focus:outline-none focus:ring-2 focus:ring-fuchsia-400/20"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm text-zinc-200/95 mb-1">Meta commentary</label>
+                  <textarea
+                    value={draft.metaCommentary || ""}
+                    onChange={(e) => update("metaCommentary", e.target.value)}
+                    rows={3}
+                    placeholder="How you prep, themes, tone rules, pacing notes…"
+                    className="w-full rounded-xl border border-white/10 bg-white/[0.03] px-3.5 py-2.5 text-sm text-white placeholder:text-zinc-400/80 shadow-inner shadow-black/10 focus:outline-none focus:ring-2 focus:ring-fuchsia-400/20"
+                  />
+                </div>
+
+                <div className="rounded-2xl border border-white/10 bg-white/[0.035] p-4 shadow-[0_0_24px_rgba(168,85,247,0.05)]">
+                  <p className="text-sm text-zinc-300 font-medium mb-1">
+                    Visibility defaults (placeholder)
+                  </p>
+                  <p className="text-sm text-zinc-300/75">
+                    Later: default visibility rules for new Sessions / Lore / Items, etc.
+                  </p>
+                </div>
               </div>
+            </div>
+          </section>
 
-              <div>
-                <label className="block text-sm text-zinc-400 mb-1">Private campaign lore</label>
-                <textarea
-                  value={draft.privateLore || ""}
-                  onChange={(e) => update("privateLore", e.target.value)}
-                  rows={4}
-                  placeholder="Secrets, true history, hidden truths…"
-                  className="w-full rounded-xl bg-zinc-950/40 border border-zinc-800/70 px-3.5 py-2.5 text-sm text-white placeholder:text-zinc-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/40"
-                />
-              </div>
+          {/* Campaign people & characters */}
+          <section className="relative overflow-visible rounded-3xl border border-cyan-400/18 bg-zinc-950/55 p-5 shadow-[0_0_0_1px_rgba(34,211,238,0.04),0_0_42px_rgba(34,211,238,0.08)] before:pointer-events-none before:absolute before:inset-0 before:bg-[radial-gradient(circle_at_top_right,rgba(34,211,238,0.14),transparent_30%),radial-gradient(circle_at_left,rgba(168,85,247,0.12),transparent_34%),radial-gradient(circle_at_bottom_center,rgba(59,130,246,0.08),transparent_40%)] before:opacity-100 before:content-['']">
+            <div className="relative z-10">
+              <h2 className="text-lg font-semibold mb-2">Campaign people & characters</h2>
+              <p className="mb-4 text-sm text-zinc-300/70">
+                Invite players, review current campaign membership, track invite status, and manage character assignments.
+              </p>
 
-              <div>
-                <label className="block text-sm text-zinc-400 mb-1">Hidden factions / arcs</label>
-                <textarea
-                  value={draft.hiddenFactions || ""}
-                  onChange={(e) => update("hiddenFactions", e.target.value)}
-                  rows={3}
-                  placeholder="Who is pulling strings? Which arcs are actually happening?"
-                  className="w-full rounded-xl bg-zinc-950/40 border border-zinc-800/70 px-3.5 py-2.5 text-sm text-white placeholder:text-zinc-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/40"
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm text-zinc-400 mb-1">Hidden timelines</label>
-                <textarea
-                  value={draft.hiddenTimelines || ""}
-                  onChange={(e) => update("hiddenTimelines", e.target.value)}
-                  rows={3}
-                  placeholder="Off-screen events / clocks / what advances between sessions…"
-                  className="w-full rounded-xl bg-zinc-950/40 border border-zinc-800/70 px-3.5 py-2.5 text-sm text-white placeholder:text-zinc-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/40"
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm text-zinc-400 mb-1">Meta commentary</label>
-                <textarea
-                  value={draft.metaCommentary || ""}
-                  onChange={(e) => update("metaCommentary", e.target.value)}
-                  rows={3}
-                  placeholder="How you prep, themes, tone rules, pacing notes…"
-                  className="w-full rounded-xl bg-zinc-950/40 border border-zinc-800/70 px-3.5 py-2.5 text-sm text-white placeholder:text-zinc-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/40"
-                />
-              </div>
-
-              <div className="rounded-xl border border-zinc-800/70 bg-zinc-950/40 p-4">
-                <p className="text-sm text-zinc-300 font-medium mb-1">
-                  Visibility defaults (placeholder)
+              <div className="rounded-xl border border-white/10 bg-white/[0.025] p-3.5 mb-4 shadow-[0_0_20px_rgba(168,85,247,0.04)]">
+                <p className="text-sm text-zinc-200 font-medium mb-2">Invite player</p>
+                <p className="mb-3 text-xs text-zinc-300/70">
+                  Create a pending invitation for the active campaign. Character assignment support will live here.
                 </p>
-                <p className="text-xs text-zinc-500">
-                  Later: default visibility rules for new Sessions / Lore / Items, etc.
-                </p>
+                <InvitePlayerForm
+                  onInvitationCreated={() => {
+                    setCampaignPeopleVersion((value) => value + 1);
+                    setSaveState({ type: "success", message: "Invitation created." });
+                  }}
+                />
               </div>
 
-              <div className="rounded-xl border border-zinc-800/70 bg-zinc-950/40 p-4">
-                <p className="text-sm text-zinc-300 font-medium mb-3">Invite player</p>
-                <p className="mb-4 text-xs text-zinc-500">
-                  Create a pending invitation for the active campaign.
-                </p>
-                <InvitePlayerForm />
+              <div className="rounded-2xl border border-white/10 bg-white/[0.035] p-4 shadow-[0_0_24px_rgba(168,85,247,0.05)]">
+                <div className="mb-3 flex items-center justify-between gap-3">
+                  <p className="text-sm text-zinc-200 font-medium">Current campaign members & invites</p>
+                  <span className="text-xs text-zinc-300/70">
+                    {campaignPeopleLoading ? "Loading…" : `${campaignPeople.length} record${campaignPeople.length === 1 ? "" : "s"}`}
+                  </span>
+                </div>
+
+                {campaignPeopleLoading ? (
+                  <p className="text-sm text-zinc-300/75">Loading campaign members and invitations…</p>
+                ) : campaignPeople.length === 0 ? (
+                  <p className="text-sm text-zinc-300/75">No members or pending invites for this campaign yet.</p>
+                ) : (
+                  <div className="overflow-x-auto overflow-y-visible pb-24">
+                    <table className="w-full min-w-[920px] border-separate border-spacing-y-2">
+                      <thead>
+                        <tr className="text-left text-xs uppercase tracking-[0.18em] text-zinc-400/80">
+                          <th className="pb-2 pr-4 font-medium">Person</th>
+                          <th className="pb-2 pr-4 font-medium">Invite status</th>
+                          <th className="pb-2 pr-4 font-medium">Workspace role</th>
+                          <th className="pb-2 pr-4 font-medium">Campaign role</th>
+                          <th className="pb-2 pr-4 font-medium">Assigned characters</th>
+                          <th className="pb-2 font-medium">Actions</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {campaignPeople.map((person) => (
+                          <tr key={person.id} className="align-top">
+                            <td className="rounded-l-2xl border-y border-l border-white/10 bg-white/[0.025] px-4 py-3">
+                              <div className="space-y-1">
+                                <p className="text-sm font-medium text-zinc-100">{person.label}</p>
+                                <p className="text-xs text-zinc-400">{person.email}</p>
+                                {person.userId ? (
+                                  <p className="text-[11px] text-zinc-500">User ID: {person.userId}</p>
+                                ) : null}
+                              </div>
+                            </td>
+                            <td className="border-y border-white/10 bg-white/[0.025] py-3">
+                              <span
+                                className={`inline-flex rounded-full border px-2.5 py-1 text-xs font-medium ${person.status === "accepted"
+                                  ? "border-emerald-400/20 bg-emerald-400/10 text-emerald-200"
+                                  : "border-amber-400/20 bg-amber-400/10 text-amber-200"
+                                  }`}
+                              >
+                                {person.status}
+                              </span>
+                            </td>
+                            <td className="border-y border-white/10 bg-white/[0.025] px-4 py-3 text-sm text-zinc-200">
+                              {person.workspaceRole}
+                            </td>
+                            <td className="border-y border-white/10 bg-white/[0.025] px-4 py-3 text-sm text-zinc-200">
+                              {person.campaignRole}
+                            </td>
+                            <td className="border-y border-white/10 bg-white/[0.025] px-4 py-3">
+                              {person.characterIds?.length ? (
+                                <div className="flex flex-wrap gap-2">
+                                  {person.characterIds.map((characterId) => (
+                                    <span
+                                      key={`${person.id}-${characterId}`}
+                                      className="inline-flex rounded-full border border-cyan-400/20 bg-cyan-400/10 px-2.5 py-1 text-xs text-cyan-100"
+                                    >
+                                      {characterId}
+                                    </span>
+                                  ))}
+                                </div>
+                              ) : (
+                                <span className="text-xs text-zinc-500">No characters assigned</span>
+                              )}
+                            </td>
+                            <td className="rounded-r-2xl border-y border-r border-white/10 bg-white/[0.025] px-4 py-3">
+                              <div className="relative flex justify-end overflow-visible">
+                                <button
+                                  type="button"
+                                  onClick={() =>
+                                    setOpenActionsId((current) =>
+                                      current === person.id ? null : person.id
+                                    )
+                                  }
+                                  className="inline-flex h-9 w-9 items-center justify-center rounded-xl border border-white/10 bg-white/[0.03] text-zinc-200 transition hover:bg-white/[0.06]"
+                                >
+                                  <MoreHorizontal className="h-4 w-4" />
+                                </button>
+
+                                {openActionsId === person.id ? (
+                                  <div className="absolute right-0 top-11 z-30 min-w-[200px] overflow-hidden rounded-2xl border border-white/10 bg-zinc-950/95 shadow-[0_12px_30px_rgba(0,0,0,0.35)] backdrop-blur-xl">
+                                    {person.type === "invite" ? (
+                                      <button
+                                        type="button"
+                                        onClick={() => onRevokeInvite(person.docId)}
+                                        className="flex w-full items-center gap-2 px-3 py-2.5 text-left text-sm text-red-200 transition hover:bg-red-400/10"
+                                      >
+                                        <MailX className="h-4 w-4" />
+                                        Revoke invite
+                                      </button>
+                                    ) : (
+                                      <>
+                                        <button
+                                          type="button"
+                                          onClick={() => {
+                                            setOpenActionsId(null);
+                                            window.alert("Character assignment actions are next up in #84.");
+                                          }}
+                                          className="flex w-full items-center gap-2 px-3 py-2.5 text-left text-sm text-zinc-200 transition hover:bg-white/[0.06]"
+                                        >
+                                          <Plus className="h-4 w-4" />
+                                          Assign character
+                                        </button>
+                                        <button
+                                          type="button"
+                                          onClick={() => onRemoveCampaignMember(person.docId)}
+                                          className="flex w-full items-center gap-2 px-3 py-2.5 text-left text-sm text-red-200 transition hover:bg-red-400/10"
+                                        >
+                                          <UserMinus className="h-4 w-4" />
+                                          Remove from campaign
+                                        </button>
+                                      </>
+                                    )}
+                                  </div>
+                                ) : null}
+                              </div>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
               </div>
             </div>
           </section>
         </div>
 
         {/* Bottom metadata strip */}
-        <section className="mt-5 rounded-2xl bg-zinc-950/35 border border-zinc-800/70 p-5">
-          <h3 className="text-sm font-semibold text-white mb-3">Metadata</h3>
+        <section className="relative mt-4 overflow-hidden rounded-3xl border border-fuchsia-500/16 bg-zinc-950/55 p-5 shadow-[0_0_0_1px_rgba(168,85,247,0.04),0_0_36px_rgba(99,102,241,0.08)] before:pointer-events-none before:absolute before:inset-0 before:bg-[radial-gradient(circle_at_bottom_left,rgba(168,85,247,0.12),transparent_34%),radial-gradient(circle_at_right,rgba(59,130,246,0.08),transparent_30%)] before:opacity-100 before:content-['']">
+          <div className="relative z-10">
+            <h3 className="text-base font-semibold text-white mb-2">Metadata</h3>
 
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <div>
-              <label className="block text-sm text-zinc-400 mb-1">Tags</label>
-              <input
-                value={draft.tags || ""}
-                onChange={(e) => update("tags", e.target.value)}
-                placeholder="comma-separated (e.g. feywild, intrigue, horror)"
-                className="w-full rounded-xl bg-zinc-950/40 border border-zinc-800/70 px-3.5 py-2.5 text-sm text-white placeholder:text-zinc-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/40"
-              />
-              <p className="mt-1 text-xs text-zinc-500">Placeholder: we’ll switch to chips later.</p>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+              <div>
+                <label className="block text-sm text-zinc-200/95 mb-1">Tags</label>
+                <input
+                  value={draft.tags || ""}
+                  onChange={(e) => update("tags", e.target.value)}
+                  placeholder="comma-separated (e.g. feywild, intrigue, horror)"
+                  className="w-full rounded-xl border border-white/10 bg-white/[0.03] px-3.5 py-2.5 text-sm text-white placeholder:text-zinc-400/80 shadow-inner shadow-black/10 focus:outline-none focus:ring-2 focus:ring-fuchsia-400/20"
+                />
+                <p className="mt-1 text-sm text-zinc-300/75">Placeholder: we’ll switch to chips later.</p>
+              </div>
+
+              <div>
+                <label className="block text-sm text-zinc-200/95 mb-1">Start date</label>
+                <input
+                  type="date"
+                  value={draft.startDate || ""}
+                  onChange={(e) => update("startDate", e.target.value)}
+                  className="w-full rounded-xl border border-white/10 bg-white/[0.03] px-3.5 py-2.5 text-sm text-white shadow-inner shadow-black/10 focus:outline-none focus:ring-2 focus:ring-fuchsia-400/20"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm text-zinc-200/95 mb-1">End date</label>
+                <input
+                  type="date"
+                  value={draft.endDate || ""}
+                  onChange={(e) => update("endDate", e.target.value)}
+                  className="w-full rounded-xl border border-white/10 bg-white/[0.03] px-3.5 py-2.5 text-sm text-white shadow-inner shadow-black/10 focus:outline-none focus:ring-2 focus:ring-fuchsia-400/20"
+                />
+              </div>
             </div>
 
-            <div>
-              <label className="block text-sm text-zinc-400 mb-1">Start date</label>
-              <input
-                type="date"
-                value={draft.startDate || ""}
-                onChange={(e) => update("startDate", e.target.value)}
-                className="w-full rounded-xl bg-zinc-950/40 border border-zinc-800/70 px-3.5 py-2.5 text-sm text-white focus:outline-none focus:ring-2 focus:ring-indigo-500/40"
-              />
+            <div className="mt-3 rounded-xl border border-white/10 bg-white/[0.025] p-3.5 shadow-[0_0_20px_rgba(168,85,247,0.04)]">
+              <p className="text-sm text-zinc-300 font-medium mb-1">Cross-links (placeholder)</p>
+              <p className="text-sm text-zinc-300/75">
+                Later: Sessions / NPCs / Items / Maps / Lore / Arcs / Quests counts and links for this campaign.
+              </p>
             </div>
-
-            <div>
-              <label className="block text-sm text-zinc-400 mb-1">End date</label>
-              <input
-                type="date"
-                value={draft.endDate || ""}
-                onChange={(e) => update("endDate", e.target.value)}
-                className="w-full rounded-xl bg-zinc-950/40 border border-zinc-800/70 px-3.5 py-2.5 text-sm text-white focus:outline-none focus:ring-2 focus:ring-indigo-500/40"
-              />
-            </div>
-          </div>
-
-          <div className="mt-4 rounded-xl border border-zinc-800/70 bg-zinc-950/40 p-4">
-            <p className="text-sm text-zinc-300 font-medium mb-1">Cross-links (placeholder)</p>
-            <p className="text-xs text-zinc-500">
-              Later: Sessions / NPCs / Items / Maps / Lore / Arcs / Quests counts and links for this campaign.
-            </p>
           </div>
         </section>
 
@@ -578,7 +928,7 @@ export default function CampaignSettings() {
 
               <form className="space-y-4" onSubmit={createCampaign}>
                 <div>
-                  <label className="block text-sm text-zinc-400 mb-1">Name</label>
+                  <label className="block text-sm text-zinc-300/75 mb-1">Name</label>
                   <input
                     value={createForm.name}
                     onChange={(e) => setCreateForm((p) => ({ ...p, name: e.target.value }))}
@@ -588,7 +938,7 @@ export default function CampaignSettings() {
                 </div>
 
                 <div>
-                  <label className="block text-sm text-zinc-400 mb-1">Description</label>
+                  <label className="block text-sm text-zinc-300/75 mb-1">Description</label>
                   <textarea
                     value={createForm.description}
                     onChange={(e) => setCreateForm((p) => ({ ...p, description: e.target.value }))}
@@ -599,7 +949,7 @@ export default function CampaignSettings() {
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div>
-                    <label className="block text-sm text-zinc-400 mb-1">Status</label>
+                    <label className="block text-sm text-zinc-300/75 mb-1">Status</label>
                     <select
                       value={createForm.status}
                       onChange={(e) => setCreateForm((p) => ({ ...p, status: e.target.value }))}
@@ -611,7 +961,7 @@ export default function CampaignSettings() {
                     </select>
                   </div>
                   <div>
-                    <label className="block text-sm text-zinc-400 mb-1">System / ruleset</label>
+                    <label className="block text-sm text-zinc-300/75 mb-1">System / ruleset</label>
                     <input
                       value={createForm.system}
                       onChange={(e) => setCreateForm((p) => ({ ...p, system: e.target.value }))}

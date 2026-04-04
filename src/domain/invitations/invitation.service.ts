@@ -8,11 +8,13 @@ import {
 import { getTenantById } from "../../data/tenants/tenant.repo";
 import { getCampaignById } from "../../data/campaigns/campaigns.repo";
 import { getCampaignMembershipForUserInCampaign } from "../../data/campaignMembers/campaignMembers.repo";
+import { getAssignmentsForUserInCampaign } from "../../data/characterAssignments/characterAssignments.repo";
 import { createMail } from "../../data/mail/mail.repo";
 import { buildInviteEmailHtml } from "../mail/inviteEmail.template";
 import type { Invitation } from "./invitation.types";
 import type { TenantMember } from "../tenants/tenant.types";
 import type { CampaignMember } from "../campaigns/campaign.types";
+import type { CharacterAssignment } from "../characterAssignments/characterAssignment.types";
 
 type InvitePlayerInput = {
   email: string;
@@ -116,6 +118,8 @@ export async function acceptPendingInvitationsForUser({
 
   const uniqueTenantIds = new Set<string>();
   const uniqueCampaignKeys = new Set<string>();
+  const uniqueCharacterAssignmentKeys = new Set<string>();
+  const existingCharacterIdsByCampaign = new Map<string, Set<string>>();
 
   for (const invitation of invitations) {
     if (!uniqueTenantIds.has(invitation.tenantId)) {
@@ -160,6 +164,51 @@ export async function acceptPendingInvitationsForUser({
           };
 
           batch.set(doc(db, "campaignMembers", campaignMemberId), campaignMember);
+        }
+      }
+
+      if (invitation.characterIds?.length) {
+        let existingCharacterIds = existingCharacterIdsByCampaign.get(invitation.campaignId);
+
+        if (!existingCharacterIds) {
+          const existingAssignments = await getAssignmentsForUserInCampaign(
+            invitation.campaignId,
+            userId
+          );
+
+          existingCharacterIds = new Set(
+            existingAssignments.map((assignment) => assignment.characterId)
+          );
+
+          existingCharacterIdsByCampaign.set(invitation.campaignId, existingCharacterIds);
+        }
+
+        for (const characterId of new Set(invitation.characterIds.filter(Boolean))) {
+          const assignmentKey = `${invitation.campaignId}:${userId}:${characterId}`;
+
+          if (
+            !existingCharacterIds.has(characterId) &&
+            !uniqueCharacterAssignmentKeys.has(assignmentKey)
+          ) {
+            uniqueCharacterAssignmentKeys.add(assignmentKey);
+            existingCharacterIds.add(characterId);
+
+            const characterAssignmentId = crypto.randomUUID();
+            const characterAssignment: CharacterAssignment = {
+              id: characterAssignmentId,
+              tenantId: invitation.tenantId,
+              campaignId: invitation.campaignId,
+              characterId,
+              userId,
+              createdAt: now,
+              createdBy: invitation.invitedBy,
+            };
+
+            batch.set(
+              doc(db, "characterAssignments", characterAssignmentId),
+              characterAssignment
+            );
+          }
         }
       }
     }
