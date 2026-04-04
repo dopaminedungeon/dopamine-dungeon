@@ -4,6 +4,8 @@ type InviteEmailParams = {
   inviteEmail: string;
   inviteLink: string;
   inviterName?: string;
+  campaignRole?: string;
+  assignedCharacterNames?: string[];
 };
 
 export function buildInviteEmailHtml({
@@ -12,7 +14,14 @@ export function buildInviteEmailHtml({
   inviteEmail,
   inviteLink,
   inviterName,
+  campaignRole,
+  assignedCharacterNames,
 }: InviteEmailParams): string {
+  const normalizedRole = campaignRole?.toLowerCase() === "gm" ? "GM" : "Player";
+  const hasAssignedCharacters = Array.isArray(assignedCharacterNames) && assignedCharacterNames.length > 0;
+  const assignedCharactersLabel = hasAssignedCharacters
+    ? assignedCharacterNames!.join(", ")
+    : null;
   return `
   <div style="
     background:#05050a;
@@ -70,6 +79,33 @@ export function buildInviteEmailHtml({
             <br/>
             <strong style="color:white;">${workspaceName}</strong>
           </p>
+
+          <div style="
+            margin:18px 0;
+            padding:14px 16px;
+            border:1px solid #2a2a3d;
+            border-radius:12px;
+            background:rgba(255,255,255,0.035);
+          ">
+            <p style="margin:0 0 6px 0;color:#c4b5fd;font-size:10px;letter-spacing:0.12em;text-transform:uppercase;">
+              Your role in this campaign
+            </p>
+            <p style="margin:0;color:white;font-weight:bold;font-size:18px;line-height:1.2;">
+              ${normalizedRole}
+            </p>
+            ${hasAssignedCharacters ? `
+              <p style="margin:12px 0 4px 0;color:#c4b5fd;font-size:10px;letter-spacing:0.12em;text-transform:uppercase;">
+                Assigned character${assignedCharacterNames!.length === 1 ? "" : "s"}
+              </p>
+              <p style="margin:0;color:white;font-weight:bold;font-size:14px;line-height:1.3;">
+                ${assignedCharactersLabel}
+              </p>
+            ` : `
+              <p style="margin:12px 0 0 0;color:#9ca3af;font-size:12px;line-height:1.4;">
+                No character has been assigned yet. The Dungeon Master is still plotting.
+              </p>
+            `}
+          </div>
 
           <p style="margin:16px 0; color:#9ca3af;">
             Side effects may include: emotional attachment to fictional characters, poor life choices, and yelling at dice.
