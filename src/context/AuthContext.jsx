@@ -7,6 +7,7 @@ import {
   onAuthStateChanged,
 } from "firebase/auth";
 import { doc, setDoc } from "firebase/firestore";
+import { ensureUserProfile } from "../domain/users/userProfile.service";
 
 const AuthContext = createContext(null);
 
@@ -20,18 +21,12 @@ export function AuthProvider({ children }) {
 
       if (firebaseUser) {
         try {
-          await setDoc(
-            doc(db, "users", firebaseUser.uid),
-            {
-              id: firebaseUser.uid,
-              email: firebaseUser.email ?? "",
-              displayName: firebaseUser.displayName ?? "",
-              photoURL: firebaseUser.photoURL ?? "",
-              onboardingState: "active",
-              lastLoginAt: Date.now(),
-            },
-            { merge: true }
-          );
+          await ensureUserProfile({
+            userId: firebaseUser.uid,
+            email: firebaseUser.email ?? "",
+            displayName: firebaseUser.displayName ?? "",
+            photoURL: firebaseUser.photoURL ?? "",
+          });
         } catch (error) {
           console.error("[AuthContext] Failed to sync user profile", error);
         }

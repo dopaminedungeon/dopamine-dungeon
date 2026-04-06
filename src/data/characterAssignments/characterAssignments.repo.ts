@@ -47,3 +47,25 @@ export const removeCharacterAssignment = async (
 ): Promise<void> => {
   await deleteDoc(doc(db, COLLECTION, assignmentId));
 };
+
+export const getAssignmentForUserCharacterInCampaign = async (
+  campaignId: string,
+  userId: string,
+  characterId: string
+): Promise<CharacterAssignment | null> => {
+  const q = query(
+    collection(db, COLLECTION),
+    where("campaignId", "==", campaignId),
+    where("userId", "==", userId),
+    where("characterId", "==", characterId)
+  );
+
+  const snapshot = await getDocs(q);
+  const first = snapshot.docs[0];
+
+  if (!first) {
+    return null;
+  }
+
+  return first.data() as CharacterAssignment;
+};
