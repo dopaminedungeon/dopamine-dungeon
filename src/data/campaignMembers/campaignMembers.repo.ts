@@ -1,4 +1,4 @@
-import { collection, doc, getDocs, query, setDoc, where } from "firebase/firestore";
+import { collection, doc, getDocs, query, setDoc, where, deleteDoc } from "firebase/firestore";
 import { db } from "../../firebase/firebase";
 import type { CampaignMember } from "../../domain/campaigns/campaign.types";
 
@@ -9,9 +9,32 @@ export async function createCampaignMember(member: CampaignMember): Promise<Camp
   return member;
 }
 
+export async function removeCampaignMember(memberId: string): Promise<void> {
+  const ref = doc(db, CAMPAIGN_MEMBERS_COLLECTION, memberId);
+  await deleteDoc(ref);
+}
+
 export async function getCampaignMembershipsForUser(userId: string): Promise<CampaignMember[]> {
   const q = query(
     collection(db, CAMPAIGN_MEMBERS_COLLECTION),
+    where("userId", "==", userId)
+  );
+
+  const snapshot = await getDocs(q);
+
+  return snapshot.docs.map((docSnap) => ({
+    id: docSnap.id,
+    ...(docSnap.data() as Omit<CampaignMember, "id">),
+  }));
+}
+
+export async function getCampaignMembershipsForUserInTenant(
+  tenantId: string,
+  userId: string
+): Promise<CampaignMember[]> {
+  const q = query(
+    collection(db, CAMPAIGN_MEMBERS_COLLECTION),
+    where("tenantId", "==", tenantId),
     where("userId", "==", userId)
   );
 
@@ -59,5 +82,28 @@ export async function getCampaignMembershipForUserInCampaign(
   return {
     id: docSnap.id,
     ...(docSnap.data() as Omit<CampaignMember, "id">),
+  };
+}
+
+export async function getCampaignMembershipForUser(
+  campaignId: string,
+  userId: string
+): Promise<CampaignMember | null> {
+  const q = query(
+    collection(db, CAMPAIGN_MEMBERS_COLLECTION),
+    where("campaignId", "==", campaignId),
+    where("userId", "==", userId)
+  );
+
+  const snapshot = await getDocs(q);
+  const first = snapshot.docs[0];
+
+  if (!first) {
+    return null;
+  }
+
+  return {
+    id: first.id,
+    ...(first.data() as Omit<CampaignMember, "id">),
   };
 }
