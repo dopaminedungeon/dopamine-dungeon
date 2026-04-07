@@ -3,6 +3,49 @@ import { db } from "../../firebase/firebase";
 
 type CoinKey = "gp" | "sp" | "cp" | "ep" | "pp";
 
+const COIN_VALUES_CP: Record<CoinKey, number> = {
+  pp: 1000,
+  gp: 100,
+  ep: 50,
+  sp: 10,
+  cp: 1,
+};
+
+function toCopper(currency?: BagCurrency): number {
+  const normalized = normalizeCurrency(currency);
+
+  return (
+    (normalized.pp || 0) * COIN_VALUES_CP.pp +
+    (normalized.gp || 0) * COIN_VALUES_CP.gp +
+    (normalized.ep || 0) * COIN_VALUES_CP.ep +
+    (normalized.sp || 0) * COIN_VALUES_CP.sp +
+    (normalized.cp || 0) * COIN_VALUES_CP.cp
+  );
+}
+
+function fromCopper(totalCp: number): BagCurrency {
+  let remaining = Math.max(0, Math.floor(Number(totalCp) || 0));
+
+  const pp = Math.floor(remaining / COIN_VALUES_CP.pp);
+  remaining -= pp * COIN_VALUES_CP.pp;
+
+  const gp = Math.floor(remaining / COIN_VALUES_CP.gp);
+  remaining -= gp * COIN_VALUES_CP.gp;
+
+  const sp = Math.floor(remaining / COIN_VALUES_CP.sp);
+  remaining -= sp * COIN_VALUES_CP.sp;
+
+  const cp = remaining;
+
+  return {
+    pp,
+    gp,
+    ep: 0,
+    sp,
+    cp,
+  };
+}
+
 export type BagCurrency = Partial<Record<CoinKey, number>>;
 
 export type LooseBagItem = {
@@ -265,17 +308,34 @@ export const bagRepo = {
   ): BagState {
     const current = normalizeBag(bag);
     const normalizedDelta = normalizeCurrency(delta);
-    const sign = mode === "spend" ? -1 : 1;
+
+    if (mode === "add") {
+      return {
+        ...current,
+        currency: normalizeCurrency({
+          gp: (current.currency.gp || 0) + (normalizedDelta.gp || 0),
+          sp: (current.currency.sp || 0) + (normalizedDelta.sp || 0),
+          cp: (current.currency.cp || 0) + (normalizedDelta.cp || 0),
+          ep: (current.currency.ep || 0) + (normalizedDelta.ep || 0),
+          pp: (current.currency.pp || 0) + (normalizedDelta.pp || 0),
+        }),
+      };
+    }
+
+    const availableCp = toCopper(current.currency);
+    const requestedCp = toCopper(normalizedDelta);
+
+    if (requestedCp <= 0) {
+      return current;
+    }
+
+    if (requestedCp > availableCp) {
+      return current;
+    }
 
     return {
       ...current,
-      currency: {
-        gp: Math.max(0, (current.currency.gp || 0) + sign * (normalizedDelta.gp || 0)),
-        sp: Math.max(0, (current.currency.sp || 0) + sign * (normalizedDelta.sp || 0)),
-        cp: Math.max(0, (current.currency.cp || 0) + sign * (normalizedDelta.cp || 0)),
-        ep: Math.max(0, (current.currency.ep || 0) + sign * (normalizedDelta.ep || 0)),
-        pp: Math.max(0, (current.currency.pp || 0) + sign * (normalizedDelta.pp || 0)),
-      },
+      currency: fromCopper(availableCp - requestedCp),
     };
   },
 };
