@@ -89,6 +89,7 @@ export default function BagOfHolding() {
   const [showLinkModal, setShowLinkModal] = useState(false);
   const [linkQuery, setLinkQuery] = useState("");
   const [rerenderTick, setRerenderTick] = useState(0);
+  const [pendingRemovalAction, setPendingRemovalAction] = useState(null);
 
   useEffect(() => {
     if (!selectedCampaignId) {
@@ -313,6 +314,7 @@ export default function BagOfHolding() {
     setShowLinkModal(false);
     setLinkQuery("");
     setRerenderTick((v) => v + 1);
+    setPendingRemovalAction(null);
   }
 
   async function removeLinkedItem(entryId, itemId) {
@@ -358,6 +360,63 @@ export default function BagOfHolding() {
 
     const next = bagRepo.updateLinkedItemQuantity(bagState, entryId, nextQuantity);
     await persistBag(next);
+  }
+
+  async function confirmRemoveLooseItem() {
+    if (!pendingRemovalAction?.itemId) return;
+
+    const next = bagRepo.removeLooseItem(bagState, pendingRemovalAction.itemId);
+    await persistBag(next);
+    setPendingRemovalAction(null);
+  }
+
+  async function confirmSellLooseItem() {
+    if (!pendingRemovalAction?.itemId) return;
+
+    const next = bagRepo.sellLooseItem(bagState, pendingRemovalAction.itemId);
+    await persistBag(next);
+    setPendingRemovalAction(null);
+  }
+
+  function updatePendingRemovalValue(value) {
+    setPendingRemovalAction((current) => {
+      if (!current) return current;
+      return {
+        ...current,
+        manualSaleValue: value,
+      };
+    });
+  }
+
+  async function confirmSellLinkedItem() {
+    if (!pendingRemovalAction?.entryId) return;
+
+    const saleValue = Math.max(0, Number(pendingRemovalAction.manualSaleValue) || 0);
+    const afterRemove = bagRepo.removeLinkedItem(bagState, pendingRemovalAction.entryId);
+    const next = bagRepo.applyCurrencyDelta(
+      afterRemove,
+      { gp: saleValue, sp: 0, cp: 0, ep: 0, pp: 0 },
+      "add"
+    );
+
+    await persistBag(next);
+
+    const stillExists = next.linkedEntries.some(
+      (entry) => String(entry.itemId) === String(pendingRemovalAction.itemId)
+    );
+    if (!stillExists) {
+      const matchingLinks = getLinksForEntity("BagOfHolding", bagId, "Player").filter((linkObj) => {
+        if (linkObj?.label !== "contained_in") return false;
+        const other = linkObj.entityA.type === "BagOfHolding" ? linkObj.entityB : linkObj.entityA;
+        return String(other?.id) === String(pendingRemovalAction.itemId);
+      });
+      matchingLinks.forEach((linkObj) => removeLink(linkObj.id));
+    }
+
+    await refreshItems();
+    setLinkQuery("");
+    setRerenderTick((v) => v + 1);
+    setPendingRemovalAction(null);
   }
 
   if (!selectedCampaignId) {
@@ -681,7 +740,16 @@ export default function BagOfHolding() {
 
                   <button
                     className="text-[11px] text-red-300 hover:text-red-200 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity"
-                    onClick={() => removeLinkedItem(entry.id, item?.id || entry.itemId)}
+                    onClick={() => {
+                      setPendingRemovalAction({
+                        kind: "linked",
+                        entryId: entry.id,
+                        itemId: item?.id || entry.itemId,
+                        name: displayName,
+                        qty: Math.max(1, Number(entry.quantity) || 1),
+                        manualSaleValue: "",
+                      });
+                    }}
                     type="button"
                   >
                     Remove
@@ -741,9 +809,17 @@ export default function BagOfHolding() {
 
                   <button
                     className="text-[11px] text-red-300 hover:text-red-200 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity"
-                    onClick={async () => {
-                      const next = bagRepo.removeLooseItem(bagState, it.id);
-                      await persistBag(next);
+                    onClick={() => {
+                      setPendingRemovalAction({
+                        kind: "loose",
+                        itemId: it.id,
+                        name: it.name,
+                        qty: Math.max(1, Number(it.qty) || 1),
+                        worth: Math.max(0, Number(it.worth) || 0),
+                        totalWorth:
+                          Math.max(1, Number(it.qty) || 1) *
+                          Math.max(0, Number(it.worth) || 0),
+                      });
                     }}
                     type="button"
                   >
@@ -878,6 +954,88 @@ export default function BagOfHolding() {
                 className="w-full sm:w-auto px-4 py-2.5 rounded-xl bg-white/5 text-zinc-300 hover:bg-white/10"
               >
                 Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Remove / sell item modal */}
+      {pendingRemovalAction && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4 overflow-auto">
+          <div className="w-[92vw] max-w-md bg-zinc-950 border border-white/10 rounded-xl sm:rounded-2xl p-4 sm:p-6">
+            <h2 className="text-lg sm:text-xl font-bold text-white mb-2">Remove item</h2>
+            <p className="text-sm text-zinc-400 mb-4">
+              What happened to <span className="text-white font-medium">{pendingRemovalAction.name}</span>?
+            </p>
+
+            <div className="rounded-xl border border-white/10 bg-black/20 p-3 mb-4 text-sm text-zinc-300 space-y-1">
+              <div>
+                Qty: <span className="text-white">{pendingRemovalAction.qty}</span>
+              </div>
+
+              {pendingRemovalAction.kind === "loose" ? (
+                <>
+                  <div>
+                    Worth each: <span className="text-white">{gpFmt(pendingRemovalAction.worth)} gp</span>
+                  </div>
+                  <div>
+                    Total sale value: <span className="text-white">{gpFmt(pendingRemovalAction.totalWorth)} gp</span>
+                  </div>
+                </>
+              ) : (
+                <div>
+                  Enter agreed sale value: <span className="text-white">manual gp input</span>
+                </div>
+              )}
+            </div>
+
+            {pendingRemovalAction.kind === "linked" ? (
+              <div className="mb-4">
+                <label className="block text-sm text-zinc-400 mb-1">Sale value (gp)</label>
+                <input
+                  type="number"
+                  min={0}
+                  inputMode="decimal"
+                  value={pendingRemovalAction.manualSaleValue}
+                  onChange={(e) => updatePendingRemovalValue(e.target.value)}
+                  className="w-full px-3 py-2 bg-white/5 border border-white/10 rounded-xl text-white"
+                  placeholder="0"
+                />
+              </div>
+            ) : null}
+
+            <div className="grid grid-cols-1 gap-2">
+              <button
+                type="button"
+                onClick={pendingRemovalAction.kind === "loose" ? confirmRemoveLooseItem : async () => {
+                  await removeLinkedItem(
+                    pendingRemovalAction.entryId,
+                    pendingRemovalAction.itemId
+                  );
+                  setPendingRemovalAction(null);
+                }}
+                className="w-full px-4 py-2.5 rounded-xl bg-white/5 border border-white/10 text-zinc-200 hover:bg-white/10 transition-colors"
+              >
+                Remove only
+              </button>
+
+              <button
+                type="button"
+                onClick={pendingRemovalAction.kind === "loose" ? confirmSellLooseItem : confirmSellLinkedItem}
+                className="w-full px-4 py-2.5 rounded-xl bg-linear-to-r from-emerald-500 to-teal-500 text-white font-medium hover:opacity-90 transition-opacity"
+              >
+                {pendingRemovalAction.kind === "loose"
+                  ? `Sell for ${gpFmt(pendingRemovalAction.totalWorth)} gp`
+                  : `Sell for ${gpFmt(pendingRemovalAction.manualSaleValue)} gp`}
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setPendingRemovalAction(null)}
+                className="w-full px-4 py-2.5 rounded-xl bg-white/5 text-zinc-400 hover:bg-white/10 transition-colors"
+              >
+                Cancel
               </button>
             </div>
           </div>
