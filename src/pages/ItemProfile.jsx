@@ -5,11 +5,29 @@ import { ArrowLeft, Swords, Shield, Sparkles, Trash2 } from "lucide-react";
 import { itemsRepo } from "../data/items/items.repo";
 import { useCampaign } from "../context/CampaignContext";
 
+const ITEM_TYPES = [
+  "Weapon",
+  "Armor",
+  "Shield",
+  "Consumable",
+  "Potion",
+  "Scroll",
+  "Wand",
+  "Staff",
+  "Rod",
+  "Ring",
+  "Wondrous Item",
+  "Tool",
+  "Adventuring Gear",
+  "Mount / Vehicle",
+  "Other",
+];
 
 const rarityColors = {
   Legendary: "from-amber-500 to-orange-600",
   Epic: "from-purple-500 to-violet-600",
   Rare: "from-blue-500 to-cyan-600",
+  "Very Rare": "from-indigo-500 to-blue-600",
   Uncommon: "from-emerald-500 to-green-600",
   Common: "from-zinc-500 to-zinc-600",
 };
@@ -17,7 +35,19 @@ const rarityColors = {
 const typeIcons = {
   Weapon: Swords,
   Armor: Shield,
+  Shield: Shield,
   Consumable: Sparkles,
+  Potion: Sparkles,
+  Scroll: Sparkles,
+  Wand: Sparkles,
+  Staff: Sparkles,
+  Rod: Sparkles,
+  Ring: Sparkles,
+  "Wondrous Item": Sparkles,
+  Tool: Sparkles,
+  "Adventuring Gear": Sparkles,
+  "Mount / Vehicle": Sparkles,
+  Other: Sparkles,
 };
 const formatSigned = (value) => {
   const n = Number(value) || 0;
@@ -156,7 +186,7 @@ export default function ItemProfile() {
           <ArrowLeft className="w-5 h-5" />
           Back to Items
         </button>
-                {isGM && (
+        {isGM && (
           <div className="flex w-full sm:w-auto flex-col sm:flex-row gap-2">
             <button
               onClick={async () => {
@@ -230,9 +260,11 @@ export default function ItemProfile() {
                       value={formData.type}
                       onChange={(e) => handleFieldChange("type", e.target.value)}
                     >
-                      <option value="Weapon">Weapon</option>
-                      <option value="Armor">Armor</option>
-                      <option value="Consumable">Consumable</option>
+                      {ITEM_TYPES.map((type) => (
+                        <option key={type} value={type}>
+                          {type}
+                        </option>
+                      ))}
                     </select>
                     <select
                       className="bg-transparent border border-white/20 rounded-lg px-2 py-1 text-sm text-white"
@@ -242,6 +274,7 @@ export default function ItemProfile() {
                       <option value="Legendary">Legendary</option>
                       <option value="Epic">Epic</option>
                       <option value="Rare">Rare</option>
+                      <option value="Very Rare">Very Rare</option>
                       <option value="Uncommon">Uncommon</option>
                       <option value="Common">Common</option>
                     </select>
@@ -348,9 +381,11 @@ export default function ItemProfile() {
                     value={formData.type}
                     onChange={(e) => handleFieldChange("type", e.target.value)}
                   >
-                    <option value="Weapon">Weapon</option>
-                    <option value="Armor">Armor</option>
-                    <option value="Consumable">Consumable</option>
+                    {ITEM_TYPES.map((type) => (
+                      <option key={type} value={type}>
+                        {type}
+                      </option>
+                    ))}
                   </select>
                   <select
                     className="bg-transparent border border-white/20 rounded-lg px-2 py-1 text-xs text-white"
@@ -360,6 +395,7 @@ export default function ItemProfile() {
                     <option value="Legendary">Legendary</option>
                     <option value="Epic">Epic</option>
                     <option value="Rare">Rare</option>
+                    <option value="Very Rare">Very Rare</option>
                     <option value="Uncommon">Uncommon</option>
                     <option value="Common">Common</option>
                   </select>
