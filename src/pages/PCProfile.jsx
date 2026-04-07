@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { useParams, Link } from "react-router-dom";
 import { useMode } from "../context/ModeContext.jsx";
 import { useAuth } from "../context/AuthContext";
+import { useCampaign } from "../context/CampaignContext";
 import { getCharacterById } from "../data/characters/characters.repo";
 
 const abilityLabels = {
@@ -38,6 +39,7 @@ const PCProfile = () => {
   const { pcId } = useParams();
   const { isGM } = useMode();
   const { user } = useAuth();
+  const { selectedCampaignId } = useCampaign();
   const isGMMode = Boolean(isGM);
 
   const [pc, setPc] = useState(null);
@@ -53,7 +55,7 @@ const PCProfile = () => {
 
       try {
         setIsLoading(true);
-        const character = await getCharacterById(pcId);
+        const character = await getCharacterById(selectedCampaignId, pcId);
         setPc(character);
       } catch (error) {
         console.error("[PCProfile] Failed to load character", error);
@@ -64,7 +66,7 @@ const PCProfile = () => {
     };
 
     loadPc();
-  }, [pcId]);
+  }, [pcId, selectedCampaignId]);
 
   const canPlayerViewPc =
     isGMMode ||
