@@ -77,11 +77,22 @@ export default function BagOfHolding() {
   const applyPendingCurrency = async (mode = "add") => {
     if (!hasPendingDelta) return;
 
+    setCurrencyError("");
+
+    if (mode === "spend" && pendingDeltaTotalGp > currencyTotals.totalGp) {
+      setCurrencyError(
+        `Not enough funds in treasury. You tried to spend ${gpFmt(
+          pendingDeltaTotalGp
+        )} gp, but only ${gpFmt(currencyTotals.totalGp)} gp is available.`
+      );
+      return;
+    }
+
     const next = bagRepo.applyCurrencyDelta(bagState, pendingDelta, mode);
     await persistBag(next);
 
-    // Clear the inputs
     setPendingCurrency({ gp: "", sp: "", cp: "", ep: "", pp: "" });
+    setCurrencyError("");
   };
   const [search, setSearch] = useState("");
   const [type, setType] = useState("All");
@@ -90,11 +101,13 @@ export default function BagOfHolding() {
   const [linkQuery, setLinkQuery] = useState("");
   const [rerenderTick, setRerenderTick] = useState(0);
   const [pendingRemovalAction, setPendingRemovalAction] = useState(null);
+  const [currencyError, setCurrencyError] = useState("");
 
   useEffect(() => {
     if (!selectedCampaignId) {
       setBagState({ currency: {}, looseItems: [], linkedEntries: [] });
       setAllItems([]);
+      setCurrencyError("");
       setLoading(false);
       return;
     }
@@ -113,10 +126,12 @@ export default function BagOfHolding() {
           linkedEntries: Array.isArray(bagData?.linkedEntries) ? bagData.linkedEntries : [],
         });
         setAllItems(Array.isArray(itemData) ? itemData : []);
+        setCurrencyError("");
       } catch (error) {
         console.error("[BagOfHolding] Failed to load bag data", error);
         setBagState({ currency: {}, looseItems: [], linkedEntries: [] });
         setAllItems([]);
+        setCurrencyError("");
       } finally {
         setLoading(false);
       }
@@ -214,7 +229,6 @@ export default function BagOfHolding() {
     const cp = Number(currency?.cp) || 0;
     const pp = Number(currency?.pp) || 0;
     const ep = Number(currency?.ep) || 0;
-
     // Conversions:
     // sp = 0.1 gp
     // cp = 0.01 gp
@@ -223,6 +237,16 @@ export default function BagOfHolding() {
     const totalGp = gp + sp * 0.1 + cp * 0.01 + pp * 10 + ep * 0.5;
     return { gp, sp, cp, pp, ep, totalGp };
   }, [currency]);
+
+  const pendingDeltaTotalGp = useMemo(() => {
+    const gp = Number(pendingDelta?.gp) || 0;
+    const sp = Number(pendingDelta?.sp) || 0;
+    const cp = Number(pendingDelta?.cp) || 0;
+    const pp = Number(pendingDelta?.pp) || 0;
+    const ep = Number(pendingDelta?.ep) || 0;
+
+    return gp + sp * 0.1 + cp * 0.01 + pp * 10 + ep * 0.5;
+  }, [pendingDelta]);
 
   const gpFmt = (n) => {
     const v = Math.round((Number(n) || 0) * 100) / 100;
@@ -558,6 +582,11 @@ export default function BagOfHolding() {
                 <div className="text-sm font-semibold text-white">Add currency</div>
                 <div className="text-xs text-zinc-500 mt-0.5">Enter what you’re adding, click Add. Inputs clear automatically.</div>
               </div>
+              {currencyError ? (
+                <div className="rounded-xl border border-red-400/30 bg-red-500/10 px-3 py-2 text-sm text-red-200">
+                  {currencyError}
+                </div>
+              ) : null}
               <div className="grid grid-cols-2 gap-2 w-full sm:w-auto">
                 <button
                   type="button"
@@ -603,7 +632,10 @@ export default function BagOfHolding() {
                     min={0}
                     inputMode="numeric"
                     value={pendingCurrency?.[key]}
-                    onChange={(e) => setPendingCurrency((p) => ({ ...p, [key]: e.target.value }))}
+                    onChange={(e) => {
+                      setPendingCurrency((p) => ({ ...p, [key]: e.target.value }));
+                      if (currencyError) setCurrencyError("");
+                    }}
                     onKeyDown={(e) => {
                       if (e.key === "Enter") {
                         e.preventDefault();
