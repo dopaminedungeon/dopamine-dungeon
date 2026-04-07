@@ -142,6 +142,35 @@ export const bagRepo = {
     };
   },
 
+  sellLooseItem(bag: BagState, itemId: string): BagState {
+    const current = normalizeBag(bag);
+    const itemToSell = current.looseItems.find(
+      (item) => String(item.id) === String(itemId)
+    );
+
+    if (!itemToSell) {
+      return current;
+    }
+
+    const saleValue =
+      Math.max(0, Number(itemToSell.worth) || 0) *
+      Math.max(1, Number(itemToSell.qty) || 1);
+
+    return {
+      ...current,
+      looseItems: current.looseItems.filter(
+        (item) => String(item.id) !== String(itemId)
+      ),
+      currency: {
+        ...normalizeCurrency(current.currency),
+        gp: Math.max(
+          0,
+          (Number(current.currency?.gp) || 0) + saleValue
+        ),
+      },
+    };
+  },
+
   addLinkedItem(
     bag: BagState,
     itemId: string,
