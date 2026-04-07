@@ -21,16 +21,65 @@ export default function BagOfHolding() {
       return false;
     }
   }, []);
-  const bagTypes = ["All", "Weapon", "Armor", "Consumable", "Other"];
+  const bagTypes = [
+    "All",
+    "Weapon",
+    "Armor",
+    "Shield",
+    "Consumable",
+    "Potion",
+    "Scroll",
+    "Wand",
+    "Staff",
+    "Rod",
+    "Ring",
+    "Wondrous Item",
+    "Tool",
+    "Adventuring Gear",
+    "Mount / Vehicle",
+    "Other",
+  ];
+
+  const bagTypeLabels = {
+    All: "All",
+    Weapon: "Weapon",
+    Armor: "Armor",
+    Shield: "Shield",
+    Consumable: "Consumable",
+    Potion: "Potion",
+    Scroll: "Scroll",
+    Wand: "Wand",
+    Staff: "Staff",
+    Rod: "Rod",
+    Ring: "Ring",
+    "Wondrous Item": "Wondrous",
+    Tool: "Tool",
+    "Adventuring Gear": "Gear",
+    "Mount / Vehicle": "Mounts/Vehicles",
+    Other: "Other",
+  };
 
   const typeAccent = (t) => {
     switch (t) {
       case "Weapon":
         return "border-l-rose-400/70";
       case "Armor":
+      case "Shield":
         return "border-l-sky-400/70";
       case "Consumable":
+      case "Potion":
+      case "Scroll":
         return "border-l-emerald-400/70";
+      case "Wand":
+      case "Staff":
+      case "Rod":
+      case "Ring":
+      case "Wondrous Item":
+        return "border-l-fuchsia-400/70";
+      case "Tool":
+      case "Adventuring Gear":
+      case "Mount / Vehicle":
+        return "border-l-amber-400/70";
       default:
         return "border-l-zinc-500/50";
     }
@@ -491,49 +540,55 @@ export default function BagOfHolding() {
         </NavLink>
       </div>
       {/* Header */}
-      <div className="flex flex-col gap-3 sm:gap-4 mb-5 sm:mb-6">
-        <div className="relative flex-1">
-          <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-zinc-500" />
-          <input
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            placeholder="Search party inventory..."
-            className="w-full pl-11 pr-3 py-2.5 sm:pl-12 sm:pr-4 sm:py-3 bg-white/5 border border-white/10 rounded-xl text-white placeholder-zinc-500 focus:outline-none focus:border-blue-500/50 focus:ring-2 focus:ring-blue-500/20 transition-all"
-          />
-        </div>
-
-        <div className="flex gap-2 overflow-x-auto whitespace-nowrap pr-1 pb-1 [-webkit-overflow-scrolling:touch]">
-          {bagTypes.map((t) => (
-            <button
-              key={t}
-              onClick={() => setType(t)}
-              className={`shrink-0 px-3 py-2.5 sm:px-4 sm:py-3 rounded-xl font-medium transition-all ${type === t
-                ? "bg-blue-500 text-white"
-                : "bg-white/5 text-zinc-400 hover:bg-white/10 hover:text-white"
-                }`}
-            >
-              {t}
-            </button>
-          ))}
-        </div>
-
-        {canAdd && (
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 w-full">
-            <button
-              className="w-full flex items-center justify-center gap-2 px-4 py-2.5 sm:px-6 sm:py-3 bg-linear-to-r from-indigo-500 to-purple-500 text-white font-medium rounded-xl hover:opacity-90 transition-opacity"
-              onClick={() => setShowModal(true)}
-            >
-              <Plus className="w-5 h-5" />
-              Add loose item
-            </button>
-            <button
-              className="w-full flex items-center justify-center gap-2 px-4 py-2.5 sm:px-6 sm:py-3 bg-white/5 border border-white/10 text-zinc-200 font-medium rounded-xl hover:bg-white/10 transition-colors"
-              onClick={() => setShowLinkModal(true)}
-            >
-              + Link existing item
-            </button>
+      <div className="space-y-4 mb-5 sm:mb-6">
+        <div className="flex flex-col xl:flex-row gap-4 xl:items-center">
+          <div className="relative flex-1 min-w-0">
+            <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-zinc-500" />
+            <input
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="Search party inventory..."
+              className="w-full pl-11 pr-3 py-2.5 sm:pl-12 sm:pr-4 sm:py-3 bg-white/5 border border-white/10 rounded-xl text-white placeholder-zinc-500 focus:outline-none focus:border-blue-500/50 focus:ring-2 focus:ring-blue-500/20 transition-all"
+            />
           </div>
-        )}
+
+          {canAdd ? (
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 w-full xl:w-auto xl:min-w-[420px]">
+              <button
+                className="w-full flex items-center justify-center gap-2 px-4 py-2.5 sm:px-6 sm:py-3 bg-linear-to-r from-indigo-500 to-purple-500 text-white font-medium rounded-xl hover:opacity-90 transition-opacity"
+                onClick={() => setShowModal(true)}
+              >
+                <Plus className="w-5 h-5" />
+                Add loose item
+              </button>
+              <button
+                className="w-full flex items-center justify-center gap-2 px-4 py-2.5 sm:px-6 sm:py-3 bg-white/5 border border-white/10 text-zinc-200 font-medium rounded-xl hover:bg-white/10 transition-colors"
+                onClick={() => setShowLinkModal(true)}
+              >
+                + Link existing item
+              </button>
+            </div>
+          ) : null}
+        </div>
+
+        <div className="rounded-2xl border border-white/10 bg-white/5 p-3">
+          <div className="flex flex-wrap gap-2">
+            {bagTypes.map((t) => (
+              <button
+                key={t}
+                onClick={() => setType(t)}
+                className={`px-3 py-2 rounded-xl text-sm font-medium whitespace-nowrap transition-all ${
+                  type === t
+                    ? "bg-blue-500 text-white"
+                    : "bg-white/5 text-zinc-400 hover:bg-white/10 hover:text-white"
+                }`}
+                title={t}
+              >
+                {bagTypeLabels[t] || t}
+              </button>
+            ))}
+          </div>
+        </div>
       </div>
 
       {/* Treasury + Party Totals */}
@@ -915,7 +970,9 @@ export default function BagOfHolding() {
                     className="w-full px-3 py-2 bg-white/5 border border-white/10 rounded-xl text-white"
                   >
                     {bagTypes.filter((t) => t !== "All").map((t) => (
-                      <option key={t} value={t}>{t}</option>
+                      <option key={t} value={t}>
+                        {bagTypeLabels[t] || t}
+                      </option>
                     ))}
                   </select>
                 </div>

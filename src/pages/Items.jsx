@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { useMode } from "../context/ModeContext.jsx";
 import { useCampaign } from "../context/CampaignContext";
 import { itemsRepo } from "../data/items/items.repo";
+
 import {
   Search,
   Plus,
@@ -13,17 +14,69 @@ import {
   List,
 } from "lucide-react";
 
+const ITEM_TYPES = [
+  "Weapon",
+  "Armor",
+  "Shield",
+  "Consumable",
+  "Potion",
+  "Scroll",
+  "Wand",
+  "Staff",
+  "Rod",
+  "Ring",
+  "Wondrous Item",
+  "Tool",
+  "Adventuring Gear",
+  "Mount / Vehicle",
+  "Other",
+];
+
+const ITEM_TYPE_FILTERS = ["All", ...ITEM_TYPES];
+
+const ITEM_TYPE_LABELS = {
+  All: "All",
+  Weapon: "Weapon",
+  Armor: "Armor",
+  Shield: "Shield",
+  Consumable: "Consumable",
+  Potion: "Potion",
+  Scroll: "Scroll",
+  Wand: "Wand",
+  Staff: "Staff",
+  Rod: "Rod",
+  Ring: "Ring",
+  "Wondrous Item": "Wondrous",
+  Tool: "Tool",
+  "Adventuring Gear": "Gear",
+  "Mount / Vehicle": "Mounts/Vehicles",
+  Other: "Other",
+};
+
 
 const typeIcons = {
   Weapon: Swords,
   Armor: Shield,
+  Shield: Shield,
   Consumable: Sparkles,
+  Potion: Sparkles,
+  Scroll: Sparkles,
+  Wand: Sparkles,
+  Staff: Sparkles,
+  Rod: Sparkles,
+  Ring: Sparkles,
+  "Wondrous Item": Sparkles,
+  Tool: Sparkles,
+  "Adventuring Gear": Sparkles,
+  "Mount / Vehicle": Sparkles,
+  Other: Sparkles,
 };
 
 const rarityConfig = {
   Legendary: { bg: 'from-amber-500 to-orange-600', border: 'border-amber-500/30', text: 'text-amber-400', glow: 'shadow-amber-500/20' },
   Epic: { bg: 'from-purple-500 to-violet-600', border: 'border-purple-500/30', text: 'text-purple-400', glow: 'shadow-purple-500/20' },
   Rare: { bg: 'from-blue-500 to-cyan-600', border: 'border-blue-500/30', text: 'text-blue-400', glow: 'shadow-blue-500/20' },
+  "Very Rare": { bg: 'from-indigo-500 to-blue-600', border: 'border-indigo-500/30', text: 'text-indigo-300', glow: 'shadow-indigo-500/20' },
   Uncommon: { bg: 'from-emerald-500 to-green-600', border: 'border-emerald-500/30', text: 'text-emerald-400', glow: 'shadow-emerald-500/20' },
   Common: { bg: 'from-zinc-500 to-zinc-600', border: 'border-zinc-500/30', text: 'text-zinc-400', glow: 'shadow-zinc-500/20' },
 };
@@ -71,7 +124,7 @@ export default function Items() {
 
   const [formData, setFormData] = useState({
     name: "",
-    type: "Weapon",
+    type: ITEM_TYPES[0],
     rarity: "Common",
     power: 0,
     description: "",
@@ -116,53 +169,39 @@ export default function Items() {
 
   return (
   <>
-    {/* Header Actions */}
-    <div className="flex flex-col lg:flex-row gap-4 mb-8">
-      {/* Search */}
-      <div className="relative flex-1">
-        <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-zinc-500" />
-        <input
-          type="text"
-          placeholder="Search items..."
-          value={searchQuery}
-          onChange={(e) => setSearchQuery(e.target.value)}
-          className="w-full pl-12 pr-4 py-3 bg-white/5 border border-white/10 rounded-xl text-white placeholder-zinc-500 focus:outline-none focus:border-blue-500/50 focus:ring-2 focus:ring-blue-500/20 transition-all"
-        />
-      </div>
+{/* Header Actions */}
+<div className="space-y-4 mb-8">
+  <div className="flex flex-col xl:flex-row gap-4 xl:items-center">
+    {/* Search */}
+    <div className="relative flex-1 min-w-0">
+      <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-zinc-500" />
+      <input
+        type="text"
+        placeholder="Search items..."
+        value={searchQuery}
+        onChange={(e) => setSearchQuery(e.target.value)}
+        className="w-full pl-12 pr-4 py-3 bg-white/5 border border-white/10 rounded-xl text-white placeholder-zinc-500 focus:outline-none focus:border-blue-500/50 focus:ring-2 focus:ring-blue-500/20 transition-all"
+      />
+    </div>
 
-      {/* Type Filter */}
-      <div className="flex gap-2">
-        {["All", "Weapon", "Armor", "Consumable"].map((type) => (
-          <button
-            key={type}
-            onClick={() => setSelectedType(type)}
-            className={`px-4 py-3 rounded-xl font-medium transition-all ${
-              selectedType === type
-                ? "bg-blue-500 text-white"
-                : "bg-white/5 text-zinc-400 hover:bg-white/10 hover:text-white"
-            }`}
-          >
-            {type}
-          </button>
-        ))}
-      </div>
-
+    <div className="flex flex-col sm:flex-row gap-3 xl:justify-end">
       {/* Rarity Filter */}
       <select
         value={selectedRarity}
         onChange={(e) => setSelectedRarity(e.target.value)}
-        className="px-4 py-3 bg-white/5 border border-white/10 rounded-xl text-white focus:outline-none focus:border-blue-500/50"
+        className="px-4 py-3 bg-white/5 border border-white/10 rounded-xl text-white focus:outline-none focus:border-blue-500/50 min-w-[180px]"
       >
         <option value="All">All Rarities</option>
         <option value="Legendary">Legendary</option>
         <option value="Epic">Epic</option>
         <option value="Rare">Rare</option>
+        <option value="Very Rare">Very Rare</option>
         <option value="Uncommon">Uncommon</option>
         <option value="Common">Common</option>
       </select>
 
       {/* View Toggle */}
-      <div className="flex bg-white/5 border border-white/10 rounded-xl p-1">
+      <div className="flex bg-white/5 border border-white/10 rounded-xl p-1 self-start">
         <button
           onClick={() => setViewMode("grid")}
           className={`p-2 rounded-lg transition-all ${
@@ -184,7 +223,7 @@ export default function Items() {
       {/* Add Button */}
       {isGM && (
         <button
-          className="flex items-center gap-2 px-6 py-3 bg-linear-to-r from-indigo-500 to-purple-500 text-white font-medium rounded-xl hover:opacity-90 transition-opacity"
+          className="flex items-center justify-center gap-2 px-6 py-3 bg-linear-to-r from-indigo-500 to-purple-500 text-white font-medium rounded-xl hover:opacity-90 transition-opacity"
           onClick={() => setShowCreateModal(true)}
         >
           <Plus className="w-5 h-5" />
@@ -192,6 +231,28 @@ export default function Items() {
         </button>
       )}
     </div>
+  </div>
+
+  {/* Type Filter */}
+  <div className="rounded-2xl border border-white/10 bg-white/5 p-3">
+    <div className="flex flex-wrap gap-2">
+      {ITEM_TYPE_FILTERS.map((type) => (
+        <button
+          key={type}
+          onClick={() => setSelectedType(type)}
+          className={`px-3 py-2 rounded-xl text-sm font-medium whitespace-nowrap transition-all ${
+            selectedType === type
+              ? "bg-blue-500 text-white"
+              : "bg-white/5 text-zinc-400 hover:bg-white/10 hover:text-white"
+          }`}
+          title={type}
+        >
+          {ITEM_TYPE_LABELS[type] || type}
+        </button>
+      ))}
+    </div>
+  </div>
+</div>
 
     {visibleItems.length === 0 && (
       <div className="bg-white/5 border border-white/10 rounded-2xl p-6 text-zinc-300">
@@ -347,7 +408,7 @@ export default function Items() {
               setShowCreateModal(false);
               setFormData({
                 name: "",
-                type: "Weapon",
+                type: ITEM_TYPES[0],
                 rarity: "Common",
                 power: 0,
                 description: "",
@@ -391,9 +452,11 @@ export default function Items() {
                   onChange={(e) => setFormData((p) => ({ ...p, type: e.target.value }))}
                   className="w-full px-3 py-2 bg-white/5 border border-white/10 rounded-xl text-white focus:outline-none focus:border-purple-500/50"
                 >
-                  <option value="Weapon">Weapon</option>
-                  <option value="Armor">Armor</option>
-                  <option value="Consumable">Consumable</option>
+                  {ITEM_TYPES.map((type) => (
+                    <option key={type} value={type}>
+                      {type}
+                    </option>
+                  ))}
                 </select>
               </div>
 
