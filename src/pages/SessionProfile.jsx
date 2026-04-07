@@ -524,7 +524,7 @@ export default function SessionProfile() {
           </div>
           <div className="flex items-center gap-3">
             <Map className="w-4 h-4 text-zinc-500" />
-            <span>Map: {viewSession?.map || ""}</span>
+            <span>Location: {viewSession?.map || ""}</span>
           </div>
           <div className="flex items-center gap-3">
             <Clock className="w-4 h-4 text-zinc-500" />

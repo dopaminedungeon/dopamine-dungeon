@@ -32,13 +32,13 @@ export default function MapProfile() {
         <div className="max-w-xl mx-auto bg-white/5 border border-white/10 rounded-2xl p-8 text-center">
           <h1 className="text-2xl font-bold text-white mb-2">DM Eyes Only</h1>
           <p className="text-zinc-400 text-sm mb-4">
-            This map is marked GM-only. Players don’t get to see it until it’s revealed in play. 💜
+            This location is marked GM-only. Players don’t get to see it until it’s revealed in play. 💜
           </p>
           <button
             className="mt-2 px-4 py-2 rounded-xl bg-white/10 text-white hover:bg-white/20"
             onClick={() => navigate("/maps")}
           >
-            Back to Maps
+            Back to Locations
           </button>
         </div>
       </main>
@@ -48,7 +48,7 @@ export default function MapProfile() {
   if (!map) {
     return (
       <main className="p-8 text-white">
-        <h1 className="text-3xl font-bold">Map Not Found</h1>
+        <h1 className="text-3xl font-bold">Location Not Found</h1>
         <button
           onClick={() => navigate(-1)}
           className="mt-4 px-4 py-2 bg-white/10 rounded-xl text-zinc-300 hover:bg-white/20"
@@ -94,12 +94,12 @@ export default function MapProfile() {
 
   const hiddenFeatures = [
     "Secret passage connecting two non-adjacent rooms.",
-    "Lore book that reveals true owner / origin of the map.",
+    "Lore book that reveals the true owner / origin of the location.",
   ];
   const mapStateDetails = [
     "Current faction control: shifting between two groups.",
     "Corruption level rising slowly due to Nexus influence.",
-    "Map evolves between sessions (reinforcements, debris, repairs).",
+    "Location evolves between sessions (reinforcements, debris, repairs).",
   ];
   const threatsAndEncounters = [
     {
@@ -141,7 +141,7 @@ export default function MapProfile() {
           onClick={() => navigate("/maps")}
         >
           <ArrowLeft className="w-5 h-5" />
-          Back to Maps
+          Back to Locations
         </button>
         {isGmView && (
           <button
@@ -386,7 +386,7 @@ export default function MapProfile() {
                 {/* Description */}
                 <section className="bg-white/5 border border-white/10 rounded-2xl p-6">
                   <h2 className="text-lg font-semibold text-white mb-2">
-                    Map description
+                    Location description
                   </h2>
                   {isGmView && editMode ? (
                     <textarea
@@ -397,7 +397,7 @@ export default function MapProfile() {
                     />
                   ) : (
                     <p className="text-zinc-300 text-sm leading-relaxed">
-                      {map.description || "Describe what the characters see when they first arrive here."}
+                      {map.description || "Describe what the characters see when they first arrive at this location."}
                     </p>
                   )}
                 </section>
@@ -519,11 +519,11 @@ export default function MapProfile() {
                   </div>
                 </section>
 
-                {/* Player interactions with this map */}
+                {/* Player interactions with this location */}
                 <section className="bg-white/5 border border-white/10 rounded-2xl p-6">
                   <div className="flex items-center justify-between mb-3">
                     <h2 className="text-lg font-semibold text-white">
-                      Player interactions with this map
+                      Player interactions with this location
                     </h2>
                   </div>
                   <ul className="space-y-2 text-sm text-zinc-300">
@@ -604,10 +604,10 @@ export default function MapProfile() {
                     )}
                   </section>
 
-                  {/* Map State (GM-only) */}
+                  {/* Location state (GM-only) */}
                   <section className="bg-white/5 border border-white/10 rounded-2xl p-6">
                     <h2 className="text-lg font-semibold text-white mb-3">
-                      Map state (GM-only)
+                      Location state (GM-only)
                     </h2>
                     {editMode ? (
                       <textarea
