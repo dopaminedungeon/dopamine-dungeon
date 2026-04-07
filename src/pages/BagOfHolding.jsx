@@ -52,11 +52,12 @@ export default function BagOfHolding() {
         return "";
     }
   };
-  const [bagState, setBagState] = useState({ currency: {}, looseItems: [] });
+  const [bagState, setBagState] = useState({ currency: {}, looseItems: [], linkedEntries: [] });
   const [allItems, setAllItems] = useState([]);
   const [loading, setLoading] = useState(true);
   const currency = bagState?.currency || {};
   const looseItems = Array.isArray(bagState?.looseItems) ? bagState.looseItems : [];
+  const linkedEntries = Array.isArray(bagState?.linkedEntries) ? bagState.linkedEntries : [];
   const [pendingCurrency, setPendingCurrency] = useState(() => ({ gp: "", sp: "", cp: "", ep: "", pp: "" }));
 
   const pendingDelta = useMemo(() => {
@@ -91,7 +92,7 @@ export default function BagOfHolding() {
 
   useEffect(() => {
     if (!selectedCampaignId) {
-      setBagState({ currency: {}, looseItems: [] });
+      setBagState({ currency: {}, looseItems: [], linkedEntries: [] });
       setAllItems([]);
       setLoading(false);
       return;
@@ -108,11 +109,12 @@ export default function BagOfHolding() {
         setBagState({
           currency: bagData?.currency || {},
           looseItems: Array.isArray(bagData?.looseItems) ? bagData.looseItems : [],
+          linkedEntries: Array.isArray(bagData?.linkedEntries) ? bagData.linkedEntries : [],
         });
         setAllItems(Array.isArray(itemData) ? itemData : []);
       } catch (error) {
         console.error("[BagOfHolding] Failed to load bag data", error);
-        setBagState({ currency: {}, looseItems: [] });
+        setBagState({ currency: {}, looseItems: [], linkedEntries: [] });
         setAllItems([]);
       } finally {
         setLoading(false);
@@ -134,37 +136,6 @@ export default function BagOfHolding() {
   });
 
   const bagId = selectedCampaignId ? `bag:${selectedCampaignId}` : "bag:none";
-  const visibilityMode = isGM ? "GM" : "Player";
-
-  // GM sees both GM-only + Player-visible links.
-  // Player sees only Player-visible links.
-  const bagLinks = useMemo(() => {
-    const gmLinks = getLinksForEntity("BagOfHolding", bagId, "GM");
-    const playerLinks = getLinksForEntity("BagOfHolding", bagId, "Player");
-
-    const merged = visibilityMode === "GM" ? [...gmLinks, ...playerLinks] : playerLinks;
-
-    // de-dupe by id
-    const byId = new Map();
-    merged.forEach((l) => {
-      if (l?.id) byId.set(String(l.id), l);
-    });
-    return Array.from(byId.values());
-  }, [bagId, visibilityMode, rerenderTick]);
-
-  const containedLinks = bagLinks.filter((l) => l.label === "contained_in");
-
-  const linkedItems = useMemo(() => {
-    return containedLinks
-      .map((linkObj) => {
-        const other =
-          linkObj.entityA.type === "BagOfHolding" ? linkObj.entityB : linkObj.entityA;
-        const item = itemsById.get(String(other.id));
-        if (!item) return null;
-        return { item, linkObj };
-      })
-      .filter(Boolean);
-  }, [containedLinks, itemsById]);
 
   const filteredLoose = useMemo(() => {
     return looseItems.filter((it) => {
@@ -177,12 +148,38 @@ export default function BagOfHolding() {
 
   const filteredLinked = useMemo(() => {
     const s = search.trim().toLowerCase();
-    return linkedItems.filter(({ item }) => {
-      const matchesSearch = !s || String(item?.name || "").toLowerCase().includes(s);
-      const matchesType = type === "All" || item.type === type;
-      return matchesSearch && matchesType;
-    });
-  }, [linkedItems, search, type]);
+    return linkedEntries
+      .map((entry) => {
+        const item = itemsById.get(String(entry.itemId));
+        if (!item) {
+          return {
+            entry,
+            item: null,
+            displayName: `Unknown item`,
+            displayType: "Other",
+            displayRarity: null,
+            isMissingItem: true,
+          };
+        }
+
+        if (!isGM && item?.visibility === "gm-only") return null;
+
+        return {
+          entry,
+          item,
+          displayName: item?.name || "Unknown item",
+          displayType: item?.type || "Other",
+          displayRarity: item?.rarity || null,
+          isMissingItem: false,
+        };
+      })
+      .filter(Boolean)
+      .filter(({ entry, displayName, displayType }) => {
+        const matchesSearch = !s || String(displayName || "").toLowerCase().includes(s);
+        const matchesType = type === "All" || displayType === type;
+        return matchesSearch && matchesType && Number(entry?.quantity) > 0;
+      });
+  }, [linkedEntries, itemsById, isGM, search, type]);
 
   const totals = useMemo(() => {
     const looseQty = filteredLoose.reduce((acc, it) => acc + (Number(it.qty) || 0), 0);
@@ -191,8 +188,8 @@ export default function BagOfHolding() {
       0
     );
 
-    const linkedQty = filteredLinked.reduce((acc) => acc + 1, 0);
-    // Linked items don't have qty/worth in this dataset yet, so just count them.
+    const linkedQty = filteredLinked.reduce((acc, { entry }) => acc + (Number(entry?.quantity) || 0), 0);
+    // Linked items do not carry independent worth yet; worth stays on loose entries for now.
 
     const totalQty = looseQty + linkedQty;
     const totalWorth = looseWorth;
@@ -200,12 +197,15 @@ export default function BagOfHolding() {
   }, [filteredLoose, filteredLinked]);
 
   const counts = useMemo(() => {
+    const linkedCount = filteredLinked.reduce((acc, { entry }) => acc + (Number(entry?.quantity) || 0), 0);
+    const looseCount = filteredLoose.reduce((acc, it) => acc + (Number(it?.qty) || 0), 0);
+
     return {
-      linked: filteredLinked.length,
-      loose: filteredLoose.length,
-      total: filteredLinked.length + filteredLoose.length,
+      linked: linkedCount,
+      loose: looseCount,
+      total: linkedCount + looseCount,
     };
-  }, [filteredLinked.length, filteredLoose.length]);
+  }, [filteredLinked, filteredLoose]);
 
   const currencyTotals = useMemo(() => {
     const gp = Number(currency?.gp) || 0;
@@ -243,8 +243,13 @@ export default function BagOfHolding() {
       setAllItems([]);
       return;
     }
-    const data = await Promise.resolve(itemsRepo.getAll(selectedCampaignId));
-    setAllItems(Array.isArray(data) ? data : []);
+    try {
+      const data = await Promise.resolve(itemsRepo.getAll(selectedCampaignId));
+      setAllItems(Array.isArray(data) ? data : []);
+    } catch (error) {
+      console.error("[BagOfHolding] Failed to refresh items", error);
+      setAllItems([]);
+    }
   }
 
   const onSubmit = async (e) => {
@@ -271,12 +276,7 @@ export default function BagOfHolding() {
 
   const linkCandidates = useMemo(() => {
     const q = linkQuery.trim().toLowerCase();
-    const linkedIds = new Set(
-      containedLinks.map((l) => {
-        const other = l.entityA.type === "BagOfHolding" ? l.entityB : l.entityA;
-        return other.id;
-      })
-    );
+    const linkedIds = new Set(linkedEntries.map((entry) => String(entry.itemId)));
 
     return (Array.isArray(allItems) ? allItems : [])
       .filter((it) => it?.id)
@@ -284,25 +284,80 @@ export default function BagOfHolding() {
       .filter((it) => !linkedIds.has(String(it.id)))
       .filter((it) => (!q ? true : String(it.name || "").toLowerCase().includes(q)))
       .slice(0, 30);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [linkQuery, allItems, containedLinks]);
+  }, [linkQuery, allItems, linkedEntries, isGM]);
 
   async function addLinkedItem(itemId) {
-    const linkObj = createLink({
-      entityA: { type: "BagOfHolding", id: bagId },
-      entityB: { type: "Item", id: String(itemId) },
-      label: "contained_in",
-      visibility: "Player",
+    const normalizedItemId = String(itemId);
+    const existingLink = getLinksForEntity("BagOfHolding", bagId, "Player").find((linkObj) => {
+      if (linkObj?.label !== "contained_in") return false;
+      const other = linkObj.entityA.type === "BagOfHolding" ? linkObj.entityB : linkObj.entityA;
+      return String(other?.id) === normalizedItemId;
     });
-    addLink(linkObj);
+
+    if (!existingLink) {
+      const linkObj = createLink({
+        entityA: { type: "BagOfHolding", id: bagId },
+        entityB: { type: "Item", id: normalizedItemId },
+        label: "contained_in",
+        visibility: "Player",
+      });
+      addLink(linkObj);
+    }
+
+    const next = bagRepo.addLinkedItem(bagState, normalizedItemId, {
+      sourceType: "linked",
+      addedBy: isGM ? "gm" : "player",
+    });
+    await persistBag(next);
     await refreshItems();
+    setShowLinkModal(false);
+    setLinkQuery("");
     setRerenderTick((v) => v + 1);
   }
 
-  async function removeLinkedItem(linkId) {
-    removeLink(linkId);
+  async function removeLinkedItem(entryId, itemId) {
+    const next = bagRepo.removeLinkedItem(bagState, entryId);
+    await persistBag(next);
+
+    const stillExists = next.linkedEntries.some((entry) => String(entry.itemId) === String(itemId));
+    if (!stillExists) {
+      const matchingLinks = getLinksForEntity("BagOfHolding", bagId, "Player").filter((linkObj) => {
+        if (linkObj?.label !== "contained_in") return false;
+        const other = linkObj.entityA.type === "BagOfHolding" ? linkObj.entityB : linkObj.entityA;
+        return String(other?.id) === String(itemId);
+      });
+      matchingLinks.forEach((linkObj) => removeLink(linkObj.id));
+    }
+
     await refreshItems();
+    setLinkQuery("");
     setRerenderTick((v) => v + 1);
+  }
+
+  async function incrementLinkedItem(entryId) {
+    const entry = linkedEntries.find((it) => String(it.id) === String(entryId));
+    if (!entry) return;
+
+    const next = bagRepo.updateLinkedItemQuantity(
+      bagState,
+      entryId,
+      (Number(entry.quantity) || 0) + 1
+    );
+    await persistBag(next);
+  }
+
+  async function decrementLinkedItem(entryId, itemId) {
+    const entry = linkedEntries.find((it) => String(it.id) === String(entryId));
+    if (!entry) return;
+
+    const nextQuantity = (Number(entry.quantity) || 0) - 1;
+    if (nextQuantity <= 0) {
+      await removeLinkedItem(entryId, itemId);
+      return;
+    }
+
+    const next = bagRepo.updateLinkedItemQuantity(bagState, entryId, nextQuantity);
+    await persistBag(next);
   }
 
   if (!selectedCampaignId) {
@@ -450,8 +505,8 @@ export default function BagOfHolding() {
                   disabled={!hasPendingDelta}
                   onClick={() => applyPendingCurrency("spend")}
                   className={`w-full px-4 py-2.5 rounded-xl border border-white/10 font-medium transition-colors ${hasPendingDelta
-                      ? "bg-red-500/15 text-red-200 hover:bg-red-500/25"
-                      : "bg-white/5 text-zinc-500 cursor-not-allowed"
+                    ? "bg-red-500/15 text-red-200 hover:bg-red-500/25"
+                    : "bg-white/5 text-zinc-500 cursor-not-allowed"
                     }`}
                 >
                   Spend
@@ -462,8 +517,8 @@ export default function BagOfHolding() {
                   disabled={!hasPendingDelta}
                   onClick={() => applyPendingCurrency("add")}
                   className={`w-full px-4 py-2.5 rounded-xl font-medium transition-opacity ${hasPendingDelta
-                      ? "bg-linear-to-r from-indigo-500 to-purple-500 text-white hover:opacity-90"
-                      : "bg-white/5 text-zinc-500 cursor-not-allowed"
+                    ? "bg-linear-to-r from-indigo-500 to-purple-500 text-white hover:opacity-90"
+                    : "bg-white/5 text-zinc-500 cursor-not-allowed"
                     }`}
                 >
                   Add
@@ -579,10 +634,10 @@ export default function BagOfHolding() {
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
             {/* Linked items */}
-            {filteredLinked.map(({ item, linkObj }) => (
+            {filteredLinked.map(({ entry, item, displayName, displayType, displayRarity, isMissingItem }) => (
               <div
-                key={linkObj.id}
-                className={`group rounded-2xl bg-black/20 border border-white/10 p-3 sm:p-4 transition hover:bg-white/5 hover:border-white/20 border-l-4 min-h-28 ${typeAccent(item.type || "Other")}`}
+                key={entry.id}
+                className={`group rounded-2xl bg-black/20 border border-white/10 p-3 sm:p-4 transition hover:bg-white/5 hover:border-white/20 border-l-4 min-h-28 ${typeAccent(displayType || "Other")}`}
               >
                 <div className="flex items-start justify-between gap-3">
                   <div className="min-w-0">
@@ -591,35 +646,68 @@ export default function BagOfHolding() {
                         🔗 Linked
                       </span>
                       <span className="text-[10px] px-2 py-0.5 rounded-full bg-zinc-950/40 text-zinc-300 border border-white/10">
-                        {item.type || "Other"}
+                        {displayType || "Other"}
                       </span>
                     </div>
 
-                    <div
-                      role="button"
-                      onClick={() => navigate(`/items/${item.id}`)}
-                      className="mt-2 text-white font-semibold wrap-break-word leading-snug cursor-pointer hover:underline"
-                      title={item.name}
-                    >
-                      {item.name}
-                    </div>
+                    {item ? (
+                      <div
+                        role="button"
+                        onClick={() => navigate(`/items/${item.id}`)}
+                        className="mt-2 text-white font-semibold wrap-break-word leading-snug cursor-pointer hover:underline"
+                        title={displayName}
+                      >
+                        {displayName}
+                      </div>
+                    ) : (
+                      <div
+                        className="mt-2 text-white font-semibold wrap-break-word leading-snug"
+                        title={displayName}
+                      >
+                        {displayName}
+                      </div>
+                    )}
 
-                    {item.rarity ? (
-                      <div className="text-xs text-zinc-400 mt-1">{item.rarity}</div>
+                    {displayRarity ? (
+                      <div className="text-xs text-zinc-400 mt-1">{displayRarity}</div>
+                    ) : null}
+
+                    {isMissingItem ? (
+                      <div className="mt-1 text-xs text-amber-300">
+                        Source item could not be resolved. Item ID: <span className="text-amber-200">{entry.itemId}</span>
+                      </div>
                     ) : null}
                   </div>
 
                   <button
                     className="text-[11px] text-red-300 hover:text-red-200 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity"
-                    onClick={() => removeLinkedItem(linkObj.id)}
+                    onClick={() => removeLinkedItem(entry.id, item?.id || entry.itemId)}
                     type="button"
                   >
                     Remove
                   </button>
                 </div>
 
-                <div className="mt-4 flex items-center justify-between text-xs text-zinc-400">
-                  <span>Qty: —</span>
+                <div className="mt-4 flex items-center justify-between gap-3 text-xs text-zinc-400">
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => decrementLinkedItem(entry.id, item?.id || entry.itemId)}
+                      className="h-7 w-7 rounded-lg border border-white/10 bg-white/5 text-zinc-200 hover:bg-white/10"
+                      aria-label={`Decrease quantity of ${displayName}`}
+                    >
+                      −
+                    </button>
+                    <span>Qty: <span className="text-zinc-200">{Number(entry.quantity) || 1}</span></span>
+                    <button
+                      type="button"
+                      onClick={() => incrementLinkedItem(entry.id)}
+                      className="h-7 w-7 rounded-lg border border-white/10 bg-white/5 text-zinc-200 hover:bg-white/10"
+                      aria-label={`Increase quantity of ${displayName}`}
+                    >
+                      +
+                    </button>
+                  </div>
                   <span>Worth: —</span>
                 </div>
               </div>
@@ -770,8 +858,6 @@ export default function BagOfHolding() {
                     key={it.id}
                     onClick={() => {
                       addLinkedItem(it.id);
-                      setShowLinkModal(false);
-                      setLinkQuery("");
                     }}
                     className="block w-full text-left px-3 py-2 text-sm text-zinc-200 hover:bg-white/5"
                   >
