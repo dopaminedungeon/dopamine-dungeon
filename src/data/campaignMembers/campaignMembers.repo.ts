@@ -5,8 +5,20 @@ import type { CampaignMember } from "../../domain/campaigns/campaign.types";
 const CAMPAIGN_MEMBERS_COLLECTION = "campaignMembers";
 
 export async function createCampaignMember(member: CampaignMember): Promise<CampaignMember> {
-  await setDoc(doc(db, CAMPAIGN_MEMBERS_COLLECTION, member.id), member);
-  return member;
+  const memberId = String(
+    member?.id ||
+      (member?.campaignId && member?.userId
+        ? `${member.campaignId}_${member.userId}`
+        : doc(collection(db, CAMPAIGN_MEMBERS_COLLECTION)).id)
+  );
+
+  const memberToSave: CampaignMember = {
+    ...member,
+    id: memberId,
+  };
+
+  await setDoc(doc(db, CAMPAIGN_MEMBERS_COLLECTION, memberId), memberToSave);
+  return memberToSave;
 }
 
 export async function removeCampaignMember(memberId: string): Promise<void> {

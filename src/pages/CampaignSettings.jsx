@@ -11,7 +11,6 @@ import {
   MailX,
 } from "lucide-react";
 import {
-  addDoc,
   collection,
   doc,
   updateDoc,
@@ -35,6 +34,7 @@ export default function CampaignSettings() {
     accessibleCampaigns,
     selectedCampaignId,
     selectCampaign,
+    createCampaign: createCampaignFromContext,
     campaignRole,
     refreshCampaigns,
   } = useCampaign();
@@ -70,40 +70,26 @@ export default function CampaignSettings() {
     const name = (createForm.name || "").trim();
     if (!name || !selectedTenantId) return;
 
-    const newCampaign = {
-      name,
-      description: createForm.description || "",
-      status: createForm.status || "active",
-      system: createForm.system || "",
-      tenantId: selectedTenantId,
-      tags: "",
-      startDate: "",
-      endDate: "",
-      playerSummary: "",
-      publicLore: "",
-      gmNotes: "",
-      privateLore: "",
-      hiddenFactions: "",
-      hiddenTimelines: "",
-      metaCommentary: "",
-      createdAt: Date.now(),
-      lastUpdated: Date.now(),
-    };
-
     try {
       setSaveState({ type: null, message: "" });
-      const ref = await addDoc(collection(db, "campaigns"), newCampaign);
-      const created = { ...newCampaign, id: ref.id, campaignId: ref.id };
+
+      const created = await createCampaignFromContext({
+        name,
+        description: createForm.description || "",
+        system: createForm.system || "",
+      });
+
+      const createdId = created?.campaignId || created?.id || null;
 
       if (typeof refreshCampaigns === "function") {
         await refreshCampaigns();
       }
 
-      if (typeof selectCampaign === "function") {
-        await Promise.resolve(selectCampaign(ref.id));
+      if (createdId && typeof selectCampaign === "function") {
+        await Promise.resolve(selectCampaign(createdId));
       }
 
-      setDraft(created);
+      setDraft(created || null);
       setShowCreate(false);
       setCreateForm({ name: "", description: "", status: "active", system: "" });
       setSaveState({ type: "success", message: "Campaign created." });
