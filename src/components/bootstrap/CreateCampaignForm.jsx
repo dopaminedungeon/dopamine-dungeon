@@ -29,6 +29,8 @@ export default function CreateCampaignForm() {
     }
 
     const trimmedName = name.trim();
+    const normalizedDescription = String(description ?? "").trim();
+    const normalizedSystem = String(system ?? "").trim();
 
     if (!trimmedName) {
       setError("Campaign name cannot be empty.");
@@ -43,8 +45,8 @@ export default function CreateCampaignForm() {
         tenantId: selectedTenantId,
         name: trimmedName,
         userId: user.uid,
-        description,
-        system,
+        description: normalizedDescription,
+        system: normalizedSystem,
       });
 
       await refreshCampaigns();

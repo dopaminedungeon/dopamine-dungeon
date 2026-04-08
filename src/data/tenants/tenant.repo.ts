@@ -1,12 +1,19 @@
-import { doc, getDoc, setDoc } from "firebase/firestore";
+import { collection, doc, getDoc, setDoc } from "firebase/firestore";
 import { db } from "../../firebase/firebase";
 import type { Tenant } from "../../domain/tenants/tenant.types";
 
 const TENANTS_COLLECTION = "tenants";
 
 export async function createTenant(tenant: Tenant): Promise<Tenant> {
-  await setDoc(doc(db, TENANTS_COLLECTION, tenant.id), tenant);
-  return tenant;
+  const tenantId = String(tenant?.id || doc(collection(db, TENANTS_COLLECTION)).id);
+
+  const tenantToSave: Tenant = {
+    ...tenant,
+    id: tenantId,
+  };
+
+  await setDoc(doc(db, TENANTS_COLLECTION, tenantId), tenantToSave);
+  return tenantToSave;
 }
 
 export async function getTenantById(tenantId: string): Promise<Tenant | null> {

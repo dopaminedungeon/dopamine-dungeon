@@ -5,8 +5,20 @@ import type { TenantMember } from "../../domain/tenants/tenant.types";
 const TENANT_MEMBERS_COLLECTION = "tenantMembers";
 
 export async function createTenantMember(member: TenantMember): Promise<TenantMember> {
-  await setDoc(doc(db, TENANT_MEMBERS_COLLECTION, member.id), member);
-  return member;
+  const memberId = String(
+    member?.id ||
+      (member?.tenantId && member?.userId
+        ? `${member.tenantId}_${member.userId}`
+        : doc(collection(db, TENANT_MEMBERS_COLLECTION)).id)
+  );
+
+  const memberToSave: TenantMember = {
+    ...member,
+    id: memberId,
+  };
+
+  await setDoc(doc(db, TENANT_MEMBERS_COLLECTION, memberId), memberToSave);
+  return memberToSave;
 }
 
 export async function updateTenantMemberRole(
