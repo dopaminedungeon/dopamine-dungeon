@@ -102,7 +102,7 @@ export default function TopBar({ title }) {
   const navigate = useNavigate();
 
   return (
-    <header className={`sticky top-0 z-0 border-b backdrop-blur-xl transition-colors duration-500 ${topBarTheme.shell}`}>
+    <header className={`sticky top-0 z-40 border-b backdrop-blur-xl transition-colors duration-500 ${topBarTheme.shell}`}>
       <div className={`pointer-events-none absolute inset-0 ${topBarTheme.glow}`} />
       <div className="relative z-10 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between px-4 py-2.5 sm:px-6 sm:py-3 md:px-8">
         {/* Title */}
@@ -149,7 +149,7 @@ export default function TopBar({ title }) {
             </button>
 
             {showNotifications && (
-              <div className="absolute right-0 mt-2 w-64 bg-black/90 backdrop-blur-xl border border-white/10 rounded-xl shadow-xl shadow-violet-950/20 p-3 text-sm">
+              <div className="absolute right-0 mt-2 z-50 w-64 bg-black/90 backdrop-blur-xl border border-white/10 rounded-xl shadow-xl shadow-violet-950/20 p-3 text-sm">
                 <p className="text-zinc-400">
                   No notifications yet. Go cause some chaos in your campaign ✨
                 </p>
@@ -285,7 +285,7 @@ export default function TopBar({ title }) {
             </button>
 
             {showProfileMenu && (
-              <div className="absolute right-0 mt-2 w-56 bg-black/90 backdrop-blur-xl border border-white/10 rounded-xl shadow-xl shadow-violet-950/20 py-1 text-sm">
+              <div className="absolute right-0 mt-2 z-50 w-56 bg-black/90 backdrop-blur-xl border border-white/10 rounded-xl shadow-xl shadow-violet-950/20 py-1 text-sm">
                 <div className="px-3 py-2 border-b border-white/10">
                   <p className="text-white text-sm font-medium truncate">{profileName}</p>
                   <p className="text-zinc-500 text-xs truncate">{user?.email || "No email"}</p>
