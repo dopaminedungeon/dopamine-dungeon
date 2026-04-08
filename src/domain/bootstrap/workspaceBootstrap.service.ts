@@ -71,7 +71,7 @@ export async function createCampaignWithGm({
   campaignMember: CampaignMember;
 }> {
   const campaignId = crypto.randomUUID();
-  const campaignMemberId = crypto.randomUUID();
+  const campaignMemberId = `${campaignId}_${userId}`;
   const now = Date.now();
 
   const trimmedName = name.trim();

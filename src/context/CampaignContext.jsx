@@ -1,8 +1,9 @@
 import { createContext, useCallback, useContext, useEffect, useState } from "react";
-import { collection, query, where, getDocs } from "firebase/firestore";
+import { collection, query, where, getDocs, doc, setDoc } from "firebase/firestore";
 import { db } from "../firebase/firebase";
 import { useTenant } from "./TenantContext";
 import { useAuth } from "./AuthContext";
+import { createCampaignMember } from "../data/campaignMembers/campaignMembers.repo";
 
 const CampaignContext = createContext(null);
 const CAMPAIGN_STORAGE_KEY = "dd_selectedCampaignId";
@@ -121,6 +122,60 @@ export function CampaignProvider({ children }) {
     }
   };
 
+  const createCampaign = async ({ name, description = "", system = "" }) => {
+    if (!user?.uid) {
+      throw new Error("You must be signed in to create a campaign.");
+    }
+
+    if (!selectedTenantId) {
+      throw new Error("Select a workspace first.");
+    }
+
+    const trimmedName = String(name || "").trim();
+    const trimmedDescription = String(description ?? "").trim();
+    const trimmedSystem = String(system ?? "").trim();
+
+    if (!trimmedName) {
+      throw new Error("Campaign name is required.");
+    }
+
+    const campaignId = crypto.randomUUID();
+    const now = Date.now();
+
+    const campaign = {
+      id: campaignId,
+      tenantId: selectedTenantId,
+      name: trimmedName,
+      description: trimmedDescription,
+      system: trimmedSystem,
+      status: "active",
+      createdAt: now,
+      createdBy: user.uid,
+      updatedAt: now,
+    };
+
+    await setDoc(doc(db, "campaigns", campaignId), campaign);
+
+    await createCampaignMember({
+      id: `${campaignId}_${user.uid}`,
+      campaignId,
+      tenantId: selectedTenantId,
+      userId: user.uid,
+      role: "gm",
+      characterId: null,
+      createdAt: now,
+      createdBy: user.uid,
+    });
+
+    await loadCampaigns();
+    selectCampaign(campaignId);
+
+    return {
+      ...campaign,
+      campaignId,
+    };
+  };
+
   return (
     <CampaignContext.Provider
       value={{
@@ -129,6 +184,7 @@ export function CampaignProvider({ children }) {
         campaignStatus,
         selectedCampaignId,
         selectCampaign,
+        createCampaign,
         refreshCampaigns: loadCampaigns,
         campaignRole,
       }}
