@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from "react";
-import { Shield, Users, CheckCircle2, AlertCircle, Trash2 } from "lucide-react";
+import { Shield, Users, CheckCircle2, AlertCircle, Trash2, PlusCircle } from "lucide-react";
 import { collection, getDocs, query, where } from "firebase/firestore";
 import { db } from "../firebase/firebase";
 import { useAuth } from "../context/AuthContext";
@@ -12,7 +12,13 @@ import { removeWorkspaceMemberCascade } from "../services/workspaceMembers.servi
 
 export default function WorkspaceSettings() {
     const { user } = useAuth();
-    const { tenants, selectedTenantId } = useTenant();
+    const {
+        tenants,
+        selectedTenantId,
+        createTenant,
+        addTenant,
+        selectTenant,
+    } = useTenant();
 
     const selectedTenant = useMemo(() => {
         if (!Array.isArray(tenants) || !selectedTenantId) {
@@ -37,6 +43,69 @@ export default function WorkspaceSettings() {
     const [savingMemberId, setSavingMemberId] = useState(null);
     const [saveState, setSaveState] = useState({ type: null, message: "" });
     const [version, setVersion] = useState(0);
+
+    const [newWorkspaceName, setNewWorkspaceName] = useState("");
+    const [newWorkspaceDescription, setNewWorkspaceDescription] = useState("");
+    const [isCreatingWorkspace, setIsCreatingWorkspace] = useState(false);
+    const [createWorkspaceState, setCreateWorkspaceState] = useState({ type: null, message: "" });
+    const handleCreateWorkspace = async (event) => {
+        event.preventDefault();
+
+        const name = String(newWorkspaceName || "").trim();
+        const description = String(newWorkspaceDescription || "").trim();
+
+        if (!name) {
+            setCreateWorkspaceState({
+                type: "error",
+                message: "Workspace name is required.",
+            });
+            return;
+        }
+
+        const fn = createTenant ?? addTenant;
+        if (typeof fn !== "function") {
+            setCreateWorkspaceState({
+                type: "error",
+                message: "Workspace creation is not available yet in TenantContext.",
+            });
+            return;
+        }
+
+        try {
+            setIsCreatingWorkspace(true);
+            setCreateWorkspaceState({ type: null, message: "" });
+
+            const createdTenant = await fn({
+                name,
+                description,
+            });
+
+            const nextTenantId =
+                createdTenant?.tenantId ||
+                createdTenant?.id ||
+                createdTenant?.docId ||
+                null;
+
+            if (nextTenantId && typeof selectTenant === "function") {
+                await selectTenant(nextTenantId);
+            }
+
+            setNewWorkspaceName("");
+            setNewWorkspaceDescription("");
+            setCreateWorkspaceState({
+                type: "success",
+                message: `Workspace ${name} created successfully.`,
+            });
+        } catch (error) {
+            console.error("[WorkspaceSettings] Failed to create workspace", error);
+            setCreateWorkspaceState({
+                type: "error",
+                message: "Could not create workspace.",
+            });
+        } finally {
+            setIsCreatingWorkspace(false);
+        }
+    };
 
     useEffect(() => {
         const loadMembers = async () => {
@@ -191,19 +260,84 @@ export default function WorkspaceSettings() {
 
     if (!selectedTenantId || !selectedTenant) {
         return (
-            <section className="relative overflow-hidden rounded-3xl border border-fuchsia-500/16 bg-zinc-950/55 p-5 shadow-[0_0_0_1px_rgba(168,85,247,0.04),0_0_36px_rgba(99,102,241,0.08)] before:pointer-events-none before:absolute before:inset-0 before:bg-[radial-gradient(circle_at_bottom_left,rgba(168,85,247,0.12),transparent_34%),radial-gradient(circle_at_right,rgba(59,130,246,0.08),transparent_30%)] before:opacity-100 before:content-['']">
-                <div className="relative z-10">
-                    <div className="flex items-start gap-3">
-                        <Shield className="mt-0.5 h-5 w-5 text-fuchsia-300" />
+            <div className="space-y-4">
+                <section className="relative overflow-hidden rounded-3xl border border-fuchsia-500/18 bg-zinc-950/55 p-5 shadow-[0_0_0_1px_rgba(168,85,247,0.04),0_0_36px_rgba(99,102,241,0.08)] before:pointer-events-none before:absolute before:inset-0 before:bg-[radial-gradient(circle_at_top_left,rgba(168,85,247,0.12),transparent_32%),radial-gradient(circle_at_right,rgba(59,130,246,0.08),transparent_30%)] before:opacity-100 before:content-['']">
+                    <div className="relative z-10 flex items-start gap-3">
+                        <PlusCircle className="mt-0.5 h-5 w-5 text-fuchsia-300" />
                         <div>
-                            <h2 className="text-lg font-semibold text-white">Workspace Settings</h2>
+                            <h2 className="text-lg font-semibold text-white">Create workspace</h2>
                             <p className="mt-1 text-sm text-zinc-300/80">
-                                Select a workspace first to manage members, roles, and ownership-level settings.
+                                Create a new workspace from here, then invite members and manage roles once it becomes active.
                             </p>
                         </div>
                     </div>
-                </div>
-            </section>
+
+                    <form className="relative z-10 mt-5 space-y-4" onSubmit={handleCreateWorkspace}>
+                        <div className="grid gap-4 md:grid-cols-2">
+                            <label className="block">
+                                <span className="mb-2 block text-sm text-zinc-300">Workspace name</span>
+                                <input
+                                    type="text"
+                                    value={newWorkspaceName}
+                                    onChange={(event) => setNewWorkspaceName(event.target.value)}
+                                    placeholder="e.g. QA Preview Workspace"
+                                    className="w-full rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-3 text-sm text-white outline-none transition placeholder:text-zinc-500 focus:border-fuchsia-400/40 focus:ring-2 focus:ring-fuchsia-400/20"
+                                />
+                            </label>
+
+                            <label className="block">
+                                <span className="mb-2 block text-sm text-zinc-300">Description (optional)</span>
+                                <input
+                                    type="text"
+                                    value={newWorkspaceDescription}
+                                    onChange={(event) => setNewWorkspaceDescription(event.target.value)}
+                                    placeholder="What is this workspace for?"
+                                    className="w-full rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-3 text-sm text-white outline-none transition placeholder:text-zinc-500 focus:border-fuchsia-400/40 focus:ring-2 focus:ring-fuchsia-400/20"
+                                />
+                            </label>
+                        </div>
+
+                        <div className="flex flex-wrap items-center gap-3">
+                            <button
+                                type="submit"
+                                disabled={isCreatingWorkspace}
+                                className="inline-flex items-center gap-2 rounded-2xl border border-fuchsia-400/30 bg-fuchsia-500/15 px-4 py-2.5 text-sm font-medium text-fuchsia-100 transition hover:bg-fuchsia-500/20 disabled:cursor-not-allowed disabled:opacity-60"
+                            >
+                                <PlusCircle className="h-4 w-4" />
+                                {isCreatingWorkspace ? "Creating workspace…" : "Create workspace"}
+                            </button>
+
+                            {createWorkspaceState.type === "success" ? (
+                                <div className="inline-flex items-center gap-2 rounded-full border border-emerald-400/20 bg-emerald-400/10 px-3 py-1.5 text-sm text-emerald-200">
+                                    <CheckCircle2 className="h-4 w-4" />
+                                    {createWorkspaceState.message}
+                                </div>
+                            ) : null}
+
+                            {createWorkspaceState.type === "error" ? (
+                                <div className="inline-flex items-center gap-2 rounded-full border border-red-400/20 bg-red-400/10 px-3 py-1.5 text-sm text-red-200">
+                                    <AlertCircle className="h-4 w-4" />
+                                    {createWorkspaceState.message}
+                                </div>
+                            ) : null}
+                        </div>
+                    </form>
+                </section>
+
+                <section className="relative overflow-hidden rounded-3xl border border-fuchsia-500/16 bg-zinc-950/55 p-5 shadow-[0_0_0_1px_rgba(168,85,247,0.04),0_0_36px_rgba(99,102,241,0.08)] before:pointer-events-none before:absolute before:inset-0 before:bg-[radial-gradient(circle_at_bottom_left,rgba(168,85,247,0.12),transparent_34%),radial-gradient(circle_at_right,rgba(59,130,246,0.08),transparent_30%)] before:opacity-100 before:content-['']">
+                    <div className="relative z-10">
+                        <div className="flex items-start gap-3">
+                            <Shield className="mt-0.5 h-5 w-5 text-fuchsia-300" />
+                            <div>
+                                <h2 className="text-lg font-semibold text-white">Workspace Settings</h2>
+                                <p className="mt-1 text-sm text-zinc-300/80">
+                                    Select a workspace first to manage members, roles, and ownership-level settings.
+                                </p>
+                            </div>
+                        </div>
+                    </div>
+                </section>
+            </div>
         );
     }
 
@@ -229,17 +363,65 @@ export default function WorkspaceSettings() {
         <div className="space-y-4">
             <section className="relative overflow-hidden rounded-3xl border border-fuchsia-500/18 bg-zinc-950/55 p-5 shadow-[0_0_0_1px_rgba(168,85,247,0.04),0_0_36px_rgba(99,102,241,0.08)] before:pointer-events-none before:absolute before:inset-0 before:bg-[radial-gradient(circle_at_top_left,rgba(168,85,247,0.12),transparent_32%),radial-gradient(circle_at_right,rgba(59,130,246,0.08),transparent_30%)] before:opacity-100 before:content-['']">
                 <div className="relative z-10 flex items-start gap-3">
-                    <Shield className="mt-0.5 h-5 w-5 text-fuchsia-300" />
+                    <PlusCircle className="mt-0.5 h-5 w-5 text-fuchsia-300" />
                     <div>
-                        <h1 className="text-lg font-semibold text-white">Workspace Settings</h1>
+                        <h2 className="text-lg font-semibold text-white">Create workspace</h2>
                         <p className="mt-1 text-sm text-zinc-300/80">
-                            Manage members, update workspace roles, and remove people from this workspace.
-                        </p>
-                        <p className="mt-3 text-xs uppercase tracking-[0.14em] text-fuchsia-200/80">
-                            {selectedTenant.name || "Untitled workspace"}
+                            Spin up a new workspace from here without leaving your current one.
                         </p>
                     </div>
                 </div>
+
+                <form className="relative z-10 mt-5 space-y-4" onSubmit={handleCreateWorkspace}>
+                    <div className="grid gap-4 md:grid-cols-2">
+                        <label className="block">
+                            <span className="mb-2 block text-sm text-zinc-300">Workspace name</span>
+                            <input
+                                type="text"
+                                value={newWorkspaceName}
+                                onChange={(event) => setNewWorkspaceName(event.target.value)}
+                                placeholder="e.g. QA Preview Workspace"
+                                className="w-full rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-3 text-sm text-white outline-none transition placeholder:text-zinc-500 focus:border-fuchsia-400/40 focus:ring-2 focus:ring-fuchsia-400/20"
+                            />
+                        </label>
+
+                        <label className="block">
+                            <span className="mb-2 block text-sm text-zinc-300">Description (optional)</span>
+                            <input
+                                type="text"
+                                value={newWorkspaceDescription}
+                                onChange={(event) => setNewWorkspaceDescription(event.target.value)}
+                                placeholder="What is this workspace for?"
+                                className="w-full rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-3 text-sm text-white outline-none transition placeholder:text-zinc-500 focus:border-fuchsia-400/40 focus:ring-2 focus:ring-fuchsia-400/20"
+                            />
+                        </label>
+                    </div>
+
+                    <div className="flex flex-wrap items-center gap-3">
+                        <button
+                            type="submit"
+                            disabled={isCreatingWorkspace}
+                            className="inline-flex items-center gap-2 rounded-2xl border border-fuchsia-400/30 bg-fuchsia-500/15 px-4 py-2.5 text-sm font-medium text-fuchsia-100 transition hover:bg-fuchsia-500/20 disabled:cursor-not-allowed disabled:opacity-60"
+                        >
+                            <PlusCircle className="h-4 w-4" />
+                            {isCreatingWorkspace ? "Creating workspace…" : "Create workspace"}
+                        </button>
+
+                        {createWorkspaceState.type === "success" ? (
+                            <div className="inline-flex items-center gap-2 rounded-full border border-emerald-400/20 bg-emerald-400/10 px-3 py-1.5 text-sm text-emerald-200">
+                                <CheckCircle2 className="h-4 w-4" />
+                                {createWorkspaceState.message}
+                            </div>
+                        ) : null}
+
+                        {createWorkspaceState.type === "error" ? (
+                            <div className="inline-flex items-center gap-2 rounded-full border border-red-400/20 bg-red-400/10 px-3 py-1.5 text-sm text-red-200">
+                                <AlertCircle className="h-4 w-4" />
+                                {createWorkspaceState.message}
+                            </div>
+                        ) : null}
+                    </div>
+                </form>
             </section>
 
             <section className="relative overflow-hidden rounded-3xl border border-cyan-400/18 bg-zinc-950/55 p-5 shadow-[0_0_0_1px_rgba(34,211,238,0.04),0_0_32px_rgba(34,211,238,0.08)] before:pointer-events-none before:absolute before:inset-0 before:bg-[radial-gradient(circle_at_top_right,rgba(34,211,238,0.12),transparent_32%),radial-gradient(circle_at_left,rgba(168,85,247,0.08),transparent_36%)] before:opacity-100 before:content-['']">
