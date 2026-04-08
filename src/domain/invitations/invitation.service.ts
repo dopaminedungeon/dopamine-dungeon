@@ -39,6 +39,20 @@ function normalizeEmail(email: string): string {
   return email.trim().toLowerCase();
 }
 
+function getPreferredAcceptedInvitation(invitations: Invitation[]): Invitation | null {
+  if (!Array.isArray(invitations) || invitations.length === 0) {
+    return null;
+  }
+
+  const sorted = [...invitations].sort((a, b) => {
+    const aCreatedAt = Number(a.createdAt ?? 0);
+    const bCreatedAt = Number(b.createdAt ?? 0);
+    return bCreatedAt - aCreatedAt;
+  });
+
+  return sorted.find((invitation) => Boolean(invitation.campaignId)) ?? sorted[0] ?? null;
+}
+
 function matchesInvitationScope(
   invitation: Pick<Invitation, "tenantId" | "campaignId" | "status">,
   tenantId: string,
@@ -144,6 +158,8 @@ export async function acceptPendingInvitationsForUser({
   if (invitations.length === 0) {
     return [];
   }
+
+  const preferredInvitation = getPreferredAcceptedInvitation(invitations);
 
   const now = Date.now();
   const batch = writeBatch(db);
@@ -308,6 +324,20 @@ export async function acceptPendingInvitationsForUser({
   });
 
   await batch.commit();
+
+  if (preferredInvitation) {
+    try {
+      localStorage.setItem("dd_selectedTenantId", preferredInvitation.tenantId);
+
+      if (preferredInvitation.campaignId) {
+        localStorage.setItem("dd_selectedCampaignId", preferredInvitation.campaignId);
+      } else {
+        localStorage.removeItem("dd_selectedCampaignId");
+      }
+    } catch {
+      // ignore storage failures
+    }
+  }
 
   console.log("[InviteAcceptance] Completed invite acceptance", {
     acceptedCount: invitations.length,
