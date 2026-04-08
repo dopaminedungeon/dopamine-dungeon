@@ -19,8 +19,6 @@ export default function TopBar({ title }) {
     accessibleCampaigns,
     selectedCampaignId,
     selectCampaign,
-    addCampaign,
-    createCampaign,
   } = useCampaign();
 
   const {
@@ -196,26 +194,6 @@ export default function TopBar({ title }) {
               onChange={(e) => {
                 const next = e.target.value;
 
-                if (next === "__new__") {
-                  if (!selectedTenantId) {
-                    alert("Pick a workspace first.");
-                    return;
-                  }
-
-                  const name = prompt("Campaign name:");
-                  if (!name) return;
-
-                  const fn = createCampaign ?? addCampaign;
-                  if (typeof fn === "function") {
-                    fn({ name, tenantId: selectedTenantId });
-                  } else {
-                    console.warn(
-                      "No campaign creation function available on CampaignContext (expected createCampaign or addCampaign)."
-                    );
-                  }
-                  return;
-                }
-
                 if (typeof selectCampaign === "function") {
                   selectCampaign(next || null);
                 }
@@ -236,9 +214,6 @@ export default function TopBar({ title }) {
                   </option>
                 ))
               )}
-              <option key="new-campaign" value="__new__" disabled={!selectedTenantId}>
-                + New campaign…
-              </option>
             </select>
           </div>
           {/* GM / Player toggle */}
