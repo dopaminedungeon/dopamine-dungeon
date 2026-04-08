@@ -53,6 +53,187 @@ function createManualPcDraft() {
   };
 }
 
+const importSkillConfig = [
+  { key: "acrobatics", label: "Acrobatics", ability: "DEX" },
+  { key: "animalHandling", label: "Animal Handling", ability: "WIS" },
+  { key: "arcana", label: "Arcana", ability: "INT" },
+  { key: "athletics", label: "Athletics", ability: "STR" },
+  { key: "deception", label: "Deception", ability: "CHA" },
+  { key: "history", label: "History", ability: "INT" },
+  { key: "insight", label: "Insight", ability: "WIS" },
+  { key: "intimidation", label: "Intimidation", ability: "CHA" },
+  { key: "investigation", label: "Investigation", ability: "INT" },
+  { key: "medicine", label: "Medicine", ability: "WIS" },
+  { key: "nature", label: "Nature", ability: "INT" },
+  { key: "perception", label: "Perception", ability: "WIS" },
+  { key: "performance", label: "Performance", ability: "CHA" },
+  { key: "persuasion", label: "Persuasion", ability: "CHA" },
+  { key: "religion", label: "Religion", ability: "INT" },
+  { key: "sleightOfHand", label: "Sleight of Hand", ability: "DEX" },
+  { key: "stealth", label: "Stealth", ability: "DEX" },
+  { key: "survival", label: "Survival", ability: "WIS" },
+];
+
+const importSaveConfig = [
+  { key: "strength", label: "Strength", ability: "STR" },
+  { key: "dexterity", label: "Dexterity", ability: "DEX" },
+  { key: "constitution", label: "Constitution", ability: "CON" },
+  { key: "intelligence", label: "Intelligence", ability: "INT" },
+  { key: "wisdom", label: "Wisdom", ability: "WIS" },
+  { key: "charisma", label: "Charisma", ability: "CHA" },
+];
+
+function toOptionalNumber(value) {
+  if (value === "" || value == null) return undefined;
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : undefined;
+}
+
+function getAbilityModifier(score) {
+  if (typeof score !== "number" || Number.isNaN(score)) return undefined;
+  return Math.floor((score - 10) / 2);
+}
+
+function buildDerivedImportSaves(existingSaves = {}, abilityScores = {}, proficiencyBonus = 0) {
+  const abilityMap = {
+    strength: "str",
+    dexterity: "dex",
+    constitution: "con",
+    intelligence: "int",
+    wisdom: "wis",
+    charisma: "cha",
+  };
+
+  return Object.fromEntries(
+    Object.entries(abilityMap).map(([saveKey, abilityKey]) => {
+      const existing = existingSaves?.[saveKey] || {};
+      const score = abilityScores?.[abilityKey]?.score;
+      const abilityMod = getAbilityModifier(score);
+      const proficient = !!existing.proficient;
+      const mod =
+        typeof abilityMod === "number"
+          ? abilityMod + (proficient ? proficiencyBonus : 0)
+          : existing.mod;
+
+      return [
+        saveKey,
+        {
+          ...existing,
+          proficient,
+          mod,
+        },
+      ];
+    })
+  );
+}
+
+function buildDerivedImportSkills(existingSkills = {}, abilityScores = {}, proficiencyBonus = 0) {
+  const abilityMap = {
+    acrobatics: "dex",
+    animalHandling: "wis",
+    arcana: "int",
+    athletics: "str",
+    deception: "cha",
+    history: "int",
+    insight: "wis",
+    intimidation: "cha",
+    investigation: "int",
+    medicine: "wis",
+    nature: "int",
+    perception: "wis",
+    performance: "cha",
+    persuasion: "cha",
+    religion: "int",
+    sleightOfHand: "dex",
+    stealth: "dex",
+    survival: "wis",
+  };
+
+  return Object.fromEntries(
+    Object.entries(abilityMap).map(([skillKey, abilityKey]) => {
+      const existing = existingSkills?.[skillKey] || {};
+      const score = abilityScores?.[abilityKey]?.score;
+      const abilityMod = getAbilityModifier(score);
+      const proficient = !!existing.proficient;
+      const expertise = !!existing.expertise;
+      const proficiencyMultiplier = expertise ? 2 : proficient ? 1 : 0;
+      const mod =
+        typeof abilityMod === "number"
+          ? abilityMod + proficiencyBonus * proficiencyMultiplier
+          : existing.mod;
+
+      return [
+        skillKey,
+        {
+          ...existing,
+          proficient,
+          expertise,
+          mod,
+        },
+      ];
+    })
+  );
+}
+
+function normalizeImportedSpellcastingEntries(entries = []) {
+  if (!Array.isArray(entries)) return [];
+
+  return entries
+    .map((entry) => ({
+      className: String(entry?.className || "").trim(),
+      ability: String(entry?.ability || entry?.spellcastingAbility || "").trim().toUpperCase(),
+      spellSaveDC: entry?.spellSaveDC ?? "",
+      spellAttackBonus: entry?.spellAttackBonus ?? "",
+    }))
+    .filter(
+      (entry) =>
+        entry.className ||
+        entry.ability ||
+        entry.spellSaveDC !== "" ||
+        entry.spellAttackBonus !== ""
+    );
+}
+
+function buildImportedClassSpellcasting(classEntries = [], fallbackStats = {}, fallbackSpellcasting = []) {
+  const normalizedSpellcasting = normalizeImportedSpellcastingEntries(fallbackSpellcasting);
+
+  return Array.isArray(classEntries)
+    ? classEntries.map((entry, index) => {
+      const className = String(entry?.className || "").trim();
+      const spellcastingMatch = normalizedSpellcasting.find(
+        (spellEntry) => spellEntry.className === className
+      );
+
+      return {
+        ...entry,
+        className,
+        level: Number(entry?.level) || 0,
+        subclass: String(entry?.subclass || "").trim(),
+        spellcastingAbility:
+          String(
+            spellcastingMatch?.ability ||
+            entry?.spellcastingAbility ||
+            (index === 0 ? fallbackStats?.spellcastingAbility || "" : "")
+          )
+            .trim()
+            .toUpperCase(),
+        spellSaveDC:
+          spellcastingMatch?.spellSaveDC ??
+          entry?.spellSaveDC ??
+          (index === 0 ? fallbackStats?.spellSaveDC ?? "" : ""),
+        spellAttackBonus:
+          spellcastingMatch?.spellAttackBonus ??
+          entry?.spellAttackBonus ??
+          (index === 0 ? fallbackStats?.spellAttackBonus ?? "" : ""),
+      };
+    })
+    : [];
+}
+
+function hasMultipleSpellcastingTracks(character) {
+  return normalizeImportedSpellcastingEntries(character?.spellcasting).length > 1;
+}
+
 const PCs = () => {
   const { selectedCampaignId } = useCampaign();
   const { mode } = useMode();
@@ -69,6 +250,8 @@ const PCs = () => {
   const [showImportReviewModal, setShowImportReviewModal] = useState(false);
   const [importDraft, setImportDraft] = useState(null);
   const [isSavingImportDraft, setIsSavingImportDraft] = useState(false);
+  const [importReviewTab, setImportReviewTab] = useState("core");
+  const [importTargetCharacterId, setImportTargetCharacterId] = useState("");
   const importInputRef = useRef(null);
 
   useEffect(() => {
@@ -216,9 +399,21 @@ const PCs = () => {
           return {
             name: c.name || "",
             race: c.race || "",
-            class: primaryClass?.className || c.class || "",
+            spellcasting: normalizeImportedSpellcastingEntries(c.spellcasting),
+            classes: buildImportedClassSpellcasting(
+              Array.isArray(c.classes) ? c.classes : [],
+              c.stats || {},
+              c.spellcasting || []
+            ),
+            class:
+              Array.isArray(c.classes) && c.classes.length > 0
+                ? c.classes.map((entry) => `${entry.className} ${entry.level}`.trim()).join(" / ")
+                : c.class || "",
             subclass: primaryClass?.subclass || c.subclass || "",
-            level: primaryClass?.level || c.level || 1,
+            level:
+              Array.isArray(c.classes) && c.classes.length > 0
+                ? c.classes.reduce((sum, entry) => sum + (Number(entry.level) || 0), 0)
+                : c.level || 1,
             background: c.background || "",
             alignment: c.alignment || "",
             playerName: c.playerName || "",
@@ -242,9 +437,18 @@ const PCs = () => {
               speed: c.stats?.speed ?? "",
               initiativeMod: c.stats?.initiativeMod ?? "",
               proficiencyBonus: c.stats?.proficiencyBonus ?? "",
-              spellcastingAbility: c.stats?.spellcastingAbility || "",
-              spellSaveDC: c.stats?.spellSaveDC ?? "",
-              spellAttackBonus: c.stats?.spellAttackBonus ?? "",
+              spellcastingAbility:
+                normalizeImportedSpellcastingEntries(c.spellcasting)[0]?.ability ||
+                c.stats?.spellcastingAbility ||
+                "",
+              spellSaveDC:
+                normalizeImportedSpellcastingEntries(c.spellcasting)[0]?.spellSaveDC ??
+                c.stats?.spellSaveDC ??
+                "",
+              spellAttackBonus:
+                normalizeImportedSpellcastingEntries(c.spellcasting)[0]?.spellAttackBonus ??
+                c.stats?.spellAttackBonus ??
+                "",
               passivePerception: c.stats?.passivePerception ?? "",
               passiveInsight: c.stats?.passiveInsight ?? "",
               passiveInvestigation: c.stats?.passiveInvestigation ?? "",
@@ -257,6 +461,39 @@ const PCs = () => {
                 wis: c.stats?.abilities?.wis?.score ?? "",
                 cha: c.stats?.abilities?.cha?.score ?? "",
               },
+              saves: c.stats?.saves || {},
+              skills: c.stats?.skills || {},
+            },
+
+            inventory: {
+              currency: {
+                cp: c.inventory?.currency?.cp ?? 0,
+                sp: c.inventory?.currency?.sp ?? 0,
+                ep: c.inventory?.currency?.ep ?? 0,
+                gp: c.inventory?.currency?.gp ?? 0,
+                pp: c.inventory?.currency?.pp ?? 0,
+              },
+              equipment: Array.isArray(c.inventory?.equipment) ? c.inventory.equipment : [],
+            },
+
+            actions: {
+              weapons: Array.isArray(c.actions?.weapons) ? c.actions.weapons : [],
+              actions: Array.isArray(c.actions?.actions) ? c.actions.actions : [],
+              bonusActions: Array.isArray(c.actions?.bonusActions) ? c.actions.bonusActions : [],
+              reactions: Array.isArray(c.actions?.reactions) ? c.actions.reactions : [],
+              other: Array.isArray(c.actions?.other) ? c.actions.other : [],
+            },
+
+            features: Array.isArray(c.features) ? c.features : [],
+            feats: Array.isArray(c.feats) ? c.feats : [],
+
+            spells: Array.isArray(c.spells) ? c.spells : [],
+
+            proficiencies: {
+              armor: Array.isArray(c.proficiencies?.armor) ? c.proficiencies.armor : [],
+              weapons: Array.isArray(c.proficiencies?.weapons) ? c.proficiencies.weapons : [],
+              tools: Array.isArray(c.proficiencies?.tools) ? c.proficiencies.tools : [],
+              languages: Array.isArray(c.proficiencies?.languages) ? c.proficiencies.languages : [],
             },
 
             narrative: {
@@ -279,6 +516,14 @@ const PCs = () => {
       };
 
       setImportDraft(mappedDraft);
+
+      const normalizedImportedName = String(mappedDraft.character?.name || "").trim().toLowerCase();
+      const suggestedExistingCharacter = normalizedImportedName
+        ? pcs.find((pc) => String(pc?.name || "").trim().toLowerCase() === normalizedImportedName)
+        : null;
+
+      setImportTargetCharacterId(suggestedExistingCharacter?.id || "");
+      setImportReviewTab("core");
       setShowImportReviewModal(true);
       setImportMessage(
         `Import draft prepared for ${mappedDraft.sourceFileName}. Review the character before saving.`
@@ -295,6 +540,8 @@ const PCs = () => {
   const handleCloseImportReview = () => {
     setShowImportReviewModal(false);
     setImportDraft(null);
+    setImportReviewTab("core");
+    setImportTargetCharacterId("");
   };
 
   const handleCreateImportedPc = async () => {
@@ -304,31 +551,66 @@ const PCs = () => {
       setIsSavingImportDraft(true);
 
       const characterLevel = Math.max(1, Number(importDraft.character.level) || 1);
+      const existingCharacter = importTargetCharacterId
+        ? pcs.find((pc) => String(pc?.id || "") === String(importTargetCharacterId))
+        : null;
       const importedCharacterToSave = {
+        ...(existingCharacter || {}),
+        ...(existingCharacter?.id ? { id: existingCharacter.id } : {}),
         name: importDraft.character.name.trim(),
         playerName: (importDraft.character.playerName || "").trim(),
         race: (importDraft.character.race || "").trim(),
-        class: (importDraft.character.class || "").trim(),
+        class:
+          Array.isArray(importDraft.character.classes) && importDraft.character.classes.length > 0
+            ? importDraft.character.classes.map((entry) => `${entry.className} ${entry.level}`.trim()).join(" / ")
+            : (importDraft.character.class || "").trim(),
         subclass: (importDraft.character.subclass || "").trim(),
-        level: characterLevel,
+        level:
+          Array.isArray(importDraft.character.classes) && importDraft.character.classes.length > 0
+            ? importDraft.character.classes.reduce((sum, entry) => sum + (Number(entry.level) || 0), 0)
+            : characterLevel,
         alignment: (importDraft.character.alignment || "").trim(),
         background: (importDraft.character.background || "").trim(),
-        publicNotes: (importDraft.character.publicNotes || "").trim(),
-        visibility: "player",
-        isPlayerVisible: true,
-        ownerUserId: user?.uid || "",
+        publicNotes:
+          (importDraft.character.publicNotes || "").trim() ||
+          (existingCharacter?.publicNotes || ""),
+        visibility: existingCharacter?.visibility || "player",
+        isPlayerVisible:
+          typeof existingCharacter?.isPlayerVisible === "boolean"
+            ? existingCharacter.isPlayerVisible
+            : true,
+        ownerUserId: existingCharacter?.ownerUserId || user?.uid || "",
 
-        classes: importDraft.character.class?.trim()
-          ? [
-              {
-                className: importDraft.character.class.trim(),
-                level: characterLevel,
-                subclass: (importDraft.character.subclass || "").trim(),
-                spellcastingAbility:
-                  (importDraft.character.stats?.spellcastingAbility || "").trim(),
-              },
-            ]
-          : [],
+        classes:
+          Array.isArray(importDraft.character.classes) && importDraft.character.classes.length > 0
+            ? importDraft.character.classes.map((entry, index) => ({
+              ...entry,
+              className: (entry.className || "").trim(),
+              level: Number(entry.level) || 0,
+              subclass:
+                index === 0
+                  ? ((entry.subclass || importDraft.character.subclass || "").trim())
+                  : ((entry.subclass || "").trim()),
+              spellcastingAbility:
+                (entry.spellcastingAbility || importDraft.character.stats?.spellcastingAbility || "")
+                  .trim()
+                  .toUpperCase(),
+              spellSaveDC: toOptionalNumber(entry.spellSaveDC),
+              spellAttackBonus: toOptionalNumber(entry.spellAttackBonus),
+            }))
+            : importDraft.character.class?.trim()
+              ? [
+                {
+                  className: importDraft.character.class.trim(),
+                  level: characterLevel,
+                  subclass: (importDraft.character.subclass || "").trim(),
+                  spellcastingAbility:
+                    (importDraft.character.stats?.spellcastingAbility || "").trim().toUpperCase(),
+                  spellSaveDC: toOptionalNumber(importDraft.character.stats?.spellSaveDC),
+                  spellAttackBonus: toOptionalNumber(importDraft.character.stats?.spellAttackBonus),
+                },
+              ]
+              : [],
 
         identity: {
           faith: (importDraft.character.identity?.faith || "").trim(),
@@ -341,50 +623,241 @@ const PCs = () => {
           skin: (importDraft.character.identity?.skin || "").trim(),
         },
 
-        stats: {
-          abilities: {
+        stats: (() => {
+          const nextAbilityScores = {
             str: {
-              score: Number(importDraft.character.stats?.abilities?.str) || undefined,
+              score: toOptionalNumber(importDraft.character.stats?.abilities?.str),
             },
             dex: {
-              score: Number(importDraft.character.stats?.abilities?.dex) || undefined,
+              score: toOptionalNumber(importDraft.character.stats?.abilities?.dex),
             },
             con: {
-              score: Number(importDraft.character.stats?.abilities?.con) || undefined,
+              score: toOptionalNumber(importDraft.character.stats?.abilities?.con),
             },
             int: {
-              score: Number(importDraft.character.stats?.abilities?.int) || undefined,
+              score: toOptionalNumber(importDraft.character.stats?.abilities?.int),
             },
             wis: {
-              score: Number(importDraft.character.stats?.abilities?.wis) || undefined,
+              score: toOptionalNumber(importDraft.character.stats?.abilities?.wis),
             },
             cha: {
-              score: Number(importDraft.character.stats?.abilities?.cha) || undefined,
+              score: toOptionalNumber(importDraft.character.stats?.abilities?.cha),
             },
+          };
+
+          Object.keys(nextAbilityScores).forEach((key) => {
+            nextAbilityScores[key] = {
+              ...nextAbilityScores[key],
+              mod: getAbilityModifier(nextAbilityScores[key]?.score),
+            };
+          });
+
+          const nextProficiencyBonus =
+            toOptionalNumber(importDraft.character.stats?.proficiencyBonus) ?? 0;
+          const nextSaves = buildDerivedImportSaves(
+            importDraft.character.stats?.saves || {},
+            nextAbilityScores,
+            nextProficiencyBonus
+          );
+          const nextSkills = buildDerivedImportSkills(
+            importDraft.character.stats?.skills || {},
+            nextAbilityScores,
+            nextProficiencyBonus
+          );
+          const nextInitiative =
+            toOptionalNumber(importDraft.character.stats?.initiativeMod) ??
+            nextAbilityScores.dex?.mod;
+          const nextPassivePerception =
+            toOptionalNumber(importDraft.character.stats?.passivePerception) ??
+            (typeof nextSkills.perception?.mod === "number"
+              ? 10 + nextSkills.perception.mod
+              : undefined);
+          const nextPassiveInsight =
+            toOptionalNumber(importDraft.character.stats?.passiveInsight) ??
+            (typeof nextSkills.insight?.mod === "number"
+              ? 10 + nextSkills.insight.mod
+              : undefined);
+          const nextPassiveInvestigation =
+            toOptionalNumber(importDraft.character.stats?.passiveInvestigation) ??
+            (typeof nextSkills.investigation?.mod === "number"
+              ? 10 + nextSkills.investigation.mod
+              : undefined);
+
+          return {
+            abilities: nextAbilityScores,
+            saves: nextSaves,
+            skills: nextSkills,
+            hpMax: toOptionalNumber(importDraft.character.stats?.hpMax),
+            hpCurrent:
+              toOptionalNumber(importDraft.character.stats?.hpMax) || undefined,
+            ac: toOptionalNumber(importDraft.character.stats?.ac),
+            speed: String(importDraft.character.stats?.speed || "").trim(),
+            initiativeMod: nextInitiative,
+            proficiencyBonus: nextProficiencyBonus || undefined,
+            spellcastingAbility:
+              normalizeImportedSpellcastingEntries(importDraft.character.spellcasting)[0]?.ability ||
+              (importDraft.character.stats?.spellcastingAbility || "").trim().toUpperCase(),
+            spellSaveDC:
+              toOptionalNumber(
+                normalizeImportedSpellcastingEntries(importDraft.character.spellcasting)[0]?.spellSaveDC
+              ) ?? toOptionalNumber(importDraft.character.stats?.spellSaveDC),
+            spellAttackBonus:
+              toOptionalNumber(
+                normalizeImportedSpellcastingEntries(importDraft.character.spellcasting)[0]?.spellAttackBonus
+              ) ?? toOptionalNumber(importDraft.character.stats?.spellAttackBonus),
+            passivePerception: nextPassivePerception,
+            passiveInsight: nextPassiveInsight,
+            passiveInvestigation: nextPassiveInvestigation,
+            additionalSenses:
+              (importDraft.character.stats?.additionalSenses || "").trim(),
+          };
+        })(),
+
+        spellcasting: normalizeImportedSpellcastingEntries(importDraft.character.spellcasting).map((entry) => ({
+          className: entry.className,
+          ability: entry.ability,
+          spellSaveDC: toOptionalNumber(entry.spellSaveDC),
+          spellAttackBonus: toOptionalNumber(entry.spellAttackBonus),
+        })),
+
+        inventory: {
+          currency: {
+            cp: Number(importDraft.character.inventory?.currency?.cp ?? 0),
+            sp: Number(importDraft.character.inventory?.currency?.sp ?? 0),
+            ep: Number(importDraft.character.inventory?.currency?.ep ?? 0),
+            gp: Number(importDraft.character.inventory?.currency?.gp ?? 0),
+            pp: Number(importDraft.character.inventory?.currency?.pp ?? 0),
           },
-          hpMax: Number(importDraft.character.stats?.hpMax) || undefined,
-          hpCurrent: Number(importDraft.character.stats?.hpMax) || undefined,
-          ac: Number(importDraft.character.stats?.ac) || undefined,
-          speed: Number(importDraft.character.stats?.speed) || undefined,
-          initiativeMod:
-            Number(importDraft.character.stats?.initiativeMod) || undefined,
-          proficiencyBonus:
-            Number(importDraft.character.stats?.proficiencyBonus) || undefined,
-          spellcastingAbility:
-            (importDraft.character.stats?.spellcastingAbility || "").trim(),
-          spellSaveDC:
-            Number(importDraft.character.stats?.spellSaveDC) || undefined,
-          spellAttackBonus:
-            Number(importDraft.character.stats?.spellAttackBonus) || undefined,
-          passivePerception:
-            Number(importDraft.character.stats?.passivePerception) || undefined,
-          passiveInsight:
-            Number(importDraft.character.stats?.passiveInsight) || undefined,
-          passiveInvestigation:
-            Number(importDraft.character.stats?.passiveInvestigation) || undefined,
-          additionalSenses:
-            (importDraft.character.stats?.additionalSenses || "").trim(),
+          equipment: Array.isArray(importDraft.character.inventory?.equipment)
+            ? importDraft.character.inventory.equipment
+              .map((item) => ({
+                name: String(item?.name || "").trim(),
+                qty: Number(item?.qty ?? 1),
+                weight: item?.weight ?? "",
+                attuned: !!item?.attuned,
+              }))
+              .filter((item) => item.name)
+            : [],
         },
+
+        proficiencies: {
+          armor: Array.isArray(importDraft.character.proficiencies?.armor)
+            ? importDraft.character.proficiencies.armor.filter(Boolean)
+            : [],
+          weapons: Array.isArray(importDraft.character.proficiencies?.weapons)
+            ? importDraft.character.proficiencies.weapons.filter(Boolean)
+            : [],
+          tools: Array.isArray(importDraft.character.proficiencies?.tools)
+            ? importDraft.character.proficiencies.tools.filter(Boolean)
+            : [],
+          languages: Array.isArray(importDraft.character.proficiencies?.languages)
+            ? importDraft.character.proficiencies.languages.filter(Boolean)
+            : [],
+        },
+
+        actions: {
+          weapons: Array.isArray(importDraft.character.actions?.weapons)
+            ? importDraft.character.actions.weapons
+              .map((weapon) => ({
+                name: String(weapon?.name || "").trim(),
+                attackBonus: weapon?.attackBonus ?? "",
+                damage: weapon?.damage ?? "",
+                notes: weapon?.notes ?? "",
+              }))
+              .filter((weapon) => weapon.name)
+            : [],
+          actions: Array.isArray(importDraft.character.actions?.actions)
+            ? importDraft.character.actions.actions
+              .map((entry) =>
+                typeof entry === "string"
+                  ? { name: entry.trim(), description: entry.trim() }
+                  : {
+                    name: String(entry?.name || entry?.description || "").trim(),
+                    description: String(entry?.description || entry?.name || "").trim(),
+                  }
+              )
+              .filter((entry) => entry.name || entry.description)
+            : [],
+          bonusActions: Array.isArray(importDraft.character.actions?.bonusActions)
+            ? importDraft.character.actions.bonusActions
+              .map((entry) =>
+                typeof entry === "string"
+                  ? { name: entry.trim(), description: entry.trim() }
+                  : {
+                    name: String(entry?.name || entry?.description || "").trim(),
+                    description: String(entry?.description || entry?.name || "").trim(),
+                  }
+              )
+              .filter((entry) => entry.name || entry.description)
+            : [],
+          reactions: Array.isArray(importDraft.character.actions?.reactions)
+            ? importDraft.character.actions.reactions
+              .map((entry) =>
+                typeof entry === "string"
+                  ? { name: entry.trim(), description: entry.trim() }
+                  : {
+                    name: String(entry?.name || entry?.description || "").trim(),
+                    description: String(entry?.description || entry?.name || "").trim(),
+                  }
+              )
+              .filter((entry) => entry.name || entry.description)
+            : [],
+          other: Array.isArray(importDraft.character.actions?.other)
+            ? importDraft.character.actions.other
+              .map((entry) =>
+                typeof entry === "string"
+                  ? { name: entry.trim(), description: entry.trim() }
+                  : {
+                    name: String(entry?.name || entry?.description || "").trim(),
+                    description: String(entry?.description || entry?.name || "").trim(),
+                  }
+              )
+              .filter((entry) => entry.name || entry.description)
+            : [],
+        },
+
+        features: Array.isArray(importDraft.character.features)
+          ? importDraft.character.features
+            .map((entry) =>
+              typeof entry === "string"
+                ? { name: entry.trim(), description: entry.trim() }
+                : {
+                  name: String(entry?.name || entry?.description || "").trim(),
+                  description: String(entry?.description || entry?.name || "").trim(),
+                }
+            )
+            .filter((entry) => entry.name || entry.description)
+          : [],
+
+        feats: Array.isArray(importDraft.character.feats)
+          ? importDraft.character.feats
+            .map((entry) =>
+              typeof entry === "string"
+                ? { name: entry.trim(), description: entry.trim() }
+                : {
+                  name: String(entry?.name || entry?.description || "").trim(),
+                  description: String(entry?.description || entry?.name || "").trim(),
+                }
+            )
+            .filter((entry) => entry.name || entry.description)
+          : [],
+
+        spells: Array.isArray(importDraft.character.spells)
+          ? importDraft.character.spells
+            .map((spell) => ({
+              name: String(spell?.name || "").trim(),
+              className: spell?.className ?? "",
+              source: spell?.source ?? "",
+              saveHit: spell?.saveHit ?? "",
+              castingTime: spell?.castingTime ?? "",
+              range: spell?.range ?? "",
+              components: spell?.components ?? "",
+              duration: spell?.duration ?? "",
+              page: spell?.page ?? "",
+              notes: spell?.notes ?? "",
+            }))
+            .filter((spell) => spell.name)
+          : [],
 
         narrative: {
           personalityTraits:
@@ -409,7 +882,13 @@ const PCs = () => {
       await refreshCharacters();
       setShowImportReviewModal(false);
       setImportDraft(null);
-      setImportMessage(`Imported character created from ${importedCharacterToSave.name}.`);
+      setImportReviewTab("core");
+      setImportTargetCharacterId("");
+      setImportMessage(
+        existingCharacter
+          ? `Updated ${importedCharacterToSave.name} from ${importDraft.sourceFileName || "the imported PDF"}.`
+          : `Imported character created from ${importedCharacterToSave.name}.`
+      );
     } catch (error) {
       console.error("[PCs] Failed to create imported character", error);
       setImportMessage(error?.message || "Failed to create imported character.");
@@ -610,7 +1089,7 @@ const PCs = () => {
 
         {showImportReviewModal && importDraft ? (
           <div className="fixed inset-0 z-[100] flex items-start justify-center overflow-y-auto bg-black/70 backdrop-blur-sm p-4 pt-24 pb-8">
-            <div className="w-full max-w-3xl rounded-2xl border border-zinc-800/80 bg-zinc-950/95 p-5 md:p-6 shadow-2xl max-h-[calc(100vh-8rem)] overflow-y-auto">
+            <div className="w-full max-w-5xl rounded-2xl border border-zinc-800/80 bg-zinc-950/95 p-5 md:p-6 shadow-2xl max-h-[calc(100vh-6rem)] overflow-y-auto">
               <div className="flex items-start justify-between gap-4 mb-5">
                 <div>
                   <h2 className="text-lg md:text-xl font-semibold text-white">Review imported character</h2>
@@ -627,157 +1106,489 @@ const PCs = () => {
                 </button>
               </div>
 
-              <div className="grid grid-cols-1 lg:grid-cols-[1.2fr_0.8fr] gap-5">
-                <div className="space-y-4">
-                  <div className="rounded-2xl border border-zinc-800/70 bg-zinc-950/40 p-4">
-                    <h3 className="text-sm font-semibold text-white mb-3">Imported draft</h3>
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                      <div>
-                        <label className="block text-sm text-zinc-300 mb-1.5">Character name</label>
-                        <input
-                          value={importDraft.character.name}
-                          onChange={(e) =>
-                            setImportDraft((prev) => ({
-                              ...prev,
-                              character: { ...prev.character, name: e.target.value },
-                            }))
-                          }
-                          className="w-full rounded-xl bg-zinc-950/40 border border-zinc-800/70 px-3.5 py-2.5 text-sm text-white placeholder:text-zinc-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/40"
-                          placeholder="Will come from parser"
-                        />
-                      </div>
-
-                      <div>
-                        <label className="block text-sm text-zinc-300 mb-1.5">Player name</label>
-                        <input
-                          value={importDraft.character.playerName}
-                          onChange={(e) =>
-                            setImportDraft((prev) => ({
-                              ...prev,
-                              character: { ...prev.character, playerName: e.target.value },
-                            }))
-                          }
-                          className="w-full rounded-xl bg-zinc-950/40 border border-zinc-800/70 px-3.5 py-2.5 text-sm text-white placeholder:text-zinc-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/40"
-                          placeholder="Optional"
-                        />
-                      </div>
-
-                      <div>
-                        <label className="block text-sm text-zinc-300 mb-1.5">Race / species</label>
-                        <input
-                          value={importDraft.character.race}
-                          onChange={(e) =>
-                            setImportDraft((prev) => ({
-                              ...prev,
-                              character: { ...prev.character, race: e.target.value },
-                            }))
-                          }
-                          className="w-full rounded-xl bg-zinc-950/40 border border-zinc-800/70 px-3.5 py-2.5 text-sm text-white placeholder:text-zinc-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/40"
-                          placeholder="Will come from parser"
-                        />
-                      </div>
-
-                      <div>
-                        <label className="block text-sm text-zinc-300 mb-1.5">Class</label>
-                        <input
-                          value={importDraft.character.class}
-                          onChange={(e) =>
-                            setImportDraft((prev) => ({
-                              ...prev,
-                              character: { ...prev.character, class: e.target.value },
-                            }))
-                          }
-                          className="w-full rounded-xl bg-zinc-950/40 border border-zinc-800/70 px-3.5 py-2.5 text-sm text-white placeholder:text-zinc-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/40"
-                          placeholder="Will come from parser"
-                        />
-                      </div>
-
-                      <div>
-                        <label className="block text-sm text-zinc-300 mb-1.5">Subclass</label>
-                        <input
-                          value={importDraft.character.subclass}
-                          onChange={(e) =>
-                            setImportDraft((prev) => ({
-                              ...prev,
-                              character: { ...prev.character, subclass: e.target.value },
-                            }))
-                          }
-                          className="w-full rounded-xl bg-zinc-950/40 border border-zinc-800/70 px-3.5 py-2.5 text-sm text-white placeholder:text-zinc-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/40"
-                          placeholder="Optional"
-                        />
-                      </div>
-
-                      <div>
-                        <label className="block text-sm text-zinc-300 mb-1.5">Level</label>
-                        <input
-                          type="number"
-                          min="1"
-                          value={importDraft.character.level}
-                          onChange={(e) =>
-                            setImportDraft((prev) => ({
-                              ...prev,
-                              character: {
-                                ...prev.character,
-                                level: Math.max(1, Number(e.target.value) || 1),
-                              },
-                            }))
-                          }
-                          className="w-full rounded-xl bg-zinc-950/40 border border-zinc-800/70 px-3.5 py-2.5 text-sm text-white placeholder:text-zinc-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/40"
-                        />
-                      </div>
-                    </div>
-                  </div>
+              <div className="flex flex-col gap-5">
+                <div className="flex gap-2 border-b border-zinc-800/70 pb-2">
+                  {[
+                    ["core", "Core"],
+                    ["combat", "Combat Snapshot"],
+                    ["checks", "Saving Throws & Skills"],
+                    ["inventory", "Inventory & Proficiencies"],
+                    ["identity", "Identity & Narrative"],
+                  ].map(([key, label]) => (
+                    <button
+                      key={key}
+                      type="button"
+                      onClick={() => setImportReviewTab(key)}
+                      className={`px-3 py-1.5 text-sm rounded-lg border transition-colors ${importReviewTab === key
+                        ? "bg-indigo-500/20 border-indigo-400/50 text-white"
+                        : "bg-zinc-900/40 border-zinc-800/60 text-zinc-400 hover:text-white"
+                        }`}
+                    >
+                      {label}
+                    </button>
+                  ))}
                 </div>
+                {importReviewTab === "core" ? (
+                  <div className="space-y-4">
+                    <div className="rounded-2xl border border-zinc-800/70 bg-zinc-950/40 p-4">
+                      <h3 className="text-sm font-semibold text-white mb-3">Imported draft</h3>
+                      <div className="grid grid-cols-1 gap-3">
+                        <div>
+                          <label className="block text-sm text-zinc-300 mb-1.5">Import target</label>
+                          <select
+                            value={importTargetCharacterId}
+                            onChange={(e) => setImportTargetCharacterId(e.target.value)}
+                            className="w-full rounded-xl bg-zinc-950/40 border border-zinc-800/70 px-3.5 py-2.5 text-sm text-white focus:outline-none focus:ring-2 focus:ring-indigo-500/40"
+                          >
+                            <option value="">Create as new character</option>
+                            {pcs.map((pc) => (
+                              <option key={pc.id} value={pc.id}>
+                                {pc.name || "Unnamed PC"}
+                              </option>
+                            ))}
+                          </select>
+                          <p className="mt-1 text-xs text-zinc-500">
+                            Select an existing PC to update its snapshot from this PDF, or leave this as a new character import.
+                          </p>
+                        </div>
+                        <div>
+                          <label className="block text-sm text-zinc-300 mb-1.5">Character name</label>
+                          <input
+                            value={importDraft.character.name}
+                            onChange={(e) =>
+                              setImportDraft((prev) => ({
+                                ...prev,
+                                character: { ...prev.character, name: e.target.value },
+                              }))
+                            }
+                            className="w-full rounded-xl bg-zinc-950/40 border border-zinc-800/70 px-3.5 py-2.5 text-sm text-white placeholder:text-zinc-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/40"
+                            placeholder="Will come from parser"
+                          />
+                        </div>
 
-                <div className="space-y-4">
-                  <div className="rounded-2xl border border-zinc-800/70 bg-zinc-950/40 p-4">
-                    <h3 className="text-sm font-semibold text-white mb-3">Import review</h3>
-                    <div className="space-y-3 text-sm text-zinc-300">
-                      <div>
-                        <span className="text-zinc-400">Confidence:</span>{" "}
-                        <span className="text-white capitalize">{importDraft.review.confidence}</span>
-                      </div>
+                        <div>
+                          <label className="block text-sm text-zinc-300 mb-1.5">Player name</label>
+                          <input
+                            value={importDraft.character.playerName}
+                            onChange={(e) =>
+                              setImportDraft((prev) => ({
+                                ...prev,
+                                character: { ...prev.character, playerName: e.target.value },
+                              }))
+                            }
+                            className="w-full rounded-xl bg-zinc-950/40 border border-zinc-800/70 px-3.5 py-2.5 text-sm text-white placeholder:text-zinc-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/40"
+                            placeholder="Optional"
+                          />
+                        </div>
 
-                      <div>
-                        <div className="text-zinc-400 mb-1">Warnings</div>
-                        <ul className="space-y-1 list-disc pl-5 text-zinc-300">
-                          {importDraft.review.warnings.map((warning) => (
-                            <li key={warning}>{warning}</li>
-                          ))}
-                        </ul>
-                      </div>
+                        <div>
+                          <label className="block text-sm text-zinc-300 mb-1.5">Race / species</label>
+                          <input
+                            value={importDraft.character.race}
+                            onChange={(e) =>
+                              setImportDraft((prev) => ({
+                                ...prev,
+                                character: { ...prev.character, race: e.target.value },
+                              }))
+                            }
+                            className="w-full rounded-xl bg-zinc-950/40 border border-zinc-800/70 px-3.5 py-2.5 text-sm text-white placeholder:text-zinc-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/40"
+                            placeholder="Will come from parser"
+                          />
+                        </div>
 
-                      <div>
-                        <div className="text-zinc-400 mb-1">Missing fields</div>
-                        <div className="flex flex-wrap gap-2">
-                          {importDraft.review.missingFields.map((field) => (
-                            <span
-                              key={field}
-                              className="inline-flex items-center rounded-full border border-amber-400/40 bg-amber-500/10 px-2 py-0.5 text-xs text-amber-200"
-                            >
-                              {field}
-                            </span>
-                          ))}
+                        <div>
+                          <label className="block text-sm text-zinc-300 mb-1.5">Class</label>
+                          <input
+                            value={importDraft.character.class}
+                            onChange={(e) =>
+                              setImportDraft((prev) => ({
+                                ...prev,
+                                character: { ...prev.character, class: e.target.value },
+                              }))
+                            }
+                            className="w-full rounded-xl bg-zinc-950/40 border border-zinc-800/70 px-3.5 py-2.5 text-sm text-white placeholder:text-zinc-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/40"
+                            placeholder="Will come from parser"
+                          />
+                        </div>
+
+                        <div>
+                          <label className="block text-sm text-zinc-300 mb-1.5">Subclass</label>
+                          <input
+                            value={importDraft.character.subclass}
+                            onChange={(e) =>
+                              setImportDraft((prev) => ({
+                                ...prev,
+                                character: { ...prev.character, subclass: e.target.value },
+                              }))
+                            }
+                            className="w-full rounded-xl bg-zinc-950/40 border border-zinc-800/70 px-3.5 py-2.5 text-sm text-white placeholder:text-zinc-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/40"
+                            placeholder="Optional"
+                          />
+                        </div>
+
+                        <div>
+                          <label className="block text-sm text-zinc-300 mb-1.5">Level</label>
+                          <input
+                            type="number"
+                            min="1"
+                            value={importDraft.character.level}
+                            onChange={(e) =>
+                              setImportDraft((prev) => ({
+                                ...prev,
+                                character: {
+                                  ...prev.character,
+                                  level: Math.max(1, Number(e.target.value) || 1),
+                                },
+                              }))
+                            }
+                            className="w-full rounded-xl bg-zinc-950/40 border border-zinc-800/70 px-3.5 py-2.5 text-sm text-white placeholder:text-zinc-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/40"
+                          />
                         </div>
                       </div>
                     </div>
-                  </div>
+                    {Array.isArray(importDraft.character.spellcasting) &&
+                      importDraft.character.spellcasting.length > 0 ? (
+                      <div className="rounded-2xl border border-zinc-800/70 bg-zinc-950/40 p-4">
+                        <h3 className="text-sm font-semibold text-white mb-3">Spellcasting by class</h3>
+                        {hasMultipleSpellcastingTracks(importDraft.character) ? (
+                          <div className="mb-3 rounded-xl border border-indigo-400/20 bg-indigo-500/5 px-3.5 py-3 text-sm text-indigo-100">
+                            <div className="font-medium">Multiclass spellcasting detected</div>
+                            <div className="mt-1 text-xs text-indigo-200/80 leading-relaxed">
+                              Review each casting track here. The shared combat summary intentionally hides single-track spellcasting fields when more than one class casts spells.
+                            </div>
+                          </div>
+                        ) : null}
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                          {importDraft.character.spellcasting.map((entry, index) => (
+                            <div
+                              key={`${entry.className || "spellcasting"}-${index}`}
+                              className="rounded-xl border border-zinc-800/60 bg-zinc-950/30 p-4"
+                            >
+                              <div className="text-sm font-medium text-white mb-3">
+                                {entry.className || `Spellcasting ${index + 1}`}
+                              </div>
 
-                  <div className="rounded-2xl border border-dashed border-indigo-400/30 bg-indigo-500/5 p-4 text-sm text-indigo-100">
-                    Next step: replace this placeholder draft with parsed PDF output from the importer service. For now, you can still confirm the reviewed draft and create a character manually from this scaffold.
-                  </div>
+                              <div className="space-y-3">
+                                <div className="grid grid-cols-[96px_1fr] items-center gap-3">
+                                  <label className="text-sm text-zinc-300">Ability</label>
+                                  <input
+                                    value={entry.ability ?? ""}
+                                    onChange={(e) =>
+                                      setImportDraft((prev) => ({
+                                        ...prev,
+                                        character: {
+                                          ...prev.character,
+                                          spellcasting: (prev.character.spellcasting || []).map(
+                                            (spellEntry, spellIndex) =>
+                                              spellIndex === index
+                                                ? {
+                                                  ...spellEntry,
+                                                  ability: e.target.value,
+                                                }
+                                                : spellEntry
+                                          ),
+                                        },
+                                      }))
+                                    }
+                                    className="w-full rounded-xl bg-zinc-950/40 border border-zinc-800/70 px-3.5 py-2.5 text-sm text-white focus:outline-none focus:ring-2 focus:ring-indigo-500/40"
+                                  />
+                                </div>
 
-                  <div className="rounded-2xl border border-zinc-800/70 bg-zinc-950/40 p-4">
-                    <h3 className="text-sm font-semibold text-white mb-3">Ability scores</h3>
-                    <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
-                      {["str", "dex", "con", "int", "wis", "cha"].map((key) => (
-                        <div key={key}>
-                          <label className="block text-xs uppercase tracking-wide text-zinc-400 mb-1.5">
-                            {key}
-                          </label>
+                                <div className="grid grid-cols-[96px_1fr] items-center gap-3">
+                                  <label className="text-sm text-zinc-300">Spell save</label>
+                                  <input
+                                    value={entry.spellSaveDC ?? ""}
+                                    onChange={(e) =>
+                                      setImportDraft((prev) => ({
+                                        ...prev,
+                                        character: {
+                                          ...prev.character,
+                                          spellcasting: (prev.character.spellcasting || []).map(
+                                            (spellEntry, spellIndex) =>
+                                              spellIndex === index
+                                                ? {
+                                                  ...spellEntry,
+                                                  spellSaveDC: e.target.value,
+                                                }
+                                                : spellEntry
+                                          ),
+                                        },
+                                      }))
+                                    }
+                                    className="w-full rounded-xl bg-zinc-950/40 border border-zinc-800/70 px-3.5 py-2.5 text-sm text-white focus:outline-none focus:ring-2 focus:ring-indigo-500/40"
+                                  />
+                                </div>
+
+                                <div className="grid grid-cols-[96px_1fr] items-center gap-3">
+                                  <label className="text-sm text-zinc-300">Attack bonus</label>
+                                  <input
+                                    value={entry.spellAttackBonus ?? ""}
+                                    onChange={(e) =>
+                                      setImportDraft((prev) => ({
+                                        ...prev,
+                                        character: {
+                                          ...prev.character,
+                                          spellcasting: (prev.character.spellcasting || []).map(
+                                            (spellEntry, spellIndex) =>
+                                              spellIndex === index
+                                                ? {
+                                                  ...spellEntry,
+                                                  spellAttackBonus: e.target.value,
+                                                }
+                                                : spellEntry
+                                          ),
+                                        },
+                                      }))
+                                    }
+                                    className="w-full rounded-xl bg-zinc-950/40 border border-zinc-800/70 px-3.5 py-2.5 text-sm text-white focus:outline-none focus:ring-2 focus:ring-indigo-500/40"
+                                  />
+                                </div>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    ) : null}
+                  </div>
+                ) : null}
+
+                {importReviewTab === "inventory" ? (
+                  <div className="space-y-4">
+                    <div className="rounded-2xl border border-zinc-800/70 bg-zinc-950/40 p-4">
+                      <h3 className="text-sm font-semibold text-white mb-3">Inventory & currency</h3>
+
+                      <div className="grid grid-cols-2 md:grid-cols-5 gap-3 mb-4">
+                        {[
+                          ["CP", importDraft.character.inventory?.currency?.cp ?? 0],
+                          ["SP", importDraft.character.inventory?.currency?.sp ?? 0],
+                          ["EP", importDraft.character.inventory?.currency?.ep ?? 0],
+                          ["GP", importDraft.character.inventory?.currency?.gp ?? 0],
+                          ["PP", importDraft.character.inventory?.currency?.pp ?? 0],
+                        ].map(([label, value]) => (
+                          <div
+                            key={label}
+                            className="rounded-xl border border-zinc-800/60 bg-zinc-950/30 px-3 py-3"
+                          >
+                            <div className="text-[10px] uppercase tracking-wide text-zinc-500">{label}</div>
+                            <div className="mt-1 text-sm font-medium text-white">{value}</div>
+                          </div>
+                        ))}
+                      </div>
+
+                      <div>
+                        <div className="text-xs uppercase tracking-wide text-zinc-500 mb-2">Equipment</div>
+                        {Array.isArray(importDraft.character.inventory?.equipment) &&
+                          importDraft.character.inventory.equipment.length > 0 ? (
+                          <div className="space-y-2 max-h-80 overflow-y-auto pr-1">
+                            {importDraft.character.inventory.equipment.map((item, index) => (
+                              <div
+                                key={`${item.name || "equipment"}-${index}`}
+                                className="rounded-xl border border-zinc-800/60 bg-zinc-950/30 px-3 py-2.5"
+                              >
+                                <div className="flex flex-wrap items-center justify-between gap-2">
+                                  <div className="text-sm text-white font-medium">{item.name || "Unnamed item"}</div>
+                                  <div className="flex flex-wrap gap-2 text-xs text-zinc-400">
+                                    <span>Qty: {item.qty ?? 1}</span>
+                                    {item.weight ? <span>Weight: {item.weight}</span> : null}
+                                    {item.attuned ? <span>Attuned</span> : null}
+                                  </div>
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        ) : (
+                          <p className="text-sm text-zinc-500">No equipment imported yet.</p>
+                        )}
+                      </div>
+                    </div>
+
+                    <div className="rounded-2xl border border-zinc-800/70 bg-zinc-950/40 p-4">
+                      <h3 className="text-sm font-semibold text-white mb-3">Proficiencies</h3>
+
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                        {[
+                          ["Armor", importDraft.character.proficiencies?.armor],
+                          ["Weapons", importDraft.character.proficiencies?.weapons],
+                          ["Tools", importDraft.character.proficiencies?.tools],
+                          ["Languages", importDraft.character.proficiencies?.languages],
+                        ].map(([label, values]) => (
+                          <div
+                            key={label}
+                            className="rounded-xl border border-zinc-800/60 bg-zinc-950/30 px-3 py-3"
+                          >
+                            <div className="text-xs uppercase tracking-wide text-zinc-500 mb-2">{label}</div>
+                            {Array.isArray(values) && values.length > 0 ? (
+                              <div className="flex flex-wrap gap-2">
+                                {values.map((value, index) => (
+                                  <span
+                                    key={`${label}-${value}-${index}`}
+                                    className="inline-flex items-center rounded-full border border-zinc-700/70 bg-zinc-900/60 px-2 py-0.5 text-xs text-zinc-200"
+                                  >
+                                    {value}
+                                  </span>
+                                ))}
+                              </div>
+                            ) : (
+                              <p className="text-sm text-zinc-500">No {String(label).toLowerCase()} imported.</p>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+                ) : null}
+
+                {/* removed spells tab */}
+
+                <div className="space-y-4">
+                  {importReviewTab === "core" ? (
+                    <div className="rounded-2xl border border-zinc-800/70 bg-zinc-950/40 p-4 xl:p-5">
+                      <h3 className="text-sm font-semibold text-white mb-3">Import review</h3>
+                      <div className="space-y-3 text-sm text-zinc-300">
+                        <div>
+                          <span className="text-zinc-400">Confidence:</span>{" "}
+                          <span className="text-white capitalize">{importDraft.review.confidence}</span>
+                        </div>
+
+                        <div>
+                          <div className="text-zinc-400 mb-1">Warnings</div>
+                          <ul className="space-y-1 list-disc pl-5 text-zinc-300">
+                            {importDraft.review.warnings.map((warning) => (
+                              <li key={warning}>{warning}</li>
+                            ))}
+                          </ul>
+                        </div>
+
+                        <div>
+                          <div className="text-zinc-400 mb-1">Missing fields</div>
+                          <div className="flex flex-wrap gap-2">
+                            {importDraft.review.missingFields.map((field) => (
+                              <span
+                                key={field}
+                                className="inline-flex items-center rounded-full border border-amber-400/40 bg-amber-500/10 px-2 py-0.5 text-xs text-amber-200"
+                              >
+                                {field}
+                              </span>
+                            ))}
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  ) : null}
+
+                  {importReviewTab === "combat" ? (
+                    <div className="rounded-2xl border border-zinc-800/70 bg-zinc-950/40 p-4">
+                      <h3 className="text-sm font-semibold text-white mb-3">Ability scores</h3>
+                      <div className="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-3">
+                        {["str", "dex", "con", "int", "wis", "cha"].map((key) => (
+                          <div key={key}>
+                            <label className="block text-xs uppercase tracking-wide text-zinc-400 mb-1.5">
+                              {key}
+                            </label>
+                            <input
+                              type="number"
+                              value={importDraft.character.stats?.abilities?.[key] ?? ""}
+                              onChange={(e) =>
+                                setImportDraft((prev) => ({
+                                  ...prev,
+                                  character: {
+                                    ...prev.character,
+                                    stats: {
+                                      ...prev.character.stats,
+                                      abilities: {
+                                        ...prev.character.stats.abilities,
+                                        [key]: e.target.value,
+                                      },
+                                    },
+                                  },
+                                }))
+                              }
+                              className="w-full rounded-xl bg-zinc-950/40 border border-zinc-800/70 px-3.5 py-2.5 text-sm text-white focus:outline-none focus:ring-2 focus:ring-indigo-500/40"
+                            />
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  ) : null}
+
+                  {importReviewTab === "combat" ? (
+                    <div className="rounded-2xl border border-zinc-800/70 bg-zinc-950/40 p-4">
+                      <h3 className="text-sm font-semibold text-white mb-3">Combat & casting</h3>
+                      <div className="mb-3 rounded-xl border border-indigo-400/20 bg-indigo-500/5 px-3.5 py-3 text-sm text-indigo-100">
+                        <div className="font-medium">Snapshot only</div>
+                        <div className="mt-1 text-xs text-indigo-200/80 leading-relaxed">
+                          Use D&D Beyond as the live tactical sheet during play. This import is intended as a campaign snapshot for core combat stats, spellcasting summary, and reference data.
+                        </div>
+                      </div>
+                      <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-3 xl:gap-4 items-start">
+                        {(hasMultipleSpellcastingTracks(importDraft.character)
+                          ? [
+                            ["AC", "ac"],
+                            ["HP Max", "hpMax"],
+                            ["Speed", "speed"],
+                            ["Proficiency Bonus", "proficiencyBonus"],
+                            ["Passive Perception", "passivePerception"],
+                            ["Passive Insight", "passiveInsight"],
+                            ["Passive Investigation", "passiveInvestigation"],
+                          ]
+                          : [
+                            ["AC", "ac"],
+                            ["HP Max", "hpMax"],
+                            ["Speed", "speed"],
+                            ["Proficiency Bonus", "proficiencyBonus"],
+                            ["Spell Save DC", "spellSaveDC"],
+                            ["Spell Attack Bonus", "spellAttackBonus"],
+                            ["Passive Perception", "passivePerception"],
+                            ["Passive Insight", "passiveInsight"],
+                            ["Passive Investigation", "passiveInvestigation"],
+                          ]).map(([label, key]) => (
+                            <div key={key}>
+                              <label className="block text-sm text-zinc-300 mb-1.5">{label}</label>
+                              <input
+                                value={importDraft.character.stats?.[key] ?? ""}
+                                onChange={(e) =>
+                                  setImportDraft((prev) => ({
+                                    ...prev,
+                                    character: {
+                                      ...prev.character,
+                                      stats: {
+                                        ...prev.character.stats,
+                                        [key]: e.target.value,
+                                      },
+                                    },
+                                  }))
+                                }
+                                className="w-full rounded-xl bg-zinc-950/40 border border-zinc-800/70 px-3.5 py-2.5 text-sm text-white focus:outline-none focus:ring-2 focus:ring-indigo-500/40"
+                              />
+                            </div>
+                          ))}
+
+                        {!hasMultipleSpellcastingTracks(importDraft.character) ? (
+                          <div>
+                            <label className="block text-sm text-zinc-300 mb-1.5">Spellcasting Ability</label>
+                            <input
+                              value={importDraft.character.stats?.spellcastingAbility ?? ""}
+                              onChange={(e) =>
+                                setImportDraft((prev) => ({
+                                  ...prev,
+                                  character: {
+                                    ...prev.character,
+                                    stats: {
+                                      ...prev.character.stats,
+                                      spellcastingAbility: e.target.value,
+                                    },
+                                  },
+                                }))
+                              }
+                              className="w-full rounded-xl bg-zinc-950/40 border border-zinc-800/70 px-3.5 py-2.5 text-sm text-white focus:outline-none focus:ring-2 focus:ring-indigo-500/40"
+                            />
+                          </div>
+                        ) : null}
+
+                        <div className="lg:col-span-2 xl:col-span-3">
+                          <label className="block text-sm text-zinc-300 mb-1.5">Additional Senses</label>
                           <input
-                            type="number"
-                            value={importDraft.character.stats?.abilities?.[key] ?? ""}
+                            value={importDraft.character.stats?.additionalSenses ?? ""}
                             onChange={(e) =>
                               setImportDraft((prev) => ({
                                 ...prev,
@@ -785,167 +1596,223 @@ const PCs = () => {
                                   ...prev.character,
                                   stats: {
                                     ...prev.character.stats,
-                                    abilities: {
-                                      ...prev.character.stats.abilities,
+                                    additionalSenses: e.target.value,
+                                  },
+                                },
+                              }))
+                            }
+                            className="w-full rounded-xl bg-zinc-950/40 border border-zinc-800/70 px-3.5 py-2.5 text-sm text-white focus:outline-none focus:ring-2 focus:ring-indigo-500/40"
+                          />
+                        </div>
+                      </div>
+                    </div>
+                  ) : null}
+
+                  {importReviewTab === "checks" ? (
+                    <div className="rounded-2xl border border-zinc-800/70 bg-zinc-950/40 p-4">
+                      <h3 className="text-sm font-semibold text-white mb-3">Saving throws</h3>
+                      <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
+                        {importSaveConfig.map((save) => {
+                          const entry = importDraft.character.stats?.saves?.[save.key] || {};
+                          return (
+                            <div key={save.key} className="rounded-xl border border-zinc-800/60 bg-zinc-950/30 p-3 space-y-2">
+                              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+                                <div>
+                                  <div className="text-sm text-white font-medium">{save.label}</div>
+                                  <div className="text-[10px] uppercase tracking-wide text-zinc-500">{save.ability}</div>
+                                </div>
+                                <label className="inline-flex items-center gap-2 text-xs text-zinc-300 sm:self-start">
+                                  <input
+                                    type="checkbox"
+                                    checked={!!entry.proficient}
+                                    onChange={(e) =>
+                                      setImportDraft((prev) => ({
+                                        ...prev,
+                                        character: {
+                                          ...prev.character,
+                                          stats: {
+                                            ...prev.character.stats,
+                                            saves: {
+                                              ...(prev.character.stats?.saves || {}),
+                                              [save.key]: {
+                                                ...(prev.character.stats?.saves?.[save.key] || {}),
+                                                proficient: e.target.checked,
+                                              },
+                                            },
+                                          },
+                                        },
+                                      }))
+                                    }
+                                    className="rounded border-zinc-700 bg-zinc-900"
+                                  />
+                                  Proficient
+                                </label>
+                              </div>
+                              <div className="text-xs text-zinc-500">
+                                Imported modifier: {entry.mod ?? "—"}. Recalculated on save.
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  ) : null}
+
+                  {importReviewTab === "checks" ? (
+                    <div className="rounded-2xl border border-zinc-800/70 bg-zinc-950/40 p-4">
+                      <h3 className="text-sm font-semibold text-white mb-3">Skills</h3>
+                      <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
+                        {importSkillConfig.map((skill) => {
+                          const entry = importDraft.character.stats?.skills?.[skill.key] || {};
+                          return (
+                            <div key={skill.key} className="rounded-xl border border-zinc-800/60 bg-zinc-950/30 p-3 space-y-2">
+                              <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-2">
+                                <div>
+                                  <div className="text-sm text-white font-medium">{skill.label}</div>
+                                  <div className="text-[10px] uppercase tracking-wide text-zinc-500">{skill.ability}</div>
+                                </div>
+                                <div className="flex flex-col gap-1.5 text-xs text-zinc-300 sm:min-w-[110px]">
+                                  <label className="inline-flex items-center gap-2">
+                                    <input
+                                      type="checkbox"
+                                      checked={!!entry.proficient}
+                                      onChange={(e) =>
+                                        setImportDraft((prev) => ({
+                                          ...prev,
+                                          character: {
+                                            ...prev.character,
+                                            stats: {
+                                              ...prev.character.stats,
+                                              skills: {
+                                                ...(prev.character.stats?.skills || {}),
+                                                [skill.key]: {
+                                                  ...(prev.character.stats?.skills?.[skill.key] || {}),
+                                                  proficient: e.target.checked,
+                                                  expertise:
+                                                    e.target.checked
+                                                      ? !!prev.character.stats?.skills?.[skill.key]?.expertise
+                                                      : false,
+                                                },
+                                              },
+                                            },
+                                          },
+                                        }))
+                                      }
+                                      className="rounded border-zinc-700 bg-zinc-900"
+                                    />
+                                    Proficient
+                                  </label>
+                                  <label className="inline-flex items-center gap-2">
+                                    <input
+                                      type="checkbox"
+                                      checked={!!entry.expertise}
+                                      onChange={(e) =>
+                                        setImportDraft((prev) => ({
+                                          ...prev,
+                                          character: {
+                                            ...prev.character,
+                                            stats: {
+                                              ...prev.character.stats,
+                                              skills: {
+                                                ...(prev.character.stats?.skills || {}),
+                                                [skill.key]: {
+                                                  ...(prev.character.stats?.skills?.[skill.key] || {}),
+                                                  proficient: e.target.checked
+                                                    ? true
+                                                    : !!prev.character.stats?.skills?.[skill.key]?.proficient,
+                                                  expertise: e.target.checked,
+                                                },
+                                              },
+                                            },
+                                          },
+                                        }))
+                                      }
+                                      className="rounded border-zinc-700 bg-zinc-900"
+                                    />
+                                    Expertise
+                                  </label>
+                                </div>
+                              </div>
+                              <div className="text-xs text-zinc-500 leading-relaxed">
+                                Imported modifier: {entry.mod ?? "—"}. Recalculated on save.
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  ) : null}
+
+                  {importReviewTab === "identity" ? (
+                    <div className="rounded-2xl border border-zinc-800/70 bg-zinc-950/40 p-4">
+                      <h3 className="text-sm font-semibold text-white mb-3">Identity & narrative</h3>
+                      <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
+                        {[
+                          ["Faith", "faith"],
+                          ["Size", "size"],
+                          ["Age", "age"],
+                          ["Height", "height"],
+                          ["Weight", "weight"],
+                          ["Gender", "gender"],
+                          ["Eyes", "eyes"],
+                          ["Hair", "hair"],
+                          ["Skin", "skin"],
+                        ].map(([label, key]) => (
+                          <div key={key}>
+                            <label className="block text-sm text-zinc-300 mb-1.5">{label}</label>
+                            <input
+                              value={importDraft.character.identity?.[key] ?? ""}
+                              onChange={(e) =>
+                                setImportDraft((prev) => ({
+                                  ...prev,
+                                  character: {
+                                    ...prev.character,
+                                    identity: {
+                                      ...prev.character.identity,
                                       [key]: e.target.value,
                                     },
                                   },
-                                },
-                              }))
-                            }
-                            className="w-full rounded-xl bg-zinc-950/40 border border-zinc-800/70 px-3.5 py-2.5 text-sm text-white focus:outline-none focus:ring-2 focus:ring-indigo-500/40"
-                          />
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-
-                  <div className="rounded-2xl border border-zinc-800/70 bg-zinc-950/40 p-4">
-                    <h3 className="text-sm font-semibold text-white mb-3">Combat & casting</h3>
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                      {[
-                        ["AC", "ac"],
-                        ["HP Max", "hpMax"],
-                        ["Speed", "speed"],
-                        ["Initiative", "initiativeMod"],
-                        ["Proficiency Bonus", "proficiencyBonus"],
-                        ["Spell Save DC", "spellSaveDC"],
-                        ["Spell Attack Bonus", "spellAttackBonus"],
-                        ["Passive Perception", "passivePerception"],
-                        ["Passive Insight", "passiveInsight"],
-                        ["Passive Investigation", "passiveInvestigation"],
-                      ].map(([label, key]) => (
-                        <div key={key}>
-                          <label className="block text-sm text-zinc-300 mb-1.5">{label}</label>
-                          <input
-                            value={importDraft.character.stats?.[key] ?? ""}
-                            onChange={(e) =>
-                              setImportDraft((prev) => ({
-                                ...prev,
-                                character: {
-                                  ...prev.character,
-                                  stats: {
-                                    ...prev.character.stats,
-                                    [key]: e.target.value,
-                                  },
-                                },
-                              }))
-                            }
-                            className="w-full rounded-xl bg-zinc-950/40 border border-zinc-800/70 px-3.5 py-2.5 text-sm text-white focus:outline-none focus:ring-2 focus:ring-indigo-500/40"
-                          />
-                        </div>
-                      ))}
-
-                      <div>
-                        <label className="block text-sm text-zinc-300 mb-1.5">Spellcasting Ability</label>
-                        <input
-                          value={importDraft.character.stats?.spellcastingAbility ?? ""}
-                          onChange={(e) =>
-                            setImportDraft((prev) => ({
-                              ...prev,
-                              character: {
-                                ...prev.character,
-                                stats: {
-                                  ...prev.character.stats,
-                                  spellcastingAbility: e.target.value,
-                                },
-                              },
-                            }))
-                          }
-                          className="w-full rounded-xl bg-zinc-950/40 border border-zinc-800/70 px-3.5 py-2.5 text-sm text-white focus:outline-none focus:ring-2 focus:ring-indigo-500/40"
-                        />
+                                }))
+                              }
+                              className="w-full rounded-xl bg-zinc-950/40 border border-zinc-800/70 px-3.5 py-2.5 text-sm text-white focus:outline-none focus:ring-2 focus:ring-indigo-500/40"
+                            />
+                          </div>
+                        ))}
                       </div>
 
-                      <div>
-                        <label className="block text-sm text-zinc-300 mb-1.5">Additional Senses</label>
-                        <input
-                          value={importDraft.character.stats?.additionalSenses ?? ""}
-                          onChange={(e) =>
-                            setImportDraft((prev) => ({
-                              ...prev,
-                              character: {
-                                ...prev.character,
-                                stats: {
-                                  ...prev.character.stats,
-                                  additionalSenses: e.target.value,
-                                },
-                              },
-                            }))
-                          }
-                          className="w-full rounded-xl bg-zinc-950/40 border border-zinc-800/70 px-3.5 py-2.5 text-sm text-white focus:outline-none focus:ring-2 focus:ring-indigo-500/40"
-                        />
+                      <div className="grid grid-cols-1 gap-4 mt-4">
+                        {[
+                          ["Personality Traits", "personalityTraits"],
+                          ["Ideals", "ideals"],
+                          ["Bonds", "bonds"],
+                          ["Flaws", "flaws"],
+                        ].map(([label, key]) => (
+                          <div key={key}>
+                            <label className="block text-sm text-zinc-300 mb-1.5">{label}</label>
+                            <textarea
+                              rows={2}
+                              value={importDraft.character.narrative?.[key] ?? ""}
+                              onChange={(e) =>
+                                setImportDraft((prev) => ({
+                                  ...prev,
+                                  character: {
+                                    ...prev.character,
+                                    narrative: {
+                                      ...prev.character.narrative,
+                                      [key]: e.target.value,
+                                    },
+                                  },
+                                }))
+                              }
+                              className="w-full rounded-xl bg-zinc-950/40 border border-zinc-800/70 px-3.5 py-2.5 text-sm text-white focus:outline-none focus:ring-2 focus:ring-indigo-500/40"
+                            />
+                          </div>
+                        ))}
                       </div>
                     </div>
-                  </div>
+                  ) : null}
 
-                  <div className="rounded-2xl border border-zinc-800/70 bg-zinc-950/40 p-4">
-                    <h3 className="text-sm font-semibold text-white mb-3">Identity & narrative</h3>
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                      {[
-                        ["Faith", "faith"],
-                        ["Size", "size"],
-                        ["Age", "age"],
-                        ["Height", "height"],
-                        ["Weight", "weight"],
-                        ["Gender", "gender"],
-                        ["Eyes", "eyes"],
-                        ["Hair", "hair"],
-                        ["Skin", "skin"],
-                      ].map(([label, key]) => (
-                        <div key={key}>
-                          <label className="block text-sm text-zinc-300 mb-1.5">{label}</label>
-                          <input
-                            value={importDraft.character.identity?.[key] ?? ""}
-                            onChange={(e) =>
-                              setImportDraft((prev) => ({
-                                ...prev,
-                                character: {
-                                  ...prev.character,
-                                  identity: {
-                                    ...prev.character.identity,
-                                    [key]: e.target.value,
-                                  },
-                                },
-                              }))
-                            }
-                            className="w-full rounded-xl bg-zinc-950/40 border border-zinc-800/70 px-3.5 py-2.5 text-sm text-white focus:outline-none focus:ring-2 focus:ring-indigo-500/40"
-                          />
-                        </div>
-                      ))}
-                    </div>
-
-                    <div className="grid grid-cols-1 gap-4 mt-4">
-                      {[
-                        ["Personality Traits", "personalityTraits"],
-                        ["Ideals", "ideals"],
-                        ["Bonds", "bonds"],
-                        ["Flaws", "flaws"],
-                      ].map(([label, key]) => (
-                        <div key={key}>
-                          <label className="block text-sm text-zinc-300 mb-1.5">{label}</label>
-                          <textarea
-                            rows={2}
-                            value={importDraft.character.narrative?.[key] ?? ""}
-                            onChange={(e) =>
-                              setImportDraft((prev) => ({
-                                ...prev,
-                                character: {
-                                  ...prev.character,
-                                  narrative: {
-                                    ...prev.character.narrative,
-                                    [key]: e.target.value,
-                                  },
-                                },
-                              }))
-                            }
-                            className="w-full rounded-xl bg-zinc-950/40 border border-zinc-800/70 px-3.5 py-2.5 text-sm text-white focus:outline-none focus:ring-2 focus:ring-indigo-500/40"
-                          />
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-
-                  <div className="flex items-center justify-end gap-3">
+                  <div className="sticky bottom-0 z-10 flex items-center justify-end gap-3 rounded-2xl border border-zinc-800/70 bg-zinc-950/95 px-4 py-3">
                     <button
                       type="button"
                       onClick={handleCloseImportReview}
@@ -963,7 +1830,9 @@ const PCs = () => {
                       }
                       className="rounded-xl bg-indigo-500/20 border border-indigo-400/50 px-4 py-2.5 text-sm font-medium text-white hover:bg-indigo-500/30 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                     >
-                      {isSavingImportDraft ? "Creating..." : "Create character from draft"}
+                      {isSavingImportDraft
+                        ? (importTargetCharacterId ? "Updating..." : "Creating...")
+                        : (importTargetCharacterId ? "Update character from import" : "Create character from import")}
                     </button>
                   </div>
                 </div>

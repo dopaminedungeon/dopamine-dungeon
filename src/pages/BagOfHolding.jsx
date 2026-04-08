@@ -12,15 +12,6 @@ export default function BagOfHolding() {
   const { isGM } = useMode();
   const { selectedCampaignId } = useCampaign();
   const navigate = useNavigate();
-  const hasPcs = useMemo(() => {
-    try {
-      const raw = localStorage.getItem("dd:pcs");
-      const parsed = raw ? JSON.parse(raw) : [];
-      return Array.isArray(parsed) && parsed.length > 0;
-    } catch {
-      return false;
-    }
-  }, []);
   const bagTypes = [
     "All",
     "Weapon",
@@ -512,20 +503,18 @@ export default function BagOfHolding() {
     <main className="flex-1 overflow-auto">
       {/* Subsection nav */}
       <div className="mb-4 flex flex-wrap items-center gap-2 overflow-x-auto whitespace-nowrap pr-1 [-webkit-overflow-scrolling:touch]">
-        {hasPcs ? (
-          <NavLink
-            to="/pcs"
-            end
-            className={({ isActive }) =>
-              `px-3 py-2 rounded-xl text-sm border transition-colors ${isActive
-                ? "bg-indigo-500/20 border-indigo-400/50 text-white"
-                : "bg-zinc-950/20 border-zinc-800/60 text-zinc-300 hover:text-white hover:bg-zinc-950/35"
-              }`
-            }
-          >
-            Characters
-          </NavLink>
-        ) : null}
+        <NavLink
+          to="/pcs"
+          end
+          className={({ isActive }) =>
+            `px-3 py-2 rounded-xl text-sm border transition-colors ${isActive
+              ? "bg-indigo-500/20 border-indigo-400/50 text-white"
+              : "bg-zinc-950/20 border-zinc-800/60 text-zinc-300 hover:text-white hover:bg-zinc-950/35"
+            }`
+          }
+        >
+          Characters
+        </NavLink>
 
         <NavLink
           to="/pcs/bag"
