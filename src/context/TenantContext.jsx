@@ -2,6 +2,8 @@ import { createContext, useCallback, useContext, useEffect, useState } from "rea
 import { collection, query, where, getDocs, doc, getDoc } from "firebase/firestore";
 import { db } from "../firebase/firebase";
 import { useAuth } from "./AuthContext";
+import { createTenant as createTenantRepo } from "../data/tenants/tenant.repo";
+import { createTenantMember } from "../data/tenantMembers/tenantMembers.repo";
 
 const TenantContext = createContext(null);
 const TENANT_STORAGE_KEY = "dd_selectedTenantId";
@@ -110,6 +112,48 @@ export function TenantProvider({ children }) {
     }
   };
 
+  const createTenant = async ({ name, description = "" }) => {
+    if (!user) {
+      throw new Error("You must be signed in to create a workspace.");
+    }
+
+    const trimmedName = String(name || "").trim();
+    const trimmedDescription = String(description || "").trim();
+
+    if (!trimmedName) {
+      throw new Error("Workspace name is required.");
+    }
+
+    const created = await createTenantRepo({
+      name: trimmedName,
+      description: trimmedDescription,
+      createdBy: user.uid,
+    });
+
+    const tenantId = created?.tenantId || created?.id;
+    if (!tenantId) {
+      throw new Error("Workspace was created without an id.");
+    }
+
+    await createTenantMember({
+      tenantId,
+      userId: user.uid,
+      role: "owner",
+      email: user.email || "",
+      displayName: user.displayName || user.email || "",
+      createdAt: new Date().toISOString(),
+      addedBy: user.uid,
+    });
+
+    await loadTenants();
+    selectTenant(tenantId);
+
+    return {
+      ...created,
+      tenantId,
+    };
+  };
+
   return (
     <TenantContext.Provider
       value={{
@@ -118,6 +162,7 @@ export function TenantProvider({ children }) {
         selectedTenantId,
         workspaceRole,
         selectTenant,
+        createTenant,
         refreshTenants: loadTenants,
       }}
     >
