@@ -62,18 +62,33 @@ export function CampaignProvider({ children }) {
         return;
       }
 
-      const campaigns = snap.docs.map((d) => {
-        const data = d.data();
-        const membership = memberships.find(
-          (m) => m.campaignId === d.id && m.tenantId === selectedTenantId
-        );
+      const campaigns = snap.docs
+        .map((d) => {
+          const data = d.data();
+          const membership = memberships.find(
+            (m) => m.campaignId === d.id && m.tenantId === selectedTenantId
+          );
 
-        return {
-          campaignId: d.id,
-          ...data,
-          role: membership?.role ?? null,
-        };
-      });
+          return {
+            campaignId: d.id,
+            ...data,
+            role: membership?.role ?? null,
+          };
+        })
+        .filter((campaign) => Boolean(campaign.role));
+
+      if (campaigns.length === 0) {
+        setAccessibleCampaigns([]);
+        setSelectedCampaignId(null);
+        setCampaignRole(null);
+        setCampaignStatus("empty");
+        try {
+          localStorage.removeItem(CAMPAIGN_STORAGE_KEY);
+        } catch {
+          // ignore storage failures
+        }
+        return;
+      }
 
       setAccessibleCampaigns(campaigns);
 
