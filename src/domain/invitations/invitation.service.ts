@@ -7,7 +7,7 @@ import {
 } from "../../data/invitations/invitations.repo";
 import { getTenantById } from "../../data/tenants/tenant.repo";
 import { getCampaignById } from "../../data/campaigns/campaigns.repo";
-import { getCharactersByCampaign } from "../../data/characters/characters.repo";
+import { getAllCharacters } from "../../data/characters/characters.repo";
 import { getAssignmentsForUserInCampaign } from "../../data/characterAssignments/characterAssignments.repo";
 import { createMail } from "../../data/mail/mail.repo";
 import { buildInviteEmailHtml } from "../mail/inviteEmail.template";
@@ -89,7 +89,7 @@ export async function invitePlayerToCampaign({
   let assignedCharacterNames: string[] = [];
 
   if (campaignId && Array.isArray(invitation.characterIds) && invitation.characterIds.length > 0) {
-    const characters = await getCharactersByCampaign(campaignId);
+    const characters = await getAllCharacters(campaignId);
     assignedCharacterNames = characters
       .filter((character) => invitation.characterIds?.includes(character.id))
       .map((character) => character.name)
