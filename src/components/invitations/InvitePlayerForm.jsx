@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { getCharactersByCampaign } from "../../data/characters/characters.repo";
+import { getAllCharacters } from "../../data/characters/characters.repo";
 import { invitePlayerToCampaign } from "../../domain/invitations/invitation.service";
 import { useAuth } from "../../context/AuthContext";
 import { useTenant } from "../../context/TenantContext";
@@ -25,7 +25,7 @@ export default function InvitePlayerForm({ onInvitationCreated }) {
 
     const loadCharacters = async () => {
       try {
-        const characters = await getCharactersByCampaign(selectedCampaignId);
+        const characters = await getAllCharacters(selectedCampaignId);
         setAvailableCharacters(characters || []);
       } catch (err) {
         console.error("[InvitePlayerForm] Failed to load characters", err);

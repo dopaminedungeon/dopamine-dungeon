@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { Link, NavLink } from "react-router-dom";
 import { getAllCharacters, upsertCharacter } from "../data/characters/characters.repo";
+import { importCharacterFromDdbPdf } from "../data/characters/characterImport.service";
 import { useCampaign } from "../context/CampaignContext";
 import { useMode } from "../context/ModeContext";
 import { useAuth } from "../context/AuthContext";
@@ -199,33 +200,88 @@ const PCs = () => {
       setIsImporting(true);
       setImportMessage("");
 
-      const draft = {
-        sourceFileName: file.name,
-        character: {
-          name: "",
-          race: "",
-          class: "",
-          subclass: "",
-          level: 1,
-          background: "",
-          alignment: "",
-          playerName: "",
-          publicNotes: "",
-        },
+      const result = await importCharacterFromDdbPdf(file);
+
+      if (!result?.ok || !result?.draft) {
+        throw new Error(result?.error || "Failed to prepare character import draft.");
+      }
+
+      const mappedDraft = {
+        sourceFileName: result.draft?.character?.importMeta?.filename || file.name,
+        character: (() => {
+          const c = result.draft?.character || {};
+          const primaryClass =
+            Array.isArray(c.classes) && c.classes.length > 0 ? c.classes[0] : null;
+
+          return {
+            name: c.name || "",
+            race: c.race || "",
+            class: primaryClass?.className || c.class || "",
+            subclass: primaryClass?.subclass || c.subclass || "",
+            level: primaryClass?.level || c.level || 1,
+            background: c.background || "",
+            alignment: c.alignment || "",
+            playerName: c.playerName || "",
+            publicNotes: c.publicNotes || "",
+
+            identity: {
+              faith: c.identity?.faith || "",
+              size: c.identity?.size || "",
+              age: c.age || c.identity?.age || "",
+              height: c.identity?.height || "",
+              weight: c.identity?.weight || "",
+              gender: c.identity?.gender || "",
+              eyes: c.identity?.eyes || "",
+              hair: c.identity?.hair || "",
+              skin: c.identity?.skin || "",
+            },
+
+            stats: {
+              hpMax: c.stats?.hpMax ?? "",
+              ac: c.stats?.ac ?? "",
+              speed: c.stats?.speed ?? "",
+              initiativeMod: c.stats?.initiativeMod ?? "",
+              proficiencyBonus: c.stats?.proficiencyBonus ?? "",
+              spellcastingAbility: c.stats?.spellcastingAbility || "",
+              spellSaveDC: c.stats?.spellSaveDC ?? "",
+              spellAttackBonus: c.stats?.spellAttackBonus ?? "",
+              passivePerception: c.stats?.passivePerception ?? "",
+              passiveInsight: c.stats?.passiveInsight ?? "",
+              passiveInvestigation: c.stats?.passiveInvestigation ?? "",
+              additionalSenses: c.stats?.additionalSenses || "",
+              abilities: {
+                str: c.stats?.abilities?.str?.score ?? "",
+                dex: c.stats?.abilities?.dex?.score ?? "",
+                con: c.stats?.abilities?.con?.score ?? "",
+                int: c.stats?.abilities?.int?.score ?? "",
+                wis: c.stats?.abilities?.wis?.score ?? "",
+                cha: c.stats?.abilities?.cha?.score ?? "",
+              },
+            },
+
+            narrative: {
+              personalityTraits: c.narrative?.personalityTraits || "",
+              ideals: c.narrative?.ideals || "",
+              bonds: c.narrative?.bonds || "",
+              flaws: c.narrative?.flaws || "",
+            },
+          };
+        })(),
         review: {
-          confidence: "medium",
-          warnings: [
-            "PDF parser is not implemented yet.",
-            "This review modal is the scaffold that the parser will feed into next.",
-          ],
-          missingFields: ["name", "race", "class"],
+          confidence: result.draft?.review?.confidence || "medium",
+          warnings: Array.isArray(result.draft?.review?.warnings)
+            ? result.draft.review.warnings
+            : [],
+          missingFields: Array.isArray(result.draft?.review?.missingFields)
+            ? result.draft.review.missingFields
+            : [],
         },
       };
 
-      setImportDraft(draft);
+      setImportDraft(mappedDraft);
       setShowImportReviewModal(true);
       setImportMessage(
-        `Import scaffold opened for ${file.name}. Parser output will land in this review flow next.`
+        `Import draft prepared for ${mappedDraft.sourceFileName}. Review the character before saving.`
       );
     } catch (error) {
       console.error("[PCs] Failed to start PDF import", error);
@@ -261,16 +317,83 @@ const PCs = () => {
         visibility: "player",
         isPlayerVisible: true,
         ownerUserId: user?.uid || "",
+
         classes: importDraft.character.class?.trim()
           ? [
               {
                 className: importDraft.character.class.trim(),
                 level: characterLevel,
                 subclass: (importDraft.character.subclass || "").trim(),
-                spellcastingAbility: "",
+                spellcastingAbility:
+                  (importDraft.character.stats?.spellcastingAbility || "").trim(),
               },
             ]
           : [],
+
+        identity: {
+          faith: (importDraft.character.identity?.faith || "").trim(),
+          size: (importDraft.character.identity?.size || "").trim(),
+          height: (importDraft.character.identity?.height || "").trim(),
+          weight: (importDraft.character.identity?.weight || "").trim(),
+          gender: (importDraft.character.identity?.gender || "").trim(),
+          eyes: (importDraft.character.identity?.eyes || "").trim(),
+          hair: (importDraft.character.identity?.hair || "").trim(),
+          skin: (importDraft.character.identity?.skin || "").trim(),
+        },
+
+        stats: {
+          abilities: {
+            str: {
+              score: Number(importDraft.character.stats?.abilities?.str) || undefined,
+            },
+            dex: {
+              score: Number(importDraft.character.stats?.abilities?.dex) || undefined,
+            },
+            con: {
+              score: Number(importDraft.character.stats?.abilities?.con) || undefined,
+            },
+            int: {
+              score: Number(importDraft.character.stats?.abilities?.int) || undefined,
+            },
+            wis: {
+              score: Number(importDraft.character.stats?.abilities?.wis) || undefined,
+            },
+            cha: {
+              score: Number(importDraft.character.stats?.abilities?.cha) || undefined,
+            },
+          },
+          hpMax: Number(importDraft.character.stats?.hpMax) || undefined,
+          hpCurrent: Number(importDraft.character.stats?.hpMax) || undefined,
+          ac: Number(importDraft.character.stats?.ac) || undefined,
+          speed: Number(importDraft.character.stats?.speed) || undefined,
+          initiativeMod:
+            Number(importDraft.character.stats?.initiativeMod) || undefined,
+          proficiencyBonus:
+            Number(importDraft.character.stats?.proficiencyBonus) || undefined,
+          spellcastingAbility:
+            (importDraft.character.stats?.spellcastingAbility || "").trim(),
+          spellSaveDC:
+            Number(importDraft.character.stats?.spellSaveDC) || undefined,
+          spellAttackBonus:
+            Number(importDraft.character.stats?.spellAttackBonus) || undefined,
+          passivePerception:
+            Number(importDraft.character.stats?.passivePerception) || undefined,
+          passiveInsight:
+            Number(importDraft.character.stats?.passiveInsight) || undefined,
+          passiveInvestigation:
+            Number(importDraft.character.stats?.passiveInvestigation) || undefined,
+          additionalSenses:
+            (importDraft.character.stats?.additionalSenses || "").trim(),
+        },
+
+        narrative: {
+          personalityTraits:
+            (importDraft.character.narrative?.personalityTraits || "").trim(),
+          ideals: (importDraft.character.narrative?.ideals || "").trim(),
+          bonds: (importDraft.character.narrative?.bonds || "").trim(),
+          flaws: (importDraft.character.narrative?.flaws || "").trim(),
+        },
+
         importMeta: {
           source: "dndbeyond-pdf",
           importedAt: new Date().toISOString(),
@@ -642,6 +765,184 @@ const PCs = () => {
 
                   <div className="rounded-2xl border border-dashed border-indigo-400/30 bg-indigo-500/5 p-4 text-sm text-indigo-100">
                     Next step: replace this placeholder draft with parsed PDF output from the importer service. For now, you can still confirm the reviewed draft and create a character manually from this scaffold.
+                  </div>
+
+                  <div className="rounded-2xl border border-zinc-800/70 bg-zinc-950/40 p-4">
+                    <h3 className="text-sm font-semibold text-white mb-3">Ability scores</h3>
+                    <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+                      {["str", "dex", "con", "int", "wis", "cha"].map((key) => (
+                        <div key={key}>
+                          <label className="block text-xs uppercase tracking-wide text-zinc-400 mb-1.5">
+                            {key}
+                          </label>
+                          <input
+                            type="number"
+                            value={importDraft.character.stats?.abilities?.[key] ?? ""}
+                            onChange={(e) =>
+                              setImportDraft((prev) => ({
+                                ...prev,
+                                character: {
+                                  ...prev.character,
+                                  stats: {
+                                    ...prev.character.stats,
+                                    abilities: {
+                                      ...prev.character.stats.abilities,
+                                      [key]: e.target.value,
+                                    },
+                                  },
+                                },
+                              }))
+                            }
+                            className="w-full rounded-xl bg-zinc-950/40 border border-zinc-800/70 px-3.5 py-2.5 text-sm text-white focus:outline-none focus:ring-2 focus:ring-indigo-500/40"
+                          />
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div className="rounded-2xl border border-zinc-800/70 bg-zinc-950/40 p-4">
+                    <h3 className="text-sm font-semibold text-white mb-3">Combat & casting</h3>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      {[
+                        ["AC", "ac"],
+                        ["HP Max", "hpMax"],
+                        ["Speed", "speed"],
+                        ["Initiative", "initiativeMod"],
+                        ["Proficiency Bonus", "proficiencyBonus"],
+                        ["Spell Save DC", "spellSaveDC"],
+                        ["Spell Attack Bonus", "spellAttackBonus"],
+                        ["Passive Perception", "passivePerception"],
+                        ["Passive Insight", "passiveInsight"],
+                        ["Passive Investigation", "passiveInvestigation"],
+                      ].map(([label, key]) => (
+                        <div key={key}>
+                          <label className="block text-sm text-zinc-300 mb-1.5">{label}</label>
+                          <input
+                            value={importDraft.character.stats?.[key] ?? ""}
+                            onChange={(e) =>
+                              setImportDraft((prev) => ({
+                                ...prev,
+                                character: {
+                                  ...prev.character,
+                                  stats: {
+                                    ...prev.character.stats,
+                                    [key]: e.target.value,
+                                  },
+                                },
+                              }))
+                            }
+                            className="w-full rounded-xl bg-zinc-950/40 border border-zinc-800/70 px-3.5 py-2.5 text-sm text-white focus:outline-none focus:ring-2 focus:ring-indigo-500/40"
+                          />
+                        </div>
+                      ))}
+
+                      <div>
+                        <label className="block text-sm text-zinc-300 mb-1.5">Spellcasting Ability</label>
+                        <input
+                          value={importDraft.character.stats?.spellcastingAbility ?? ""}
+                          onChange={(e) =>
+                            setImportDraft((prev) => ({
+                              ...prev,
+                              character: {
+                                ...prev.character,
+                                stats: {
+                                  ...prev.character.stats,
+                                  spellcastingAbility: e.target.value,
+                                },
+                              },
+                            }))
+                          }
+                          className="w-full rounded-xl bg-zinc-950/40 border border-zinc-800/70 px-3.5 py-2.5 text-sm text-white focus:outline-none focus:ring-2 focus:ring-indigo-500/40"
+                        />
+                      </div>
+
+                      <div>
+                        <label className="block text-sm text-zinc-300 mb-1.5">Additional Senses</label>
+                        <input
+                          value={importDraft.character.stats?.additionalSenses ?? ""}
+                          onChange={(e) =>
+                            setImportDraft((prev) => ({
+                              ...prev,
+                              character: {
+                                ...prev.character,
+                                stats: {
+                                  ...prev.character.stats,
+                                  additionalSenses: e.target.value,
+                                },
+                              },
+                            }))
+                          }
+                          className="w-full rounded-xl bg-zinc-950/40 border border-zinc-800/70 px-3.5 py-2.5 text-sm text-white focus:outline-none focus:ring-2 focus:ring-indigo-500/40"
+                        />
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="rounded-2xl border border-zinc-800/70 bg-zinc-950/40 p-4">
+                    <h3 className="text-sm font-semibold text-white mb-3">Identity & narrative</h3>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      {[
+                        ["Faith", "faith"],
+                        ["Size", "size"],
+                        ["Age", "age"],
+                        ["Height", "height"],
+                        ["Weight", "weight"],
+                        ["Gender", "gender"],
+                        ["Eyes", "eyes"],
+                        ["Hair", "hair"],
+                        ["Skin", "skin"],
+                      ].map(([label, key]) => (
+                        <div key={key}>
+                          <label className="block text-sm text-zinc-300 mb-1.5">{label}</label>
+                          <input
+                            value={importDraft.character.identity?.[key] ?? ""}
+                            onChange={(e) =>
+                              setImportDraft((prev) => ({
+                                ...prev,
+                                character: {
+                                  ...prev.character,
+                                  identity: {
+                                    ...prev.character.identity,
+                                    [key]: e.target.value,
+                                  },
+                                },
+                              }))
+                            }
+                            className="w-full rounded-xl bg-zinc-950/40 border border-zinc-800/70 px-3.5 py-2.5 text-sm text-white focus:outline-none focus:ring-2 focus:ring-indigo-500/40"
+                          />
+                        </div>
+                      ))}
+                    </div>
+
+                    <div className="grid grid-cols-1 gap-4 mt-4">
+                      {[
+                        ["Personality Traits", "personalityTraits"],
+                        ["Ideals", "ideals"],
+                        ["Bonds", "bonds"],
+                        ["Flaws", "flaws"],
+                      ].map(([label, key]) => (
+                        <div key={key}>
+                          <label className="block text-sm text-zinc-300 mb-1.5">{label}</label>
+                          <textarea
+                            rows={2}
+                            value={importDraft.character.narrative?.[key] ?? ""}
+                            onChange={(e) =>
+                              setImportDraft((prev) => ({
+                                ...prev,
+                                character: {
+                                  ...prev.character,
+                                  narrative: {
+                                    ...prev.character.narrative,
+                                    [key]: e.target.value,
+                                  },
+                                },
+                              }))
+                            }
+                            className="w-full rounded-xl bg-zinc-950/40 border border-zinc-800/70 px-3.5 py-2.5 text-sm text-white focus:outline-none focus:ring-2 focus:ring-indigo-500/40"
+                          />
+                        </div>
+                      ))}
+                    </div>
                   </div>
 
                   <div className="flex items-center justify-end gap-3">
