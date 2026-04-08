@@ -60,7 +60,7 @@ export default function Maps() {
           <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-zinc-500" />
           <input
             type="text"
-            placeholder="Search maps..."
+            placeholder="Search locations..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             className="w-full pl-12 pr-4 py-3 bg-white/5 border border-white/10 rounded-xl text-white placeholder-zinc-500 focus:outline-none focus:border-indigo-500/50 focus:ring-2 focus:ring-indigo-500/20 transition-all"
@@ -107,7 +107,7 @@ export default function Maps() {
             onClick={() => setShowCreateModal(true)}
           >
             <Plus className="w-5 h-5" />
-            Create Map
+            Create Location
           </button>
         )}
       </div>
@@ -197,13 +197,13 @@ export default function Maps() {
       {showCreateModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm">
           <div className="w-full max-w-xl bg-zinc-950 border border-white/10 rounded-2xl p-6">
-            <h2 className="text-xl font-bold text-white mb-4">Create New Map</h2>
+            <h2 className="text-xl font-bold text-white mb-4">Create New Location</h2>
 
             <form
               className="space-y-4"
               onSubmit={(e) => {
                 e.preventDefault();
-                console.log('New map created:', formData);
+                console.log('New location created:', formData);
 
                 setShowCreateModal(false);
                 setFormData({
@@ -394,7 +394,7 @@ export default function Maps() {
                   type="submit"
                   className="px-4 py-2 rounded-xl bg-linear-to-r from-indigo-500 to-purple-500 text-white font-medium hover:opacity-90"
                 >
-                  Save Map
+                  Save Location
                 </button>
               </div>
             </form>

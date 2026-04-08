@@ -1,20 +1,39 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { getAllCharacters } from "../../data/characters/characters.repo";
 import { invitePlayerToCampaign } from "../../domain/invitations/invitation.service";
 import { useAuth } from "../../context/AuthContext";
 import { useTenant } from "../../context/TenantContext";
 import { useCampaign } from "../../context/CampaignContext";
 
-export default function InvitePlayerForm() {
+export default function InvitePlayerForm({ onInvitationCreated }) {
   const { user } = useAuth();
   const { selectedTenantId, workspaceRole } = useTenant();
   const { selectedCampaignId, campaignRole } = useCampaign();
 
   const [email, setEmail] = useState("");
+  const [selectedCampaignRole, setSelectedCampaignRole] = useState("player");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState("");
   const [successMessage, setSuccessMessage] = useState("");
+  const [availableCharacters, setAvailableCharacters] = useState([]);
+  const [selectedCharacterIds, setSelectedCharacterIds] = useState([]);
 
   const canInvite = workspaceRole === "owner" && campaignRole === "gm";
+
+  useEffect(() => {
+    if (!selectedCampaignId) return;
+
+    const loadCharacters = async () => {
+      try {
+        const characters = await getAllCharacters(selectedCampaignId);
+        setAvailableCharacters(characters || []);
+      } catch (err) {
+        console.error("[InvitePlayerForm] Failed to load characters", err);
+      }
+    };
+
+    loadCharacters();
+  }, [selectedCampaignId]);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -50,16 +69,28 @@ export default function InvitePlayerForm() {
     setError("");
     setSuccessMessage("");
 
+    if (typeof onInvitationCreated === "function") {
+      onInvitationCreated();
+    }
+
     try {
       const invitation = await invitePlayerToCampaign({
         email: trimmedEmail,
         tenantId: selectedTenantId,
         campaignId: selectedCampaignId,
+        campaignRole: selectedCampaignRole,
+        characterIds: selectedCharacterIds,
         invitedBy: user.uid,
       });
 
       setEmail("");
-      setSuccessMessage(`Invitation created for ${invitation.email}.`);
+      setSelectedCampaignRole("player");
+      setSelectedCharacterIds([]);
+      setSuccessMessage(
+        selectedCharacterIds.length
+          ? `Invitation created for ${invitation.email} with ${selectedCharacterIds.length} assigned character${selectedCharacterIds.length === 1 ? "" : "s"}.`
+          : `Invitation created for ${invitation.email}.`
+      );
     } catch (err) {
       console.error("[InvitePlayerForm] Failed to create invitation", err);
       setError("Failed to create invitation. Please try again.");
@@ -69,46 +100,123 @@ export default function InvitePlayerForm() {
   };
 
   return (
-    <form onSubmit={handleSubmit} className="space-y-4 max-w-md">
+    <form onSubmit={handleSubmit} className="max-w-2xl space-y-4">
+      <div className="grid gap-4 md:grid-cols-[1.4fr_0.8fr]">
+        <div>
+          <label className="mb-2 block text-sm font-medium text-zinc-200">
+            Player email
+          </label>
+          <input
+            type="email"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            placeholder="e.g. player@example.com"
+            className="w-full rounded-xl border border-white/10 bg-white/[0.03] px-4 py-3 text-zinc-100 outline-none shadow-inner shadow-black/10 placeholder:text-zinc-400 focus:border-fuchsia-400/30 focus:ring-2 focus:ring-fuchsia-400/20"
+            disabled={isSubmitting}
+          />
+        </div>
+
+        <div>
+          <label className="mb-2 block text-sm font-medium text-zinc-200">
+            Campaign role
+          </label>
+          <select
+            value={selectedCampaignRole}
+            onChange={(e) => setSelectedCampaignRole(e.target.value)}
+            className="w-full rounded-xl border border-white/10 bg-white/[0.03] px-4 py-3 text-zinc-100 outline-none shadow-inner shadow-black/10 focus:border-fuchsia-400/30 focus:ring-2 focus:ring-fuchsia-400/20"
+            disabled={isSubmitting}
+          >
+            <option value="player">player</option>
+            <option value="gm">gm</option>
+          </select>
+        </div>
+      </div>
+
       <div>
         <label className="mb-2 block text-sm font-medium text-zinc-200">
-          Player email
+          Assign characters (optional)
         </label>
-        <input
-          type="email"
-          value={email}
-          onChange={(e) => setEmail(e.target.value)}
-          placeholder="e.g. player@example.com"
-          className="w-full rounded-xl border border-zinc-700 bg-zinc-900 px-4 py-3 text-zinc-100 outline-none focus:border-violet-500"
-          disabled={isSubmitting}
-        />
+
+        <div className="space-y-2 rounded-xl border border-white/10 bg-white/[0.025] p-3">
+          {availableCharacters.length === 0 ? (
+            <p className="text-xs text-zinc-400">
+              No characters available in this campaign yet.
+            </p>
+          ) : (
+            availableCharacters.map((character) => {
+              const isSelected = selectedCharacterIds.includes(character.id);
+
+              return (
+                <button
+                  key={character.id}
+                  type="button"
+                  onClick={() => {
+                    setSelectedCharacterIds((prev) =>
+                      isSelected
+                        ? prev.filter((id) => id !== character.id)
+                        : [...prev, character.id]
+                    );
+                  }}
+                  className={`w-full flex items-center justify-between rounded-lg px-3 py-2 text-sm transition ${isSelected
+                      ? "bg-violet-500/20 border border-violet-400/30 text-violet-100"
+                      : "bg-white/[0.02] border border-white/10 text-zinc-300 hover:bg-white/[0.05]"
+                    }`}
+                >
+                  <span>{character.name || character.id}</span>
+                  {isSelected && <span className="text-xs">✓</span>}
+                </button>
+              );
+            })
+          )}
+        </div>
+
+        <p className="mt-2 text-xs text-zinc-400">
+          You can assign multiple characters now or do it later in campaign management.
+        </p>
+
+        {selectedCharacterIds.length > 0 && (
+          <p className="mt-1 text-xs text-cyan-300/90">
+            {selectedCharacterIds.length} character{selectedCharacterIds.length === 1 ? "" : "s"} selected.
+          </p>
+        )}
       </div>
 
-      <div className="rounded-xl border border-zinc-800 bg-zinc-950/70 px-4 py-3 text-sm text-zinc-300">
+      <div className="rounded-2xl border border-white/10 bg-white/3 px-4 py-3 text-sm text-zinc-300 shadow-[0_0_24px_rgba(168,85,247,0.05)]">
         <p>
-          This will create a pending player invitation for the currently selected campaign.
+          This will create a pending campaign invitation for the currently selected workspace and campaign.
         </p>
-        <p className="mt-2 text-zinc-500">
-          Email delivery comes next. For now, this creates the invitation record in Dopamine Dungeon.
+        <p className="mt-2 text-zinc-400">
+          The selected campaign role and any assigned characters will be attached to the invitation now.
         </p>
       </div>
 
-      {error ? <p className="text-sm text-red-400">{error}</p> : null}
-      {successMessage ? <p className="text-sm text-emerald-400">{successMessage}</p> : null}
-
-      <button
-        type="submit"
-        disabled={isSubmitting || !canInvite}
-        className="rounded-xl bg-violet-600 px-4 py-2 text-sm font-medium text-white disabled:cursor-not-allowed disabled:opacity-60"
-      >
-        {isSubmitting ? "Creating invitation..." : "Invite player"}
-      </button>
-
-      {!canInvite ? (
-        <p className="text-xs text-zinc-500">
-          Invites are currently limited to the active workspace owner and campaign GM.
+      {error ? (
+        <p className="inline-flex items-center rounded-full border border-red-400/20 bg-red-400/10 px-3 py-1.5 text-sm text-red-200">
+          {error}
         </p>
       ) : null}
+
+      {successMessage ? (
+        <p className="inline-flex items-center rounded-full border border-emerald-400/20 bg-emerald-400/10 px-3 py-1.5 text-sm text-emerald-200">
+          {successMessage}
+        </p>
+      ) : null}
+
+      <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+        <button
+          type="submit"
+          disabled={isSubmitting || !canInvite}
+          className="rounded-xl bg-violet-600 px-4 py-2 text-sm font-medium text-white transition hover:bg-violet-500 disabled:cursor-not-allowed disabled:opacity-60"
+        >
+          {isSubmitting ? "Creating invitation..." : "Invite player"}
+        </button>
+
+        {!canInvite ? (
+          <p className="text-xs text-zinc-500">
+            Invites are currently limited to the active workspace owner and campaign GM.
+          </p>
+        ) : null}
+      </div>
     </form>
   );
 }
