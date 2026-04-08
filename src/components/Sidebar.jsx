@@ -51,7 +51,7 @@ export default function Sidebar() {
     // Future modules (kept here for when you flip flags back on)
     { to: "/npcs", icon: Users, label: "NPCs", on: features.npcs },
     { to: "/pcs", icon: Users, label: "PCs", on: features.pcs },
-    { to: "/maps", icon: Map, label: "Maps", on: features.maps },
+    { to: "/maps", icon: Map, label: "Locations", on: features.maps },
     { to: "/arcs", icon: Sparkles, label: "Arcs", on: features.arcs },
     { to: "/lore", icon: BookOpen, label: "Lore", on: features.lore },
   ].filter((x) => x.on);

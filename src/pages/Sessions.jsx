@@ -224,7 +224,7 @@ if (loading) {
                         {status.label}
                       </span>
                     </div>
-                    <p className="text-zinc-500 text-sm">{session.map || ""}</p>
+                    <p className="text-zinc-500 text-sm">Location: {session.map || ""}</p>
                   </div>
                 </div>
 
@@ -372,7 +372,7 @@ if (loading) {
               </div>
 
               <div>
-                <label className="block text-sm text-zinc-400 mb-1">Map</label>
+                <label className="block text-sm text-zinc-400 mb-1">Location</label>
                 <input
                   type="text"
                   required

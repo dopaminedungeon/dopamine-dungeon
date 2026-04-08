@@ -102,13 +102,13 @@ export default function TopBar({ title }) {
   const navigate = useNavigate();
 
   return (
-    <header className={`sticky top-0 z-40 border-b backdrop-blur-xl transition-colors duration-500 ${topBarTheme.shell}`}>
+    <header className={`sticky top-0 z-0 border-b backdrop-blur-xl transition-colors duration-500 ${topBarTheme.shell}`}>
       <div className={`pointer-events-none absolute inset-0 ${topBarTheme.glow}`} />
-      <div className="relative z-10 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between px-4 py-3 sm:px-6 sm:py-4 md:px-8">
+      <div className="relative z-10 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between px-4 py-2.5 sm:px-6 sm:py-3 md:px-8">
         {/* Title */}
         <div className="min-w-0">
           <div className="flex items-baseline justify-between gap-3">
-            <h1 className="text-xl sm:text-2xl font-bold text-white truncate">{title}</h1>
+            <h1 className="text-lg sm:text-xl font-bold text-white truncate">{title}</h1>
           </div>
           <div className="flex flex-wrap items-center gap-2 text-xs sm:text-sm">
             <p className="text-zinc-400">
@@ -118,9 +118,9 @@ export default function TopBar({ title }) {
         </div>
 
         {/* Actions */}
-        <div className="flex flex-wrap items-center justify-end gap-2 sm:gap-4">
+        <div className="flex flex-wrap items-center justify-end gap-2 sm:gap-3">
           {/* Search */}
-          <div className="relative hidden md:block">
+          <div className="relative hidden lg:block">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-500" />
             <input
               type="text"
@@ -158,7 +158,7 @@ export default function TopBar({ title }) {
           </div>
 
           {/* Workspace + Campaign selectors */}
-          <div className="hidden md:flex items-center gap-3">
+          <div className="hidden lg:flex items-center gap-3">
             {/* Workspace selector */}
             <select
               value={selectedTenantId ?? ""}
@@ -246,7 +246,7 @@ export default function TopBar({ title }) {
             <button
               type="button"
               onClick={() => setMode("player")}
-              className={`px-2.5 py-2 sm:px-3 sm:py-1.5 text-xs rounded-lg border transition-all ${
+              className={`px-2.5 py-1.5 sm:px-3 sm:py-1.5 text-xs rounded-lg border transition-all ${
                 String(mode).toLowerCase() === "player"
                   ? topBarTheme.activePlayer
                   : "bg-transparent border-white/10 text-zinc-400 hover:text-white hover:bg-white/5"
@@ -258,7 +258,7 @@ export default function TopBar({ title }) {
             <button
               type="button"
               onClick={() => setMode("gm")}
-              className={`px-2.5 py-2 sm:px-3 sm:py-1.5 text-xs rounded-lg border transition-all ${
+              className={`px-2.5 py-1.5 sm:px-3 sm:py-1.5 text-xs rounded-lg border transition-all ${
                 String(mode).toLowerCase() === "gm"
                   ? topBarTheme.activeGm
                   : "bg-transparent border-white/10 text-zinc-400 hover:text-white hover:bg-white/5"
@@ -271,7 +271,7 @@ export default function TopBar({ title }) {
           {/* Profile */}
           <div className="relative" ref={profileRef}>
             <button
-              className="flex items-center gap-3 p-2 sm:pr-4 bg-white/5 border border-white/10 rounded-xl hover:bg-white/10 transition-all"
+              className="flex items-center gap-3 p-2 sm:pr-3 bg-white/5 border border-white/10 rounded-xl hover:bg-white/10 transition-all"
               onClick={() => setShowProfileMenu((v) => !v)}
             >
               <div className={`w-8 h-8 rounded-lg bg-linear-to-br ${topBarTheme.profileOrb} flex items-center justify-center shadow-[0_0_18px_rgba(139,92,246,0.2)]`}>
