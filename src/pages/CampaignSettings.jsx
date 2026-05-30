@@ -43,7 +43,9 @@ export default function CampaignSettings() {
   const activeCampaign = useMemo(() => {
     return (
       (accessibleCampaigns || []).find(
-        (c) => String(c.id ?? c.campaignId) === String(selectedCampaignId)
+        (campaign) =>
+          String(campaign.campaignId ?? "") === String(selectedCampaignId) ||
+          String(campaign.postgresCampaignId ?? "") === String(selectedCampaignId)
       ) || null
     );
   }, [accessibleCampaigns, selectedCampaignId]);
@@ -369,7 +371,7 @@ export default function CampaignSettings() {
   }
 
   const onDeleteCampaign = async () => {
-    const campaignId = draft?.id || draft?.campaignId || selectedCampaignId;
+    const campaignId = draft?.campaignId || selectedCampaignId;
     if (!campaignId) return;
 
     const confirmed = window.confirm(
@@ -401,7 +403,7 @@ export default function CampaignSettings() {
   };
 
   const onSave = async () => {
-    const campaignId = draft?.id || draft?.campaignId || selectedCampaignId;
+    const campaignId = draft?.campaignId || selectedCampaignId;
     if (!draft || !campaignId) return;
 
     try {

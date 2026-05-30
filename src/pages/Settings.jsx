@@ -44,21 +44,30 @@ export default function Settings() {
   const [activeTab, setActiveTab] = useState("profile");
 
   const selectedTenant = useMemo(
-    () => (Array.isArray(tenants) ? tenants.find((t) => t.tenantId === selectedTenantId) : null),
+    () =>
+      Array.isArray(tenants)
+        ? tenants.find(
+            (tenant) =>
+              tenant.tenantId === selectedTenantId ||
+              tenant.postgresWorkspaceId === selectedTenantId
+          )
+        : null,
     [tenants, selectedTenantId]
   );
 
   const selectedCampaign = useMemo(
     () =>
       Array.isArray(accessibleCampaigns)
-        ? accessibleCampaigns.find((c) => c.campaignId === selectedCampaignId)
+        ? accessibleCampaigns.find(
+            (campaign) =>
+              campaign.campaignId === selectedCampaignId ||
+              campaign.postgresCampaignId === selectedCampaignId
+          )
         : null,
     [accessibleCampaigns, selectedCampaignId]
   );
 
-  const isWorkspaceOwner = Boolean(
-    user?.uid && selectedTenant && selectedTenant.createdBy === user.uid
-  );
+  const isWorkspaceOwner = workspaceRole === "owner" || selectedTenant?.role === "owner";
 
   const tabs = [
     { id: "profile", label: "Profile" },

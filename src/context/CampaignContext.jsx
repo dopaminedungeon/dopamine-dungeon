@@ -1,12 +1,17 @@
 import { createContext, useCallback, useContext, useEffect, useState } from "react";
-import { collection, query, where, getDocs, doc, setDoc } from "firebase/firestore";
+import { doc, setDoc } from "firebase/firestore";
 import { db } from "../firebase/firebase";
 import { useTenant } from "./TenantContext";
 import { useAuth } from "./AuthContext";
 import { createCampaignMember } from "../data/campaignMembers/campaignMembers.repo";
+import { getApiMe } from "../data/api/apiClient";
 
 const CampaignContext = createContext(null);
 const CAMPAIGN_STORAGE_KEY = "dd_selectedCampaignId";
+
+function getCampaignAppId(campaign) {
+  return campaign?.campaignId ?? campaign?.slug ?? null;
+}
 
 export function CampaignProvider({ children }) {
   const { selectedTenantId, tenantStatus } = useTenant();
@@ -22,6 +27,22 @@ export function CampaignProvider({ children }) {
     }
   });
 
+  const findCampaignByAnyId = useCallback(
+    (campaignId) => {
+      if (!campaignId) return null;
+
+      return (
+        accessibleCampaigns.find(
+          (campaign) =>
+            campaign.campaignId === campaignId ||
+            campaign.id === campaignId ||
+            campaign.postgresCampaignId === campaignId
+        ) ?? null
+      );
+    },
+    [accessibleCampaigns]
+  );
+
   const loadCampaigns = useCallback(async () => {
     if (!user?.uid) {
       setAccessibleCampaigns([]);
@@ -30,6 +51,15 @@ export function CampaignProvider({ children }) {
       setCampaignStatus("unknown");
       return;
     }
+
+    if (tenantStatus !== "ready") {
+      setAccessibleCampaigns([]);
+      setSelectedCampaignId(null);
+      setCampaignRole(null);
+      setCampaignStatus("unknown");
+      return;
+    }
+
     if (!selectedTenantId) {
       setAccessibleCampaigns([]);
       setSelectedCampaignId(null);
@@ -41,41 +71,45 @@ export function CampaignProvider({ children }) {
     setCampaignStatus("loading");
 
     try {
-      const q = query(
-        collection(db, "campaigns"),
-        where("tenantId", "==", selectedTenantId)
+      const apiMe = await getApiMe();
+
+      const selectedWorkspace = (apiMe.workspaces ?? []).find(
+        (workspace) => workspace.slug === selectedTenantId
       );
 
-      const snap = await getDocs(q);
-
-      // Fetch campaign memberships for this user (across tenants), filter in app
-      const membershipsSnap = await getDocs(
-        query(collection(db, "campaignMembers"), where("userId", "==", user.uid))
-      );
-      const memberships = membershipsSnap.docs.map((d) => ({ id: d.id, ...d.data() }));
-
-      if (snap.empty) {
+      if (!selectedWorkspace) {
         setAccessibleCampaigns([]);
         setSelectedCampaignId(null);
         setCampaignRole(null);
         setCampaignStatus("empty");
+        try {
+          localStorage.removeItem(CAMPAIGN_STORAGE_KEY);
+        } catch {
+          // ignore storage failures
+        }
         return;
       }
 
-      const campaigns = snap.docs
-        .map((d) => {
-          const data = d.data();
+      const memberships = apiMe.campaignMemberships ?? [];
+
+      const campaigns = (apiMe.campaigns ?? [])
+        .filter((campaign) => campaign.workspaceId === selectedWorkspace.id)
+        .map((campaign) => {
           const membership = memberships.find(
-            (m) => m.campaignId === d.id && m.tenantId === selectedTenantId
+            (m) => m.campaignId === campaign.id
           );
 
+          // Keep app state/localStorage on the legacy-safe campaign slug, while retaining the PG UUID for joins.
           return {
-            campaignId: d.id,
-            ...data,
+            ...campaign,
+            campaignId: getCampaignAppId(campaign),
+            postgresCampaignId: campaign.id,
+            tenantId: selectedWorkspace.slug,
+            postgresWorkspaceId: selectedWorkspace.id,
             role: membership?.role ?? null,
           };
         })
-        .filter((campaign) => Boolean(campaign.role));
+        .filter((campaign) => Boolean(campaign.campaignId && campaign.role));
 
       if (campaigns.length === 0) {
         setAccessibleCampaigns([]);
@@ -93,16 +127,19 @@ export function CampaignProvider({ children }) {
       setAccessibleCampaigns(campaigns);
 
       const validSelected = campaigns.find(
-        (c) => c.campaignId === selectedCampaignId
+        (campaign) =>
+          campaign.campaignId === selectedCampaignId ||
+          campaign.postgresCampaignId === selectedCampaignId
       );
 
       const nextCampaignId = validSelected
         ? validSelected.campaignId
         : campaigns[0].campaignId;
 
-      setSelectedCampaignId(nextCampaignId);
+      const selectedCampaign =
+        campaigns.find((campaign) => campaign.campaignId === nextCampaignId) ?? null;
 
-      const selectedCampaign = campaigns.find((c) => c.campaignId === nextCampaignId) ?? null;
+      setSelectedCampaignId(nextCampaignId);
       setCampaignRole(selectedCampaign?.role ?? null);
 
       try {
@@ -118,7 +155,7 @@ export function CampaignProvider({ children }) {
       setCampaignRole(null);
       setCampaignStatus("error");
     }
-  }, [selectedTenantId, selectedCampaignId, tenantStatus, user]);
+  }, [selectedCampaignId, selectedTenantId, tenantStatus, user]);
 
   useEffect(() => {
     loadCampaigns();
@@ -126,11 +163,14 @@ export function CampaignProvider({ children }) {
 
 
   const selectCampaign = (campaignId) => {
-    setSelectedCampaignId(campaignId);
-    const selected = accessibleCampaigns.find((c) => c.campaignId === campaignId) ?? null;
+    const selected = findCampaignByAnyId(campaignId);
+    const normalizedCampaignId = selected?.campaignId ?? campaignId ?? null;
+
+    setSelectedCampaignId(normalizedCampaignId);
     setCampaignRole(selected?.role ?? null);
+
     try {
-      if (campaignId) localStorage.setItem(CAMPAIGN_STORAGE_KEY, campaignId);
+      if (normalizedCampaignId) localStorage.setItem(CAMPAIGN_STORAGE_KEY, normalizedCampaignId);
       else localStorage.removeItem(CAMPAIGN_STORAGE_KEY);
     } catch {
       // ignore storage failures

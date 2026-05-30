@@ -1,9 +1,15 @@
 import type { VercelRequest, VercelResponse } from "@vercel/node";
-import { eq } from "drizzle-orm";
+import { eq, inArray } from "drizzle-orm";
 
 import { verifyAuthHeader } from "./_lib/auth";
 import { db } from "./_lib/db";
 import { users } from "../db/schema/users";
+import { workspaces } from "../db/schema/workspaces";
+import { campaigns } from "../db/schema/campaigns";
+import {
+  workspaceMemberships,
+  campaignMemberships,
+} from "../db/schema/memberships";
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   res.setHeader("Access-Control-Allow-Origin", "http://localhost:5173");
@@ -40,9 +46,39 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       user = insertedUsers[0];
     }
 
+    const workspaceMembershipsData = await db
+      .select()
+      .from(workspaceMemberships)
+      .where(eq(workspaceMemberships.userId, user.id));
+
+    const workspaceIds = workspaceMembershipsData.map(
+      (membership) => membership.workspaceId
+    );
+
+    const workspacesData = workspaceIds.length
+      ? await db.select().from(workspaces).where(inArray(workspaces.id, workspaceIds))
+      : [];
+
+    const campaignMembershipsData = await db
+      .select()
+      .from(campaignMemberships)
+      .where(eq(campaignMemberships.userId, user.id));
+
+    const campaignIds = campaignMembershipsData.map(
+      (membership) => membership.campaignId
+    );
+
+    const campaignsData = campaignIds.length
+      ? await db.select().from(campaigns).where(inArray(campaigns.id, campaignIds))
+      : [];
+
     return res.status(200).json({
       ok: true,
       user,
+      workspaces: workspacesData,
+      workspaceMemberships: workspaceMembershipsData,
+      campaigns: campaignsData,
+      campaignMemberships: campaignMembershipsData,
     });
   } catch (error) {
     return res.status(401).json({
