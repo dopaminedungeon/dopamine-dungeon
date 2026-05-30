@@ -15,6 +15,7 @@ export default function WorkspaceSettings() {
     const {
         tenants,
         selectedTenantId,
+        workspaceRole,
         createTenant,
         addTenant,
         selectTenant,
@@ -27,16 +28,14 @@ export default function WorkspaceSettings() {
 
         return (
             tenants.find(
-                (tenant) => tenant?.tenantId === selectedTenantId || tenant?.id === selectedTenantId
+                (tenant) =>
+                    tenant?.tenantId === selectedTenantId ||
+                    tenant?.postgresWorkspaceId === selectedTenantId
             ) || null
         );
     }, [tenants, selectedTenantId]);
 
-    const isOwner = Boolean(
-        user?.uid &&
-        selectedTenant &&
-        selectedTenant.createdBy === user.uid
-    );
+    const isOwner = workspaceRole === "owner" || selectedTenant?.role === "owner";
 
     const [members, setMembers] = useState([]);
     const [loading, setLoading] = useState(false);
