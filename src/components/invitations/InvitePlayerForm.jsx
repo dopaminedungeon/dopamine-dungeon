@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { getAllCharacters } from "../../data/characters/characters.repo";
-import { invitePlayerToCampaign } from "../../domain/invitations/invitation.service";
+import { createApiInvitation } from "../../data/api/apiClient";
 import { useAuth } from "../../context/AuthContext";
 import { useTenant } from "../../context/TenantContext";
 import { useCampaign } from "../../context/CampaignContext";
@@ -74,22 +74,18 @@ export default function InvitePlayerForm({ onInvitationCreated }) {
     }
 
     try {
-      const invitation = await invitePlayerToCampaign({
+      const { invitation } = await createApiInvitation({
         email: trimmedEmail,
         tenantId: selectedTenantId,
         campaignId: selectedCampaignId,
         campaignRole: selectedCampaignRole,
-        characterIds: selectedCharacterIds,
-        invitedBy: user.uid,
       });
 
       setEmail("");
       setSelectedCampaignRole("player");
       setSelectedCharacterIds([]);
       setSuccessMessage(
-        selectedCharacterIds.length
-          ? `Invitation created for ${invitation.email} with ${selectedCharacterIds.length} assigned character${selectedCharacterIds.length === 1 ? "" : "s"}.`
-          : `Invitation created for ${invitation.email}.`
+        `Invitation created for ${invitation.email}. Character assignment will remain managed separately for now.`
       );
     } catch (err) {
       console.error("[InvitePlayerForm] Failed to create invitation", err);
@@ -186,7 +182,7 @@ export default function InvitePlayerForm({ onInvitationCreated }) {
           This will create a pending campaign invitation for the currently selected workspace and campaign.
         </p>
         <p className="mt-2 text-zinc-400">
-          The selected campaign role and any assigned characters will be attached to the invitation now.
+          The selected campaign role will be attached to the invitation now. Character assignment remains managed separately for now.
         </p>
       </div>
 

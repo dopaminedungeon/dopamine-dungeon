@@ -44,8 +44,9 @@ export async function apiFetch<T>(path: string, options: ApiOptions = {}): Promi
   const { skipAuth, headers, ...requestOptions } = options;
 
   const authHeaders = await getAuthHeaders(skipAuth);
+  const url = `${API_BASE_URL}${path}`;
 
-  const response = await fetch(`${API_BASE_URL}${path}`, {
+  const response = await fetch(url, {
     ...requestOptions,
     headers: {
       "Content-Type": "application/json",
@@ -53,21 +54,38 @@ export async function apiFetch<T>(path: string, options: ApiOptions = {}): Promi
       ...headers,
     },
   });
+  const responseText = await response.text();
+  const contentType = response.headers.get("content-type") || "";
+  const isJson = contentType.includes("application/json") || contentType.includes("+json");
+
+  if (!isJson) {
+    throw new Error(`API request returned non-JSON response: ${response.status} ${url}`);
+  }
+
+  let responseBody: unknown;
+
+  try {
+    responseBody = responseText ? JSON.parse(responseText) : null;
+  } catch {
+    throw new Error(`API request returned invalid JSON: ${response.status} ${url}`);
+  }
 
   if (!response.ok) {
     let errorMessage = `API request failed: ${response.status}`;
 
-    try {
-      const errorBody = await response.json();
-      errorMessage = errorBody?.error ?? errorMessage;
-    } catch {
-      // Ignore non-JSON error bodies.
+    if (
+      responseBody &&
+      typeof responseBody === "object" &&
+      "error" in responseBody &&
+      typeof responseBody.error === "string"
+    ) {
+      errorMessage = responseBody.error;
     }
 
     throw new Error(errorMessage);
   }
 
-  return response.json() as Promise<T>;
+  return responseBody as T;
 }
 
 export async function getApiMe() {
@@ -79,4 +97,67 @@ export async function getApiMe() {
     campaigns: unknown[];
     campaignMemberships: unknown[];
   }>("/api/me");
+}
+
+export async function createApiInvitation(input: {
+  email: string;
+  tenantId: string;
+  campaignId: string;
+  campaignRole?: "player" | "gm";
+}) {
+  return apiFetch<{
+    ok: true;
+    invitation: {
+      id: string;
+      email: string;
+      normalizedEmail: string;
+      tenantId: string;
+      campaignId: string;
+      workspaceRole: string;
+      campaignRole: string;
+      characterId: string | null;
+      status: string;
+      createdAt: string;
+    };
+  }>("/api/invitations", {
+    method: "POST",
+    body: JSON.stringify(input),
+  });
+}
+
+export async function acceptPendingApiInvitations() {
+  return apiFetch<{
+    ok: true;
+    acceptedInvitations: Array<{
+      id: string;
+      tenantId: string;
+      campaignId: string;
+      workspaceRole: string;
+      campaignRole: string;
+      status: string;
+      acceptedAt: string | null;
+    }>;
+  }>("/api/invitations/accept-pending", {
+    method: "POST",
+    body: JSON.stringify({}),
+  });
+}
+
+export async function getApiCampaignPeople(campaignId: string) {
+  return apiFetch<{
+    ok: true;
+    campaignId: string;
+    people: Array<{
+      id: string;
+      docId: string;
+      type: "member" | "invite";
+      status: string;
+      email: string;
+      label: string;
+      userId: string | null;
+      workspaceRole: string;
+      campaignRole: string;
+      characterIds: string[];
+    }>;
+  }>(`/api/campaign-people?campaignId=${encodeURIComponent(campaignId)}`);
 }
