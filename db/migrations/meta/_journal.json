@@ -15,6 +15,13 @@
       "when": 1777305681511,
       "tag": "0001_robust_jasper_sitwell",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1780175000713,
+      "tag": "0002_flowery_misty_knight",
+      "breakpoints": true
     }
   ]
 }

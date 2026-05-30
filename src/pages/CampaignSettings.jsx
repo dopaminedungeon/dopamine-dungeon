@@ -17,13 +17,12 @@ import {
   deleteDoc,
   getDocs,
   writeBatch,
-  query,
-  where,
 } from "firebase/firestore";
 import { useMode } from "../context/ModeContext.jsx";
 import { useCampaign } from "../context/CampaignContext.jsx";
 import { useTenant } from "../context/TenantContext.jsx";
 import { db } from "../firebase/firebase";
+import { getApiCampaignPeople } from "../data/api/apiClient.ts";
 
 const STATUS = ["active", "paused", "completed"];
 
@@ -117,131 +116,8 @@ export default function CampaignSettings() {
       try {
         setCampaignPeopleLoading(true);
 
-        const [membersSnap, invitesSnap, assignmentsSnap, tenantMembersSnap] = await Promise.all([
-          getDocs(query(collection(db, "campaignMembers"), where("campaignId", "==", selectedCampaignId))),
-          getDocs(query(collection(db, "invitations"), where("campaignId", "==", selectedCampaignId))),
-          getDocs(query(collection(db, "characterAssignments"), where("campaignId", "==", selectedCampaignId))),
-          getDocs(query(collection(db, "tenantMembers"), where("tenantId", "==", selectedTenantId))),
-        ]);
-
-        const members = membersSnap.docs.map((docSnap) => ({
-          docId: docSnap.id,
-          ...docSnap.data(),
-        }));
-
-        const invites = invitesSnap.docs.map((docSnap) => ({
-          docId: docSnap.id,
-          ...docSnap.data(),
-        }));
-
-        const assignments = assignmentsSnap.docs.map((docSnap) => ({
-          docId: docSnap.id,
-          ...docSnap.data(),
-        }));
-
-        const tenantMembers = tenantMembersSnap.docs.map((docSnap) => ({
-          docId: docSnap.id,
-          ...docSnap.data(),
-        }));
-
-        const assignedCharacterIdsByUserId = assignments.reduce((acc, assignment) => {
-          const key = String(assignment.userId || "");
-          if (!key) return acc;
-          if (!acc[key]) acc[key] = [];
-          if (assignment.characterId && !acc[key].includes(assignment.characterId)) {
-            acc[key].push(assignment.characterId);
-          }
-          return acc;
-        }, {});
-
-        const userIds = Array.from(
-          new Set(members.map((member) => String(member.userId || "")).filter(Boolean))
-        );
-
-        const userDocs = await Promise.all(
-          userIds.map(async (userId) => {
-            const snap = await getDocs(query(collection(db, "users"), where("id", "==", userId)));
-            const first = snap.docs[0];
-            return first ? { userId, ...first.data() } : { userId };
-          })
-        );
-
-        const usersById = userDocs.reduce((acc, user) => {
-          acc[String(user.userId)] = user;
-          return acc;
-        }, {});
-
-        const workspaceRoleByUserId = tenantMembers.reduce((acc, member) => {
-          const key = String(member.userId || "");
-          if (!key) return acc;
-          acc[key] = member.role || "member";
-          return acc;
-        }, {});
-
-        const acceptedRows = members.map((member) => {
-          const userId = String(member.userId || "");
-          const user = usersById[userId] || {};
-          return {
-            id: `member-${member.docId}`,
-            docId: member.docId,
-            type: "member",
-            status: "accepted",
-            email: user.email || "—",
-            label: user.displayName || user.email || userId || "Unknown user",
-            userId,
-            workspaceRole: workspaceRoleByUserId[userId] || "member",
-            campaignRole: member.role || "player",
-            characterIds: assignedCharacterIdsByUserId[userId] || [],
-          };
-        });
-
-        const acceptedUserIds = new Set(
-          members.map((member) => String(member.userId || "")).filter(Boolean)
-        );
-
-        const acceptedEmails = new Set(
-          members
-            .map((member) => {
-              const userId = String(member.userId || "");
-              const user = usersById[userId] || {};
-              return String(user.normalizedEmail || user.email || "").toLowerCase();
-            })
-            .filter(Boolean)
-        );
-
-        const pendingRows = invites
-          .filter((invite) => {
-            if ((invite.status || "pending") !== "pending") return false;
-
-            const acceptedByUserId = String(invite.acceptedByUserId || "");
-            const normalizedInviteEmail = String(
-              invite.normalizedEmail || invite.email || ""
-            ).toLowerCase();
-
-            if (acceptedByUserId && acceptedUserIds.has(acceptedByUserId)) {
-              return false;
-            }
-
-            if (normalizedInviteEmail && acceptedEmails.has(normalizedInviteEmail)) {
-              return false;
-            }
-
-            return true;
-          })
-          .map((invite) => ({
-            id: `invite-${invite.docId}`,
-            docId: invite.docId,
-            type: "invite",
-            status: invite.status || "pending",
-            email: invite.email || "—",
-            label: invite.email || "Pending invite",
-            userId: null,
-            workspaceRole: invite.workspaceRole || "member",
-            campaignRole: invite.campaignRole || "player",
-            characterIds: Array.isArray(invite.characterIds) ? invite.characterIds : [],
-          }));
-
-        setCampaignPeople([...acceptedRows, ...pendingRows]);
+        const response = await getApiCampaignPeople(selectedCampaignId);
+        setCampaignPeople(response.people || []);
       } catch (error) {
         console.error("[CampaignSettings] Failed to load campaign people", error);
         setCampaignPeople([]);
@@ -251,7 +127,7 @@ export default function CampaignSettings() {
     };
 
     loadCampaignPeople();
-  }, [selectedCampaignId, selectedTenantId, saveState.type, saveState.message, campaignPeopleVersion]);
+  }, [selectedCampaignId, saveState.type, saveState.message, campaignPeopleVersion]);
 
   if (!isGM || (campaignRole && campaignRole !== "owner" && campaignRole !== "gm")) {
     return (

@@ -47,8 +47,15 @@ function App() {
 
 function AppGate() {
   const { authStatus, user, signInWithGoogle } = useAuth();
-  const { tenantStatus } = useTenant();
-  const { campaignStatus } = useCampaign();
+  const tenantContext = useTenant();
+  const campaignContext = useCampaign();
+
+  if (!tenantContext || !campaignContext) {
+    return <LoadingScreen label="Loading…" />;
+  }
+
+  const { tenantStatus } = tenantContext;
+  const { campaignStatus } = campaignContext;
 
   if (authStatus === "loading") return <LoadingScreen label="Loading…" />;
 
