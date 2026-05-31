@@ -34,6 +34,13 @@ jobs:
           node -v
           pnpm -v
 
+      - name: Show pnpm config
+        run: |
+          pwd
+          ls -la
+          cat pnpm-workspace.yaml
+          pnpm config get onlyBuiltDependencies
+
       - name: Install dependencies
         run: |
           pnpm install --frozen-lockfile
