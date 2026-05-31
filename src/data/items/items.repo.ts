@@ -1,29 +1,32 @@
-import {
-  collection,
-  getDocs,
-  doc,
-  setDoc,
-  deleteDoc,
-} from "firebase/firestore";
-import { db } from "../../firebase/firebase";
+import { apiFetch } from "../api/apiClient";
 
 export const itemsRepo = {
   async getAll(campaignId: string) {
-    const snap = await getDocs(
-      collection(db, "campaigns", campaignId, "items")
+    const response = await apiFetch<{
+      ok: true;
+      items: unknown[];
+    }>(
+      `/api/items?campaignId=${encodeURIComponent(campaignId)}`
     );
 
-    return snap.docs?.map((d) => ({ id: d.id, ...d.data() })) ?? [];
+    return response.items ?? [];
   },
 
   async upsert(campaignId: string, item: any) {
-    await setDoc(
-      doc(db, "campaigns", campaignId, "items", item.id),
-      item
-    );
+    await apiFetch(`/api/items?campaignId=${encodeURIComponent(campaignId)}`, {
+      method: "PUT",
+      body: JSON.stringify({ item }),
+    });
   },
 
   async remove(campaignId: string, id: string) {
-    await deleteDoc(doc(db, "campaigns", campaignId, "items", id));
+    await apiFetch(
+      `/api/items?campaignId=${encodeURIComponent(
+        campaignId
+      )}&itemId=${encodeURIComponent(id)}`,
+      {
+        method: "DELETE",
+      }
+    );
   },
 };
