@@ -1,23 +1,30 @@
-import { collection, getDocs, doc, setDoc, deleteDoc } from "firebase/firestore";
-import { db } from "../../firebase/firebase";
+import { apiFetch } from "../api/apiClient";
 
 export const sessionsRepo = {
   async getAll(campaignId: string) {
-    const snap = await getDocs(
-      collection(db, "campaigns", campaignId, "sessions")
-    );
+    const response = await apiFetch<{
+      ok: true;
+      sessions: unknown[];
+    }>(`/api/sessions?campaignId=${encodeURIComponent(campaignId)}`);
 
-    return snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+    return response.sessions;
   },
 
   async upsert(campaignId: string, session: any) {
-    await setDoc(
-      doc(db, "campaigns", campaignId, "sessions", session.id),
-      session
-    );
+    await apiFetch(`/api/sessions?campaignId=${encodeURIComponent(campaignId)}`, {
+      method: "PUT",
+      body: JSON.stringify({ session }),
+    });
   },
 
   async remove(campaignId: string, id: string) {
-    await deleteDoc(doc(db, "campaigns", campaignId, "sessions", id));
+    await apiFetch(
+      `/api/sessions?campaignId=${encodeURIComponent(
+        campaignId
+      )}&sessionId=${encodeURIComponent(id)}`,
+      {
+        method: "DELETE",
+      }
+    );
   },
 };
