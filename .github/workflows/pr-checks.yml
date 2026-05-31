@@ -27,7 +27,7 @@ jobs:
         run: corepack enable
 
       - name: Setup pnpm
-        run: corepack prepare pnpm@latest --activate
+        run: corepack prepare pnpm@10.28.1 --activate
 
       - name: Show versions
         run: |
