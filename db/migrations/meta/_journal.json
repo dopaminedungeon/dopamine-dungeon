@@ -29,6 +29,27 @@
       "when": 1780204557057,
       "tag": "0003_public_the_twelve",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1780206602666,
+      "tag": "0004_past_war_machine",
+      "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1780206812641,
+      "tag": "0005_sharp_doctor_strange",
+      "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1780209246552,
+      "tag": "0006_needy_enchantress",
+      "breakpoints": true
     }
   ]
 }

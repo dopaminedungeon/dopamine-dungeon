@@ -1,5 +1,4 @@
-import { doc, getDoc, setDoc } from "firebase/firestore";
-import { db } from "../../firebase/firebase";
+import { apiFetch } from "../api/apiClient";
 
 type CoinKey = "gp" | "sp" | "cp" | "ep" | "pp";
 
@@ -147,16 +146,19 @@ export const bagRepo = {
   async get(campaignId: string): Promise<BagState> {
     if (!campaignId) return { ...EMPTY_BAG };
 
-    const snap = await getDoc(doc(db, "campaigns", campaignId, "meta", "bag"));
-    if (!snap.exists()) return { ...EMPTY_BAG };
-
-    return normalizeBag(snap.data() as Partial<BagState>);
+    const response = await apiFetch<{ ok: true; bag?: Partial<BagState> }>(
+      `/api/bag?campaignId=${encodeURIComponent(campaignId)}`
+    );
+    return normalizeBag(response.bag);
   },
 
   async save(campaignId: string, bag: BagState): Promise<void> {
     if (!campaignId) return;
     const normalizedBag = normalizeBag(bag);
-    await setDoc(doc(db, "campaigns", campaignId, "meta", "bag"), normalizedBag);
+    await apiFetch(`/api/bag?campaignId=${encodeURIComponent(campaignId)}`, {
+      method: "PUT",
+      body: JSON.stringify({ bag: normalizedBag }),
+    });
   },
 
   addLooseItem(bag: BagState, newItem: LooseBagItem): BagState {
