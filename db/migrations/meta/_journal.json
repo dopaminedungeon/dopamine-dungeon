@@ -50,6 +50,13 @@
       "when": 1780209246552,
       "tag": "0006_needy_enchantress",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1780210550011,
+      "tag": "0007_lonely_scalphunter",
+      "breakpoints": true
     }
   ]
 }

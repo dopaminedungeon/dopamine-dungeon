@@ -4,7 +4,7 @@ import { useCampaign } from "../context/CampaignContext";
 import { Search, Plus } from "lucide-react";
 import { NavLink, useNavigate } from "react-router-dom";
 import { createLink } from "../domain/links/link.service";
-import { addLink, getLinksForEntity, removeLink } from "../data/links/links.repo";
+import { addLink, getLinksForEntity, loadLinks, removeLink } from "../data/links/links.repo";
 import { itemsRepo } from "../data/items/items.repo";
 import { bagRepo } from "../data/bag/bag.repo";
 
@@ -158,6 +158,7 @@ export default function BagOfHolding() {
         const [bagData, itemData] = await Promise.all([
           Promise.resolve(bagRepo.get(selectedCampaignId)),
           Promise.resolve(itemsRepo.getAll(selectedCampaignId)),
+          loadLinks(selectedCampaignId),
         ]);
 
         setBagState({
@@ -366,7 +367,7 @@ export default function BagOfHolding() {
         label: "contained_in",
         visibility: "Player",
       });
-      addLink(linkObj);
+      await addLink(linkObj, selectedCampaignId);
     }
 
     const next = bagRepo.addLinkedItem(bagState, normalizedItemId, {
@@ -392,7 +393,9 @@ export default function BagOfHolding() {
         const other = linkObj.entityA.type === "BagOfHolding" ? linkObj.entityB : linkObj.entityA;
         return String(other?.id) === String(itemId);
       });
-      matchingLinks.forEach((linkObj) => removeLink(linkObj.id));
+      for (const linkObj of matchingLinks) {
+        await removeLink(linkObj.id, selectedCampaignId);
+      }
     }
 
     await refreshItems();
@@ -474,7 +477,9 @@ export default function BagOfHolding() {
         const other = linkObj.entityA.type === "BagOfHolding" ? linkObj.entityB : linkObj.entityA;
         return String(other?.id) === String(pendingRemovalAction.itemId);
       });
-      matchingLinks.forEach((linkObj) => removeLink(linkObj.id));
+      for (const linkObj of matchingLinks) {
+        await removeLink(linkObj.id, selectedCampaignId);
+      }
     }
 
     await refreshItems();
