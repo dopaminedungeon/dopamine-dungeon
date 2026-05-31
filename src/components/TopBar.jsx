@@ -31,12 +31,12 @@ export default function TopBar({ title }) {
   const tenantsRaw = accessibleTenants ?? legacyTenants ?? [];
   const campaignsRaw = accessibleCampaigns ?? legacyCampaigns ?? [];
 
-  // Normalize IDs across legacy/new shapes
+  // Selector values must stay on app-safe slugs/legacy IDs, never Postgres UUIDs.
   const tenants = (tenantsRaw || [])
     .filter(Boolean)
     .map((t) => ({
       ...t,
-      __id: t.id ?? t.tenantId,
+      __id: t.tenantId,
       __name: t.name ?? t.title ?? "(Unnamed workspace)",
     }))
     .filter((t) => t.__id);
@@ -45,7 +45,7 @@ export default function TopBar({ title }) {
     .filter(Boolean)
     .map((c) => ({
       ...c,
-      __id: c.id ?? c.campaignId,
+      __id: c.campaignId ?? c.slug,
       __name: c.name ?? c.title ?? "(Unnamed campaign)",
     }))
     .filter((c) => c.__id);
@@ -57,25 +57,25 @@ export default function TopBar({ title }) {
 
   const topBarTheme = isGmMode
     ? {
-        shell: "border-fuchsia-400/15 bg-black/25",
-        glow: "bg-[radial-gradient(circle_at_20%_20%,rgba(217,70,239,0.18),transparent_28%),radial-gradient(circle_at_80%_20%,rgba(168,85,247,0.14),transparent_24%)]",
-        searchRing: "focus:border-fuchsia-400/50 focus:ring-fuchsia-500/20",
-        selectRing: "focus:ring-fuchsia-500/40",
-        activePlayer: "bg-white/10 border-white/10 text-zinc-400 hover:text-white",
-        activeGm: "bg-fuchsia-500/80 border-fuchsia-400 text-white shadow-[0_0_18px_rgba(217,70,239,0.28)]",
-        badge: "text-fuchsia-300/90",
-        profileOrb: "from-fuchsia-500 via-violet-500 to-rose-400",
-      }
+      shell: "border-fuchsia-400/15 bg-black/25",
+      glow: "bg-[radial-gradient(circle_at_20%_20%,rgba(217,70,239,0.18),transparent_28%),radial-gradient(circle_at_80%_20%,rgba(168,85,247,0.14),transparent_24%)]",
+      searchRing: "focus:border-fuchsia-400/50 focus:ring-fuchsia-500/20",
+      selectRing: "focus:ring-fuchsia-500/40",
+      activePlayer: "bg-white/10 border-white/10 text-zinc-400 hover:text-white",
+      activeGm: "bg-fuchsia-500/80 border-fuchsia-400 text-white shadow-[0_0_18px_rgba(217,70,239,0.28)]",
+      badge: "text-fuchsia-300/90",
+      profileOrb: "from-fuchsia-500 via-violet-500 to-rose-400",
+    }
     : {
-        shell: "border-cyan-400/10 bg-black/20",
-        glow: "bg-[radial-gradient(circle_at_20%_20%,rgba(139,92,246,0.14),transparent_28%),radial-gradient(circle_at_80%_20%,rgba(34,211,238,0.12),transparent_24%)]",
-        searchRing: "focus:border-purple-500/50 focus:ring-purple-500/20",
-        selectRing: "focus:ring-indigo-500/40",
-        activePlayer: "bg-white/10 border-indigo-500 text-indigo-300 shadow-[0_0_16px_rgba(99,102,241,0.2)]",
-        activeGm: "bg-transparent border-white/10 text-zinc-400 hover:text-white",
-        badge: "text-cyan-300/90",
-        profileOrb: "from-purple-500 to-pink-500",
-      };
+      shell: "border-cyan-400/10 bg-black/20",
+      glow: "bg-[radial-gradient(circle_at_20%_20%,rgba(139,92,246,0.14),transparent_28%),radial-gradient(circle_at_80%_20%,rgba(34,211,238,0.12),transparent_24%)]",
+      searchRing: "focus:border-purple-500/50 focus:ring-purple-500/20",
+      selectRing: "focus:ring-indigo-500/40",
+      activePlayer: "bg-white/10 border-indigo-500 text-indigo-300 shadow-[0_0_16px_rgba(99,102,241,0.2)]",
+      activeGm: "bg-transparent border-white/10 text-zinc-400 hover:text-white",
+      badge: "text-cyan-300/90",
+      profileOrb: "from-purple-500 to-pink-500",
+    };
 
   // Close popovers on outside click
   useEffect(() => {
@@ -221,11 +221,10 @@ export default function TopBar({ title }) {
             <button
               type="button"
               onClick={() => setMode("player")}
-              className={`px-2.5 py-1.5 sm:px-3 sm:py-1.5 text-xs rounded-lg border transition-all ${
-                String(mode).toLowerCase() === "player"
+              className={`px-2.5 py-1.5 sm:px-3 sm:py-1.5 text-xs rounded-lg border transition-all ${String(mode).toLowerCase() === "player"
                   ? topBarTheme.activePlayer
                   : "bg-transparent border-white/10 text-zinc-400 hover:text-white hover:bg-white/5"
-              }`}
+                }`}
             >
               <Eye className="inline w-3 h-3 sm:mr-1" />
               <span className="hidden sm:inline">Player</span>
@@ -233,11 +232,10 @@ export default function TopBar({ title }) {
             <button
               type="button"
               onClick={() => setMode("gm")}
-              className={`px-2.5 py-1.5 sm:px-3 sm:py-1.5 text-xs rounded-lg border transition-all ${
-                String(mode).toLowerCase() === "gm"
+              className={`px-2.5 py-1.5 sm:px-3 sm:py-1.5 text-xs rounded-lg border transition-all ${String(mode).toLowerCase() === "gm"
                   ? topBarTheme.activeGm
                   : "bg-transparent border-white/10 text-zinc-400 hover:text-white hover:bg-white/5"
-              }`}
+                }`}
             >
               <Shield className="inline w-3 h-3 sm:mr-1" />
               <span className="hidden sm:inline">GM</span>
@@ -317,13 +315,13 @@ export default function TopBar({ title }) {
               tenantsSource: accessibleTenants
                 ? "accessibleTenants"
                 : legacyTenants
-                ? "legacyTenants"
-                : "none",
+                  ? "legacyTenants"
+                  : "none",
               campaignsSource: accessibleCampaigns
                 ? "accessibleCampaigns"
                 : legacyCampaigns
-                ? "legacyCampaigns"
-                : "none",
+                  ? "legacyCampaigns"
+                  : "none",
             }}
           />
         </div>
