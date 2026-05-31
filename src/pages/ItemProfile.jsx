@@ -3,7 +3,9 @@ import { useParams, useNavigate } from "react-router-dom";
 import { useMode } from "../context/ModeContext.jsx";
 import { ArrowLeft, Swords, Shield, Sparkles, Trash2 } from "lucide-react";
 import { itemsRepo } from "../data/items/items.repo";
+import { sessionsRepo } from "../data/sessions/sessions.repo";
 import { useCampaign } from "../context/CampaignContext";
+import { getLinksForEntity, loadLinks } from "../data/links/links.repo";
 
 const ITEM_TYPES = [
   "Weapon",
@@ -60,19 +62,19 @@ export default function ItemProfile() {
   const { isGM } = useMode();
 
   const { selectedCampaignId } = useCampaign();
-  const [items, setItems] = useState([]);
+  const [item, setItem] = useState(null);
+  const [sessions, setSessions] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [linksVersion, setLinksVersion] = useState(0);
 
-  const rawItem = useMemo(
-    () => items.find((it) => String(it.id) === String(id)) || null,
-    [items, id]
-  );
+  const rawItem = item && String(item.id) === String(id) ? item : null;
 
-  const [formData, setFormData] = useState(rawItem || null);
+  const [formData, setFormData] = useState(null);
 
   useEffect(() => {
     if (!selectedCampaignId) {
-      setItems([]);
+      setItem(null);
+      setSessions([]);
       setLoading(false);
       return;
     }
@@ -80,24 +82,44 @@ export default function ItemProfile() {
     async function load() {
       setLoading(true);
       try {
-        const data = await itemsRepo.getAll(selectedCampaignId);
-        setItems(Array.isArray(data) ? data : []);
+        const [itemData, sessionData] = await Promise.all([
+          itemsRepo.getById(selectedCampaignId, String(id)),
+          sessionsRepo.getAll(selectedCampaignId),
+          loadLinks(selectedCampaignId),
+        ]);
+        setItem(itemData || null);
+        setSessions(Array.isArray(sessionData) ? sessionData : []);
+        setLinksVersion((version) => version + 1);
       } catch (error) {
         console.error("[ItemProfile] Failed to load items", error);
-        setItems([]);
+        setItem(null);
+        setSessions([]);
       } finally {
         setLoading(false);
       }
     }
 
     load();
-  }, [selectedCampaignId]);
+  }, [selectedCampaignId, id]);
 
   useEffect(() => {
     setFormData(rawItem || null);
   }, [rawItem]);
   const [isEditing, setIsEditing] = useState(false);
-  const linkedSessions = [];
+  const itemLinks = useMemo(
+    () => getLinksForEntity("Item", String(id), isGM ? "GM" : "Player"),
+    [id, isGM, linksVersion]
+  );
+  const sessionsById = useMemo(
+    () => new Map(sessions.map((session) => [String(session?.id), session])),
+    [sessions]
+  );
+  const getEndpointLabel = (endpoint) => {
+    if (endpoint.type !== "Session") return endpoint.id;
+
+    const session = sessionsById.get(String(endpoint.id));
+    return session?.name || session?.title || endpoint.id;
+  };
 
   if (loading) {
     return (
@@ -191,9 +213,8 @@ export default function ItemProfile() {
             <button
               onClick={async () => {
                 if (isEditing && formData && selectedCampaignId) {
-                  await itemsRepo.upsert(selectedCampaignId, formData);
-                  const data = await itemsRepo.getAll(selectedCampaignId);
-                  setItems(Array.isArray(data) ? data : []);
+                  const savedItem = await itemsRepo.upsert(selectedCampaignId, formData);
+                  setItem(savedItem || formData);
                 }
                 setIsEditing((prev) => !prev);
               }}
@@ -479,9 +500,33 @@ export default function ItemProfile() {
           {/* v0.1: cross-links */}
           <section className="bg-white/5 border border-white/10 rounded-2xl p-5">
             <h2 className="text-lg font-semibold text-white mb-2">Where it showed up</h2>
-            <p className="text-zinc-400 text-sm">
-              Session linking will return after Firestore link migration.
-            </p>
+            {itemLinks.length === 0 ? (
+              <p className="text-zinc-400 text-sm">No visible links yet.</p>
+            ) : (
+              <div className="space-y-2">
+                {itemLinks.map((link) => {
+                  // Bidirectional display: show the endpoint on the other side of this Item link.
+                  const other =
+                    link.entityA.type === "Item" && link.entityA.id === String(id)
+                      ? link.entityB
+                      : link.entityA;
+
+                  return (
+                    <div
+                      key={link.id}
+                      className="rounded-xl border border-white/10 bg-black/20 px-3 py-2 text-sm text-zinc-300"
+                    >
+                      <span className="text-white">{other.type}</span>: {getEndpointLabel(other)}
+                      <span className="mx-2 text-zinc-600">•</span>
+                      {link.label}
+                      {isGM ? (
+                        <span className="ml-2 text-xs text-zinc-500">[{link.visibility}]</span>
+                      ) : null}
+                    </div>
+                  );
+                })}
+              </div>
+            )}
           </section>
 
           <section className="bg-white/5 border border-white/10 rounded-2xl p-5">

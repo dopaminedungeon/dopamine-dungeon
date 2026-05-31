@@ -7,3 +7,4 @@ export * from "./sessions";
 export * from "./characters";
 export * from "./items";
 export * from "./bag";
+export * from "./entityLinks";

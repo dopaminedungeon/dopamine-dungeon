@@ -1,12 +1,14 @@
 // src/components/session/SessionEntityLinkManager.jsx
-import React, { useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { createLink } from "../../domain/links/link.service";
 import {
   addLink,
   getLinksForEntity,
+  loadLinks,
   removeLink,
 } from "../../data/links/links.repo";
+import { useCampaign } from "../../context/CampaignContext";
 
 /**
  * Generic session ↔ entity link manager (in-memory repo for now).
@@ -44,6 +46,7 @@ export default function SessionEntityLinkManager({
   onAddNew,
 }) {
   const navigate = useNavigate();
+  const { selectedCampaignId } = useCampaign();
 
   // Force rerender when in-memory repo changes (until persistence/state store exists)
   const [, forceUpdate] = useState(0);
@@ -54,6 +57,26 @@ export default function SessionEntityLinkManager({
   const [query, setQuery] = useState("");
   const [newLinkVisibility, setNewLinkVisibility] = useState("Player"); // "GM" | "Player"
   const [error, setError] = useState(null);
+
+  useEffect(() => {
+    if (!selectedCampaignId || !sessionId) return;
+
+    let cancelled = false;
+
+    loadLinks(selectedCampaignId)
+      .then(() => {
+        if (!cancelled) triggerRerender();
+      })
+      .catch((err) => {
+        if (!cancelled) {
+          setError(err?.message || "Failed to load links");
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [selectedCampaignId, sessionId]);
 
   // Normalize data source into an array of entities
   const entities = useMemo(() => {
@@ -120,7 +143,7 @@ export default function SessionEntityLinkManager({
       });
   }, [entities, query, linkedEntityIds, filterByTenant, labelFn]);
 
-  function handleLink(entityId) {
+  async function handleLink(entityId) {
     try {
       const linkObj = createLink({
         entityA: { type: "Session", id: String(sessionId) },
@@ -129,7 +152,7 @@ export default function SessionEntityLinkManager({
         visibility: newLinkVisibility,
       });
 
-      addLink(linkObj);
+      await addLink(linkObj, selectedCampaignId);
       setError(null);
       setQuery("");
       triggerRerender();
@@ -138,14 +161,14 @@ export default function SessionEntityLinkManager({
     }
   }
 
-  function handleRemove(linkId) {
-    removeLink(linkId);
+  async function handleRemove(linkId) {
+    await removeLink(linkId, selectedCampaignId);
     triggerRerender();
   }
 
-  function handleUpdateLabel(linkObj, newLabel) {
+  async function handleUpdateLabel(linkObj, newLabel) {
     // Remove old link
-    removeLink(linkObj.id);
+    await removeLink(linkObj.id, selectedCampaignId);
 
     // Recreate with new label (preserve visibility)
     const updated = createLink({
@@ -155,7 +178,7 @@ export default function SessionEntityLinkManager({
       visibility: linkObj.visibility,
     });
 
-    addLink(updated);
+    await addLink(updated, selectedCampaignId);
     triggerRerender();
   }
 
