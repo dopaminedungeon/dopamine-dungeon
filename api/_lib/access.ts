@@ -157,6 +157,30 @@ export async function requireCampaignGm(params: {
   }
 }
 
+export async function requireCampaignMember(params: {
+  campaignId: string;
+  userId: string;
+}) {
+  const memberships = await db
+    .select()
+    .from(campaignMemberships)
+    .where(
+      and(
+        eq(campaignMemberships.campaignId, params.campaignId),
+        eq(campaignMemberships.userId, params.userId)
+      )
+    )
+    .limit(1);
+
+  const membership = memberships[0];
+
+  if (!membership) {
+    throw new Error("Campaign membership required");
+  }
+
+  return membership;
+}
+
 export async function requireCampaignGmOrWorkspaceOwner(params: {
   campaignId: string;
   workspaceId: string;

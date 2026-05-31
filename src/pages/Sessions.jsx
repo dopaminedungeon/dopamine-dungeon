@@ -47,6 +47,7 @@ export default function Sessions() {
   const { selectedCampaignId } = useCampaign();
   const [sessions, setSessions] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [isSaving, setIsSaving] = useState(false);
 
 useEffect(() => {
   if (!selectedCampaignId) {
@@ -271,7 +272,7 @@ if (loading) {
               className="space-y-4"
             onSubmit={async (e) => {
               e.preventDefault();
-              if (!selectedCampaignId) return;
+              if (!selectedCampaignId || isSaving) return;
 
               const id = newId("session");
               const nextSession = {
@@ -291,26 +292,32 @@ if (loading) {
                 progress: 0,
               };
 
-              await sessionsRepo.upsert(selectedCampaignId, nextSession);
-              const data = await sessionsRepo.getAll(selectedCampaignId);
-              setSessions(safeArray(data));
+              try {
+                setIsSaving(true);
 
-              setShowCreateModal(false);
-              setFormData({
-                name: "",
-                sessionNumber: 1,
-                map: "",
-                difficulty: "Normal",
-                players: 0,
-                maxPlayers: 4,
-                status: "scheduled",
-                startTime: "",
-                visibility: "public",
-                gmNotes: "",
-              });
+                await sessionsRepo.upsert(selectedCampaignId, nextSession);
+                const data = await sessionsRepo.getAll(selectedCampaignId);
+                setSessions(safeArray(data));
 
-              // Navigate straight to the new session
-              navigate(`/sessions/${id}`);
+                setShowCreateModal(false);
+                setFormData({
+                  name: "",
+                  sessionNumber: 1,
+                  map: "",
+                  difficulty: "Normal",
+                  players: 0,
+                  maxPlayers: 4,
+                  status: "scheduled",
+                  startTime: "",
+                  visibility: "public",
+                  gmNotes: "",
+                });
+
+                // Navigate straight to the new session
+                navigate(`/sessions/${id}`);
+              } finally {
+                setIsSaving(false);
+              }
             }}
             >
               <div>
@@ -477,9 +484,10 @@ if (loading) {
                 </button>
                 <button
                   type="submit"
-                  className="w-full sm:w-auto px-4 py-2 rounded-xl bg-linear-to-r from-purple-500 to-indigo-500 text-white font-medium hover:opacity-90"
+                  disabled={isSaving}
+                  className="w-full sm:w-auto px-4 py-2 rounded-xl bg-linear-to-r from-purple-500 to-indigo-500 text-white font-medium hover:opacity-90 disabled:opacity-50"
                 >
-                  Save Session
+                  {isSaving ? "Saving..." : "Save Session"}
                 </button>
               </div>
             </form>

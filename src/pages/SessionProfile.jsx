@@ -65,6 +65,7 @@ export default function SessionProfile() {
   }, [session]);
 
   const [editMode, setEditMode] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
   const [editableSession, setEditableSession] = useState(() =>
     normalizedSession ? { ...normalizedSession } : null
   );
@@ -222,7 +223,10 @@ export default function SessionProfile() {
               </div>
               <button
                 type="button"
+                disabled={isSaving}
                 onClick={async () => {
+                  if (isSaving) return;
+
                   if (editMode && normalizedEditable) {
                     const gmPrep = gmPrepText
                       .split("\n")
@@ -238,16 +242,21 @@ export default function SessionProfile() {
                       gmPrep,
                     };
 
-                    await sessionsRepo.upsert(selectedCampaignId, toSave);
-                    const data = await sessionsRepo.getAll(selectedCampaignId);
-                    setAllSessions(data);
+                    try {
+                      setIsSaving(true);
+                      await sessionsRepo.upsert(selectedCampaignId, toSave);
+                      const data = await sessionsRepo.getAll(selectedCampaignId);
+                      setAllSessions(data);
+                    } finally {
+                      setIsSaving(false);
+                    }
                   }
 
                   setEditMode((prev) => !prev);
                 }}
-                className="px-3 py-1.5 sm:px-3 sm:py-1.5 rounded-xl bg-white/5 border border-white/10 text-xs text-zinc-300 hover:bg-white/10 transition"
+                className="px-3 py-1.5 sm:px-3 sm:py-1.5 rounded-xl bg-white/5 border border-white/10 text-xs text-zinc-300 hover:bg-white/10 transition disabled:opacity-50"
               >
-                {editMode ? "Done" : "Edit"}
+                {isSaving ? "Saving..." : editMode ? "Done" : "Edit"}
               </button>
               <button
                 type="button"
