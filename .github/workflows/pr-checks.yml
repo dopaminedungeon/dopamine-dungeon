@@ -35,7 +35,9 @@ jobs:
           pnpm -v
 
       - name: Install dependencies
-        run: pnpm install --frozen-lockfile --ignore-scripts=false
+        run: |
+          pnpm install --frozen-lockfile
+          pnpm approve-builds
 
       - name: Lint
         run: pnpm lint || true
