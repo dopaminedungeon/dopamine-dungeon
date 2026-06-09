@@ -6,9 +6,9 @@ import {
   requireCampaignGm,
   requireCampaignMember,
   resolveCampaignBySlug,
-} from "./lib/access";
-import { setCorsHeaders } from "./lib/cors";
-import { db } from "./lib/db";
+} from "../src/server/access";
+import { setCorsHeaders } from "../src/server/cors";
+import { db } from "../src/server/db";
 import { characters } from "../db/schema/characters";
 
 type CharacterRow = typeof characters.$inferSelect;

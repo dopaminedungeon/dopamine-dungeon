@@ -1,8 +1,8 @@
 import type { VercelRequest, VercelResponse } from "@vercel/node";
 import { eq, inArray } from "drizzle-orm";
 
-import { verifyAuthHeader } from "./lib/auth";
-import { db } from "./lib/db";
+import { verifyAuthHeader } from "../src/server/auth";
+import { db } from "../src/server/db";
 import { users } from "../db/schema/users";
 import { workspaces } from "../db/schema/workspaces";
 import { campaigns } from "../db/schema/campaigns";

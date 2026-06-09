@@ -5,9 +5,9 @@ import {
   getCurrentUser,
   requireCampaignGmOrWorkspaceOwner,
   resolveCampaignBySlug,
-} from "./lib/access";
-import { setCorsHeaders } from "./lib/cors";
-import { db } from "./lib/db";
+} from "../src/server/access";
+import { setCorsHeaders } from "../src/server/cors";
+import { db } from "../src/server/db";
 import { invitations } from "../db/schema/invitations";
 import {
   campaignMemberships,
