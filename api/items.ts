@@ -6,10 +6,10 @@ import {
   requireCampaignGm,
   requireCampaignMember,
   resolveCampaignBySlug,
-} from "../src/server/access";
-import { setCorsHeaders } from "../src/server/cors";
-import { db } from "../src/server/db";
-import { items } from "../db/schema/items";
+} from "../src/server/access.js";
+import { setCorsHeaders } from "../src/server/cors.js";
+import { db } from "../src/server/db.js";
+import { items } from "../db/schema/items.js";
 
 type ItemRow = typeof items.$inferSelect;
 

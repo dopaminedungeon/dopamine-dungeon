@@ -1,15 +1,15 @@
 import type { VercelRequest } from "@vercel/node";
 import { and, eq } from "drizzle-orm";
 
-import { verifyAuthHeader } from "./auth";
-import { db } from "./db";
-import { users } from "../../db/schema/users";
-import { workspaces } from "../../db/schema/workspaces";
-import { campaigns } from "../../db/schema/campaigns";
+import { verifyAuthHeader } from "./auth.js";
+import { db } from "./db.js";
+import { users } from "../../db/schema/users.js";
+import { workspaces } from "../../db/schema/workspaces.js";
+import { campaigns } from "../../db/schema/campaigns.js";
 import {
   campaignMemberships,
   workspaceMemberships,
-} from "../../db/schema/memberships";
+} from "../../db/schema/memberships.js";
 
 export type CurrentUser = typeof users.$inferSelect;
 export type Workspace = typeof workspaces.$inferSelect;

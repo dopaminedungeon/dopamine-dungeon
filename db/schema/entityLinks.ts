@@ -1,5 +1,5 @@
 import { pgTable, text, timestamp, unique, uuid } from "drizzle-orm/pg-core";
-import { campaigns } from "./campaigns";
+import { campaigns } from "./campaigns.js";
 
 export const entityLinks = pgTable(
   "entity_links",

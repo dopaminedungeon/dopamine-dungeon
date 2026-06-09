@@ -5,15 +5,15 @@ import {
   getCurrentUser,
   requireCampaignGmOrWorkspaceOwner,
   resolveCampaignBySlug,
-} from "../src/server/access";
-import { setCorsHeaders } from "../src/server/cors";
-import { db } from "../src/server/db";
-import { invitations } from "../db/schema/invitations";
+} from "../src/server/access.js";
+import { setCorsHeaders } from "../src/server/cors.js";
+import { db } from "../src/server/db.js";
+import { invitations } from "../db/schema/invitations.js";
 import {
   campaignMemberships,
   workspaceMemberships,
-} from "../db/schema/memberships";
-import { users } from "../db/schema/users";
+} from "../db/schema/memberships.js";
+import { users } from "../db/schema/users.js";
 
 type User = typeof users.$inferSelect;
 

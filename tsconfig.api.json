@@ -1,0 +1,16 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "module": "NodeNext",
+    "moduleResolution": "NodeNext",
+    "noEmit": true,
+    "strict": true
+  },
+  "include": [
+    "api/**/*.ts",
+    "db/schema/**/*.ts",
+    "src/server/**/*.ts",
+    "src/domain/links/**/*.ts",
+    "src/domain/mail/**/*.ts"
+  ]
+}

@@ -1,4 +1,4 @@
-import { EntityType } from "./link.types";
+import type { EntityType } from "./link.types.js";
 
 /**
  * Maps (entityType + label) → section title.
@@ -46,7 +46,7 @@ export const LINK_SECTIONS: Record<
   Condition: {},
   BagOfHolding: {},
 };
-import { Link } from "./link.types";
+import type { Link } from "./link.types.js";
 
 export function groupLinksBySection(
   entityType: EntityType,

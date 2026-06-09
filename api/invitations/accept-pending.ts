@@ -1,16 +1,16 @@
 import type { VercelRequest, VercelResponse } from "@vercel/node";
 import { and, eq } from "drizzle-orm";
 
-import { getCurrentUser, normalizeEmail } from "../../src/server/access";
-import { setCorsHeaders } from "../../src/server/cors";
-import { db } from "../../src/server/db";
-import { invitations } from "../../db/schema/invitations";
+import { getCurrentUser, normalizeEmail } from "../../src/server/access.js";
+import { setCorsHeaders } from "../../src/server/cors.js";
+import { db } from "../../src/server/db.js";
+import { invitations } from "../../db/schema/invitations.js";
 import {
   campaignMemberships,
   workspaceMemberships,
-} from "../../db/schema/memberships";
-import { campaigns } from "../../db/schema/campaigns";
-import { workspaces } from "../../db/schema/workspaces";
+} from "../../db/schema/memberships.js";
+import { campaigns } from "../../db/schema/campaigns.js";
+import { workspaces } from "../../db/schema/workspaces.js";
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   setCorsHeaders(res, "POST, OPTIONS");

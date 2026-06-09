@@ -1,15 +1,15 @@
 import type { VercelRequest, VercelResponse } from "@vercel/node";
 import { eq, inArray } from "drizzle-orm";
 
-import { verifyAuthHeader } from "../src/server/auth";
-import { db } from "../src/server/db";
-import { users } from "../db/schema/users";
-import { workspaces } from "../db/schema/workspaces";
-import { campaigns } from "../db/schema/campaigns";
+import { verifyAuthHeader } from "../src/server/auth.js";
+import { db } from "../src/server/db.js";
+import { users } from "../db/schema/users.js";
+import { workspaces } from "../db/schema/workspaces.js";
+import { campaigns } from "../db/schema/campaigns.js";
 import {
   workspaceMemberships,
   campaignMemberships,
-} from "../db/schema/memberships";
+} from "../db/schema/memberships.js";
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   res.setHeader("Access-Control-Allow-Origin", "http://localhost:5173");

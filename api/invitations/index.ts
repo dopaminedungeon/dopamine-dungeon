@@ -1,7 +1,7 @@
 import type { VercelRequest, VercelResponse } from "@vercel/node";
 import { and, eq } from "drizzle-orm";
 
-import { adminDb } from "../../src/server/auth";
+import { adminDb } from "../../src/server/auth.js";
 import {
   getCurrentUser,
   normalizeEmail,
@@ -9,11 +9,11 @@ import {
   requireWorkspaceOwner,
   resolveCampaignByAppId,
   resolveWorkspaceByAppId,
-} from "../../src/server/access";
-import { setCorsHeaders } from "../../src/server/cors";
-import { db } from "../../src/server/db";
-import { invitations } from "../../db/schema/invitations";
-import { buildInviteEmailHtml } from "../../src/domain/mail/inviteEmail.template";
+} from "../../src/server/access.js";
+import { setCorsHeaders } from "../../src/server/cors.js";
+import { db } from "../../src/server/db.js";
+import { invitations } from "../../db/schema/invitations.js";
+import { buildInviteEmailHtml } from "../../src/domain/mail/inviteEmail.template.js";
 
 function getFrontendOrigin(req: VercelRequest) {
   const requestOrigin = req.headers.origin;
