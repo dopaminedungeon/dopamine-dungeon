@@ -748,15 +748,20 @@ export default function CampaignSettings() {
                                 <div className="mt-2 flex gap-2">
                                   <select
                                     value={assignmentSelectionByUserId[person.userId] || ""}
+                                    disabled={assignableCharacters.length === 0}
                                     onChange={(event) =>
                                       setAssignmentSelectionByUserId((current) => ({
                                         ...current,
                                         [person.userId]: event.target.value,
                                       }))
                                     }
-                                    className="min-w-[160px] rounded-lg border border-white/10 bg-zinc-950 px-2 py-1 text-xs text-white"
+                                    className="min-w-[160px] rounded-lg border border-white/10 bg-zinc-950 px-2 py-1 text-xs text-white disabled:cursor-not-allowed disabled:opacity-60"
                                   >
-                                    <option value="">Assign PC...</option>
+                                    <option value="">
+                                      {assignableCharacters.length === 0
+                                        ? "No available PCs"
+                                        : "Assign PC..."}
+                                    </option>
                                     {assignableCharacters.map((character) => (
                                       <option key={character.id} value={character.id}>
                                         {character.name || character.id}
@@ -766,7 +771,10 @@ export default function CampaignSettings() {
                                   <button
                                     type="button"
                                     onClick={() => onAssignCharacter(person)}
-                                    disabled={!assignmentSelectionByUserId[person.userId]}
+                                    disabled={
+                                      assignableCharacters.length === 0 ||
+                                      !assignmentSelectionByUserId[person.userId]
+                                    }
                                     className="rounded-lg border border-white/10 bg-white/5 px-2 py-1 text-xs text-zinc-200 hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-50"
                                   >
                                     Assign

@@ -282,6 +282,19 @@ const PCProfile = () => {
     pendingAssignedCharacterIds: [],
   });
 
+  const refreshAssignmentMeta = async () => {
+    if (!selectedCampaignId) {
+      setAssignmentMeta({ assignments: [], pendingAssignedCharacterIds: [] });
+      return;
+    }
+
+    const assignments = await getApiCharacterAssignments(selectedCampaignId);
+    setAssignmentMeta({
+      assignments: assignments.assignments || [],
+      pendingAssignedCharacterIds: assignments.pendingAssignedCharacterIds || [],
+    });
+  };
+
   useEffect(() => {
     const loadPc = async () => {
       if (!pcId || !selectedCampaignId) {
@@ -537,12 +550,7 @@ const PCProfile = () => {
     await unassignApiCharacter(selectedCampaignId, {
       assignmentId: acceptedAssignmentForPc.id,
     });
-    setAssignmentMeta((current) => ({
-      ...current,
-      assignments: current.assignments.filter(
-        (assignment) => assignment.id !== acceptedAssignmentForPc.id
-      ),
-    }));
+    await refreshAssignmentMeta();
   };
   const activeEditDraft = useMemo(() => editDraft || buildEditDraftFromPc(pc), [editDraft, pc]);
 
@@ -775,6 +783,14 @@ const PCProfile = () => {
                 Open in D&amp;D Beyond ↗
               </a>
             )}
+            {!isGMMode ? (
+              <Link
+                to="/pcs/bag"
+                className="inline-flex items-center rounded-full bg-indigo-500/15 border border-indigo-400/60 px-3 py-1 text-[11px] font-medium text-indigo-100 hover:bg-indigo-500/25 transition"
+              >
+                Bag of Holding
+              </Link>
+            ) : null}
             <span className="inline-flex items-center rounded-full bg-purple-500/20 border border-purple-400/50 px-3 py-1 text-[11px] font-medium text-purple-100">
               Player Character
             </span>

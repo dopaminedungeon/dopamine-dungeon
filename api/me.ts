@@ -2,6 +2,7 @@ import type { VercelRequest, VercelResponse } from "@vercel/node";
 import { eq, inArray } from "drizzle-orm";
 
 import { verifyAuthHeader } from "../src/server/auth.js";
+import { setCorsHeaders } from "../src/server/cors.js";
 import { db } from "../src/server/db.js";
 import { users } from "../db/schema/users.js";
 import { workspaces } from "../db/schema/workspaces.js";
@@ -12,9 +13,7 @@ import {
 } from "../db/schema/memberships.js";
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
-  res.setHeader("Access-Control-Allow-Origin", "http://localhost:5173");
-  res.setHeader("Access-Control-Allow-Methods", "GET, OPTIONS");
-  res.setHeader("Access-Control-Allow-Headers", "Authorization, Content-Type");
+  setCorsHeaders(res, "GET, OPTIONS");
 
   if (req.method === "OPTIONS") {
     return res.status(204).end();

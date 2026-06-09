@@ -1,4 +1,5 @@
 import { auth } from "../../firebase/firebase";
+import { onAuthStateChanged } from "firebase/auth";
 
 function getApiBaseUrl() {
   const configuredUrl = import.meta.env.VITE_API_BASE_URL;
@@ -22,12 +23,34 @@ type ApiOptions = RequestInit & {
   skipAuth?: boolean;
 };
 
+async function waitForAuthUser() {
+  if (auth.currentUser) {
+    return auth.currentUser;
+  }
+
+  const authWithReady = auth as typeof auth & {
+    authStateReady?: () => Promise<void>;
+  };
+
+  if (typeof authWithReady.authStateReady === "function") {
+    await authWithReady.authStateReady();
+    return auth.currentUser;
+  }
+
+  return new Promise<typeof auth.currentUser>((resolve) => {
+    const unsubscribe = onAuthStateChanged(auth, (user) => {
+      unsubscribe();
+      resolve(user);
+    });
+  });
+}
+
 async function getAuthHeaders(skipAuth?: boolean): Promise<HeadersInit> {
   if (skipAuth) {
     return {};
   }
 
-  const user = auth.currentUser;
+  const user = await waitForAuthUser();
 
   if (!user) {
     throw new Error("No authenticated Firebase user available for API request");
@@ -45,11 +68,19 @@ export async function apiFetch<T>(path: string, options: ApiOptions = {}): Promi
 
   const authHeaders = await getAuthHeaders(skipAuth);
   const url = `${API_BASE_URL}${path}`;
+  const method = String(requestOptions.method || "GET").toUpperCase();
 
   const response = await fetch(url, {
     ...requestOptions,
+    cache: "no-store",
     headers: {
       "Content-Type": "application/json",
+      ...(method === "GET"
+        ? {
+            "Cache-Control": "no-cache",
+            Pragma: "no-cache",
+          }
+        : {}),
       ...authHeaders,
       ...headers,
     },
