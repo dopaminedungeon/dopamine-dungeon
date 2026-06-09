@@ -1,14 +1,12 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { Shield, Users, CheckCircle2, AlertCircle, Trash2, PlusCircle } from "lucide-react";
-import { collection, getDocs, query, where } from "firebase/firestore";
-import { db } from "../firebase/firebase";
 import { useAuth } from "../context/AuthContext";
 import { useTenant } from "../context/TenantContext";
 import {
-    getMembersForTenant,
-    updateTenantMemberRole,
-} from "../data/tenantMembers/tenantMembers.repo";
-import { removeWorkspaceMemberCascade } from "../services/workspaceMembers.service";
+    getApiWorkspacePeople,
+    removeApiWorkspaceMember,
+    updateApiWorkspaceMemberRole,
+} from "../data/api/apiClient.ts";
 
 export default function WorkspaceSettings() {
     const { user } = useAuth();
@@ -19,6 +17,7 @@ export default function WorkspaceSettings() {
         createTenant,
         addTenant,
         selectTenant,
+        refreshTenants,
     } = useTenant();
 
     const selectedTenant = useMemo(() => {
@@ -117,49 +116,8 @@ export default function WorkspaceSettings() {
                 setLoading(true);
                 setSaveState({ type: null, message: "" });
 
-                const tenantMembers = await getMembersForTenant(selectedTenantId);
-                const userIds = Array.from(
-                    new Set(tenantMembers.map((member) => String(member.userId || "")).filter(Boolean))
-                );
-
-                const userDocs = await Promise.all(
-                    userIds.map(async (userId) => {
-                        const snap = await getDocs(
-                            query(collection(db, "users"), where("id", "==", userId))
-                        );
-                        const first = snap.docs[0];
-                        return first ? { userId, ...first.data() } : { userId };
-                    })
-                );
-
-                const usersById = userDocs.reduce((acc, currentUser) => {
-                    acc[String(currentUser.userId)] = currentUser;
-                    return acc;
-                }, {});
-
-                const mappedMembers = tenantMembers
-                    .map((member) => {
-                        const memberUserId = String(member.userId || "");
-                        const memberUser = usersById[memberUserId] || {};
-
-                        return {
-                            ...member,
-                            label:
-                                memberUser.displayName ||
-                                memberUser.email ||
-                                memberUser.normalizedEmail ||
-                                memberUserId ||
-                                "Unknown user",
-                            email: memberUser.email || "—",
-                        };
-                    })
-                    .sort((a, b) => {
-                        if (a.role === "owner" && b.role !== "owner") return -1;
-                        if (a.role !== "owner" && b.role === "owner") return 1;
-                        return String(a.label).localeCompare(String(b.label));
-                    });
-
-                setMembers(mappedMembers);
+                const response = await getApiWorkspacePeople(selectedTenantId);
+                setMembers(response.members || []);
             } catch (error) {
                 console.error("[WorkspaceSettings] Failed to load workspace members", error);
                 setMembers([]);
@@ -183,7 +141,7 @@ export default function WorkspaceSettings() {
         }
 
         if (
-            member.userId === user?.uid &&
+            member.firebaseUid === user?.uid &&
             member.role === "owner" &&
             nextRole !== "owner" &&
             ownerCount <= 1
@@ -197,9 +155,12 @@ export default function WorkspaceSettings() {
 
         try {
             setSavingMemberId(member.id);
-            await updateTenantMemberRole(member.id, nextRole);
+            await updateApiWorkspaceMemberRole(selectedTenantId, member.id, nextRole);
             setSaveState({ type: "success", message: "Workspace role updated." });
             setVersion((value) => value + 1);
+            if (typeof refreshTenants === "function") {
+                await refreshTenants();
+            }
         } catch (error) {
             console.error("[WorkspaceSettings] Failed to update workspace role", error);
             setSaveState({ type: "error", message: "Could not update workspace role." });
@@ -213,7 +174,7 @@ export default function WorkspaceSettings() {
             return;
         }
 
-        if (member.userId === user?.uid) {
+        if (member.firebaseUid === user?.uid) {
             setSaveState({
                 type: "error",
                 message: "You cannot remove yourself from the workspace here.",
@@ -230,7 +191,7 @@ export default function WorkspaceSettings() {
         }
 
         const confirmed = window.confirm(
-            "Remove this member from the workspace? This will also remove their related campaign memberships and character assignments."
+            "Remove this member from the workspace? This will also remove their campaign memberships in this workspace."
         );
 
         if (!confirmed) {
@@ -239,16 +200,15 @@ export default function WorkspaceSettings() {
 
         try {
             setSavingMemberId(member.id);
-            await removeWorkspaceMemberCascade({
-                tenantMemberId: member.id,
-                tenantId: selectedTenantId,
-                userId: member.userId,
-            });
+            await removeApiWorkspaceMember(selectedTenantId, member.id);
             setSaveState({
                 type: "success",
                 message: "Workspace member removed with related campaign cleanup.",
             });
             setVersion((value) => value + 1);
+            if (typeof refreshTenants === "function") {
+                await refreshTenants();
+            }
         } catch (error) {
             console.error("[WorkspaceSettings] Failed to remove workspace member", error);
             setSaveState({ type: "error", message: "Could not remove workspace member." });
@@ -484,7 +444,7 @@ export default function WorkspaceSettings() {
                                         </thead>
                                         <tbody>
                                             {members.map((member) => {
-                                                const isCurrentUser = member.userId === user?.uid;
+                                                const isCurrentUser = member.firebaseUid === user?.uid;
                                                 const isOnlyOwner = member.role === "owner" && ownerCount <= 1;
                                                 const isBusy = savingMemberId === member.id;
 

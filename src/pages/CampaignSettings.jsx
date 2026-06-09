@@ -22,7 +22,11 @@ import { useMode } from "../context/ModeContext.jsx";
 import { useCampaign } from "../context/CampaignContext.jsx";
 import { useTenant } from "../context/TenantContext.jsx";
 import { db } from "../firebase/firebase";
-import { getApiCampaignPeople } from "../data/api/apiClient.ts";
+import {
+  getApiCampaignPeople,
+  removeApiCampaignMember,
+  revokeApiCampaignInvite,
+} from "../data/api/apiClient.ts";
 
 const STATUS = ["active", "paused", "completed"];
 
@@ -322,13 +326,14 @@ export default function CampaignSettings() {
   };
 
   const onRevokeInvite = async (inviteDocId) => {
-    if (!inviteDocId) return;
+    const campaignId = draft?.campaignId || selectedCampaignId;
+    if (!inviteDocId || !campaignId) return;
 
     const confirmed = window.confirm("Revoke this pending invitation?");
     if (!confirmed) return;
 
     try {
-      await deleteDoc(doc(db, "invitations", inviteDocId));
+      await revokeApiCampaignInvite(campaignId, inviteDocId);
       setOpenActionsId(null);
       setCampaignPeopleVersion((value) => value + 1);
       setSaveState({ type: "success", message: "Invitation revoked." });
@@ -339,13 +344,14 @@ export default function CampaignSettings() {
   };
 
   const onRemoveCampaignMember = async (memberDocId) => {
-    if (!memberDocId) return;
+    const campaignId = draft?.campaignId || selectedCampaignId;
+    if (!memberDocId || !campaignId) return;
 
     const confirmed = window.confirm("Remove this member from the campaign?");
     if (!confirmed) return;
 
     try {
-      await deleteDoc(doc(db, "campaignMembers", memberDocId));
+      await removeApiCampaignMember(campaignId, memberDocId);
       setOpenActionsId(null);
       setCampaignPeopleVersion((value) => value + 1);
       setSaveState({ type: "success", message: "Campaign member removed." });

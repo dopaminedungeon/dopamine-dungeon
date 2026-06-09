@@ -161,3 +161,71 @@ export async function getApiCampaignPeople(campaignId: string) {
     }>;
   }>(`/api/campaign-people?campaignId=${encodeURIComponent(campaignId)}`);
 }
+
+export async function revokeApiCampaignInvite(campaignId: string, inviteId: string) {
+  return apiFetch<{ ok: true }>("/api/campaign-people", {
+    method: "DELETE",
+    body: JSON.stringify({
+      campaignId,
+      personType: "invite",
+      personId: inviteId,
+    }),
+  });
+}
+
+export async function removeApiCampaignMember(campaignId: string, memberId: string) {
+  return apiFetch<{ ok: true }>("/api/campaign-people", {
+    method: "DELETE",
+    body: JSON.stringify({
+      campaignId,
+      personType: "member",
+      personId: memberId,
+    }),
+  });
+}
+
+export async function getApiWorkspacePeople(tenantId: string) {
+  return apiFetch<{
+    ok: true;
+    tenantId: string;
+    workspaceId: string;
+    members: Array<{
+      id: string;
+      membershipId: string | null;
+      type: "workspace" | "campaign-only";
+      userId: string;
+      firebaseUid: string | null;
+      label: string;
+      email: string;
+      role: string;
+      campaignMembershipCount: number;
+      campaignRoles: string[];
+      createdAt: string | null;
+    }>;
+  }>(`/api/workspace-people?tenantId=${encodeURIComponent(tenantId)}`);
+}
+
+export async function updateApiWorkspaceMemberRole(
+  tenantId: string,
+  memberId: string,
+  role: string
+) {
+  return apiFetch<{ ok: true }>("/api/workspace-people", {
+    method: "PATCH",
+    body: JSON.stringify({
+      tenantId,
+      memberId,
+      role,
+    }),
+  });
+}
+
+export async function removeApiWorkspaceMember(tenantId: string, memberId: string) {
+  return apiFetch<{ ok: true }>("/api/workspace-people", {
+    method: "DELETE",
+    body: JSON.stringify({
+      tenantId,
+      memberId,
+    }),
+  });
+}
