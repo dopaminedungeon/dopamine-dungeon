@@ -6,9 +6,9 @@ import {
   requireCampaignGm,
   requireCampaignMember,
   resolveCampaignBySlug,
-} from "./lib/access.ts";
-import { setCorsHeaders } from "./lib/cors.ts";
-import { db } from "./lib/db.ts";
+} from "./lib/access";
+import { setCorsHeaders } from "./lib/cors";
+import { db } from "./lib/db";
 import { entityLinks } from "../db/schema/entityLinks";
 import {
   assertAllowedEntityPair,
