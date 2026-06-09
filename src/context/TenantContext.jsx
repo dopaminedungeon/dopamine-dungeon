@@ -33,6 +33,7 @@ export function TenantProvider({ children }) {
   const [tenants, setTenants] = useState([]);
   const [tenantStatus, setTenantStatus] = useState("loading");
   const [workspaceRole, setWorkspaceRole] = useState(null);
+  const [membershipVersion, setMembershipVersion] = useState(0);
   const [selectedTenantId, setSelectedTenantId] = useState(() => {
     try {
       return localStorage.getItem(TENANT_STORAGE_KEY) || null;
@@ -79,6 +80,7 @@ export function TenantProvider({ children }) {
         setSelectedTenantId(null);
         setTenantStatus("empty");
         setWorkspaceRole(null);
+        setMembershipVersion((version) => version + 1);
         writeStoredTenantId(null);
         return;
       }
@@ -103,6 +105,7 @@ export function TenantProvider({ children }) {
         setSelectedTenantId(null);
         setTenantStatus("empty");
         setWorkspaceRole(null);
+        setMembershipVersion((version) => version + 1);
         writeStoredTenantId(null);
         return;
       }
@@ -122,6 +125,7 @@ export function TenantProvider({ children }) {
       writeStoredTenantId(nextTenantId);
 
       setTenantStatus("ready");
+      setMembershipVersion((version) => version + 1);
     } catch (error) {
       console.error("[TenantContext] Failed to load tenants", error);
       setWorkspaceRole(null);
@@ -191,6 +195,7 @@ export function TenantProvider({ children }) {
         tenantStatus,
         selectedTenantId,
         workspaceRole,
+        membershipVersion,
         selectTenant,
         createTenant,
         refreshTenants: loadTenants,

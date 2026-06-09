@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
-import { Link, NavLink } from "react-router-dom";
+import { Link, NavLink, useNavigate } from "react-router-dom";
 import { getAllCharacters, upsertCharacter } from "../data/characters/characters.repo";
 import { importCharacterFromDdbPdf } from "../data/characters/characterImport.service";
 import { useCampaign } from "../context/CampaignContext";
@@ -238,6 +238,7 @@ const PCs = () => {
   const { selectedCampaignId } = useCampaign();
   const { mode } = useMode();
   const { user } = useAuth();
+  const navigate = useNavigate();
 
   const [pcs, setPcs] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -265,24 +266,7 @@ const PCs = () => {
       try {
         setIsLoading(true);
         const characters = await getAllCharacters(selectedCampaignId);
-
-        const playerVisibleCharacters = characters.filter((character) => {
-          if (String(mode).toLowerCase() === "gm") {
-            return true;
-          }
-
-          if (character.ownerUserId && character.ownerUserId === user?.uid) {
-            return true;
-          }
-
-          if (character.visibility === "player") {
-            return true;
-          }
-
-          return character.isPlayerVisible === true;
-        });
-
-        setPcs(playerVisibleCharacters);
+        setPcs(characters);
       } catch (error) {
         console.error("[PCs] Failed to load characters", error);
         setPcs([]);
@@ -303,24 +287,7 @@ const PCs = () => {
     }
 
     const characters = await getAllCharacters(selectedCampaignId);
-
-    const playerVisibleCharacters = characters.filter((character) => {
-      if (String(mode).toLowerCase() === "gm") {
-        return true;
-      }
-
-      if (character.ownerUserId && character.ownerUserId === user?.uid) {
-        return true;
-      }
-
-      if (character.visibility === "player") {
-        return true;
-      }
-
-      return character.isPlayerVisible === true;
-    });
-
-    setPcs(playerVisibleCharacters);
+    setPcs(characters);
   };
 
   const handleCreatePc = async (e) => {
@@ -899,6 +866,12 @@ const PCs = () => {
 
   const hasPcs = pcs.length > 0;
 
+  useEffect(() => {
+    if (!isGMMode && !isLoading && pcs.length === 1) {
+      navigate(`/pcs/${pcs[0].id}`, { replace: true });
+    }
+  }, [isGMMode, isLoading, navigate, pcs]);
+
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
     if (!q) return pcs;
@@ -964,7 +937,9 @@ const PCs = () => {
                 ? "Loading character profiles for the active campaign…"
                 : hasPcs
                   ? "Character hub for stats, notes, relationships, conditions, arcs, and session links."
-                  : "Party hub — Bag of Holding is available. Player character profiles will appear here once added to this campaign."}
+                  : isGMMode
+                    ? "Party hub — Bag of Holding is available. Player character profiles will appear here once added to this campaign."
+                    : "No characters assigned yet — check out the Bag of Holding"}
             </p>
           </div>
 
@@ -1029,7 +1004,17 @@ const PCs = () => {
           </div>
         ) : !hasPcs ? (
           <div className="rounded-2xl border border-zinc-800/70 bg-zinc-950/40 p-6 text-zinc-300">
-            <div className="text-base font-semibold text-white mb-1">No PC profiles yet</div>
+            <div className="text-base font-semibold text-white mb-1">
+              {isGMMode ? "No PC profiles yet" : "No characters assigned yet — check out the Bag of Holding"}
+            </div>
+            {!isGMMode ? (
+              <Link
+                to="/pcs/bag"
+                className="mt-3 inline-flex rounded-xl bg-indigo-500/20 border border-indigo-400/50 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-500/30"
+              >
+                Bag of Holding
+              </Link>
+            ) : null}
           </div>
         ) : filtered.length === 0 ? (
           <div className="rounded-2xl border border-zinc-800/70 bg-zinc-950/40 p-6 text-zinc-300">

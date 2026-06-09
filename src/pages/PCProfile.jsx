@@ -4,6 +4,7 @@ import { useMode } from "../context/ModeContext.jsx";
 import { useAuth } from "../context/AuthContext";
 import { useCampaign } from "../context/CampaignContext";
 import { getCharacterById, removeCharacter, upsertCharacter } from "../data/characters/characters.repo";
+import { getApiCharacterAssignments, unassignApiCharacter } from "../data/api/apiClient";
 
 const abilityLabels = {
   str: "STR",
@@ -276,10 +277,14 @@ const PCProfile = () => {
   const [isSaving, setIsSaving] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
   const [activeTab, setActiveTab] = useState("stats");
+  const [assignmentMeta, setAssignmentMeta] = useState({
+    assignments: [],
+    pendingAssignedCharacterIds: [],
+  });
 
   useEffect(() => {
     const loadPc = async () => {
-      if (!pcId) {
+      if (!pcId || !selectedCampaignId) {
         setPc(null);
         setIsLoading(false);
         return;
@@ -287,8 +292,15 @@ const PCProfile = () => {
 
       try {
         setIsLoading(true);
-        const character = await getCharacterById(selectedCampaignId, pcId);
+        const [character, assignments] = await Promise.all([
+          getCharacterById(selectedCampaignId, pcId),
+          getApiCharacterAssignments(selectedCampaignId),
+        ]);
         setPc(character);
+        setAssignmentMeta({
+          assignments: assignments.assignments || [],
+          pendingAssignedCharacterIds: assignments.pendingAssignedCharacterIds || [],
+        });
       } catch (error) {
         console.error("[PCProfile] Failed to load character", error);
         setPc(null);
@@ -486,9 +498,12 @@ const PCProfile = () => {
 
   const handleDeleteCharacter = async () => {
     if (!pc || !selectedCampaignId) return;
+    if (isAssignedToPendingInvitation) return;
 
     const confirmed = window.confirm(
-      `Delete ${pc.name || "this character"}? This removes the character from Dopamine Dungeon and Firebase.`
+      acceptedAssignmentForPc
+        ? "Deleting this character will also unassign it from the player."
+        : `Delete ${pc.name || "this character"}? This removes the character from Dopamine Dungeon.`
     );
 
     if (!confirmed) return;
@@ -501,6 +516,33 @@ const PCProfile = () => {
       console.error("[PCProfile] Failed to delete character", error);
       setIsDeleting(false);
     }
+  };
+  const acceptedAssignmentForPc = useMemo(
+    () =>
+      assignmentMeta.assignments.find(
+        (assignment) => String(assignment.characterId) === String(pc?.id)
+      ) || null,
+    [assignmentMeta.assignments, pc?.id]
+  );
+  const isAssignedToPendingInvitation = useMemo(
+    () => assignmentMeta.pendingAssignedCharacterIds.includes(String(pc?.id || "")),
+    [assignmentMeta.pendingAssignedCharacterIds, pc?.id]
+  );
+  const handleUnassignCharacter = async () => {
+    if (!selectedCampaignId || !acceptedAssignmentForPc) return;
+
+    const confirmed = window.confirm("Unassign this character from the player?");
+    if (!confirmed) return;
+
+    await unassignApiCharacter(selectedCampaignId, {
+      assignmentId: acceptedAssignmentForPc.id,
+    });
+    setAssignmentMeta((current) => ({
+      ...current,
+      assignments: current.assignments.filter(
+        (assignment) => assignment.id !== acceptedAssignmentForPc.id
+      ),
+    }));
   };
   const activeEditDraft = useMemo(() => editDraft || buildEditDraftFromPc(pc), [editDraft, pc]);
 
@@ -702,11 +744,25 @@ const PCProfile = () => {
                 <button
                   type="button"
                   onClick={handleDeleteCharacter}
-                  disabled={isDeleting}
+                  disabled={isDeleting || isAssignedToPendingInvitation}
+                  title={
+                    isAssignedToPendingInvitation
+                      ? "Unable to delete this character because it is assigned to a pending invitation."
+                      : undefined
+                  }
                   className="inline-flex items-center rounded-full bg-rose-500/15 border border-rose-400/40 px-3 py-1 text-[11px] font-medium text-rose-100 hover:bg-rose-500/25 disabled:opacity-50 disabled:cursor-not-allowed transition"
                 >
                   {isDeleting ? "Deleting..." : "Delete Character"}
                 </button>
+                {acceptedAssignmentForPc ? (
+                  <button
+                    type="button"
+                    onClick={handleUnassignCharacter}
+                    className="inline-flex items-center rounded-full bg-white/10 border border-white/15 px-3 py-1 text-[11px] font-medium text-white hover:bg-white/20 transition"
+                  >
+                    Unassign Character
+                  </button>
+                ) : null}
               </div>
             )}
             {pc.ddbCharacterUrl && (

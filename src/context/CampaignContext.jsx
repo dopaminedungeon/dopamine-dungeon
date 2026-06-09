@@ -14,7 +14,7 @@ function getCampaignAppId(campaign) {
 }
 
 export function CampaignProvider({ children }) {
-  const { selectedTenantId, tenantStatus } = useTenant();
+  const { selectedTenantId, tenantStatus, membershipVersion } = useTenant();
   const { user } = useAuth();
   const [campaignStatus, setCampaignStatus] = useState("loading");
   const [accessibleCampaigns, setAccessibleCampaigns] = useState([]);
@@ -155,7 +155,7 @@ export function CampaignProvider({ children }) {
       setCampaignRole(null);
       setCampaignStatus("error");
     }
-  }, [selectedCampaignId, selectedTenantId, tenantStatus, user]);
+  }, [membershipVersion, selectedCampaignId, selectedTenantId, tenantStatus, user]);
 
   useEffect(() => {
     loadCampaigns();

@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useMode } from "../context/ModeContext.jsx";
 import { useCampaign } from "../context/CampaignContext";
@@ -98,6 +98,8 @@ export default function Items() {
   const { selectedCampaignId } = useCampaign();
   const [items, setItems] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [isCreatingItem, setIsCreatingItem] = useState(false);
+  const isCreatingItemRef = useRef(false);
 
   useEffect(() => {
     if (!selectedCampaignId) {
@@ -383,7 +385,7 @@ export default function Items() {
   className="p-4 sm:p-6 space-y-4"
             onSubmit={async (e) => {
               e.preventDefault();
-              if (!selectedCampaignId) return;
+              if (!selectedCampaignId || isCreatingItemRef.current) return;
 
               const id = newId("item");
               const nextItem = {
@@ -401,24 +403,31 @@ export default function Items() {
                 location: null,
               };
 
-              await itemsRepo.upsert(selectedCampaignId, nextItem);
-              const data = await itemsRepo.getAll(selectedCampaignId);
-              setItems(safeArray(data));
+              try {
+                setIsCreatingItem(true);
+                isCreatingItemRef.current = true;
+                await itemsRepo.upsert(selectedCampaignId, nextItem);
+                const data = await itemsRepo.getAll(selectedCampaignId);
+                setItems(safeArray(data));
 
-              setShowCreateModal(false);
-              setFormData({
-                name: "",
-                type: ITEM_TYPES[0],
-                rarity: "Common",
-                power: 0,
-                description: "",
-                visibility: "public",
-                mechanicalSummary: "",
-                gmNotes: "",
-                stats: {},
-              });
+                setShowCreateModal(false);
+                setFormData({
+                  name: "",
+                  type: ITEM_TYPES[0],
+                  rarity: "Common",
+                  power: 0,
+                  description: "",
+                  visibility: "public",
+                  mechanicalSummary: "",
+                  gmNotes: "",
+                  stats: {},
+                });
 
-              navigate(`/items/${id}`);
+                navigate(`/items/${id}`);
+              } finally {
+                isCreatingItemRef.current = false;
+                setIsCreatingItem(false);
+              }
             }}
           >
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -525,16 +534,18 @@ export default function Items() {
             <div className="flex flex-col-reverse sm:flex-row sm:items-center sm:justify-end gap-2 pt-2">
               <button
                 type="button"
+                disabled={isCreatingItem}
                 onClick={() => setShowCreateModal(false)}
-                className="w-full sm:w-auto px-4 py-2.5 rounded-xl bg-white/5 border border-white/10 text-zinc-300 hover:bg-white/10"
+                className="w-full sm:w-auto px-4 py-2.5 rounded-xl bg-white/5 border border-white/10 text-zinc-300 hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-60"
               >
                 Cancel
               </button>
               <button
                 type="submit"
-                className="w-full sm:w-auto px-4 py-2.5 rounded-xl bg-linear-to-r from-indigo-500 to-purple-500 text-white font-medium hover:opacity-90"
+                disabled={isCreatingItem}
+                className="w-full sm:w-auto px-4 py-2.5 rounded-xl bg-linear-to-r from-indigo-500 to-purple-500 text-white font-medium hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60"
               >
-                Save
+                {isCreatingItem ? "Saving..." : "Save"}
               </button>
             </div>
           </form>

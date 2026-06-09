@@ -1,5 +1,5 @@
 import type { VercelRequest, VercelResponse } from "@vercel/node";
-import { and, eq } from "drizzle-orm";
+import { and, eq, inArray } from "drizzle-orm";
 
 import { adminDb } from "../../src/server/auth.js";
 import {
@@ -13,6 +13,8 @@ import {
 import { setCorsHeaders } from "../../src/server/cors.js";
 import { db } from "../../src/server/db.js";
 import { invitations } from "../../db/schema/invitations.js";
+import { characterAssignments } from "../../db/schema/characterAssignments.js";
+import { characters } from "../../db/schema/characters.js";
 import { buildInviteEmailHtml } from "../../src/domain/mail/inviteEmail.template.js";
 
 function getFrontendOrigin(req: VercelRequest) {
@@ -28,6 +30,13 @@ function getFrontendOrigin(req: VercelRequest) {
     process.env.APP_ORIGIN ||
     "http://localhost:5173"
   );
+}
+
+function parseInvitationCharacterIds(value?: string | null) {
+  return String(value || "")
+    .split(",")
+    .map((id) => id.trim())
+    .filter(Boolean);
 }
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
@@ -47,6 +56,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const tenantId = String(req.body?.tenantId || "").trim();
     const campaignId = String(req.body?.campaignId || "").trim();
     const campaignRole = req.body?.campaignRole === "gm" ? "gm" : "player";
+    const characterIds = Array.isArray(req.body?.characterIds)
+      ? req.body.characterIds.map((id: unknown) => String(id)).filter(Boolean)
+      : [];
     const normalizedEmail = normalizeEmail(email);
 
     if (!normalizedEmail) {
@@ -88,6 +100,60 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       });
     }
 
+    if (characterIds.length > 0) {
+      const [matchingCharacters, existingAssignments, pendingInvitations] = await Promise.all([
+        db
+          .select()
+          .from(characters)
+          .where(
+            and(
+              eq(characters.campaignId, campaign.id),
+              inArray(characters.id, characterIds)
+            )
+          ),
+        db
+          .select()
+          .from(characterAssignments)
+          .where(
+            and(
+              eq(characterAssignments.campaignId, campaign.id),
+              inArray(characterAssignments.characterId, characterIds)
+            )
+          ),
+        db
+          .select()
+          .from(invitations)
+          .where(
+            and(
+              eq(invitations.campaignId, campaign.id),
+              eq(invitations.status, "pending")
+            )
+          ),
+      ]);
+      if (matchingCharacters.length !== characterIds.length) {
+        return res.status(400).json({
+          ok: false,
+          error: "One or more selected characters do not exist.",
+        });
+      }
+
+      const pendingAssignedIds = new Set(
+        pendingInvitations.flatMap((invitation) =>
+          parseInvitationCharacterIds(invitation.characterId)
+        )
+      );
+      const blockedCharacterId =
+        existingAssignments[0]?.characterId ||
+        characterIds.find((characterId: string) => pendingAssignedIds.has(characterId));
+
+      if (blockedCharacterId) {
+        return res.status(409).json({
+          ok: false,
+          error: "One or more selected characters are already assigned.",
+        });
+      }
+    }
+
     const insertedInvitations = await db
       .insert(invitations)
       .values({
@@ -97,8 +163,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         campaignId: campaign.id,
         workspaceRole: "member",
         campaignRole,
-        // Phase 1 stores no character assignment. Existing Firestore assignment flows remain separate.
-        characterId: null,
+        characterId: characterIds.join(",") || null,
         status: "pending",
         invitedByUserId: currentUser.id,
       })

@@ -1,5 +1,5 @@
 // src/components/session/SessionEntityLinkManager.jsx
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { createLink } from "../../domain/links/link.service";
 import {
@@ -57,6 +57,8 @@ export default function SessionEntityLinkManager({
   const [query, setQuery] = useState("");
   const [newLinkVisibility, setNewLinkVisibility] = useState("Player"); // "GM" | "Player"
   const [error, setError] = useState(null);
+  const [linkingEntityId, setLinkingEntityId] = useState(null);
+  const linkingEntityIdRef = useRef(null);
 
   useEffect(() => {
     if (!selectedCampaignId || !sessionId) return;
@@ -144,10 +146,15 @@ export default function SessionEntityLinkManager({
   }, [entities, query, linkedEntityIds, filterByTenant, labelFn]);
 
   async function handleLink(entityId) {
+    const normalizedEntityId = String(entityId);
+    if (linkingEntityIdRef.current === normalizedEntityId) return;
+
     try {
+      linkingEntityIdRef.current = normalizedEntityId;
+      setLinkingEntityId(normalizedEntityId);
       const linkObj = createLink({
         entityA: { type: "Session", id: String(sessionId) },
-        entityB: { type: entityType, id: String(entityId) },
+        entityB: { type: entityType, id: normalizedEntityId },
         label: defaultLabel || label,
         visibility: newLinkVisibility,
       });
@@ -158,6 +165,9 @@ export default function SessionEntityLinkManager({
       triggerRerender();
     } catch (err) {
       setError(err?.message || "Failed to add link");
+    } finally {
+      linkingEntityIdRef.current = null;
+      setLinkingEntityId(null);
     }
   }
 
@@ -282,10 +292,11 @@ export default function SessionEntityLinkManager({
                     <button
                       key={e.id}
                       type="button"
+                      disabled={linkingEntityId === String(e.id)}
                       onClick={() => handleLink(e.id)}
-                      className="block w-full text-left px-3 py-2 text-sm text-zinc-300 hover:bg-white/10"
+                      className="block w-full text-left px-3 py-2 text-sm text-zinc-300 hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-60"
                     >
-                      {labelFn(e)}
+                      {linkingEntityId === String(e.id) ? "Linking..." : labelFn(e)}
                     </button>
                   ))
                 )}

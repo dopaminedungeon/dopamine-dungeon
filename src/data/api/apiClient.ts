@@ -104,6 +104,7 @@ export async function createApiInvitation(input: {
   tenantId: string;
   campaignId: string;
   campaignRole?: "player" | "gm";
+  characterIds?: string[];
 }) {
   return apiFetch<{
     ok: true;
@@ -227,5 +228,42 @@ export async function removeApiWorkspaceMember(tenantId: string, memberId: strin
       tenantId,
       memberId,
     }),
+  });
+}
+
+export async function getApiCharacterAssignments(campaignId: string) {
+  return apiFetch<{
+    ok: true;
+    assignments: Array<{
+      id: string;
+      campaignId: string;
+      characterId: string;
+      userId: string;
+      createdAt: string;
+    }>;
+    assignedCharacterIds: string[];
+    pendingAssignedCharacterIds: string[];
+    characters: unknown[];
+  }>(`/api/character-assignments?campaignId=${encodeURIComponent(campaignId)}`);
+}
+
+export async function assignApiCharacter(
+  campaignId: string,
+  userId: string,
+  characterId: string
+) {
+  return apiFetch<{ ok: true; assignment: unknown }>("/api/character-assignments", {
+    method: "POST",
+    body: JSON.stringify({ campaignId, userId, characterId }),
+  });
+}
+
+export async function unassignApiCharacter(
+  campaignId: string,
+  input: { assignmentId?: string; characterId?: string }
+) {
+  return apiFetch<{ ok: true }>("/api/character-assignments", {
+    method: "DELETE",
+    body: JSON.stringify({ campaignId, ...input }),
   });
 }

@@ -13,6 +13,7 @@ import {
   campaignMemberships,
   workspaceMemberships,
 } from "../db/schema/memberships.js";
+import { characterAssignments } from "../db/schema/characterAssignments.js";
 import { users } from "../db/schema/users.js";
 
 type WorkspaceMembership = typeof workspaceMemberships.$inferSelect;
@@ -216,6 +217,14 @@ async function removeWorkspaceMember(params: {
     }
 
     if (workspaceCampaignIds.length && targetCampaignMembershipIds.length) {
+      await tx
+        .delete(characterAssignments)
+        .where(
+          and(
+            inArray(characterAssignments.campaignId, workspaceCampaignIds),
+            eq(characterAssignments.userId, target.userId)
+          )
+        );
       await tx
         .delete(campaignMemberships)
         .where(

@@ -13,6 +13,7 @@ import {
   campaignMemberships,
   workspaceMemberships,
 } from "../db/schema/memberships.js";
+import { characterAssignments } from "../db/schema/characterAssignments.js";
 import { users } from "../db/schema/users.js";
 
 type User = typeof users.$inferSelect;
@@ -134,14 +135,24 @@ async function removeCampaignMember(params: {
     throw new Error("Cannot remove the last campaign GM or workspace owner");
   }
 
-  await db
-    .delete(campaignMemberships)
-    .where(
-      and(
-        eq(campaignMemberships.id, params.membershipId),
-        eq(campaignMemberships.campaignId, params.campaignId)
-      )
-    );
+  await db.transaction(async (tx) => {
+    await tx
+      .delete(characterAssignments)
+      .where(
+        and(
+          eq(characterAssignments.campaignId, params.campaignId),
+          eq(characterAssignments.userId, targetMembership.userId)
+        )
+      );
+    await tx
+      .delete(campaignMemberships)
+      .where(
+        and(
+          eq(campaignMemberships.id, params.membershipId),
+          eq(campaignMemberships.campaignId, params.campaignId)
+        )
+      );
+  });
 }
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
@@ -205,7 +216,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     const userIds = memberships.map((membership) => membership.userId);
 
-    const [memberUsers, memberWorkspaceMemberships, pendingInvitations] =
+    const [memberUsers, memberWorkspaceMemberships, pendingInvitations, assignments] =
       await Promise.all([
         userIds.length
           ? db.select().from(users).where(inArray(users.id, userIds))
@@ -230,6 +241,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
               eq(invitations.status, "pending")
             )
           ),
+        db
+          .select()
+          .from(characterAssignments)
+          .where(eq(characterAssignments.campaignId, campaign.id)),
       ]);
 
     const usersById = new Map<string, User>();
@@ -240,6 +255,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const workspaceRolesByUserId = new Map<string, string>();
     memberWorkspaceMemberships.forEach((membership) => {
       workspaceRolesByUserId.set(membership.userId, membership.role);
+    });
+    const characterIdsByUserId = new Map<string, string[]>();
+    assignments.forEach((assignment) => {
+      const existing = characterIdsByUserId.get(assignment.userId) ?? [];
+      existing.push(assignment.characterId);
+      characterIdsByUserId.set(assignment.userId, existing);
     });
 
     const acceptedRows = memberships.map((membership) => {
@@ -256,8 +277,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         userId: membership.userId,
         workspaceRole: workspaceRolesByUserId.get(membership.userId) || "member",
         campaignRole: membership.role || "player",
-        // Character assignment has not moved to Postgres/API yet.
-        characterIds: [],
+        characterIds: characterIdsByUserId.get(membership.userId) ?? [],
       };
     });
 
@@ -271,8 +291,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       userId: null,
       workspaceRole: invitation.workspaceRole || "member",
       campaignRole: invitation.campaignRole || "player",
-      // Character assignment has not moved to Postgres/API yet.
-      characterIds: [],
+      characterIds: String(invitation.characterId || "")
+        .split(",")
+        .map((id) => id.trim())
+        .filter(Boolean),
     }));
 
     return res.status(200).json({

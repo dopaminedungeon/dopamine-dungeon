@@ -1,5 +1,5 @@
 import type { VercelRequest, VercelResponse } from "@vercel/node";
-import { and, eq, or } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 
 import {
   getCurrentUser,
@@ -10,6 +10,8 @@ import {
 import { setCorsHeaders } from "../src/server/cors.js";
 import { db } from "../src/server/db.js";
 import { characters } from "../db/schema/characters.js";
+import { characterAssignments } from "../db/schema/characterAssignments.js";
+import { invitations } from "../db/schema/invitations.js";
 
 type CharacterRow = typeof characters.$inferSelect;
 
@@ -31,6 +33,13 @@ function stripGmOnlyCharacterFields(data: Record<string, unknown>) {
   void gmNotes;
   void secrets;
   return safeData;
+}
+
+function parseInvitationCharacterIds(value?: string | null) {
+  return String(value || "")
+    .split(",")
+    .map((id) => id.trim())
+    .filter(Boolean);
 }
 
 function toCharacterPayload(row: CharacterRow, isGm: boolean) {
@@ -106,20 +115,30 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
       const visibilityFilter = isGm
         ? eq(characters.campaignId, campaign.id)
-        : and(
-            eq(characters.campaignId, campaign.id),
-            or(
-              eq(characters.visibility, "player"),
-              eq(characters.isPlayerVisible, true),
-              eq(characters.ownerUserId, currentUser.firebaseUid)
-            )
-          );
+        : eq(characters.campaignId, campaign.id);
 
       const whereClause = characterId
         ? and(visibilityFilter, eq(characters.id, characterId))
         : visibilityFilter;
 
-      const rows = await db.select().from(characters).where(whereClause);
+      let rows = await db.select().from(characters).where(whereClause);
+      let assignedCharacterIds = new Set<string>();
+
+      if (!isGm) {
+        const assignments = await db
+          .select()
+          .from(characterAssignments)
+          .where(
+            and(
+              eq(characterAssignments.campaignId, campaign.id),
+              eq(characterAssignments.userId, currentUser.id)
+            )
+          );
+        assignedCharacterIds = new Set(
+          assignments.map((assignment) => assignment.characterId)
+        );
+        rows = rows.filter((row) => assignedCharacterIds.has(row.id));
+      }
 
       if (characterId) {
         return res.status(200).json({
@@ -184,11 +203,39 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       return res.status(400).json({ ok: false, error: "characterId is required" });
     }
 
-    await db
-      .delete(characters)
+    const pendingInvitations = await db
+      .select()
+      .from(invitations)
       .where(
-        and(eq(characters.campaignId, campaign.id), eq(characters.id, characterId))
+        and(eq(invitations.campaignId, campaign.id), eq(invitations.status, "pending"))
       );
+    const isAssignedToPendingInvitation = pendingInvitations.some((invitation) =>
+      parseInvitationCharacterIds(invitation.characterId).includes(characterId)
+    );
+
+    if (isAssignedToPendingInvitation) {
+      return res.status(409).json({
+        ok: false,
+        error:
+          "Unable to delete this character because it is assigned to a pending invitation.",
+      });
+    }
+
+    await db.transaction(async (tx) => {
+      await tx
+        .delete(characterAssignments)
+        .where(
+          and(
+            eq(characterAssignments.campaignId, campaign.id),
+            eq(characterAssignments.characterId, characterId)
+          )
+        );
+      await tx
+        .delete(characters)
+        .where(
+          and(eq(characters.campaignId, campaign.id), eq(characters.id, characterId))
+        );
+    });
 
     return res.status(200).json({ ok: true });
   } catch (error) {

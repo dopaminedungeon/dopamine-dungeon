@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import { useMode } from "../context/ModeContext.jsx";
 import { useCampaign } from "../context/CampaignContext";
 import { Search, Plus } from "lucide-react";
@@ -95,6 +95,10 @@ export default function BagOfHolding() {
   const [bagState, setBagState] = useState({ currency: {}, looseItems: [], linkedEntries: [] });
   const [allItems, setAllItems] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [isBagSaving, setIsBagSaving] = useState(false);
+  const [linkingItemId, setLinkingItemId] = useState(null);
+  const isBagSavingRef = useRef(false);
+  const linkingItemIdRef = useRef(null);
   const currency = bagState?.currency || {};
   const looseItems = Array.isArray(bagState?.looseItems) ? bagState.looseItems : [];
   const linkedEntries = Array.isArray(bagState?.linkedEntries) ? bagState.linkedEntries : [];
@@ -115,7 +119,7 @@ export default function BagOfHolding() {
   }, [pendingDelta]);
 
   const applyPendingCurrency = async (mode = "add") => {
-    if (!hasPendingDelta) return;
+    if (!hasPendingDelta || isBagSavingRef.current) return;
 
     setCurrencyError("");
 
@@ -297,10 +301,19 @@ export default function BagOfHolding() {
   const canAdd = true; // requirement: players can add
 
   async function persistBag(next) {
+    if (isBagSavingRef.current) return false;
+    isBagSavingRef.current = true;
+    setIsBagSaving(true);
     setBagState(next);
-    if (!selectedCampaignId) return;
-    if (typeof bagRepo.save === "function") {
-      await Promise.resolve(bagRepo.save(selectedCampaignId, next));
+    try {
+      if (!selectedCampaignId) return true;
+      if (typeof bagRepo.save === "function") {
+        await Promise.resolve(bagRepo.save(selectedCampaignId, next));
+      }
+      return true;
+    } finally {
+      isBagSavingRef.current = false;
+      setIsBagSaving(false);
     }
   }
 
@@ -320,6 +333,7 @@ export default function BagOfHolding() {
 
   const onSubmit = async (e) => {
     e.preventDefault();
+    if (isBagSavingRef.current) return;
 
     const name = form.name.trim();
     if (!name) return;
@@ -335,7 +349,8 @@ export default function BagOfHolding() {
     };
 
     const next = bagRepo.addLooseItem(bagState, newItem);
-    await persistBag(next);
+    const didSave = await persistBag(next);
+    if (!didSave) return;
     setShowModal(false);
     setForm({ name: "", qty: 1, worth: "", type: "Other" });
   };
@@ -354,6 +369,11 @@ export default function BagOfHolding() {
 
   async function addLinkedItem(itemId) {
     const normalizedItemId = String(itemId);
+    if (isBagSavingRef.current || linkingItemIdRef.current === normalizedItemId) return;
+
+    linkingItemIdRef.current = normalizedItemId;
+    setLinkingItemId(normalizedItemId);
+    try {
     const existingLink = getLinksForEntity("BagOfHolding", bagId, "Player").find((linkObj) => {
       if (linkObj?.label !== "contained_in") return false;
       const other = linkObj.entityA.type === "BagOfHolding" ? linkObj.entityB : linkObj.entityA;
@@ -374,12 +394,17 @@ export default function BagOfHolding() {
       sourceType: "linked",
       addedBy: isGM ? "gm" : "player",
     });
-    await persistBag(next);
+    const didSave = await persistBag(next);
+    if (!didSave) return;
     await refreshItems();
     setShowLinkModal(false);
     setLinkQuery("");
     setRerenderTick((v) => v + 1);
     setPendingRemovalAction(null);
+    } finally {
+      linkingItemIdRef.current = null;
+      setLinkingItemId(null);
+    }
   }
 
   async function removeLinkedItem(entryId, itemId) {
@@ -637,28 +662,28 @@ export default function BagOfHolding() {
                 </div>
               ) : null}
               <div className="grid grid-cols-2 gap-2 w-full sm:w-auto">
-                <button
-                  type="button"
-                  disabled={!hasPendingDelta}
+              <button
+                type="button"
+                  disabled={!hasPendingDelta || isBagSaving}
                   onClick={() => applyPendingCurrency("spend")}
-                  className={`w-full px-4 py-2.5 rounded-xl border border-white/10 font-medium transition-colors ${hasPendingDelta
+                  className={`w-full px-4 py-2.5 rounded-xl border border-white/10 font-medium transition-colors ${hasPendingDelta && !isBagSaving
                     ? "bg-red-500/15 text-red-200 hover:bg-red-500/25"
                     : "bg-white/5 text-zinc-500 cursor-not-allowed"
                     }`}
                 >
-                  Spend
+                  {isBagSaving ? "Saving..." : "Spend"}
                 </button>
 
                 <button
                   type="button"
-                  disabled={!hasPendingDelta}
+                  disabled={!hasPendingDelta || isBagSaving}
                   onClick={() => applyPendingCurrency("add")}
-                  className={`w-full px-4 py-2.5 rounded-xl font-medium transition-opacity ${hasPendingDelta
+                  className={`w-full px-4 py-2.5 rounded-xl font-medium transition-opacity ${hasPendingDelta && !isBagSaving
                     ? "bg-linear-to-r from-indigo-500 to-purple-500 text-white hover:opacity-90"
                     : "bg-white/5 text-zinc-500 cursor-not-allowed"
                     }`}
                 >
-                  Add
+                  {isBagSaving ? "Saving..." : "Add"}
                 </button>
               </div>
             </div>
@@ -975,16 +1000,18 @@ export default function BagOfHolding() {
               <div className="flex flex-col-reverse sm:flex-row sm:justify-end gap-3 pt-2">
                 <button
                   type="button"
+                  disabled={isBagSaving}
                   onClick={() => setShowModal(false)}
-                  className="w-full sm:w-auto px-4 py-2.5 rounded-xl bg-white/5 text-zinc-300 hover:bg-white/10"
+                  className="w-full sm:w-auto px-4 py-2.5 rounded-xl bg-white/5 text-zinc-300 hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-60"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
-                  className="w-full sm:w-auto px-4 py-2.5 rounded-xl bg-linear-to-r from-blue-500 to-cyan-500 text-white font-medium hover:opacity-90"
+                  disabled={isBagSaving}
+                  className="w-full sm:w-auto px-4 py-2.5 rounded-xl bg-linear-to-r from-blue-500 to-cyan-500 text-white font-medium hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60"
                 >
-                  Add
+                  {isBagSaving ? "Adding..." : "Add"}
                 </button>
               </div>
             </form>
@@ -1015,12 +1042,13 @@ export default function BagOfHolding() {
                 linkCandidates.map((it) => (
                   <button
                     key={it.id}
+                    disabled={isBagSaving || linkingItemId === String(it.id)}
                     onClick={() => {
                       addLinkedItem(it.id);
                     }}
-                    className="block w-full text-left px-3 py-2 text-sm text-zinc-200 hover:bg-white/5"
+                    className="block w-full text-left px-3 py-2 text-sm text-zinc-200 hover:bg-white/5 disabled:cursor-not-allowed disabled:opacity-60"
                   >
-                    {it.name}
+                    {linkingItemId === String(it.id) ? "Linking..." : it.name}
                     <span className="ml-2 text-xs text-zinc-500">({it.type || "Other"})</span>
                   </button>
                 ))

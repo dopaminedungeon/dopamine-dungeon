@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { getAllCharacters } from "../../data/characters/characters.repo";
-import { createApiInvitation } from "../../data/api/apiClient";
+import { createApiInvitation, getApiCharacterAssignments } from "../../data/api/apiClient";
 import { useAuth } from "../../context/AuthContext";
 import { useTenant } from "../../context/TenantContext";
 import { useCampaign } from "../../context/CampaignContext";
@@ -25,8 +25,17 @@ export default function InvitePlayerForm({ onInvitationCreated }) {
 
     const loadCharacters = async () => {
       try {
-        const characters = await getAllCharacters(selectedCampaignId);
-        setAvailableCharacters(characters || []);
+        const [characters, assignmentData] = await Promise.all([
+          getAllCharacters(selectedCampaignId),
+          getApiCharacterAssignments(selectedCampaignId),
+        ]);
+        const blockedCharacterIds = new Set([
+          ...(assignmentData.assignedCharacterIds || []),
+          ...(assignmentData.pendingAssignedCharacterIds || []),
+        ]);
+        setAvailableCharacters(
+          (characters || []).filter((character) => !blockedCharacterIds.has(character.id))
+        );
       } catch (err) {
         console.error("[InvitePlayerForm] Failed to load characters", err);
       }
@@ -37,6 +46,7 @@ export default function InvitePlayerForm({ onInvitationCreated }) {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    if (isSubmitting) return;
 
     if (!user?.uid) {
       setError("You must be signed in to invite a player.");
@@ -79,6 +89,7 @@ export default function InvitePlayerForm({ onInvitationCreated }) {
         tenantId: selectedTenantId,
         campaignId: selectedCampaignId,
         campaignRole: selectedCampaignRole,
+        characterIds: selectedCharacterIds,
       });
 
       setEmail("");

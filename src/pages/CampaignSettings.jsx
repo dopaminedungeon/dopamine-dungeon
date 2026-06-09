@@ -23,10 +23,14 @@ import { useCampaign } from "../context/CampaignContext.jsx";
 import { useTenant } from "../context/TenantContext.jsx";
 import { db } from "../firebase/firebase";
 import {
+  assignApiCharacter,
   getApiCampaignPeople,
+  getApiCharacterAssignments,
   removeApiCampaignMember,
   revokeApiCampaignInvite,
+  unassignApiCharacter,
 } from "../data/api/apiClient.ts";
+import { getAllCharacters } from "../data/characters/characters.repo";
 
 const STATUS = ["active", "paused", "completed"];
 
@@ -68,6 +72,10 @@ export default function CampaignSettings() {
   const [campaignPeopleLoading, setCampaignPeopleLoading] = useState(false);
   const [openActionsId, setOpenActionsId] = useState(null);
   const [campaignPeopleVersion, setCampaignPeopleVersion] = useState(0);
+  const [campaignCharacters, setCampaignCharacters] = useState([]);
+  const [assignableCharacters, setAssignableCharacters] = useState([]);
+  const [assignmentRows, setAssignmentRows] = useState([]);
+  const [assignmentSelectionByUserId, setAssignmentSelectionByUserId] = useState({});
 
   const createCampaign = async (e) => {
     e?.preventDefault?.();
@@ -120,11 +128,27 @@ export default function CampaignSettings() {
       try {
         setCampaignPeopleLoading(true);
 
-        const response = await getApiCampaignPeople(selectedCampaignId);
+        const [response, characters, assignmentData] = await Promise.all([
+          getApiCampaignPeople(selectedCampaignId),
+          getAllCharacters(selectedCampaignId),
+          getApiCharacterAssignments(selectedCampaignId),
+        ]);
+        const blockedCharacterIds = new Set([
+          ...(assignmentData.assignedCharacterIds || []),
+          ...(assignmentData.pendingAssignedCharacterIds || []),
+        ]);
         setCampaignPeople(response.people || []);
+        setAssignmentRows(assignmentData.assignments || []);
+        setCampaignCharacters(characters || []);
+        setAssignableCharacters(
+          (characters || []).filter((character) => !blockedCharacterIds.has(character.id))
+        );
       } catch (error) {
         console.error("[CampaignSettings] Failed to load campaign people", error);
         setCampaignPeople([]);
+        setAssignmentRows([]);
+        setCampaignCharacters([]);
+        setAssignableCharacters([]);
       } finally {
         setCampaignPeopleLoading(false);
       }
@@ -358,6 +382,44 @@ export default function CampaignSettings() {
     } catch (error) {
       console.error("[CampaignSettings] Failed to remove campaign member", error);
       setSaveState({ type: "error", message: "Could not remove campaign member." });
+    }
+  };
+
+  const getAssignmentForCharacter = (characterId) =>
+    assignmentRows.find((assignment) => assignment.characterId === characterId) || null;
+
+  const getCharacterName = (characterId) =>
+    campaignCharacters.find((character) => character.id === characterId)?.name ||
+    characterId;
+
+  const onAssignCharacter = async (person) => {
+    const campaignId = draft?.campaignId || selectedCampaignId;
+    const characterId = assignmentSelectionByUserId[person.userId];
+    if (!campaignId || !person?.userId || !characterId) return;
+
+    try {
+      await assignApiCharacter(campaignId, person.userId, characterId);
+      setAssignmentSelectionByUserId((current) => ({ ...current, [person.userId]: "" }));
+      setCampaignPeopleVersion((value) => value + 1);
+      setSaveState({ type: "success", message: "Character assigned." });
+    } catch (error) {
+      console.error("[CampaignSettings] Failed to assign character", error);
+      setSaveState({ type: "error", message: "Could not assign character." });
+    }
+  };
+
+  const onUnassignCharacter = async (characterId) => {
+    const campaignId = draft?.campaignId || selectedCampaignId;
+    const assignment = getAssignmentForCharacter(characterId);
+    if (!campaignId || !assignment) return;
+
+    try {
+      await unassignApiCharacter(campaignId, { assignmentId: assignment.id });
+      setCampaignPeopleVersion((value) => value + 1);
+      setSaveState({ type: "success", message: "Character unassigned." });
+    } catch (error) {
+      console.error("[CampaignSettings] Failed to unassign character", error);
+      setSaveState({ type: "error", message: "Could not unassign character." });
     }
   };
 
@@ -668,17 +730,49 @@ export default function CampaignSettings() {
                               {person.characterIds?.length ? (
                                 <div className="flex flex-wrap gap-2">
                                   {person.characterIds.map((characterId) => (
-                                    <span
+                                    <button
+                                      type="button"
                                       key={`${person.id}-${characterId}`}
-                                      className="inline-flex rounded-full border border-cyan-400/20 bg-cyan-400/10 px-2.5 py-1 text-xs text-cyan-100"
+                                      onClick={() => onUnassignCharacter(characterId)}
+                                      className="inline-flex rounded-full border border-cyan-400/20 bg-cyan-400/10 px-2.5 py-1 text-xs text-cyan-100 hover:bg-cyan-400/20"
+                                      title="Unassign this character"
                                     >
-                                      {characterId}
-                                    </span>
+                                      {getCharacterName(characterId)} ×
+                                    </button>
                                   ))}
                                 </div>
                               ) : (
                                 <span className="text-xs text-zinc-500">No characters assigned</span>
                               )}
+                              {person.type === "member" && person.userId ? (
+                                <div className="mt-2 flex gap-2">
+                                  <select
+                                    value={assignmentSelectionByUserId[person.userId] || ""}
+                                    onChange={(event) =>
+                                      setAssignmentSelectionByUserId((current) => ({
+                                        ...current,
+                                        [person.userId]: event.target.value,
+                                      }))
+                                    }
+                                    className="min-w-[160px] rounded-lg border border-white/10 bg-zinc-950 px-2 py-1 text-xs text-white"
+                                  >
+                                    <option value="">Assign PC...</option>
+                                    {assignableCharacters.map((character) => (
+                                      <option key={character.id} value={character.id}>
+                                        {character.name || character.id}
+                                      </option>
+                                    ))}
+                                  </select>
+                                  <button
+                                    type="button"
+                                    onClick={() => onAssignCharacter(person)}
+                                    disabled={!assignmentSelectionByUserId[person.userId]}
+                                    className="rounded-lg border border-white/10 bg-white/5 px-2 py-1 text-xs text-zinc-200 hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-50"
+                                  >
+                                    Assign
+                                  </button>
+                                </div>
+                              ) : null}
                             </td>
                             <td className="rounded-r-2xl border-y border-r border-white/10 bg-white/[0.025] px-4 py-3">
                               <div className="relative flex justify-end overflow-visible">

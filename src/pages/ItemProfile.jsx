@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { useMode } from "../context/ModeContext.jsx";
 import { ArrowLeft, Swords, Shield, Sparkles, Trash2 } from "lucide-react";
@@ -65,6 +65,8 @@ export default function ItemProfile() {
   const [item, setItem] = useState(null);
   const [sessions, setSessions] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [isItemSaving, setIsItemSaving] = useState(false);
+  const isItemSavingRef = useRef(false);
   const [linksVersion, setLinksVersion] = useState(0);
 
   const rawItem = item && String(item.id) === String(id) ? item : null;
@@ -115,10 +117,19 @@ export default function ItemProfile() {
     [sessions]
   );
   const getEndpointLabel = (endpoint) => {
+    if (endpoint.type === "BagOfHolding") return "Bag of Holding";
     if (endpoint.type !== "Session") return endpoint.id;
 
     const session = sessionsById.get(String(endpoint.id));
     return session?.name || session?.title || endpoint.id;
+  };
+  const getEndpointTypeLabel = (endpoint) => {
+    if (endpoint.type === "BagOfHolding") return "";
+    return `${endpoint.type}: `;
+  };
+  const getLinkLabel = (label) => {
+    if (label === "contained_in") return "contained in";
+    return String(label || "").replaceAll("_", " ");
   };
 
   if (loading) {
@@ -212,15 +223,24 @@ export default function ItemProfile() {
           <div className="flex w-full sm:w-auto flex-col sm:flex-row gap-2">
             <button
               onClick={async () => {
+                if (isItemSavingRef.current) return;
                 if (isEditing && formData && selectedCampaignId) {
-                  const savedItem = await itemsRepo.upsert(selectedCampaignId, formData);
-                  setItem(savedItem || formData);
+                  try {
+                    isItemSavingRef.current = true;
+                    setIsItemSaving(true);
+                    const savedItem = await itemsRepo.upsert(selectedCampaignId, formData);
+                    setItem(savedItem || formData);
+                  } finally {
+                    isItemSavingRef.current = false;
+                    setIsItemSaving(false);
+                  }
                 }
                 setIsEditing((prev) => !prev);
               }}
-              className="w-full sm:w-auto px-4 py-2 rounded-xl bg-white/10 text-zinc-200 hover:bg-white/20 text-sm font-medium"
+              disabled={isItemSaving}
+              className="w-full sm:w-auto px-4 py-2 rounded-xl bg-white/10 text-zinc-200 hover:bg-white/20 text-sm font-medium disabled:cursor-not-allowed disabled:opacity-60"
             >
-              {isEditing ? "Done" : "Edit"}
+              {isItemSaving ? "Saving..." : isEditing ? "Done" : "Edit"}
             </button>
 
             <button
@@ -516,9 +536,9 @@ export default function ItemProfile() {
                       key={link.id}
                       className="rounded-xl border border-white/10 bg-black/20 px-3 py-2 text-sm text-zinc-300"
                     >
-                      <span className="text-white">{other.type}</span>: {getEndpointLabel(other)}
+                      <span className="text-white">{getEndpointTypeLabel(other)}{getEndpointLabel(other)}</span>
                       <span className="mx-2 text-zinc-600">•</span>
-                      {link.label}
+                      {getLinkLabel(link.label)}
                       {isGM ? (
                         <span className="ml-2 text-xs text-zinc-500">[{link.visibility}]</span>
                       ) : null}

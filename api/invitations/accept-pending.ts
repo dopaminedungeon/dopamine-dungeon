@@ -9,6 +9,7 @@ import {
   campaignMemberships,
   workspaceMemberships,
 } from "../../db/schema/memberships.js";
+import { characterAssignments } from "../../db/schema/characterAssignments.js";
 import { campaigns } from "../../db/schema/campaigns.js";
 import { workspaces } from "../../db/schema/workspaces.js";
 
@@ -69,7 +70,45 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
             userId: currentUser.id,
             role: invitation.campaignRole || "player",
           })
-          .onConflictDoNothing();
+          .onConflictDoUpdate({
+            target: [campaignMemberships.campaignId, campaignMemberships.userId],
+            set: {
+              role: invitation.campaignRole || "player",
+            },
+          });
+
+        const characterIds = String(invitation.characterId || "")
+          .split(",")
+          .map((id) => id.trim())
+          .filter(Boolean);
+
+        for (const characterId of characterIds) {
+          const existingAssignments = await tx
+            .select()
+            .from(characterAssignments)
+            .where(
+              and(
+                eq(characterAssignments.campaignId, invitation.campaignId),
+                eq(characterAssignments.characterId, characterId)
+              )
+            )
+            .limit(1);
+          const existingAssignment = existingAssignments[0];
+
+          if (existingAssignment) {
+            if (existingAssignment.userId !== currentUser.id) {
+              throw new Error("Character is already assigned to another player");
+            }
+            continue;
+          }
+
+          await tx.insert(characterAssignments).values({
+            campaignId: invitation.campaignId,
+            characterId,
+            userId: currentUser.id,
+            createdByUserId: invitation.invitedByUserId,
+          });
+        }
 
         const updatedInvitations = await tx
           .update(invitations)
