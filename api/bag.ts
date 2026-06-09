@@ -5,9 +5,9 @@ import {
   getCurrentUser,
   requireCampaignMember,
   resolveCampaignBySlug,
-} from "./_lib/access.ts";
-import { setCorsHeaders } from "./_lib/cors.ts";
-import { db } from "./_lib/db.ts";
+} from "./lib/access.ts";
+import { setCorsHeaders } from "./lib/cors.ts";
+import { db } from "./lib/db.ts";
 import { bagCurrency, bagEntries } from "../db/schema/bag";
 
 type BagCurrency = Partial<Record<"gp" | "sp" | "cp" | "ep" | "pp", number>>;

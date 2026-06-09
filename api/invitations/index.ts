@@ -1,7 +1,7 @@
 import type { VercelRequest, VercelResponse } from "@vercel/node";
 import { and, eq } from "drizzle-orm";
 
-import { adminDb } from "../_lib/auth";
+import { adminDb } from "../lib/auth";
 import {
   getCurrentUser,
   normalizeEmail,
@@ -9,9 +9,9 @@ import {
   requireWorkspaceOwner,
   resolveCampaignByAppId,
   resolveWorkspaceByAppId,
-} from "../_lib/access";
-import { setCorsHeaders } from "../_lib/cors";
-import { db } from "../_lib/db";
+} from "../lib/access";
+import { setCorsHeaders } from "../lib/cors";
+import { db } from "../lib/db";
 import { invitations } from "../../db/schema/invitations";
 import { buildInviteEmailHtml } from "../../src/domain/mail/inviteEmail.template";
 

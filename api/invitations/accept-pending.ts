@@ -1,9 +1,9 @@
 import type { VercelRequest, VercelResponse } from "@vercel/node";
 import { and, eq } from "drizzle-orm";
 
-import { getCurrentUser, normalizeEmail } from "../_lib/access";
-import { setCorsHeaders } from "../_lib/cors";
-import { db } from "../_lib/db";
+import { getCurrentUser, normalizeEmail } from "../lib/access";
+import { setCorsHeaders } from "../lib/cors";
+import { db } from "../lib/db";
 import { invitations } from "../../db/schema/invitations";
 import {
   campaignMemberships,
