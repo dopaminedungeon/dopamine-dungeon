@@ -185,7 +185,7 @@ export async function updateApiCampaign(input: {
   return apiFetch<{
     ok: true;
     campaign: unknown;
-  }>("/api/campaign-settings", {
+  }>("/api/campaign-people", {
     method: "PATCH",
     body: JSON.stringify(input),
   });
