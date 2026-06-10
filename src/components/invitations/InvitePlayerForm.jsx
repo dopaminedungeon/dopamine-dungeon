@@ -17,6 +17,7 @@ export default function InvitePlayerForm({ onInvitationCreated }) {
   const [successMessage, setSuccessMessage] = useState("");
   const [availableCharacters, setAvailableCharacters] = useState([]);
   const [selectedCharacterIds, setSelectedCharacterIds] = useState([]);
+  const [charactersVersion, setCharactersVersion] = useState(0);
 
   const canInvite = workspaceRole === "owner" && campaignRole === "gm";
 
@@ -42,7 +43,7 @@ export default function InvitePlayerForm({ onInvitationCreated }) {
     };
 
     loadCharacters();
-  }, [selectedCampaignId]);
+  }, [selectedCampaignId, charactersVersion]);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -79,10 +80,6 @@ export default function InvitePlayerForm({ onInvitationCreated }) {
     setError("");
     setSuccessMessage("");
 
-    if (typeof onInvitationCreated === "function") {
-      onInvitationCreated();
-    }
-
     try {
       const { invitation } = await createApiInvitation({
         email: trimmedEmail,
@@ -95,9 +92,13 @@ export default function InvitePlayerForm({ onInvitationCreated }) {
       setEmail("");
       setSelectedCampaignRole("player");
       setSelectedCharacterIds([]);
+      setCharactersVersion((value) => value + 1);
       setSuccessMessage(
-        `Invitation created for ${invitation.email}. Character assignment will remain managed separately for now.`
+        `Invitation created for ${invitation.email}.`
       );
+      if (typeof onInvitationCreated === "function") {
+        await onInvitationCreated();
+      }
     } catch (err) {
       console.error("[InvitePlayerForm] Failed to create invitation", err);
       setError("Failed to create invitation. Please try again.");
@@ -193,7 +194,7 @@ export default function InvitePlayerForm({ onInvitationCreated }) {
           This will create a pending campaign invitation for the currently selected workspace and campaign.
         </p>
         <p className="mt-2 text-zinc-400">
-          The selected campaign role will be attached to the invitation now. Character assignment remains managed separately for now.
+          The selected campaign role and character assignments will be attached to the invitation now.
         </p>
       </div>
 

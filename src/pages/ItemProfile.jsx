@@ -6,6 +6,8 @@ import { itemsRepo } from "../data/items/items.repo";
 import { sessionsRepo } from "../data/sessions/sessions.repo";
 import { useCampaign } from "../context/CampaignContext";
 import { getLinksForEntity, loadLinks } from "../data/links/links.repo";
+import { getApiCampaignPeople, getApiCharacterAssignments } from "../data/api/apiClient";
+import { getAllCharacters } from "../data/characters/characters.repo";
 
 const ITEM_TYPES = [
   "Weapon",
@@ -68,6 +70,7 @@ export default function ItemProfile() {
   const [isItemSaving, setIsItemSaving] = useState(false);
   const isItemSavingRef = useRef(false);
   const [linksVersion, setLinksVersion] = useState(0);
+  const [ownerOptions, setOwnerOptions] = useState([{ value: "", label: "Unassigned" }]);
 
   const rawItem = item && String(item.id) === String(id) ? item : null;
 
@@ -84,29 +87,88 @@ export default function ItemProfile() {
     async function load() {
       setLoading(true);
       try {
-        const [itemData, sessionData] = await Promise.all([
+        const [
+          itemData,
+          sessionData,
+          _links,
+          campaignPeopleResponse,
+          characters,
+          assignmentData,
+        ] = await Promise.all([
           itemsRepo.getById(selectedCampaignId, String(id)),
           sessionsRepo.getAll(selectedCampaignId),
           loadLinks(selectedCampaignId),
+          isGM ? getApiCampaignPeople(selectedCampaignId) : Promise.resolve({ people: [] }),
+          isGM ? getAllCharacters(selectedCampaignId) : Promise.resolve([]),
+          isGM
+            ? getApiCharacterAssignments(selectedCampaignId)
+            : Promise.resolve({ assignments: [] }),
         ]);
+        void _links;
         setItem(itemData || null);
         setSessions(Array.isArray(sessionData) ? sessionData : []);
         setLinksVersion((version) => version + 1);
+
+        const characterById = new Map(
+          (characters || []).map((character) => [String(character.id), character])
+        );
+        const nextOwnerOptions = new Map([["", { value: "", label: "Unassigned" }]]);
+        const addOwnerOption = (value, label, aliases = []) => {
+          const trimmedLabel = String(label || "").trim();
+          const trimmedValue = String(value || "").trim();
+          if (!trimmedValue || !trimmedLabel || nextOwnerOptions.has(trimmedValue)) return;
+          nextOwnerOptions.set(trimmedValue, {
+            value: trimmedValue,
+            label: trimmedLabel,
+            aliases: aliases.map((alias) => String(alias || "").trim()).filter(Boolean),
+          });
+        };
+
+        (assignmentData.assignments || []).forEach((assignment) => {
+          const character = characterById.get(String(assignment.characterId));
+          const characterName = String(character?.name || "").trim();
+          if (characterName) {
+            addOwnerOption(characterName, characterName, [assignment.characterId]);
+          }
+        });
+
+        (campaignPeopleResponse.people || [])
+          .filter((person) => person.type === "member" && person.status === "accepted")
+          .forEach((person) => {
+            const label = String(person.label || person.email || "").trim();
+            if (label && label !== "—") {
+              addOwnerOption(label, label, [person.userId, person.docId]);
+            }
+          });
+
+        setOwnerOptions(Array.from(nextOwnerOptions.values()));
       } catch (error) {
         console.error("[ItemProfile] Failed to load items", error);
         setItem(null);
         setSessions([]);
+        setOwnerOptions([{ value: "", label: "Unassigned" }]);
       } finally {
         setLoading(false);
       }
     }
 
     load();
-  }, [selectedCampaignId, id]);
+  }, [selectedCampaignId, id, isGM]);
 
   useEffect(() => {
     setFormData(rawItem || null);
   }, [rawItem]);
+  useEffect(() => {
+    if (!formData?.owner) return;
+
+    const ownerOption = ownerOptions.find((entry) =>
+      (entry.aliases || []).includes(String(formData.owner))
+    );
+
+    if (ownerOption && ownerOption.value !== formData.owner) {
+      setFormData((prev) => (prev ? { ...prev, owner: ownerOption.value } : prev));
+    }
+  }, [formData?.owner, ownerOptions]);
   const [isEditing, setIsEditing] = useState(false);
   const itemLinks = useMemo(
     () => getLinksForEntity("Item", String(id), isGM ? "GM" : "Player"),
@@ -130,6 +192,17 @@ export default function ItemProfile() {
   const getLinkLabel = (label) => {
     if (label === "contained_in") return "contained in";
     return String(label || "").replaceAll("_", " ");
+  };
+  const getOwnerLabel = (ownerValue) => {
+    const normalized = String(ownerValue || "").trim();
+    if (!normalized) return "Unassigned";
+    const option = ownerOptions.find(
+      (entry) =>
+        entry.value === normalized ||
+        entry.label === normalized ||
+        (entry.aliases || []).includes(normalized)
+    );
+    return option?.label || normalized;
   };
 
   if (loading) {
@@ -491,13 +564,37 @@ export default function ItemProfile() {
             <p className="text-zinc-400 text-sm mb-1 flex items-center gap-2">
               <span className="text-zinc-500">Current owner:</span>
               {isEditing && isGM ? (
-                <input
-                  className="bg-transparent border border-white/20 rounded-lg px-2 py-1 text-white font-medium"
-                  value={formData.owner}
+                <select
+                  className="bg-zinc-950 border border-white/20 rounded-lg px-2 py-1 text-white font-medium"
+                  value={
+                    ownerOptions.some((entry) => entry.value === formData.owner)
+                      ? formData.owner
+                      : getOwnerLabel(formData.owner) === "Unassigned"
+                        ? ""
+                        : getOwnerLabel(formData.owner)
+                  }
                   onChange={(e) => handleFieldChange("owner", e.target.value)}
-                />
+                >
+                  {ownerOptions
+                    .concat(
+                      formData.owner &&
+                        !ownerOptions.some(
+                          (entry) =>
+                            entry.value === formData.owner ||
+                            entry.label === formData.owner ||
+                            (entry.aliases || []).includes(formData.owner)
+                        )
+                        ? [{ value: formData.owner, label: getOwnerLabel(formData.owner) }]
+                        : []
+                    )
+                    .map((option) => (
+                      <option key={option.value || "unassigned"} value={option.value}>
+                        {option.label}
+                      </option>
+                    ))}
+                </select>
               ) : (
-                <span className="text-white font-medium">{formData.owner || "Unassigned"}</span>
+                <span className="text-white font-medium">{getOwnerLabel(formData.owner)}</span>
               )}
             </p>
             <p className="text-zinc-400 text-sm mb-1 flex items-center gap-2">

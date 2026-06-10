@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { useParams, Link, useLocation, useNavigate } from "react-router-dom";
+import { useParams, Link, NavLink, useLocation, useNavigate } from "react-router-dom";
 import { useMode } from "../context/ModeContext.jsx";
 import { useAuth } from "../context/AuthContext";
 import { useCampaign } from "../context/CampaignContext";
@@ -714,6 +714,28 @@ const PCProfile = () => {
   return (
     <div className="p-6 md:p-8 text-white">
       <div className="space-y-6">
+        {!isGMMode ? (
+          <div className="mb-4 flex items-center gap-2">
+            <Link
+              to="/pcs"
+              className="px-3 py-2 rounded-xl text-sm border transition-colors bg-indigo-500/20 border-indigo-400/50 text-white"
+            >
+              Characters
+            </Link>
+            <NavLink
+              to="/pcs/bag"
+              className={({ isActive }) =>
+                `px-3 py-2 rounded-xl text-sm border transition-colors ${isActive
+                  ? "bg-indigo-500/20 border-indigo-400/50 text-white"
+                  : "bg-zinc-950/20 border-zinc-800/60 text-zinc-300 hover:text-white hover:bg-zinc-950/35"
+                }`
+              }
+            >
+              Bag of Holding
+            </NavLink>
+          </div>
+        ) : null}
+
         {/* Title + Back */}
         <header className="flex items-center justify-between gap-4">
           <div className="space-y-1">
@@ -783,14 +805,6 @@ const PCProfile = () => {
                 Open in D&amp;D Beyond ↗
               </a>
             )}
-            {!isGMMode ? (
-              <Link
-                to="/pcs/bag"
-                className="inline-flex items-center rounded-full bg-indigo-500/15 border border-indigo-400/60 px-3 py-1 text-[11px] font-medium text-indigo-100 hover:bg-indigo-500/25 transition"
-              >
-                Bag of Holding
-              </Link>
-            ) : null}
             <span className="inline-flex items-center rounded-full bg-purple-500/20 border border-purple-400/50 px-3 py-1 text-[11px] font-medium text-purple-100">
               Player Character
             </span>

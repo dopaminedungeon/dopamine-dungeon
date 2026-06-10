@@ -100,8 +100,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       });
     }
 
+    let matchingCharacters: Array<typeof characters.$inferSelect> = [];
+
     if (characterIds.length > 0) {
-      const [matchingCharacters, existingAssignments, pendingInvitations] = await Promise.all([
+      const [fetchedCharacters, existingAssignments, pendingInvitations] = await Promise.all([
         db
           .select()
           .from(characters)
@@ -130,6 +132,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
             )
           ),
       ]);
+      matchingCharacters = fetchedCharacters;
+
       if (matchingCharacters.length !== characterIds.length) {
         return res.status(400).json({
           ok: false,
@@ -170,6 +174,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       .returning();
 
     const invitation = insertedInvitations[0];
+    const assignedCharacterNames = matchingCharacters
+      .map((character) => String(character.name || "").trim())
+      .filter(Boolean);
 
     // Firestore mail delivery is intentionally retained temporarily until email sending moves server-side.
     await adminDb.collection("mail").add({
@@ -183,7 +190,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           inviteLink: `${getFrontendOrigin(req)}/welcome?invited=true`,
           inviterName: "Dungeon Master",
           campaignRole,
-          assignedCharacterNames: [],
+          assignedCharacterNames,
         }),
       },
     });
