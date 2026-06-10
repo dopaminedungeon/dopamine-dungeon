@@ -58,6 +58,28 @@ const formatSigned = (value) => {
   return n >= 0 ? `+${n}` : `${n}`;
 };
 
+function formatPersonName(value) {
+  const raw = String(value || "").trim();
+  if (!raw || raw === "—") return "Player";
+  const localPart = raw.includes("@") ? raw.split("@")[0] : raw;
+  const looksLikeUuid = /^[0-9a-f]{8}-[0-9a-f-]{27,}$/i.test(localPart);
+  if (looksLikeUuid) return "Player";
+
+  return localPart
+    .replace(/[._-]+/g, " ")
+    .split(" ")
+    .filter(Boolean)
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+    .join(" ") || "Player";
+}
+
+function formatOwnerDisplay(value) {
+  const raw = String(value || "").trim();
+  if (!raw) return "Unassigned";
+  if (raw.includes("@")) return formatPersonName(raw);
+  return raw;
+}
+
 export default function ItemProfile() {
   const { id } = useParams();
   const navigate = useNavigate();
@@ -112,6 +134,11 @@ export default function ItemProfile() {
         const characterById = new Map(
           (characters || []).map((character) => [String(character.id), character])
         );
+        const peopleByUserId = new Map(
+          (campaignPeopleResponse.people || [])
+            .filter((person) => person.type === "member" && person.status === "accepted")
+            .map((person) => [String(person.userId || ""), person])
+        );
         const nextOwnerOptions = new Map([["", { value: "", label: "Unassigned" }]]);
         const addOwnerOption = (value, label, aliases = []) => {
           const trimmedLabel = String(label || "").trim();
@@ -127,19 +154,17 @@ export default function ItemProfile() {
         (assignmentData.assignments || []).forEach((assignment) => {
           const character = characterById.get(String(assignment.characterId));
           const characterName = String(character?.name || "").trim();
-          if (characterName) {
-            addOwnerOption(characterName, characterName, [assignment.characterId]);
-          }
-        });
+          const person = peopleByUserId.get(String(assignment.userId || ""));
+          if (!characterName || !person) return;
 
-        (campaignPeopleResponse.people || [])
-          .filter((person) => person.type === "member" && person.status === "accepted")
-          .forEach((person) => {
-            const label = String(person.label || person.email || "").trim();
-            if (label && label !== "—") {
-              addOwnerOption(label, label, [person.userId, person.docId]);
-            }
-          });
+          const playerName = formatPersonName(person.label || person.email || person.userId);
+          const label = `${characterName} — ${playerName}`;
+          addOwnerOption(label, label, [
+            assignment.characterId,
+            assignment.userId,
+            characterName,
+          ]);
+        });
 
         setOwnerOptions(Array.from(nextOwnerOptions.values()));
       } catch (error) {
@@ -202,7 +227,7 @@ export default function ItemProfile() {
         entry.label === normalized ||
         (entry.aliases || []).includes(normalized)
     );
-    return option?.label || normalized;
+    return option?.label || formatOwnerDisplay(normalized);
   };
 
   if (loading) {

@@ -5,7 +5,7 @@ import { useAuth } from "../../context/AuthContext";
 import { useTenant } from "../../context/TenantContext";
 import { useCampaign } from "../../context/CampaignContext";
 
-export default function InvitePlayerForm({ onInvitationCreated }) {
+export default function InvitePlayerForm({ onInvitationCreated, availabilityVersion = 0 }) {
   const { user } = useAuth();
   const { selectedTenantId, workspaceRole } = useTenant();
   const { selectedCampaignId, campaignRole } = useCampaign();
@@ -43,7 +43,7 @@ export default function InvitePlayerForm({ onInvitationCreated }) {
     };
 
     loadCharacters();
-  }, [selectedCampaignId, charactersVersion]);
+  }, [selectedCampaignId, charactersVersion, availabilityVersion]);
 
   const handleSubmit = async (e) => {
     e.preventDefault();

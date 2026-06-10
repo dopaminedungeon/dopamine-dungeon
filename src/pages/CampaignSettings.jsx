@@ -666,6 +666,7 @@ export default function CampaignSettings() {
                   Create a pending invitation for the active campaign. Character assignment support will live here.
                 </p>
                 <InvitePlayerForm
+                  availabilityVersion={campaignPeopleVersion}
                   onInvitationCreated={() => {
                     setCampaignPeopleVersion((value) => value + 1);
                     setSaveState({ type: "success", message: "Invitation created." });
