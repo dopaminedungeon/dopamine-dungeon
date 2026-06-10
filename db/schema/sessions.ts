@@ -35,6 +35,7 @@ export const sessions = pgTable(
     gmNotes: text("gm_notes").default("").notNull(),
     gmSecrets: text("gm_secrets").default("").notNull(),
     gmPrep: jsonb("gm_prep").$type<string[]>().default([]).notNull(),
+    attendees: jsonb("attendees").$type<string[]>().default([]).notNull(),
     createdAt: timestamp("created_at").defaultNow().notNull(),
     updatedAt: timestamp("updated_at").defaultNow().notNull(),
   },

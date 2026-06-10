@@ -58,7 +58,9 @@ export default function SessionEntityLinkManager({
   const [newLinkVisibility, setNewLinkVisibility] = useState("Player"); // "GM" | "Player"
   const [error, setError] = useState(null);
   const [linkingEntityId, setLinkingEntityId] = useState(null);
+  const [pendingActionId, setPendingActionId] = useState(null);
   const linkingEntityIdRef = useRef(null);
+  const isBusy = Boolean(linkingEntityId || pendingActionId);
 
   useEffect(() => {
     if (!selectedCampaignId || !sessionId) return;
@@ -147,6 +149,7 @@ export default function SessionEntityLinkManager({
 
   async function handleLink(entityId) {
     const normalizedEntityId = String(entityId);
+    if (isBusy) return;
     if (linkingEntityIdRef.current === normalizedEntityId) return;
 
     try {
@@ -172,11 +175,24 @@ export default function SessionEntityLinkManager({
   }
 
   async function handleRemove(linkId) {
-    await removeLink(linkId, selectedCampaignId);
-    triggerRerender();
+    const actionId = `remove-${linkId}`;
+    if (pendingActionId) return;
+
+    try {
+      setPendingActionId(actionId);
+      await removeLink(linkId, selectedCampaignId);
+      triggerRerender();
+    } finally {
+      setPendingActionId(null);
+    }
   }
 
   async function handleUpdateLabel(linkObj, newLabel) {
+    const actionId = `label-${linkObj.id}`;
+    if (pendingActionId) return;
+
+    try {
+      setPendingActionId(actionId);
     // Remove old link
     await removeLink(linkObj.id, selectedCampaignId);
 
@@ -190,6 +206,9 @@ export default function SessionEntityLinkManager({
 
     await addLink(updated, selectedCampaignId);
     triggerRerender();
+    } finally {
+      setPendingActionId(null);
+    }
   }
 
   const helpers = {
@@ -199,6 +218,8 @@ export default function SessionEntityLinkManager({
     handleRemove,
     handleUpdateLabel,
     allowedLabels,
+    isBusy,
+    pendingActionId,
   };
 
   return (
@@ -209,17 +230,19 @@ export default function SessionEntityLinkManager({
       {isGM && editMode && (
         <div className="mb-4">
           {!searchOpen ? (
-            <button
-              type="button"
-              onClick={() => setSearchOpen(true)}
-              className="px-3 py-1 rounded-lg bg-white/10 text-xs text-zinc-300 hover:bg-white/20"
-            >
+	            <button
+	              type="button"
+                disabled={isBusy}
+	              onClick={() => setSearchOpen(true)}
+	              className="px-3 py-1 rounded-lg bg-white/10 text-xs text-zinc-300 hover:bg-white/20 disabled:cursor-not-allowed disabled:opacity-50"
+	            >
               + Add {entityType}
             </button>
           ) : (
-            <div className="space-y-2">
-              <input
-                type="text"
+	            <div aria-disabled={isBusy} className={`space-y-2 ${isBusy ? "opacity-60" : ""}`}>
+	              <input
+	                type="text"
+                  disabled={isBusy}
                 placeholder={`Search ${entityType}...`}
                 value={query}
                 onChange={(e) => setQuery(e.target.value)}
@@ -228,10 +251,11 @@ export default function SessionEntityLinkManager({
 
               <div className="flex items-center justify-between gap-2">
                 <div className="flex gap-2 text-xs">
-                  <button
-                    type="button"
+	                  <button
+	                    type="button"
+                      disabled={isBusy}
                     onClick={() => setNewLinkVisibility("Player")}
-                    className={`px-2 py-1 rounded-full ${
+	                    className={`px-2 py-1 rounded-full disabled:cursor-not-allowed disabled:opacity-50 ${
                       newLinkVisibility === "Player"
                         ? "bg-emerald-500 text-white"
                         : "bg-white/10 text-zinc-300"
@@ -239,10 +263,11 @@ export default function SessionEntityLinkManager({
                   >
                     Player-visible
                   </button>
-                  <button
-                    type="button"
+	                  <button
+	                    type="button"
+                      disabled={isBusy}
                     onClick={() => setNewLinkVisibility("GM")}
-                    className={`px-2 py-1 rounded-full ${
+	                    className={`px-2 py-1 rounded-full disabled:cursor-not-allowed disabled:opacity-50 ${
                       newLinkVisibility === "GM"
                         ? "bg-red-500 text-white"
                         : "bg-white/10 text-zinc-300"
@@ -253,14 +278,15 @@ export default function SessionEntityLinkManager({
                 </div>
 
                 <button
-                  type="button"
+	                  type="button"
+	                  disabled={isBusy}
                   onClick={() => {
                     setSearchOpen(false);
                     setQuery("");
                     setError(null);
                   }}
-                  className="text-xs text-zinc-400 hover:text-zinc-200"
-                >
+	                  className="text-xs text-zinc-400 hover:text-zinc-200 disabled:cursor-not-allowed disabled:opacity-50"
+	                >
                   Close
                 </button>
               </div>
@@ -275,9 +301,10 @@ export default function SessionEntityLinkManager({
                     </p>
                     {onAddNew ? (
                       <button
-                        type="button"
-                        onClick={onAddNew}
-                        className="mt-2 px-3 py-1 rounded-lg bg-white/10 text-xs text-zinc-300 hover:bg-white/20"
+	                        type="button"
+                          disabled={isBusy}
+	                        onClick={onAddNew}
+	                        className="mt-2 px-3 py-1 rounded-lg bg-white/10 text-xs text-zinc-300 hover:bg-white/20 disabled:cursor-not-allowed disabled:opacity-50"
                       >
                         + Add new {entityType}
                       </button>
@@ -292,7 +319,7 @@ export default function SessionEntityLinkManager({
                     <button
                       key={e.id}
                       type="button"
-                      disabled={linkingEntityId === String(e.id)}
+	                      disabled={isBusy || linkingEntityId === String(e.id)}
                       onClick={() => handleLink(e.id)}
                       className="block w-full text-left px-3 py-2 text-sm text-zinc-300 hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-60"
                     >
@@ -300,7 +327,7 @@ export default function SessionEntityLinkManager({
                     </button>
                   ))
                 )}
-              </div>
+	            </div>
             </div>
           )}
         </div>

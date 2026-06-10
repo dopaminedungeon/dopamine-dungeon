@@ -8,6 +8,7 @@ import {
 } from "../src/server/access.js";
 import { setCorsHeaders } from "../src/server/cors.js";
 import { db } from "../src/server/db.js";
+import { campaigns } from "../db/schema/campaigns.js";
 import { invitations } from "../db/schema/invitations.js";
 import {
   campaignMemberships,
@@ -32,6 +33,10 @@ function getReadablePersonLabel(params: {
   }
 
   return String(params.fallback || "Unknown person").trim();
+}
+
+function normalizeString(value: unknown, fallback = "") {
+  return String(value ?? fallback).trim();
 }
 
 function getCampaignIdParam(req: VercelRequest) {
@@ -172,13 +177,13 @@ async function removeCampaignMember(params: {
 }
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
-  setCorsHeaders(res, "GET, DELETE, OPTIONS");
+  setCorsHeaders(res, "GET, PATCH, DELETE, OPTIONS");
 
   if (req.method === "OPTIONS") {
     return res.status(204).end();
   }
 
-  if (!["GET", "DELETE"].includes(req.method || "")) {
+  if (!["GET", "PATCH", "DELETE"].includes(req.method || "")) {
     return res.status(405).json({ ok: false, error: "Method not allowed" });
   }
 
@@ -191,6 +196,24 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       workspaceId: campaign.workspaceId,
       userId: currentUser.id,
     });
+
+    if (req.method === "PATCH") {
+      const updatedRows = await db
+        .update(campaigns)
+        .set({
+          name: normalizeString(req.body?.name, campaign.name) || campaign.name,
+          description: normalizeString(req.body?.description),
+          status: normalizeString(req.body?.status, campaign.status) || campaign.status,
+          system: normalizeString(req.body?.system),
+        })
+        .where(eq(campaigns.id, campaign.id))
+        .returning();
+
+      return res.status(200).json({
+        ok: true,
+        campaign: updatedRows[0] ?? campaign,
+      });
+    }
 
     if (req.method === "DELETE") {
       const personType = getRequestValue(req, "personType");

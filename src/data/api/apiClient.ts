@@ -175,6 +175,22 @@ export async function acceptPendingApiInvitations() {
   });
 }
 
+export async function updateApiCampaign(input: {
+  campaignId: string;
+  name?: string;
+  description?: string;
+  status?: string;
+  system?: string;
+}) {
+  return apiFetch<{
+    ok: true;
+    campaign: unknown;
+  }>("/api/campaign-people", {
+    method: "PATCH",
+    body: JSON.stringify(input),
+  });
+}
+
 export async function getApiCampaignPeople(campaignId: string) {
   return apiFetch<{
     ok: true;
