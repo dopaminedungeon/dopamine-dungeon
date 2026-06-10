@@ -46,8 +46,9 @@ export default function WorkspaceSettings() {
     const [newWorkspaceDescription, setNewWorkspaceDescription] = useState("");
     const [isCreatingWorkspace, setIsCreatingWorkspace] = useState(false);
     const [createWorkspaceState, setCreateWorkspaceState] = useState({ type: null, message: "" });
-    const handleCreateWorkspace = async (event) => {
-        event.preventDefault();
+	    const handleCreateWorkspace = async (event) => {
+	        event.preventDefault();
+	        if (isCreatingWorkspace) return;
 
         const name = String(newWorkspaceName || "").trim();
         const description = String(newWorkspaceDescription || "").trim();
@@ -136,7 +137,7 @@ export default function WorkspaceSettings() {
     );
 
     const handleRoleChange = async (member, nextRole) => {
-        if (!member?.id || !nextRole || member.role === nextRole) {
+	        if (savingMemberId || !member?.id || !nextRole || member.role === nextRole) {
             return;
         }
 
@@ -170,7 +171,7 @@ export default function WorkspaceSettings() {
     };
 
     const handleRemoveMember = async (member) => {
-        if (!member?.id) {
+	        if (savingMemberId || !member?.id) {
             return;
         }
 
@@ -231,7 +232,8 @@ export default function WorkspaceSettings() {
                         </div>
                     </div>
 
-                    <form className="relative z-10 mt-5 space-y-4" onSubmit={handleCreateWorkspace}>
+	                    <form className="relative z-10 mt-5 space-y-4" onSubmit={handleCreateWorkspace}>
+	                        <fieldset disabled={isCreatingWorkspace} className="space-y-4 disabled:opacity-60">
                         <div className="grid gap-4 md:grid-cols-2">
                             <label className="block">
                                 <span className="mb-2 block text-sm text-zinc-300">Workspace name</span>
@@ -279,8 +281,9 @@ export default function WorkspaceSettings() {
                                     {createWorkspaceState.message}
                                 </div>
                             ) : null}
-                        </div>
-                    </form>
+	                        </div>
+	                        </fieldset>
+	                    </form>
                 </section>
 
                 <section className="relative overflow-hidden rounded-3xl border border-fuchsia-500/16 bg-zinc-950/55 p-5 shadow-[0_0_0_1px_rgba(168,85,247,0.04),0_0_36px_rgba(99,102,241,0.08)] before:pointer-events-none before:absolute before:inset-0 before:bg-[radial-gradient(circle_at_bottom_left,rgba(168,85,247,0.12),transparent_34%),radial-gradient(circle_at_right,rgba(59,130,246,0.08),transparent_30%)] before:opacity-100 before:content-['']">
@@ -331,7 +334,8 @@ export default function WorkspaceSettings() {
                     </div>
                 </div>
 
-                <form className="relative z-10 mt-5 space-y-4" onSubmit={handleCreateWorkspace}>
+	                <form className="relative z-10 mt-5 space-y-4" onSubmit={handleCreateWorkspace}>
+	                    <fieldset disabled={isCreatingWorkspace} className="space-y-4 disabled:opacity-60">
                     <div className="grid gap-4 md:grid-cols-2">
                         <label className="block">
                             <span className="mb-2 block text-sm text-zinc-300">Workspace name</span>
@@ -379,8 +383,9 @@ export default function WorkspaceSettings() {
                                 {createWorkspaceState.message}
                             </div>
                         ) : null}
-                    </div>
-                </form>
+	                    </div>
+	                    </fieldset>
+	                </form>
             </section>
 
             <section className="relative overflow-hidden rounded-3xl border border-cyan-400/18 bg-zinc-950/55 p-5 shadow-[0_0_0_1px_rgba(34,211,238,0.04),0_0_32px_rgba(34,211,238,0.08)] before:pointer-events-none before:absolute before:inset-0 before:bg-[radial-gradient(circle_at_top_right,rgba(34,211,238,0.12),transparent_32%),radial-gradient(circle_at_left,rgba(168,85,247,0.08),transparent_36%)] before:opacity-100 before:content-['']">
@@ -446,7 +451,8 @@ export default function WorkspaceSettings() {
                                             {members.map((member) => {
                                                 const isCurrentUser = member.firebaseUid === user?.uid;
                                                 const isOnlyOwner = member.role === "owner" && ownerCount <= 1;
-                                                const isBusy = savingMemberId === member.id;
+	                                                const isBusy = savingMemberId === member.id;
+	                                                const anyMemberBusy = Boolean(savingMemberId);
 
                                                 return (
                                                     <tr key={member.id} className="align-top">
@@ -463,7 +469,7 @@ export default function WorkspaceSettings() {
                                                                 value={member.role}
                                                                 onChange={(e) => handleRoleChange(member, e.target.value)}
                                                                 disabled={
-                                                                    isBusy ||
+	                                                                    anyMemberBusy ||
                                                                     (isCurrentUser && member.role === "owner" && ownerCount <= 1)
                                                                 }
                                                                 className="w-full max-w-[180px] rounded-xl border border-white/10 bg-white/[0.03] px-3.5 py-2.5 text-sm text-white shadow-inner shadow-black/10 focus:outline-none focus:ring-2 focus:ring-fuchsia-400/20 disabled:cursor-not-allowed disabled:opacity-60"
@@ -484,7 +490,7 @@ export default function WorkspaceSettings() {
                                                             <button
                                                                 type="button"
                                                                 onClick={() => handleRemoveMember(member)}
-                                                                disabled={isBusy || isCurrentUser || isOnlyOwner}
+	                                                                disabled={anyMemberBusy || isCurrentUser || isOnlyOwner}
                                                                 className="inline-flex items-center gap-2 rounded-xl border border-red-400/20 bg-red-400/10 px-3 py-2 text-sm text-red-200 transition hover:bg-red-400/15 disabled:cursor-not-allowed disabled:opacity-50"
                                                             >
                                                                 <Trash2 className="h-4 w-4" />

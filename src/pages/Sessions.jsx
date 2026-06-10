@@ -282,8 +282,8 @@ if (loading) {
           <div className="w-[92vw] max-w-xl max-h-[85vh] overflow-y-auto my-auto bg-zinc-950 border border-white/10 rounded-xl sm:rounded-2xl p-4 sm:p-6">
             <h2 className="text-lg sm:text-xl font-bold text-white mb-4">Create New Session</h2>
 
-            <form
-              className="space-y-4"
+	            <form
+	              className="space-y-4"
             onSubmit={async (e) => {
               e.preventDefault();
               if (!selectedCampaignId || isSaving) return;
@@ -332,8 +332,9 @@ if (loading) {
                 setIsSaving(false);
               }
             }}
-            >
-              <div>
+	            >
+                <fieldset disabled={isSaving} className="space-y-4 disabled:opacity-60">
+	              <div>
                 <label className="block text-sm text-zinc-400 mb-1">Session Name</label>
                 <input
                   type="text"
@@ -364,11 +365,12 @@ if (loading) {
                   </label>
                   <div className="grid grid-cols-1 sm:flex gap-2 sm:gap-3">
                     <button
-                      type="button"
-                      onClick={() =>
+	                      type="button"
+                        disabled={isSaving}
+	                      onClick={() =>
                         setFormData({ ...formData, visibility: "public" })
                       }
-                      className={`px-3 py-2 rounded-xl text-sm border ${formData.visibility === "public"
+	                      className={`px-3 py-2 rounded-xl text-sm border disabled:cursor-not-allowed disabled:opacity-50 ${formData.visibility === "public"
                           ? "border-emerald-500 bg-emerald-500/10 text-emerald-300"
                           : "border-white/10 bg-white/5 text-zinc-300"
                         }`}
@@ -376,11 +378,12 @@ if (loading) {
                       Player-visible
                     </button>
                     <button
-                      type="button"
-                      onClick={() =>
+	                      type="button"
+                        disabled={isSaving}
+	                      onClick={() =>
                         setFormData({ ...formData, visibility: "gm-only" })
                       }
-                      className={`px-3 py-2 rounded-xl text-sm border ${formData.visibility === "gm-only"
+	                      className={`px-3 py-2 rounded-xl text-sm border disabled:cursor-not-allowed disabled:opacity-50 ${formData.visibility === "gm-only"
                           ? "border-red-500 bg-red-500/10 text-red-300"
                           : "border-white/10 bg-white/5 text-zinc-300"
                         }`}
@@ -446,21 +449,23 @@ if (loading) {
 
               <div className="grid grid-cols-1 sm:flex sm:justify-end gap-2 sm:gap-3 pt-2">
                 <button
-                  type="button"
-                  onClick={() => setShowCreateModal(false)}
-                  className="w-full sm:w-auto px-4 py-2 rounded-xl bg-white/5 text-zinc-300 hover:bg-white/10"
-                >
+	                  type="button"
+	                  disabled={isSaving}
+	                  onClick={() => setShowCreateModal(false)}
+	                  className="w-full sm:w-auto px-4 py-2 rounded-xl bg-white/5 text-zinc-300 hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-50"
+	                >
                   Cancel
                 </button>
                 <button
                   type="submit"
-                  disabled={isSaving}
-                  className="w-full sm:w-auto px-4 py-2 rounded-xl bg-linear-to-r from-purple-500 to-indigo-500 text-white font-medium hover:opacity-90 disabled:opacity-50"
-                >
+	                  disabled={isSaving}
+	                  className="w-full sm:w-auto px-4 py-2 rounded-xl bg-linear-to-r from-purple-500 to-indigo-500 text-white font-medium hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
+	                >
                   {isSaving ? "Saving..." : "Save Session"}
                 </button>
-              </div>
-            </form>
+	              </div>
+                </fieldset>
+	            </form>
           </div>
         </div>
       )}

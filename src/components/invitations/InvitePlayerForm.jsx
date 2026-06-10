@@ -109,6 +109,7 @@ export default function InvitePlayerForm({ onInvitationCreated, availabilityVers
 
   return (
     <form onSubmit={handleSubmit} className="max-w-2xl space-y-4">
+      <fieldset disabled={isSubmitting} className="space-y-4 disabled:opacity-60">
       <div className="grid gap-4 md:grid-cols-[1.4fr_0.8fr]">
         <div>
           <label className="mb-2 block text-sm font-medium text-zinc-200">
@@ -120,7 +121,6 @@ export default function InvitePlayerForm({ onInvitationCreated, availabilityVers
             onChange={(e) => setEmail(e.target.value)}
             placeholder="e.g. player@example.com"
             className="w-full rounded-xl border border-white/10 bg-white/[0.03] px-4 py-3 text-zinc-100 outline-none shadow-inner shadow-black/10 placeholder:text-zinc-400 focus:border-fuchsia-400/30 focus:ring-2 focus:ring-fuchsia-400/20"
-            disabled={isSubmitting}
           />
         </div>
 
@@ -132,7 +132,6 @@ export default function InvitePlayerForm({ onInvitationCreated, availabilityVers
             value={selectedCampaignRole}
             onChange={(e) => setSelectedCampaignRole(e.target.value)}
             className="w-full rounded-xl border border-white/10 bg-white/[0.03] px-4 py-3 text-zinc-100 outline-none shadow-inner shadow-black/10 focus:border-fuchsia-400/30 focus:ring-2 focus:ring-fuchsia-400/20"
-            disabled={isSubmitting}
           >
             <option value="player">player</option>
             <option value="gm">gm</option>
@@ -155,17 +154,18 @@ export default function InvitePlayerForm({ onInvitationCreated, availabilityVers
               const isSelected = selectedCharacterIds.includes(character.id);
 
               return (
-                <button
-                  key={character.id}
-                  type="button"
-                  onClick={() => {
+	                <button
+	                  key={character.id}
+	                  type="button"
+                    disabled={isSubmitting}
+	                  onClick={() => {
                     setSelectedCharacterIds((prev) =>
                       isSelected
                         ? prev.filter((id) => id !== character.id)
                         : [...prev, character.id]
                     );
                   }}
-                  className={`w-full flex items-center justify-between rounded-lg px-3 py-2 text-sm transition ${isSelected
+	                  className={`w-full flex items-center justify-between rounded-lg px-3 py-2 text-sm transition disabled:cursor-not-allowed disabled:opacity-60 ${isSelected
                       ? "bg-violet-500/20 border border-violet-400/30 text-violet-100"
                       : "bg-white/[0.02] border border-white/10 text-zinc-300 hover:bg-white/[0.05]"
                     }`}
@@ -187,9 +187,10 @@ export default function InvitePlayerForm({ onInvitationCreated, availabilityVers
             {selectedCharacterIds.length} character{selectedCharacterIds.length === 1 ? "" : "s"} selected.
           </p>
         )}
-      </div>
+	      </div>
+      </fieldset>
 
-      <div className="rounded-2xl border border-white/10 bg-white/3 px-4 py-3 text-sm text-zinc-300 shadow-[0_0_24px_rgba(168,85,247,0.05)]">
+	      <div className="rounded-2xl border border-white/10 bg-white/3 px-4 py-3 text-sm text-zinc-300 shadow-[0_0_24px_rgba(168,85,247,0.05)]">
         <p>
           This will create a pending campaign invitation for the currently selected workspace and campaign.
         </p>

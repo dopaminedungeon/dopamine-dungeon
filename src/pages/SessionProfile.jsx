@@ -427,9 +427,9 @@ export default function SessionProfile() {
           {isGM && (
             <div className="flex flex-wrap items-center gap-2 sm:gap-3 self-start">
               <div className="flex flex-wrap items-center gap-1 bg-white/5 border border-white/10 rounded-full p-1">
-                <button
-                  type="button"
-                  disabled={!editMode}
+	                <button
+	                  type="button"
+	                  disabled={!editMode || isSaving}
                   onClick={() => handleVisibilityChange("public")}
                   className={`px-3 py-1 rounded-full text-xs font-medium transition ${viewSession.visibility === "public"
                     ? "bg-emerald-500 text-white"
@@ -438,9 +438,9 @@ export default function SessionProfile() {
                 >
                   Player-visible
                 </button>
-                <button
-                  type="button"
-                  disabled={!editMode}
+	                <button
+	                  type="button"
+	                  disabled={!editMode || isSaving}
                   onClick={() => handleVisibilityChange("gm-only")}
                   className={`px-3 py-1 rounded-full text-xs font-medium transition ${viewSession.visibility === "gm-only"
                     ? "bg-red-500 text-white"
@@ -491,11 +491,11 @@ export default function SessionProfile() {
               >
                 {isSaving ? "Saving..." : editMode ? "Done" : "Edit"}
               </button>
-              <button
-                type="button"
-                disabled={isDeleting}
-                onClick={async () => {
-                  if (isDeleting) return;
+	              <button
+	                type="button"
+	                disabled={isDeleting || isSaving}
+	                onClick={async () => {
+	                  if (isDeleting || isSaving) return;
                   const ok = window.confirm("Delete this session? This cannot be undone.");
                   if (!ok) return;
 
@@ -517,7 +517,8 @@ export default function SessionProfile() {
           )}
         </div>
 
-        {isGM && editMode ? (
+	        <fieldset disabled={isSaving} className="contents disabled:opacity-60">
+	        {isGM && editMode ? (
           <div className="rounded-xl border border-white/10 bg-white/[0.03] p-4 sm:p-5">
             <h2 className="text-lg font-semibold text-white mb-4">Session details</h2>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
@@ -657,7 +658,7 @@ export default function SessionProfile() {
             {/* Items discovered, Notable NPCs, timeline, Moments, Quotes, NPC relationships */}
             {/* Items discovered (player-visible) */}
             {/* Items (player-visible) */}
-            <SessionEntityLinkManager
+	            <SessionEntityLinkManager
               sessionId={String(id)}
               entityType="Item"
               label="introduced"
@@ -669,7 +670,7 @@ export default function SessionProfile() {
               getEntityLabel={(item) => item?.name}
               onAddNew={() => navigate("/items")}
               renderCard={(item, link, helpers) => {
-                const { isGM, editMode, navigate, handleRemove } = helpers;
+	                const { isGM, editMode, navigate, handleRemove, isBusy } = helpers;
 
                 return (
                   <div
@@ -677,11 +678,12 @@ export default function SessionProfile() {
                     className="relative group bg-white/5 hover:bg-white/10 border border-white/10 rounded-xl p-4 transition flex flex-col justify-between"
                   >
                     {isGM && editMode && (
-                      <button
-                        type="button"
-                        onClick={() => handleRemove(link.id)}
-                        className="absolute top-2 right-2 text-[10px] text-red-400 hover:text-red-200 opacity-0 group-hover:opacity-100 transition-opacity"
-                      >
+	                      <button
+	                        type="button"
+                          disabled={isBusy}
+	                        onClick={() => handleRemove(link.id)}
+	                        className="absolute top-2 right-2 text-[10px] text-red-400 hover:text-red-200 opacity-0 group-hover:opacity-100 transition-opacity disabled:cursor-not-allowed disabled:opacity-50"
+	                      >
                         Remove
                       </button>
                     )}
@@ -695,7 +697,7 @@ export default function SessionProfile() {
                       {item?.rarity && (
                         <p className="text-zinc-400 text-xs mt-1">{item.rarity}</p>
                       )}
-                    </div>
+		        </div>
 
                     <div className="flex items-center justify-end mt-3">
                       {isGM && (
@@ -846,9 +848,10 @@ export default function SessionProfile() {
               </div>
             </div>
           )}
-        </div>
+	        </div>
+	        </fieldset>
 
-        {/* Metadata strip */}
+	        {/* Metadata strip */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-3 sm:gap-4 text-sm text-zinc-400 pt-2">
           <div className="flex items-center gap-3">
             <MapIcon className="w-4 h-4 text-zinc-500" />

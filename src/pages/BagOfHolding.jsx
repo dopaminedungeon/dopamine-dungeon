@@ -701,10 +701,11 @@ export default function BagOfHolding() {
                     <span aria-hidden="true">{coinIcon(key)}</span>
                     <span>+ {label} ({key})</span>
                   </div>
-                  <input
-                    type="number"
-                    min={0}
-                    inputMode="numeric"
+	                  <input
+	                    type="number"
+	                    min={0}
+	                    inputMode="numeric"
+	                    disabled={isBagSaving}
                     value={pendingCurrency?.[key]}
                     onChange={(e) => {
                       setPendingCurrency((p) => ({ ...p, [key]: e.target.value }));
@@ -717,8 +718,8 @@ export default function BagOfHolding() {
                       }
                     }}
                     placeholder="0"
-                    className="w-full bg-transparent border border-white/10 rounded-lg px-2 py-1.5 text-sm text-white placeholder-zinc-600 focus:outline-none focus:ring-2 focus:ring-indigo-500/30"
-                  />
+	                    className="w-full bg-transparent border border-white/10 rounded-lg px-2 py-1.5 text-sm text-white placeholder-zinc-600 focus:outline-none focus:ring-2 focus:ring-indigo-500/30 disabled:cursor-not-allowed disabled:opacity-50"
+	                  />
                 </div>
               ))}
             </div>
@@ -949,7 +950,8 @@ export default function BagOfHolding() {
           <div className="w-[92vw] max-w-lg max-h-[85vh] overflow-y-auto bg-zinc-950 border border-white/10 rounded-xl sm:rounded-2xl p-4 sm:p-6">
             <h2 className="text-lg sm:text-xl font-bold text-white mb-4">Add to Bag of Holding</h2>
 
-            <form className="space-y-4" onSubmit={onSubmit}>
+	            <form className="space-y-4" onSubmit={onSubmit}>
+                <fieldset disabled={isBagSaving} className="space-y-4 disabled:opacity-60">
               <div>
                 <label className="block text-sm text-zinc-400 mb-1">Item</label>
                 <input
@@ -997,7 +999,7 @@ export default function BagOfHolding() {
                 </div>
               </div>
 
-              <div className="flex flex-col-reverse sm:flex-row sm:justify-end gap-3 pt-2">
+	              <div className="flex flex-col-reverse sm:flex-row sm:justify-end gap-3 pt-2">
                 <button
                   type="button"
                   disabled={isBagSaving}
@@ -1013,8 +1015,9 @@ export default function BagOfHolding() {
                 >
                   {isBagSaving ? "Adding..." : "Add"}
                 </button>
-              </div>
-            </form>
+	              </div>
+                </fieldset>
+	            </form>
           </div>
         </div>
       )}
@@ -1028,12 +1031,13 @@ export default function BagOfHolding() {
               This creates a real cross-link (Bag ↔ Item). It will show up later in the Item profile too.
             </p>
 
-            <input
+	            <fieldset disabled={isBagSaving} className="space-y-3 disabled:opacity-60">
+	            <input
               value={linkQuery}
               onChange={(e) => setLinkQuery(e.target.value)}
               placeholder="Search items…"
-              className="w-full px-3 py-2 bg-white/5 border border-white/10 rounded-xl text-white mb-3"
-            />
+	              className="w-full px-3 py-2 bg-white/5 border border-white/10 rounded-xl text-white"
+	            />
 
             <div className="max-h-64 overflow-auto border border-white/10 rounded-xl">
               {linkCandidates.length === 0 ? (
@@ -1057,17 +1061,19 @@ export default function BagOfHolding() {
 
             <div className="flex flex-col-reverse sm:flex-row sm:justify-end gap-3 pt-4">
               <button
-                type="button"
-                onClick={() => {
+	                type="button"
+	                disabled={isBagSaving}
+	                onClick={() => {
                   setShowLinkModal(false);
                   setLinkQuery("");
                 }}
-                className="w-full sm:w-auto px-4 py-2.5 rounded-xl bg-white/5 text-zinc-300 hover:bg-white/10"
-              >
+	                className="w-full sm:w-auto px-4 py-2.5 rounded-xl bg-white/5 text-zinc-300 hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-50"
+	              >
                 Close
-              </button>
-            </div>
-          </div>
+	              </button>
+	            </div>
+	            </fieldset>
+	          </div>
         </div>
       )}
 
@@ -1104,13 +1110,14 @@ export default function BagOfHolding() {
             {pendingRemovalAction.kind === "linked" ? (
               <div className="mb-4">
                 <label className="block text-sm text-zinc-400 mb-1">Sale value (gp)</label>
-                <input
-                  type="number"
-                  min={0}
-                  inputMode="decimal"
+	                  <input
+	                    type="number"
+	                    min={0}
+	                    inputMode="decimal"
+	                    disabled={isBagSaving}
                   value={pendingRemovalAction.manualSaleValue}
                   onChange={(e) => updatePendingRemovalValue(e.target.value)}
-                  className="w-full px-3 py-2 bg-white/5 border border-white/10 rounded-xl text-white"
+	                  className="w-full px-3 py-2 bg-white/5 border border-white/10 rounded-xl text-white disabled:cursor-not-allowed disabled:opacity-50"
                   placeholder="0"
                 />
               </div>
@@ -1118,23 +1125,25 @@ export default function BagOfHolding() {
 
             <div className="grid grid-cols-1 gap-2">
               <button
-                type="button"
-                onClick={pendingRemovalAction.kind === "loose" ? confirmRemoveLooseItem : async () => {
+	                type="button"
+	                disabled={isBagSaving}
+	                onClick={pendingRemovalAction.kind === "loose" ? confirmRemoveLooseItem : async () => {
                   await removeLinkedItem(
                     pendingRemovalAction.entryId,
                     pendingRemovalAction.itemId
                   );
                   setPendingRemovalAction(null);
                 }}
-                className="w-full px-4 py-2.5 rounded-xl bg-white/5 border border-white/10 text-zinc-200 hover:bg-white/10 transition-colors"
+	                className="w-full px-4 py-2.5 rounded-xl bg-white/5 border border-white/10 text-zinc-200 hover:bg-white/10 transition-colors disabled:cursor-not-allowed disabled:opacity-50"
               >
                 Remove only
               </button>
 
               <button
-                type="button"
-                onClick={pendingRemovalAction.kind === "loose" ? confirmSellLooseItem : confirmSellLinkedItem}
-                className="w-full px-4 py-2.5 rounded-xl bg-linear-to-r from-emerald-500 to-teal-500 text-white font-medium hover:opacity-90 transition-opacity"
+	                type="button"
+	                disabled={isBagSaving}
+	                onClick={pendingRemovalAction.kind === "loose" ? confirmSellLooseItem : confirmSellLinkedItem}
+	                className="w-full px-4 py-2.5 rounded-xl bg-linear-to-r from-emerald-500 to-teal-500 text-white font-medium hover:opacity-90 transition-opacity disabled:cursor-not-allowed disabled:opacity-50"
               >
                 {pendingRemovalAction.kind === "loose"
                   ? `Sell for ${gpFmt(pendingRemovalAction.totalWorth)} gp`
@@ -1142,9 +1151,10 @@ export default function BagOfHolding() {
               </button>
 
               <button
-                type="button"
-                onClick={() => setPendingRemovalAction(null)}
-                className="w-full px-4 py-2.5 rounded-xl bg-white/5 text-zinc-400 hover:bg-white/10 transition-colors"
+	                type="button"
+	                disabled={isBagSaving}
+	                onClick={() => setPendingRemovalAction(null)}
+	                className="w-full px-4 py-2.5 rounded-xl bg-white/5 text-zinc-400 hover:bg-white/10 transition-colors disabled:cursor-not-allowed disabled:opacity-50"
               >
                 Cancel
               </button>

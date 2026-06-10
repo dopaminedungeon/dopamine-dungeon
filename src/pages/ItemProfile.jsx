@@ -90,6 +90,7 @@ export default function ItemProfile() {
   const [sessions, setSessions] = useState([]);
   const [loading, setLoading] = useState(true);
   const [isItemSaving, setIsItemSaving] = useState(false);
+  const [isItemDeleting, setIsItemDeleting] = useState(false);
   const isItemSavingRef = useRef(false);
   const [linksVersion, setLinksVersion] = useState(0);
   const [ownerOptions, setOwnerOptions] = useState([{ value: "", label: "Unassigned" }]);
@@ -321,7 +322,7 @@ export default function ItemProfile() {
           <div className="flex w-full sm:w-auto flex-col sm:flex-row gap-2">
             <button
               onClick={async () => {
-                if (isItemSavingRef.current) return;
+	                if (isItemSavingRef.current || isItemDeleting) return;
                 if (isEditing && formData && selectedCampaignId) {
                   try {
                     isItemSavingRef.current = true;
@@ -335,7 +336,7 @@ export default function ItemProfile() {
                 }
                 setIsEditing((prev) => !prev);
               }}
-              disabled={isItemSaving}
+	              disabled={isItemSaving || isItemDeleting}
               className="w-full sm:w-auto px-4 py-2 rounded-xl bg-white/10 text-zinc-200 hover:bg-white/20 text-sm font-medium disabled:cursor-not-allowed disabled:opacity-60"
             >
               {isItemSaving ? "Saving..." : isEditing ? "Done" : "Edit"}
@@ -344,28 +345,33 @@ export default function ItemProfile() {
             <button
               type="button"
               onClick={async () => {
-                if (!selectedCampaignId || !formData?.id) return;
-                const ok = window.confirm("Delete this item? This cannot be undone.");
-                if (!ok) return;
+	                if (isItemSaving || isItemDeleting || !selectedCampaignId || !formData?.id) return;
+	                const ok = window.confirm("Delete this item? This cannot be undone.");
+	                if (!ok) return;
 
-                try {
-                  await itemsRepo.remove(selectedCampaignId, String(formData.id));
-                  navigate("/items");
-                } catch (error) {
-                  console.error("[ItemProfile] Failed to delete item", error);
-                  alert("Could not delete item. Please try again.");
-                }
-              }}
-              className="w-full sm:w-auto px-4 py-2 rounded-xl bg-red-500/15 border border-red-500/40 text-red-200 hover:bg-red-500/25 text-sm font-medium inline-flex items-center justify-center gap-2"
-            >
-              <Trash2 className="w-4 h-4" />
-              Delete
-            </button>
+	                try {
+                    setIsItemDeleting(true);
+	                  await itemsRepo.remove(selectedCampaignId, String(formData.id));
+	                  navigate("/items");
+	                } catch (error) {
+	                  console.error("[ItemProfile] Failed to delete item", error);
+	                  alert("Could not delete item. Please try again.");
+                  } finally {
+                    setIsItemDeleting(false);
+	                }
+	              }}
+	              disabled={isItemSaving || isItemDeleting}
+	              className="w-full sm:w-auto px-4 py-2 rounded-xl bg-red-500/15 border border-red-500/40 text-red-200 hover:bg-red-500/25 text-sm font-medium inline-flex items-center justify-center gap-2 disabled:cursor-not-allowed disabled:opacity-50"
+	            >
+	              <Trash2 className="w-4 h-4" />
+	              {isItemDeleting ? "Deleting..." : "Delete"}
+	            </button>
           </div>
         )}
       </div>
 
-      {/* Header / identity */}
+	      <fieldset disabled={isItemSaving} className="contents disabled:opacity-60">
+	      {/* Header / identity */}
       <div className="bg-white/5 border border-white/10 rounded-2xl p-6 backdrop-blur-sm mb-6">
         <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-6">
           <div className="flex items-center gap-4">
@@ -751,7 +757,8 @@ export default function ItemProfile() {
             </section>
           </div>
         )}
-      </div>
-    </>
+	      </div>
+        </fieldset>
+	    </>
   );
 }

@@ -17,6 +17,7 @@ export default function CreateCampaignForm() {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    if (isSubmitting) return;
 
     if (!user?.uid) {
       setError("You must be signed in to create a campaign.");
@@ -64,6 +65,7 @@ export default function CreateCampaignForm() {
 
   return (
     <form onSubmit={handleSubmit} className="space-y-4 max-w-md">
+      <fieldset disabled={isSubmitting} className="space-y-4 disabled:opacity-60">
       <div>
         <label className="mb-2 block text-sm font-medium text-zinc-200">
           Campaign name
@@ -74,7 +76,6 @@ export default function CreateCampaignForm() {
           onChange={(e) => setName(e.target.value)}
           placeholder="e.g. Chronicles of Varionath"
           className="w-full rounded-xl border border-zinc-700 bg-zinc-900 px-4 py-3 text-zinc-100 outline-none focus:border-violet-500"
-          disabled={isSubmitting}
         />
       </div>
 
@@ -87,7 +88,6 @@ export default function CreateCampaignForm() {
           onChange={(e) => setDescription(e.target.value)}
           placeholder="A short description of your campaign"
           className="min-h-30 w-full rounded-xl border border-zinc-700 bg-zinc-900 px-4 py-3 text-zinc-100 outline-none focus:border-violet-500"
-          disabled={isSubmitting}
         />
       </div>
 
@@ -101,9 +101,9 @@ export default function CreateCampaignForm() {
           onChange={(e) => setSystem(e.target.value)}
           placeholder="e.g. D&D 5.5e"
           className="w-full rounded-xl border border-zinc-700 bg-zinc-900 px-4 py-3 text-zinc-100 outline-none focus:border-violet-500"
-          disabled={isSubmitting}
         />
       </div>
+      </fieldset>
 
       {error ? <p className="text-sm text-red-400">{error}</p> : null}
 

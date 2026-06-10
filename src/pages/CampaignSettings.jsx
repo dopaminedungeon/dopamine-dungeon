@@ -61,6 +61,7 @@ export default function CampaignSettings() {
 
   const [draft, setDraft] = useState(null);
   const [showCreate, setShowCreate] = useState(false);
+  const [creating, setCreating] = useState(false);
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [saveState, setSaveState] = useState({ type: null, message: "" });
@@ -78,15 +79,18 @@ export default function CampaignSettings() {
   const [assignableCharacters, setAssignableCharacters] = useState([]);
   const [assignmentRows, setAssignmentRows] = useState([]);
   const [assignmentSelectionByUserId, setAssignmentSelectionByUserId] = useState({});
+  const [peopleActionId, setPeopleActionId] = useState(null);
 
-  const createCampaign = async (e) => {
-    e?.preventDefault?.();
+	  const createCampaign = async (e) => {
+	    e?.preventDefault?.();
+    if (creating) return;
 
     const name = (createForm.name || "").trim();
     if (!name || !selectedTenantId) return;
 
-    try {
-      setSaveState({ type: null, message: "" });
+	    try {
+      setCreating(true);
+	      setSaveState({ type: null, message: "" });
 
       const created = await createCampaignFromContext({
         name,
@@ -108,11 +112,13 @@ export default function CampaignSettings() {
       setShowCreate(false);
       setCreateForm({ name: "", description: "", status: "active", system: "" });
       setSaveState({ type: "success", message: "Campaign created." });
-    } catch (error) {
-      console.error("[CampaignSettings] Failed to create campaign", error);
-      setSaveState({ type: "error", message: "Could not create campaign." });
-    }
-  };
+	    } catch (error) {
+	      console.error("[CampaignSettings] Failed to create campaign", error);
+	      setSaveState({ type: "error", message: "Could not create campaign." });
+    } finally {
+      setCreating(false);
+	    }
+	  };
 
   useEffect(() => {
     // Sync the draft whenever the active campaign changes.
@@ -178,10 +184,11 @@ export default function CampaignSettings() {
           </div>
 
           {isGM && (
-            <button
-              type="button"
-              onClick={() => setShowCreate(true)}
-              className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-linear-to-r from-indigo-500 to-purple-500 text-white font-medium hover:opacity-90"
+	            <button
+	              type="button"
+	              disabled={saving || deleting || creating}
+	              onClick={() => setShowCreate(true)}
+	              className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-linear-to-r from-indigo-500 to-purple-500 text-white font-medium hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
             >
               <Plus className="w-5 h-5" />
               Add campaign
@@ -195,7 +202,8 @@ export default function CampaignSettings() {
             <div className="w-full max-w-lg bg-zinc-950 border border-white/10 rounded-2xl p-6">
               <h2 className="text-xl font-bold text-white mb-4">Create campaign</h2>
 
-              <form className="space-y-4" onSubmit={createCampaign}>
+	              <form className="space-y-4" onSubmit={createCampaign}>
+	                <fieldset disabled={creating} className="space-y-4 disabled:opacity-60">
                 <div>
                   <label className="block text-sm text-zinc-300/75 mb-1">Name</label>
                   <input
@@ -242,20 +250,23 @@ export default function CampaignSettings() {
 
                 <div className="flex justify-end gap-3 pt-2">
                   <button
-                    type="button"
-                    onClick={() => setShowCreate(false)}
-                    className="px-4 py-2 rounded-xl bg-white/5 text-zinc-300 hover:bg-white/10"
+	                    type="button"
+	                    disabled={creating}
+	                    onClick={() => setShowCreate(false)}
+	                    className="px-4 py-2 rounded-xl bg-white/5 text-zinc-300 hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-50"
                   >
                     Cancel
                   </button>
                   <button
-                    type="submit"
-                    className="px-4 py-2 rounded-xl bg-linear-to-r from-blue-500 to-cyan-500 text-white font-medium hover:opacity-90"
-                  >
-                    Create
-                  </button>
-                </div>
-              </form>
+	                    type="submit"
+	                    disabled={creating}
+	                    className="px-4 py-2 rounded-xl bg-linear-to-r from-blue-500 to-cyan-500 text-white font-medium hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
+	                  >
+	                    {creating ? "Creating..." : "Create"}
+	                  </button>
+	                </div>
+	                </fieldset>
+	              </form>
             </div>
           </div>
         )}
@@ -276,9 +287,9 @@ export default function CampaignSettings() {
     await batch.commit();
   }
 
-  const onDeleteCampaign = async () => {
-    const campaignId = draft?.campaignId || selectedCampaignId;
-    if (!campaignId) return;
+	  const onDeleteCampaign = async () => {
+	    const campaignId = draft?.campaignId || selectedCampaignId;
+	    if (saving || deleting || !campaignId) return;
 
     const confirmed = window.confirm(
       "Delete this campaign and all associated sessions, items, and bag data? This cannot be undone."
@@ -308,9 +319,9 @@ export default function CampaignSettings() {
     }
   };
 
-  const onSave = async () => {
-    const campaignId = draft?.campaignId || selectedCampaignId;
-    if (!draft || !campaignId) return;
+	  const onSave = async () => {
+	    const campaignId = draft?.campaignId || selectedCampaignId;
+	    if (saving || deleting || !draft || !campaignId) return;
 
     try {
       setSaving(true);
@@ -388,41 +399,49 @@ export default function CampaignSettings() {
     }
   };
 
-  const onRevokeInvite = async (inviteDocId) => {
-    const campaignId = draft?.campaignId || selectedCampaignId;
-    if (!inviteDocId || !campaignId) return;
+	  const onRevokeInvite = async (inviteDocId) => {
+	    const campaignId = draft?.campaignId || selectedCampaignId;
+	    const actionId = `revoke-${inviteDocId}`;
+	    if (peopleActionId || !inviteDocId || !campaignId) return;
 
     const confirmed = window.confirm("Revoke this pending invitation?");
     if (!confirmed) return;
 
-    try {
-      await revokeApiCampaignInvite(campaignId, inviteDocId);
+	    try {
+      setPeopleActionId(actionId);
+	      await revokeApiCampaignInvite(campaignId, inviteDocId);
       setOpenActionsId(null);
       setCampaignPeopleVersion((value) => value + 1);
       setSaveState({ type: "success", message: "Invitation revoked." });
-    } catch (error) {
-      console.error("[CampaignSettings] Failed to revoke invitation", error);
-      setSaveState({ type: "error", message: "Could not revoke invitation." });
-    }
-  };
+	    } catch (error) {
+	      console.error("[CampaignSettings] Failed to revoke invitation", error);
+	      setSaveState({ type: "error", message: "Could not revoke invitation." });
+    } finally {
+      setPeopleActionId(null);
+	    }
+	  };
 
-  const onRemoveCampaignMember = async (memberDocId) => {
-    const campaignId = draft?.campaignId || selectedCampaignId;
-    if (!memberDocId || !campaignId) return;
+	  const onRemoveCampaignMember = async (memberDocId) => {
+	    const campaignId = draft?.campaignId || selectedCampaignId;
+	    const actionId = `remove-${memberDocId}`;
+	    if (peopleActionId || !memberDocId || !campaignId) return;
 
     const confirmed = window.confirm("Remove this member from the campaign?");
     if (!confirmed) return;
 
-    try {
-      await removeApiCampaignMember(campaignId, memberDocId);
+	    try {
+      setPeopleActionId(actionId);
+	      await removeApiCampaignMember(campaignId, memberDocId);
       setOpenActionsId(null);
       setCampaignPeopleVersion((value) => value + 1);
       setSaveState({ type: "success", message: "Campaign member removed." });
-    } catch (error) {
-      console.error("[CampaignSettings] Failed to remove campaign member", error);
-      setSaveState({ type: "error", message: "Could not remove campaign member." });
-    }
-  };
+	    } catch (error) {
+	      console.error("[CampaignSettings] Failed to remove campaign member", error);
+	      setSaveState({ type: "error", message: "Could not remove campaign member." });
+    } finally {
+      setPeopleActionId(null);
+	    }
+	  };
 
   const getAssignmentForCharacter = (characterId) =>
     assignmentRows.find((assignment) => assignment.characterId === characterId) || null;
@@ -431,36 +450,44 @@ export default function CampaignSettings() {
     campaignCharacters.find((character) => character.id === characterId)?.name ||
     characterId;
 
-  const onAssignCharacter = async (person) => {
-    const campaignId = draft?.campaignId || selectedCampaignId;
-    const characterId = assignmentSelectionByUserId[person.userId];
-    if (!campaignId || !person?.userId || !characterId) return;
+	  const onAssignCharacter = async (person) => {
+	    const campaignId = draft?.campaignId || selectedCampaignId;
+	    const characterId = assignmentSelectionByUserId[person.userId];
+	    const actionId = `assign-${person?.userId || "unknown"}`;
+	    if (peopleActionId || !campaignId || !person?.userId || !characterId) return;
 
-    try {
-      await assignApiCharacter(campaignId, person.userId, characterId);
+	    try {
+      setPeopleActionId(actionId);
+	      await assignApiCharacter(campaignId, person.userId, characterId);
       setAssignmentSelectionByUserId((current) => ({ ...current, [person.userId]: "" }));
       setCampaignPeopleVersion((value) => value + 1);
       setSaveState({ type: "success", message: "Character assigned." });
-    } catch (error) {
-      console.error("[CampaignSettings] Failed to assign character", error);
-      setSaveState({ type: "error", message: "Could not assign character." });
-    }
-  };
+	    } catch (error) {
+	      console.error("[CampaignSettings] Failed to assign character", error);
+	      setSaveState({ type: "error", message: "Could not assign character." });
+    } finally {
+      setPeopleActionId(null);
+	    }
+	  };
 
-  const onUnassignCharacter = async (characterId) => {
-    const campaignId = draft?.campaignId || selectedCampaignId;
-    const assignment = getAssignmentForCharacter(characterId);
-    if (!campaignId || !assignment) return;
+	  const onUnassignCharacter = async (characterId) => {
+	    const campaignId = draft?.campaignId || selectedCampaignId;
+	    const assignment = getAssignmentForCharacter(characterId);
+	    const actionId = `unassign-${characterId}`;
+	    if (peopleActionId || !campaignId || !assignment) return;
 
-    try {
-      await unassignApiCharacter(campaignId, { assignmentId: assignment.id });
+	    try {
+      setPeopleActionId(actionId);
+	      await unassignApiCharacter(campaignId, { assignmentId: assignment.id });
       setCampaignPeopleVersion((value) => value + 1);
       setSaveState({ type: "success", message: "Character unassigned." });
-    } catch (error) {
-      console.error("[CampaignSettings] Failed to unassign character", error);
-      setSaveState({ type: "error", message: "Could not unassign character." });
-    }
-  };
+	    } catch (error) {
+	      console.error("[CampaignSettings] Failed to unassign character", error);
+	      setSaveState({ type: "error", message: "Could not unassign character." });
+    } finally {
+      setPeopleActionId(null);
+	    }
+	  };
 
   return (
     <div className="w-full text-white">
@@ -487,12 +514,13 @@ export default function CampaignSettings() {
             </button>
 
             <button
-              type="button"
-              onClick={() => {
+	              type="button"
+	              disabled={saving || deleting}
+	              onClick={() => {
                 setDraft(activeCampaign ? { ...activeCampaign } : null);
                 setSaveState({ type: null, message: "" });
               }}
-              className="px-4 py-2 rounded-xl bg-white/5 text-zinc-300 hover:bg-white/10"
+	              className="px-4 py-2 rounded-xl bg-white/5 text-zinc-300 hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-50"
             >
               Reset
             </button>
@@ -500,8 +528,8 @@ export default function CampaignSettings() {
             <button
               type="button"
               onClick={onSave}
-              disabled={saving}
-              className="px-4 py-2 rounded-xl bg-linear-to-r from-blue-500 to-cyan-500 text-white font-medium hover:opacity-90 disabled:opacity-50"
+	              disabled={saving || deleting}
+	              className="px-4 py-2 rounded-xl bg-linear-to-r from-blue-500 to-cyan-500 text-white font-medium hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
             >
               {saving ? "Saving..." : "Save"}
             </button>
@@ -509,8 +537,8 @@ export default function CampaignSettings() {
             <button
               type="button"
               onClick={onDeleteCampaign}
-              disabled={deleting}
-              className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-red-500/15 border border-red-500/40 text-red-200 hover:bg-red-500/25 disabled:opacity-50"
+	              disabled={deleting || saving}
+	              className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-red-500/15 border border-red-500/40 text-red-200 hover:bg-red-500/25 disabled:cursor-not-allowed disabled:opacity-50"
             >
               <Trash2 className="w-4 h-4" />
               {deleting ? "Deleting..." : "Delete Campaign"}
@@ -533,7 +561,8 @@ export default function CampaignSettings() {
 
         {/* Main sections */}
         <div className="space-y-4">
-          {/* Player-safe campaign info */}
+	          <fieldset disabled={saving} className="contents disabled:opacity-60">
+	          {/* Player-safe campaign info */}
           <section className="relative overflow-hidden rounded-3xl border border-fuchsia-500/20 bg-zinc-950/55 p-5 shadow-[0_0_0_1px_rgba(168,85,247,0.05),0_0_48px_rgba(99,102,241,0.10)] before:pointer-events-none before:absolute before:inset-0 before:bg-[radial-gradient(circle_at_top_left,rgba(168,85,247,0.18),transparent_34%),radial-gradient(circle_at_75%_35%,rgba(59,130,246,0.12),transparent_30%),radial-gradient(circle_at_bottom_center,rgba(168,85,247,0.08),transparent_38%)] before:opacity-100 before:content-['']">
             <div className="relative z-10">
               <h2 className="text-lg font-semibold mb-2">Campaign overview</h2>
@@ -613,9 +642,11 @@ export default function CampaignSettings() {
                 </div>
               </div>
             </div>
-          </section>
+	          </section>
+	          </fieldset>
 
-          {/* GM-only notes */}
+	          <fieldset disabled={saving} className="contents disabled:opacity-60">
+	          {/* GM-only notes */}
           <section className="relative overflow-hidden rounded-3xl border border-fuchsia-500/22 bg-zinc-950/55 p-5 shadow-[0_0_0_1px_rgba(217,70,239,0.05),0_0_44px_rgba(168,85,247,0.10)] before:pointer-events-none before:absolute before:inset-0 before:bg-[radial-gradient(circle_at_top_left,rgba(217,70,239,0.15),transparent_34%),radial-gradient(circle_at_bottom_right,rgba(99,102,241,0.12),transparent_36%),radial-gradient(circle_at_center,rgba(168,85,247,0.07),transparent_42%)] before:opacity-100 before:content-['']">
             <div className="relative z-10">
               <h2 className="text-lg font-semibold mb-2">GM-only notes</h2>
@@ -689,7 +720,8 @@ export default function CampaignSettings() {
                 </div>
               </div>
             </div>
-          </section>
+	          </section>
+	          </fieldset>
 
           {/* Campaign people & characters */}
           <section className="relative overflow-visible rounded-3xl border border-cyan-400/18 bg-zinc-950/55 p-5 shadow-[0_0_0_1px_rgba(34,211,238,0.04),0_0_42px_rgba(34,211,238,0.08)] before:pointer-events-none before:absolute before:inset-0 before:bg-[radial-gradient(circle_at_top_right,rgba(34,211,238,0.14),transparent_30%),radial-gradient(circle_at_left,rgba(168,85,247,0.12),transparent_34%),radial-gradient(circle_at_bottom_center,rgba(59,130,246,0.08),transparent_40%)] before:opacity-100 before:content-['']">
@@ -772,8 +804,9 @@ export default function CampaignSettings() {
                                     <button
                                       type="button"
                                       key={`${person.id}-${characterId}`}
-                                      onClick={() => onUnassignCharacter(characterId)}
-                                      className="inline-flex rounded-full border border-cyan-400/20 bg-cyan-400/10 px-2.5 py-1 text-xs text-cyan-100 hover:bg-cyan-400/20"
+	                                      onClick={() => onUnassignCharacter(characterId)}
+	                                      disabled={peopleActionId === `unassign-${characterId}` || Boolean(peopleActionId)}
+	                                      className="inline-flex rounded-full border border-cyan-400/20 bg-cyan-400/10 px-2.5 py-1 text-xs text-cyan-100 hover:bg-cyan-400/20 disabled:cursor-not-allowed disabled:opacity-50"
                                       title="Unassign this character"
                                     >
                                       {getCharacterName(characterId)} ×
@@ -787,7 +820,7 @@ export default function CampaignSettings() {
                                 <div className="mt-2 flex gap-2">
                                   <select
                                     value={assignmentSelectionByUserId[person.userId] || ""}
-                                    disabled={assignableCharacters.length === 0}
+	                                    disabled={assignableCharacters.length === 0 || Boolean(peopleActionId)}
                                     onChange={(event) =>
                                       setAssignmentSelectionByUserId((current) => ({
                                         ...current,
@@ -810,8 +843,9 @@ export default function CampaignSettings() {
                                   <button
                                     type="button"
                                     onClick={() => onAssignCharacter(person)}
-                                    disabled={
-                                      assignableCharacters.length === 0 ||
+	                                    disabled={
+                                        Boolean(peopleActionId) ||
+	                                      assignableCharacters.length === 0 ||
                                       !assignmentSelectionByUserId[person.userId]
                                     }
                                     className="rounded-lg border border-white/10 bg-white/5 px-2 py-1 text-xs text-zinc-200 hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-50"
@@ -825,12 +859,13 @@ export default function CampaignSettings() {
                               <div className="relative flex justify-end overflow-visible">
                                 <button
                                   type="button"
-                                  onClick={() =>
+	                                  onClick={() =>
                                     setOpenActionsId((current) =>
                                       current === person.id ? null : person.id
                                     )
                                   }
-                                  className="inline-flex h-9 w-9 items-center justify-center rounded-xl border border-white/10 bg-white/[0.03] text-zinc-200 transition hover:bg-white/[0.06]"
+	                                  disabled={Boolean(peopleActionId)}
+	                                  className="inline-flex h-9 w-9 items-center justify-center rounded-xl border border-white/10 bg-white/[0.03] text-zinc-200 transition hover:bg-white/[0.06] disabled:cursor-not-allowed disabled:opacity-50"
                                 >
                                   <MoreHorizontal className="h-4 w-4" />
                                 </button>
@@ -840,8 +875,9 @@ export default function CampaignSettings() {
                                     {person.type === "invite" ? (
                                       <button
                                         type="button"
-                                        onClick={() => onRevokeInvite(person.docId)}
-                                        className="flex w-full items-center gap-2 px-3 py-2.5 text-left text-sm text-red-200 transition hover:bg-red-400/10"
+	                                        onClick={() => onRevokeInvite(person.docId)}
+	                                        disabled={Boolean(peopleActionId)}
+	                                        className="flex w-full items-center gap-2 px-3 py-2.5 text-left text-sm text-red-200 transition hover:bg-red-400/10 disabled:cursor-not-allowed disabled:opacity-50"
                                       >
                                         <MailX className="h-4 w-4" />
                                         Revoke invite
@@ -850,19 +886,21 @@ export default function CampaignSettings() {
                                       <>
                                         <button
                                           type="button"
-                                          onClick={() => {
+	                                          onClick={() => {
                                             setOpenActionsId(null);
                                             window.alert("Character assignment actions are next up in #84.");
                                           }}
-                                          className="flex w-full items-center gap-2 px-3 py-2.5 text-left text-sm text-zinc-200 transition hover:bg-white/[0.06]"
+	                                          disabled={Boolean(peopleActionId)}
+	                                          className="flex w-full items-center gap-2 px-3 py-2.5 text-left text-sm text-zinc-200 transition hover:bg-white/[0.06] disabled:cursor-not-allowed disabled:opacity-50"
                                         >
                                           <Plus className="h-4 w-4" />
                                           Assign character
                                         </button>
                                         <button
                                           type="button"
-                                          onClick={() => onRemoveCampaignMember(person.docId)}
-                                          className="flex w-full items-center gap-2 px-3 py-2.5 text-left text-sm text-red-200 transition hover:bg-red-400/10"
+	                                          onClick={() => onRemoveCampaignMember(person.docId)}
+	                                          disabled={Boolean(peopleActionId)}
+	                                          className="flex w-full items-center gap-2 px-3 py-2.5 text-left text-sm text-red-200 transition hover:bg-red-400/10 disabled:cursor-not-allowed disabled:opacity-50"
                                         >
                                           <UserMinus className="h-4 w-4" />
                                           Remove from campaign
@@ -932,13 +970,14 @@ export default function CampaignSettings() {
         </section>
 
         {/* Create campaign modal */}
-        {showCreate && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm">
-            <div className="w-full max-w-lg bg-zinc-950 border border-white/10 rounded-2xl p-6">
-              <h2 className="text-xl font-bold text-white mb-4">Create campaign</h2>
+	        {showCreate && (
+	          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm">
+	            <div className="w-full max-w-lg bg-zinc-950 border border-white/10 rounded-2xl p-6">
+	              <h2 className="text-xl font-bold text-white mb-4">Create campaign</h2>
 
-              <form className="space-y-4" onSubmit={createCampaign}>
-                <div>
+	              <form className="space-y-4" onSubmit={createCampaign}>
+	                <fieldset disabled={creating} className="space-y-4 disabled:opacity-60">
+	                <div>
                   <label className="block text-sm text-zinc-300/75 mb-1">Name</label>
                   <input
                     value={createForm.name}
@@ -984,20 +1023,23 @@ export default function CampaignSettings() {
 
                 <div className="flex justify-end gap-3 pt-2">
                   <button
-                    type="button"
-                    onClick={() => setShowCreate(false)}
-                    className="px-4 py-2 rounded-xl bg-white/5 text-zinc-300 hover:bg-white/10"
+	                    type="button"
+	                    disabled={creating}
+	                    onClick={() => setShowCreate(false)}
+	                    className="px-4 py-2 rounded-xl bg-white/5 text-zinc-300 hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-50"
                   >
                     Cancel
                   </button>
                   <button
-                    type="submit"
-                    className="px-4 py-2 rounded-xl bg-linear-to-r from-blue-500 to-cyan-500 text-white font-medium hover:opacity-90"
-                  >
-                    Create
-                  </button>
-                </div>
-              </form>
+	                    type="submit"
+	                    disabled={creating}
+	                    className="px-4 py-2 rounded-xl bg-linear-to-r from-blue-500 to-cyan-500 text-white font-medium hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
+	                  >
+	                    {creating ? "Creating..." : "Create"}
+	                  </button>
+	                </div>
+	                </fieldset>
+	              </form>
             </div>
           </div>
         )}

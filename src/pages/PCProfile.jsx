@@ -276,6 +276,7 @@ const PCProfile = () => {
   const [editDraft, setEditDraft] = useState(null);
   const [isSaving, setIsSaving] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
+  const [isUnassigning, setIsUnassigning] = useState(false);
   const [activeTab, setActiveTab] = useState("stats");
   const [assignmentMeta, setAssignmentMeta] = useState({
     assignments: [],
@@ -326,18 +327,19 @@ const PCProfile = () => {
   }, [pcId, selectedCampaignId]);
 
   const handleStartEdit = () => {
-    if (!pc) return;
+    if (!pc || isSaving || isDeleting || isUnassigning) return;
     setEditDraft(buildEditDraftFromPc(pc));
     setIsEditing(true);
   };
 
   const handleCancelEdit = () => {
+    if (isSaving) return;
     setIsEditing(false);
     setEditDraft(null);
   };
 
   const handleSaveEdit = async () => {
-    if (!pc || !selectedCampaignId || !editDraft) return;
+    if (isSaving || !pc || !selectedCampaignId || !editDraft) return;
 
     try {
       setIsSaving(true);
@@ -509,8 +511,8 @@ const PCProfile = () => {
     }
   };
 
-  const handleDeleteCharacter = async () => {
-    if (!pc || !selectedCampaignId) return;
+	  const handleDeleteCharacter = async () => {
+	    if (isDeleting || isSaving || isUnassigning || !pc || !selectedCampaignId) return;
     if (isAssignedToPendingInvitation) return;
 
     const confirmed = window.confirm(
@@ -542,15 +544,20 @@ const PCProfile = () => {
     [assignmentMeta.pendingAssignedCharacterIds, pc?.id]
   );
   const handleUnassignCharacter = async () => {
-    if (!selectedCampaignId || !acceptedAssignmentForPc) return;
+    if (isUnassigning || isSaving || isDeleting || !selectedCampaignId || !acceptedAssignmentForPc) return;
 
     const confirmed = window.confirm("Unassign this character from the player?");
     if (!confirmed) return;
 
-    await unassignApiCharacter(selectedCampaignId, {
-      assignmentId: acceptedAssignmentForPc.id,
-    });
-    await refreshAssignmentMeta();
+    try {
+      setIsUnassigning(true);
+      await unassignApiCharacter(selectedCampaignId, {
+        assignmentId: acceptedAssignmentForPc.id,
+      });
+      await refreshAssignmentMeta();
+    } finally {
+      setIsUnassigning(false);
+    }
   };
   const activeEditDraft = useMemo(() => editDraft || buildEditDraftFromPc(pc), [editDraft, pc]);
 
@@ -764,17 +771,18 @@ const PCProfile = () => {
           <div className="flex flex-col items-end gap-2 text-right">
             {isGMMode && (
               <div className="flex flex-wrap justify-end gap-2">
-                <button
-                  type="button"
-                  onClick={handleStartEdit}
-                  className="inline-flex items-center rounded-full bg-white/10 border border-white/15 px-3 py-1 text-[11px] font-medium text-white hover:bg-white/20 transition"
-                >
+	                <button
+	                  type="button"
+	                  onClick={handleStartEdit}
+	                  disabled={isSaving || isDeleting || isUnassigning}
+	                  className="inline-flex items-center rounded-full bg-white/10 border border-white/15 px-3 py-1 text-[11px] font-medium text-white hover:bg-white/20 disabled:cursor-not-allowed disabled:opacity-50 transition"
+	                >
                   Edit In Profile
                 </button>
                 <button
                   type="button"
                   onClick={handleDeleteCharacter}
-                  disabled={isDeleting || isAssignedToPendingInvitation}
+	                  disabled={isDeleting || isSaving || isUnassigning || isAssignedToPendingInvitation}
                   title={
                     isAssignedToPendingInvitation
                       ? "Unable to delete this character because it is assigned to a pending invitation."
@@ -786,12 +794,13 @@ const PCProfile = () => {
                 </button>
                 {acceptedAssignmentForPc ? (
                   <button
-                    type="button"
-                    onClick={handleUnassignCharacter}
-                    className="inline-flex items-center rounded-full bg-white/10 border border-white/15 px-3 py-1 text-[11px] font-medium text-white hover:bg-white/20 transition"
-                  >
-                    Unassign Character
-                  </button>
+	                    type="button"
+	                    onClick={handleUnassignCharacter}
+	                    disabled={isSaving || isDeleting || isUnassigning}
+	                    className="inline-flex items-center rounded-full bg-white/10 border border-white/15 px-3 py-1 text-[11px] font-medium text-white hover:bg-white/20 disabled:cursor-not-allowed disabled:opacity-50 transition"
+	                  >
+	                    {isUnassigning ? "Unassigning..." : "Unassign Character"}
+	                  </button>
                 ) : null}
               </div>
             )}
@@ -906,7 +915,7 @@ const PCProfile = () => {
         </section>
 
         {isEditing ? (
-          <section className="bg-white/5 border border-indigo-400/40 rounded-2xl p-4 md:p-5 space-y-4">
+	          <fieldset disabled={isSaving} className="bg-white/5 border border-indigo-400/40 rounded-2xl p-4 md:p-5 space-y-4 disabled:opacity-60">
             <div className="flex items-center justify-between gap-3">
               <div>
                 <h3 className="text-sm font-semibold tracking-tight text-indigo-100">
@@ -918,10 +927,11 @@ const PCProfile = () => {
               </div>
               <div className="flex items-center gap-2">
                 <button
-                  type="button"
-                  onClick={handleCancelEdit}
-                  className="rounded-xl border border-zinc-800/70 bg-zinc-900/70 px-4 py-2.5 text-sm text-zinc-300 hover:text-white hover:bg-zinc-800/70 transition-colors"
-                >
+	                  type="button"
+	                  onClick={handleCancelEdit}
+	                  disabled={isSaving}
+	                  className="rounded-xl border border-zinc-800/70 bg-zinc-900/70 px-4 py-2.5 text-sm text-zinc-300 hover:text-white hover:bg-zinc-800/70 disabled:cursor-not-allowed disabled:opacity-50 transition-colors"
+	                >
                   Cancel
                 </button>
                 <button
@@ -1307,7 +1317,7 @@ const PCProfile = () => {
                 ))}
               </div>
             </div>
-          </section>
+	          </fieldset>
         ) : null}
 
         {/* Metadata strip */}

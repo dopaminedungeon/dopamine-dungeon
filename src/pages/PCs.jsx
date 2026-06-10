@@ -290,9 +290,9 @@ const PCs = () => {
     setPcs(characters);
   };
 
-  const handleCreatePc = async (e) => {
-    e.preventDefault();
-    if (!selectedCampaignId || !newPc.name.trim()) return;
+	  const handleCreatePc = async (e) => {
+	    e.preventDefault();
+	    if (isSaving || !selectedCampaignId || !newPc.name.trim()) return;
 
     try {
       setIsSaving(true);
@@ -511,8 +511,8 @@ const PCs = () => {
     setImportTargetCharacterId("");
   };
 
-  const handleCreateImportedPc = async () => {
-    if (!selectedCampaignId || !importDraft?.character?.name?.trim()) return;
+	  const handleCreateImportedPc = async () => {
+	    if (isSavingImportDraft || !selectedCampaignId || !importDraft?.character?.name?.trim()) return;
 
     try {
       setIsSavingImportDraft(true);
@@ -1082,16 +1082,17 @@ const PCs = () => {
                     Source file: {importDraft.sourceFileName}
                   </p>
                 </div>
-                <button
-                  type="button"
-                  onClick={handleCloseImportReview}
-                  className="rounded-lg border border-zinc-800/70 bg-zinc-900/70 px-3 py-1.5 text-sm text-zinc-300 hover:text-white hover:bg-zinc-800/70 transition-colors"
-                >
+	                <button
+	                  type="button"
+                    disabled={isSavingImportDraft}
+	                  onClick={handleCloseImportReview}
+	                  className="rounded-lg border border-zinc-800/70 bg-zinc-900/70 px-3 py-1.5 text-sm text-zinc-300 hover:text-white hover:bg-zinc-800/70 disabled:cursor-not-allowed disabled:opacity-50 transition-colors"
+	                >
                   Close
                 </button>
               </div>
 
-              <div className="flex flex-col gap-5">
+	              <div aria-disabled={isSavingImportDraft} className={`flex flex-col gap-5 ${isSavingImportDraft ? "pointer-events-none opacity-60" : ""}`}>
                 <div className="flex gap-2 border-b border-zinc-800/70 pb-2">
                   {[
                     ["core", "Core"],
@@ -1798,11 +1799,12 @@ const PCs = () => {
                   ) : null}
 
                   <div className="sticky bottom-0 z-10 flex items-center justify-end gap-3 rounded-2xl border border-zinc-800/70 bg-zinc-950/95 px-4 py-3">
-                    <button
-                      type="button"
-                      onClick={handleCloseImportReview}
-                      className="rounded-xl border border-zinc-800/70 bg-zinc-900/70 px-4 py-2.5 text-sm text-zinc-300 hover:text-white hover:bg-zinc-800/70 transition-colors"
-                    >
+	                    <button
+	                      type="button"
+                        disabled={isSavingImportDraft}
+	                      onClick={handleCloseImportReview}
+	                      className="rounded-xl border border-zinc-800/70 bg-zinc-900/70 px-4 py-2.5 text-sm text-zinc-300 hover:text-white hover:bg-zinc-800/70 disabled:cursor-not-allowed disabled:opacity-50 transition-colors"
+	                    >
                       Cancel
                     </button>
                     <button
@@ -1819,8 +1821,8 @@ const PCs = () => {
                         ? (importTargetCharacterId ? "Updating..." : "Creating...")
                         : (importTargetCharacterId ? "Update character from import" : "Create character from import")}
                     </button>
-                  </div>
                 </div>
+		                </div>
               </div>
             </div>
           </div>
@@ -1836,19 +1838,21 @@ const PCs = () => {
                     Create a player character by hand. PDF import can plug into this same character model later.
                   </p>
                 </div>
-                <button
-                  type="button"
-                  onClick={() => {
+	                <button
+	                  type="button"
+                    disabled={isSaving}
+	                  onClick={() => {
                     setShowCreateModal(false);
                     setNewPc(createManualPcDraft());
                   }}
-                  className="rounded-lg border border-zinc-800/70 bg-zinc-900/70 px-3 py-1.5 text-sm text-zinc-300 hover:text-white hover:bg-zinc-800/70 transition-colors"
-                >
+	                  className="rounded-lg border border-zinc-800/70 bg-zinc-900/70 px-3 py-1.5 text-sm text-zinc-300 hover:text-white hover:bg-zinc-800/70 disabled:cursor-not-allowed disabled:opacity-50 transition-colors"
+	                >
                   Close
                 </button>
               </div>
 
-              <form onSubmit={handleCreatePc} className="space-y-4">
+	              <form onSubmit={handleCreatePc} className="space-y-4">
+                  <fieldset disabled={isSaving} className="space-y-4 disabled:opacity-60">
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div>
                     <label className="block text-sm text-zinc-300 mb-1.5">Character name</label>
@@ -1959,13 +1963,14 @@ const PCs = () => {
 
                 <div className="flex items-center justify-end gap-3 pt-2">
                   <button
-                    type="button"
-                    onClick={() => {
+	                    type="button"
+	                    disabled={isSaving}
+	                    onClick={() => {
                       setShowCreateModal(false);
                       setNewPc(createManualPcDraft());
                     }}
-                    className="rounded-xl border border-zinc-800/70 bg-zinc-900/70 px-4 py-2.5 text-sm text-zinc-300 hover:text-white hover:bg-zinc-800/70 transition-colors"
-                  >
+	                    className="rounded-xl border border-zinc-800/70 bg-zinc-900/70 px-4 py-2.5 text-sm text-zinc-300 hover:text-white hover:bg-zinc-800/70 disabled:cursor-not-allowed disabled:opacity-50 transition-colors"
+	                  >
                     Cancel
                   </button>
                   <button
@@ -1975,8 +1980,9 @@ const PCs = () => {
                   >
                     {isSaving ? "Saving..." : "Create PC"}
                   </button>
-                </div>
-              </form>
+	                </div>
+                  </fieldset>
+	              </form>
             </div>
           </div>
         ) : null}

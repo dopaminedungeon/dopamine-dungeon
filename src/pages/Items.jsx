@@ -372,11 +372,12 @@ export default function Items() {
         <div className="w-[92vw] max-w-2xl max-h-[85vh] overflow-y-auto my-auto bg-zinc-950/90 border border-white/10 rounded-2xl shadow-xl">
           <div className="flex items-center justify-between px-6 py-4 border-b border-white/10">
             <h2 className="text-white font-semibold text-lg">Add Item</h2>
-            <button
-              type="button"
-              className="text-zinc-400 hover:text-white"
-              onClick={() => setShowCreateModal(false)}
-            >
+	            <button
+	              type="button"
+	              disabled={isCreatingItem}
+	              className="text-zinc-400 hover:text-white disabled:cursor-not-allowed disabled:opacity-50"
+	              onClick={() => setShowCreateModal(false)}
+	            >
               ✕
             </button>
           </div>
@@ -428,9 +429,10 @@ export default function Items() {
                 isCreatingItemRef.current = false;
                 setIsCreatingItem(false);
               }
-            }}
-          >
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+	            }}
+	          >
+              <fieldset disabled={isCreatingItem} className="space-y-4 disabled:opacity-60">
+	            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>
                 <label className="block text-xs text-zinc-400 mb-1">Name</label>
                 <input
@@ -531,7 +533,7 @@ export default function Items() {
               )}
             </div>
 
-            <div className="flex flex-col-reverse sm:flex-row sm:items-center sm:justify-end gap-2 pt-2">
+	            <div className="flex flex-col-reverse sm:flex-row sm:items-center sm:justify-end gap-2 pt-2">
               <button
                 type="button"
                 disabled={isCreatingItem}
@@ -547,8 +549,9 @@ export default function Items() {
               >
                 {isCreatingItem ? "Saving..." : "Save"}
               </button>
-            </div>
-          </form>
+	            </div>
+              </fieldset>
+	          </form>
         </div>
       </div>
     )}
