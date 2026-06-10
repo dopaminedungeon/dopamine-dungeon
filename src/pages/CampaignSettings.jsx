@@ -29,6 +29,7 @@ import {
   removeApiCampaignMember,
   revokeApiCampaignInvite,
   unassignApiCharacter,
+  updateApiCampaign,
 } from "../data/api/apiClient.ts";
 import { getAllCharacters } from "../data/characters/characters.repo";
 
@@ -41,6 +42,7 @@ export default function CampaignSettings() {
     accessibleCampaigns,
     selectedCampaignId,
     selectCampaign,
+    updateCampaignInContext,
     createCampaign: createCampaignFromContext,
     campaignRole,
     refreshCampaigns,
@@ -332,12 +334,49 @@ export default function CampaignSettings() {
         lastUpdated: Date.now(),
       });
 
-      if (typeof refreshCampaigns === "function") {
-        await refreshCampaigns();
-      }
+      const requestedUpdate = {
+        campaignId,
+        name: draft.name || "",
+        description: draft.description || "",
+        status: draft.status || "active",
+        system: draft.system || "",
+      };
 
-      if (typeof selectCampaign === "function") {
-        await Promise.resolve(selectCampaign(campaignId));
+      const apiResponse = await updateApiCampaign(requestedUpdate);
+      const returnedCampaign =
+        apiResponse?.campaign && typeof apiResponse.campaign === "object"
+          ? apiResponse.campaign
+          : {};
+
+      const savedCampaignId =
+        returnedCampaign.campaignId ||
+        returnedCampaign.slug ||
+        draft.campaignId ||
+        selectedCampaignId ||
+        campaignId;
+
+      const savedFields = {
+        campaignId: savedCampaignId,
+        postgresCampaignId:
+          returnedCampaign.postgresCampaignId ||
+          returnedCampaign.id ||
+          draft.postgresCampaignId ||
+          draft.id ||
+          null,
+        id: returnedCampaign.id || draft.id,
+        name: returnedCampaign.name ?? requestedUpdate.name,
+        description: returnedCampaign.description ?? requestedUpdate.description,
+        status: returnedCampaign.status ?? requestedUpdate.status,
+        system: returnedCampaign.system ?? requestedUpdate.system,
+      };
+
+      setDraft((current) => ({
+        ...(current || {}),
+        ...savedFields,
+      }));
+
+      if (typeof updateCampaignInContext === "function") {
+        updateCampaignInContext(campaignId, savedFields);
       }
 
       setSaveState({ type: "success", message: "Campaign settings saved." });

@@ -30,6 +30,12 @@ function normalizeGmPrep(value: unknown) {
   return Array.isArray(value) ? value.map((item) => String(item)) : [];
 }
 
+function normalizeAttendees(value: unknown) {
+  return Array.isArray(value)
+    ? value.map((item) => String(item).trim()).filter(Boolean)
+    : [];
+}
+
 function toSessionPayload(row: SessionRow, isGm: boolean) {
   const payload = {
     id: row.id,
@@ -51,6 +57,7 @@ function toSessionPayload(row: SessionRow, isGm: boolean) {
     gmNotes: row.gmNotes,
     gmSecrets: row.gmSecrets,
     gmPrep: row.gmPrep,
+    attendees: row.attendees,
     createdAt: row.createdAt,
     updatedAt: row.updatedAt,
   };
@@ -98,6 +105,7 @@ function toSessionInsert(campaignId: string, rawSession: Record<string, unknown>
     gmNotes: normalizeString(rawSession.gmNotes),
     gmSecrets: normalizeString(rawSession.gmSecrets),
     gmPrep: normalizeGmPrep(rawSession.gmPrep),
+    attendees: normalizeAttendees(rawSession.attendees),
     updatedAt: new Date(),
   };
 }
@@ -188,6 +196,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
             gmNotes: values.gmNotes,
             gmSecrets: values.gmSecrets,
             gmPrep: values.gmPrep,
+            attendees: values.attendees,
             updatedAt: values.updatedAt,
           },
         })

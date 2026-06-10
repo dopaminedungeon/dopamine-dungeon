@@ -1,11 +1,151 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
-import { ArrowLeft, Users, Clock, Map, Trash2 } from "lucide-react";
+import { ArrowLeft, Clock, Map as MapIcon, Trash2 } from "lucide-react";
 import { useMode } from "../context/ModeContext.jsx";
 import { sessionsRepo } from "../data/sessions/sessions.repo";
 import { itemsRepo } from "../data/items/items.repo";
 import SessionEntityLinkManager from "../components/session/SessionEntityLinkManager.jsx";
 import { useCampaign } from "../context/CampaignContext";
+import { getApiCampaignPeople, getApiCharacterAssignments } from "../data/api/apiClient.ts";
+import { getAllCharacters } from "../data/characters/characters.repo";
+
+const SESSION_STATUSES = ["scheduled", "active", "paused", "completed"];
+
+function getSessionDateValue(value) {
+  const rawDate = String(value || "").trim();
+  if (!rawDate) return "";
+  return rawDate.slice(0, 10);
+}
+
+function formatSessionDate(value) {
+  const rawDate = getSessionDateValue(value);
+  if (!rawDate) return "";
+
+  const parsed = new Date(`${rawDate}T00:00:00`);
+  if (Number.isNaN(parsed.getTime())) return rawDate;
+
+  return parsed.toLocaleDateString(undefined, {
+    year: "numeric",
+    month: "short",
+    day: "numeric",
+  });
+}
+
+function renderInlineMarkdown(text) {
+  const raw = String(text || "");
+  const parts = [];
+  const pattern = /(\*\*[^*]+\*\*|_[^_]+_|\*[^*]+\*)/g;
+  let lastIndex = 0;
+  let match;
+
+  while ((match = pattern.exec(raw)) !== null) {
+    if (match.index > lastIndex) {
+      parts.push(raw.slice(lastIndex, match.index));
+    }
+
+    const token = match[0];
+    if (token.startsWith("**")) {
+      parts.push(<strong key={parts.length}>{token.slice(2, -2)}</strong>);
+    } else {
+      parts.push(<em key={parts.length}>{token.slice(1, -1)}</em>);
+    }
+
+    lastIndex = match.index + token.length;
+  }
+
+  if (lastIndex < raw.length) {
+    parts.push(raw.slice(lastIndex));
+  }
+
+  return parts.map((part, index) =>
+    typeof part === "string" ? <React.Fragment key={index}>{part}</React.Fragment> : part
+  );
+}
+
+function renderMarkdownBlock(value, placeholder = "") {
+  const text = String(value || "").trim();
+  if (!text) {
+    return <p className="text-zinc-500 text-sm italic">{placeholder}</p>;
+  }
+
+  const nodes = [];
+  let paragraphLines = [];
+  let listItems = [];
+
+  const flushParagraph = () => {
+    if (paragraphLines.length === 0) return;
+    const content = paragraphLines.join("\n");
+    nodes.push(
+      <p key={`p-${nodes.length}`} className="whitespace-pre-line leading-6">
+        {renderInlineMarkdown(content)}
+      </p>
+    );
+    paragraphLines = [];
+  };
+
+  const flushList = () => {
+    if (listItems.length === 0) return;
+    nodes.push(
+      <ul key={`ul-${nodes.length}`} className="list-disc space-y-1 pl-5">
+        {listItems.map((item, index) => (
+          <li key={index}>{renderInlineMarkdown(item)}</li>
+        ))}
+      </ul>
+    );
+    listItems = [];
+  };
+
+  text.split("\n").forEach((line) => {
+    const trimmed = line.trim();
+
+    if (!trimmed) {
+      flushParagraph();
+      flushList();
+      return;
+    }
+
+    const heading = trimmed.match(/^(#{1,3})\s+(.+)$/);
+    if (heading) {
+      flushParagraph();
+      flushList();
+
+      const level = heading[1].length;
+      const className =
+        level === 1
+          ? "text-xl font-semibold text-white"
+          : level === 2
+            ? "text-lg font-semibold text-white"
+            : "text-base font-semibold text-zinc-100";
+
+      nodes.push(
+        <h3 key={`h-${nodes.length}`} className={className}>
+          {renderInlineMarkdown(heading[2])}
+        </h3>
+      );
+      return;
+    }
+
+    const listItem = trimmed.match(/^[-*]\s+(.+)$/);
+    if (listItem) {
+      flushParagraph();
+      listItems.push(listItem[1]);
+      return;
+    }
+
+    flushList();
+    paragraphLines.push(line.trimEnd());
+  });
+
+  flushParagraph();
+  flushList();
+
+  return (
+    <div className="space-y-3 text-sm text-zinc-300">
+      {nodes}
+    </div>
+  );
+}
+
 export default function SessionProfile() {
   const { id } = useParams();
   const navigate = useNavigate();
@@ -15,11 +155,17 @@ export default function SessionProfile() {
   const [allSessions, setAllSessions] = useState([]);
   const [loading, setLoading] = useState(true);
   const [allItems, setAllItems] = useState([]);
+  const [campaignPeople, setCampaignPeople] = useState([]);
+  const [campaignCharacters, setCampaignCharacters] = useState([]);
+  const [assignmentRows, setAssignmentRows] = useState([]);
 
   useEffect(() => {
     if (!selectedCampaignId) {
       setAllSessions([]);
       setAllItems([]);
+      setCampaignPeople([]);
+      setCampaignCharacters([]);
+      setAssignmentRows([]);
       setLoading(false);
       return;
     }
@@ -44,6 +190,44 @@ export default function SessionProfile() {
 
     load();
   }, [selectedCampaignId]);
+
+  useEffect(() => {
+    if (!selectedCampaignId || !isGM) {
+      setCampaignPeople([]);
+      setCampaignCharacters([]);
+      setAssignmentRows([]);
+      return;
+    }
+
+    let cancelled = false;
+
+    async function loadAttendanceOptions() {
+      try {
+        const [peopleData, charactersData, assignmentData] = await Promise.all([
+          getApiCampaignPeople(selectedCampaignId),
+          getAllCharacters(selectedCampaignId),
+          getApiCharacterAssignments(selectedCampaignId),
+        ]);
+
+        if (cancelled) return;
+        setCampaignPeople(peopleData.people || []);
+        setCampaignCharacters(charactersData || []);
+        setAssignmentRows(assignmentData.assignments || []);
+      } catch (error) {
+        if (cancelled) return;
+        console.error("[SessionProfile] Failed to load attendance options", error);
+        setCampaignPeople([]);
+        setCampaignCharacters([]);
+        setAssignmentRows([]);
+      }
+    }
+
+    loadAttendanceOptions();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [selectedCampaignId, isGM]);
   const session = useMemo(
     () => allSessions.find((s) => String(s.id) === String(id)),
     [allSessions, id]
@@ -61,18 +245,21 @@ export default function SessionProfile() {
       gmNotes: session.gmNotes ?? "",
       gmSecrets: session.gmSecrets ?? "",
       gmPrep: Array.isArray(session.gmPrep) ? session.gmPrep : [],
+      attendees: Array.isArray(session.attendees) ? session.attendees : [],
+      startTime: getSessionDateValue(session.startTime),
     };
   }, [session]);
 
   const [editMode, setEditMode] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
   const [editableSession, setEditableSession] = useState(() =>
     normalizedSession ? { ...normalizedSession } : null
   );
 
   useEffect(() => {
-    if (normalizedSession) setEditableSession({ ...normalizedSession });
-  }, [normalizedSession]);
+    if (normalizedSession && !editMode) setEditableSession({ ...normalizedSession });
+  }, [normalizedSession, editMode]);
 
   const normalizedEditable = useMemo(() => {
     if (!editableSession) return null;
@@ -86,6 +273,8 @@ export default function SessionProfile() {
       gmNotes: editableSession.gmNotes ?? "",
       gmSecrets: editableSession.gmSecrets ?? "",
       gmPrep: Array.isArray(editableSession.gmPrep) ? editableSession.gmPrep : [],
+      attendees: Array.isArray(editableSession.attendees) ? editableSession.attendees : [],
+      startTime: getSessionDateValue(editableSession.startTime),
     };
   }, [editableSession]);
 
@@ -94,6 +283,31 @@ export default function SessionProfile() {
     if (!normalizedSession) return;
     setGmPrepText(normalizedSession.gmPrep.join("\n"));
   }, [normalizedSession]);
+
+  const attendeeOptions = useMemo(() => {
+    const charactersById = new Map(
+      (campaignCharacters || []).map((character) => [String(character.id), character])
+    );
+    const peopleByUserId = new Map(
+      (campaignPeople || [])
+        .filter((person) => person.type === "member" && person.status === "accepted")
+        .map((person) => [String(person.userId || ""), person])
+    );
+
+    return (assignmentRows || [])
+      .map((assignment) => {
+        const character = charactersById.get(String(assignment.characterId));
+        const person = peopleByUserId.get(String(assignment.userId || ""));
+        const characterName = String(character?.name || "").trim();
+        const playerName = String(person?.label || "").trim();
+        if (!characterName || !playerName) return null;
+
+        const label = `${characterName} — ${playerName}`;
+        return { value: label, label };
+      })
+      .filter(Boolean)
+      .sort((a, b) => a.label.localeCompare(b.label));
+  }, [assignmentRows, campaignCharacters, campaignPeople]);
 
   if (loading) {
     return (
@@ -164,6 +378,19 @@ export default function SessionProfile() {
       visibility,
     }));
   };
+
+  const toggleAttendee = (attendeeValue) => {
+    setEditableSession((prev) => {
+      const base = prev ?? (normalizedSession ? { ...normalizedSession } : {});
+      const current = Array.isArray(base.attendees) ? base.attendees : [];
+      const next = current.includes(attendeeValue)
+        ? current.filter((value) => value !== attendeeValue)
+        : [...current, attendeeValue];
+
+      return { ...base, attendees: next };
+    });
+  };
+
   return (
     <main className="flex-1 overflow-auto">
       <button
@@ -188,10 +415,12 @@ export default function SessionProfile() {
             </h1>
             <p className="text-zinc-400 text-sm">
               {viewSession?.map || ""}
-              {viewSession.sessionNumber && (
+              {viewSession.sessionNumber !== undefined &&
+                viewSession.sessionNumber !== null &&
+                viewSession.sessionNumber !== "" && (
                 <> • Session #{viewSession.sessionNumber}</>
               )}
-              {viewSession.startTime && <> • {viewSession.startTime}</>}
+              {viewSession.startTime && <> • {formatSessionDate(viewSession.startTime)}</>}
             </p>
           </div>
 
@@ -239,7 +468,11 @@ export default function SessionProfile() {
                       timeline: normalizedEditable.timeline ?? "",
                       moments: normalizedEditable.moments ?? "",
                       quotes: normalizedEditable.quotes ?? "",
+                      startTime: getSessionDateValue(normalizedEditable.startTime),
                       gmPrep,
+                      attendees: Array.isArray(normalizedEditable.attendees)
+                        ? normalizedEditable.attendees
+                        : [],
                     };
 
                     try {
@@ -260,22 +493,102 @@ export default function SessionProfile() {
               </button>
               <button
                 type="button"
+                disabled={isDeleting}
                 onClick={async () => {
+                  if (isDeleting) return;
                   const ok = window.confirm("Delete this session? This cannot be undone.");
                   if (!ok) return;
 
-                  await sessionsRepo.remove(selectedCampaignId, String(id));
-                  navigate("/sessions");
+                  try {
+                    setIsDeleting(true);
+                    await sessionsRepo.remove(selectedCampaignId, String(id));
+                    navigate("/sessions");
+                  } finally {
+                    setIsDeleting(false);
+                  }
                 }}
-                className="px-3 py-1.5 rounded-xl bg-red-500/15 border border-red-500/40 text-xs text-red-200 hover:bg-red-500/25 transition flex items-center gap-2"
+                className="px-3 py-1.5 rounded-xl bg-red-500/15 border border-red-500/40 text-xs text-red-200 hover:bg-red-500/25 transition flex items-center gap-2 disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:bg-red-500/15"
                 title="Delete session"
               >
                 <Trash2 className="w-4 h-4" />
-                Delete
+                {isDeleting ? "Deleting..." : "Delete"}
               </button>
             </div>
           )}
         </div>
+
+        {isGM && editMode ? (
+          <div className="rounded-xl border border-white/10 bg-white/[0.03] p-4 sm:p-5">
+            <h2 className="text-lg font-semibold text-white mb-4">Session details</h2>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+              <label className="block">
+                <span className="block text-xs uppercase tracking-wide text-zinc-500 mb-1">Name</span>
+                <input
+                  className="w-full bg-transparent border border-white/15 rounded-xl px-3 py-2 text-sm text-zinc-100 focus:outline-none focus:border-purple-500/60"
+                  value={editableSession?.name ?? ""}
+                  onChange={(e) => handleFieldChange("name", e.target.value)}
+                />
+              </label>
+              <label className="block">
+                <span className="block text-xs uppercase tracking-wide text-zinc-500 mb-1">Session number</span>
+                <input
+                  type="number"
+                  min={0}
+                  className="w-full bg-transparent border border-white/15 rounded-xl px-3 py-2 text-sm text-zinc-100 focus:outline-none focus:border-purple-500/60"
+                  value={editableSession?.sessionNumber ?? 0}
+                  onChange={(e) =>
+                    handleFieldChange(
+                      "sessionNumber",
+                      Number.isFinite(Number(e.target.value)) ? Number(e.target.value) : 0
+                    )
+                  }
+                />
+              </label>
+              <label className="block">
+                <span className="block text-xs uppercase tracking-wide text-zinc-500 mb-1">Date</span>
+                <input
+                  type="date"
+                  className="w-full bg-transparent border border-white/15 rounded-xl px-3 py-2 text-sm text-zinc-100 focus:outline-none focus:border-purple-500/60"
+                  value={getSessionDateValue(editableSession?.startTime)}
+                  onChange={(e) => handleFieldChange("startTime", getSessionDateValue(e.target.value))}
+                />
+              </label>
+              <label className="block">
+                <span className="block text-xs uppercase tracking-wide text-zinc-500 mb-1">Location</span>
+                <input
+                  className="w-full bg-transparent border border-white/15 rounded-xl px-3 py-2 text-sm text-zinc-100 focus:outline-none focus:border-purple-500/60"
+                  value={editableSession?.map ?? ""}
+                  onChange={(e) => handleFieldChange("map", e.target.value)}
+                />
+              </label>
+              <label className="block">
+                <span className="block text-xs uppercase tracking-wide text-zinc-500 mb-1">Status</span>
+                <select
+                  className="w-full bg-zinc-950 border border-white/15 rounded-xl px-3 py-2 text-sm text-zinc-100 focus:outline-none focus:border-purple-500/60"
+                  value={editableSession?.status ?? "scheduled"}
+                  onChange={(e) => handleFieldChange("status", e.target.value)}
+                >
+                  {SESSION_STATUSES.map((status) => (
+                    <option key={status} value={status}>
+                      {status}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label className="block">
+                <span className="block text-xs uppercase tracking-wide text-zinc-500 mb-1">Visibility</span>
+                <select
+                  className="w-full bg-zinc-950 border border-white/15 rounded-xl px-3 py-2 text-sm text-zinc-100 focus:outline-none focus:border-purple-500/60"
+                  value={editableSession?.visibility ?? "public"}
+                  onChange={(e) => handleFieldChange("visibility", e.target.value)}
+                >
+                  <option value="public">Player-visible</option>
+                  <option value="gm-only">GM-only</option>
+                </select>
+              </label>
+            </div>
+          </div>
+        ) : null}
 
         {/* Player & GM layout */}
         <div className={`grid grid-cols-1 ${isGM ? "lg:grid-cols-2" : ""} gap-4 sm:gap-6 pt-2`}>
@@ -292,7 +605,7 @@ export default function SessionProfile() {
                   onChange={(e) => handleFieldChange("summary", e.target.value)}
                 />
               ) : (
-                <p className="text-zinc-300 text-sm whitespace-pre-line">{viewSession?.summary || ""}</p>
+                renderMarkdownBlock(viewSession?.summary, "No player-facing recap yet.")
               )}
             </div>
 
@@ -301,37 +614,44 @@ export default function SessionProfile() {
             {/* Attendance */}
             <div className="bg-white/5 rounded-xl border border-white/10 p-4 sm:p-5">
               <h2 className="text-lg font-semibold text-white mb-2">Attendance</h2>
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-3">
-                  <Users className="w-5 h-5 text-zinc-500" />
-                  <div>
-                    <p className="text-zinc-400 text-xs uppercase tracking-wide">Players present</p>
-                    {isGM && editMode ? (
-                      <div className="flex items-center gap-2">
-                        <input
-                          type="number"
-                          min={0}
-                          className="w-16 bg-transparent border border-white/15 rounded-lg px-2 py-1 text-sm text-zinc-100 focus:outline-none focus:border-purple-500/60"
-                          value={editableSession.players}
-                          onChange={(e) => handleFieldChange("players", Number(e.target.value) || 0)}
-                        />
-                        <span className="text-zinc-400 text-sm">/</span>
-                        <input
-                          type="number"
-                          min={0}
-                          className="w-16 bg-transparent border border-white/15 rounded-lg px-2 py-1 text-sm text-zinc-100 focus:outline-none focus:border-purple-500/60"
-                          value={editableSession.maxPlayers}
-                          onChange={(e) => handleFieldChange("maxPlayers", Number(e.target.value) || 0)}
-                        />
-                      </div>
-                    ) : (
-                      <p className="text-white font-semibold text-lg">
-                        {Number(viewSession?.players) || 0} / {Number(viewSession?.maxPlayers) || 0}
-                      </p>
-                    )}
-                  </div>
+              {isGM && editMode ? (
+                <div className="space-y-2">
+                  {attendeeOptions.length === 0 ? (
+                    <p className="text-sm text-zinc-500">No assigned characters available for attendance yet.</p>
+                  ) : (
+                    attendeeOptions.map((option) => {
+                      const checked = (editableSession?.attendees || []).includes(option.value);
+                      return (
+                        <label
+                          key={option.value}
+                          className="flex items-center gap-3 rounded-lg border border-white/10 bg-white/[0.025] px-3 py-2 text-sm text-zinc-200"
+                        >
+                          <input
+                            type="checkbox"
+                            checked={checked}
+                            onChange={() => toggleAttendee(option.value)}
+                            className="h-4 w-4 accent-purple-500"
+                          />
+                          <span>{option.label}</span>
+                        </label>
+                      );
+                    })
+                  )}
                 </div>
-              </div>
+              ) : (viewSession?.attendees || []).length > 0 ? (
+                <div className="flex flex-wrap gap-2">
+                  {viewSession.attendees.map((attendee) => (
+                    <span
+                      key={attendee}
+                      className="rounded-full border border-emerald-400/25 bg-emerald-400/10 px-3 py-1 text-xs text-emerald-100"
+                    >
+                      {attendee}
+                    </span>
+                  ))}
+                </div>
+              ) : (
+                <p className="text-sm text-zinc-500">No attendance recorded yet.</p>
+              )}
             </div>
 
             {/* Items discovered, Notable NPCs, timeline, Moments, Quotes, NPC relationships */}
@@ -408,9 +728,7 @@ export default function SessionProfile() {
                     placeholder="Key beats in order…"
                   />
                 ) : (
-                  <p className="text-zinc-300 text-sm whitespace-pre-line">
-                    {viewSession?.timeline || ""}
-                  </p>
+                  renderMarkdownBlock(viewSession?.timeline)
                 )}
               </div>
             )}
@@ -429,9 +747,7 @@ export default function SessionProfile() {
                     placeholder="Cinematic highlights, emotional gut-punches…"
                   />
                 ) : (
-                  <p className="text-zinc-300 text-sm whitespace-pre-line">
-                    {viewSession?.moments || ""}
-                  </p>
+                  renderMarkdownBlock(viewSession?.moments)
                 )}
               </div>
             )}
@@ -450,9 +766,7 @@ export default function SessionProfile() {
                     placeholder="Best one-liners, table memes…"
                   />
                 ) : (
-                  <p className="text-zinc-300 text-sm whitespace-pre-line">
-                    {viewSession?.quotes || ""}
-                  </p>
+                  renderMarkdownBlock(viewSession?.quotes)
                 )}
               </div>
             )}
@@ -467,37 +781,50 @@ export default function SessionProfile() {
                   Off-screen events & GM notes
                 </h2>
                 {isGM && editMode ? (
-                  <textarea
-                    className="w-full bg-transparent border border-purple-500/40 rounded-xl px-3 py-2 text-sm text-zinc-100 focus:outline-none focus:border-purple-400/80"
-                    rows={3}
-                    value={editableSession.gmNotes}
-                    onChange={(e) => handleFieldChange("gmNotes", e.target.value)}
-                  />
+                  <div>
+                    <label className="block text-xs uppercase tracking-wide text-purple-200 mb-1">
+                      GM notes
+                    </label>
+                    <textarea
+                      className="w-full bg-transparent border border-purple-500/40 rounded-xl px-3 py-2 text-sm text-zinc-100 focus:outline-none focus:border-purple-400/80"
+                      rows={3}
+                      value={editableSession?.gmNotes ?? ""}
+                      onChange={(e) => handleFieldChange("gmNotes", e.target.value)}
+                    />
+                  </div>
                 ) : (
-                  <p className="text-zinc-300 text-sm mb-3">
-                    {viewSession.gmNotes}
-                  </p>
-                )}
-                {isGM && editMode ? (
-                  <textarea
-                    className="mt-3 w-full bg-transparent border border-purple-500/25 rounded-xl px-3 py-2 text-sm text-zinc-100 focus:outline-none focus:border-purple-400/80"
-                    rows={3}
-                    value={editableSession.gmSecrets}
-                    onChange={(e) => handleFieldChange("gmSecrets", e.target.value)}
-                  />
-                ) : (
-                  <p className="text-zinc-400 text-sm mb-3">
-                    <span className="font-semibold text-purple-200">
-                      Secrets &amp; twists:
-                    </span>{" "}
-                    {viewSession.gmSecrets}
-                  </p>
-                )}
-                {isGM && editMode ? (
-                  <div className="mt-3">
-                    <p className="text-zinc-500 text-xs mb-1 uppercase tracking-wide">
-                      Prep notes
+                  <div className="mb-4">
+                    <p className="text-xs uppercase tracking-wide text-purple-200 mb-1">
+                      GM notes
                     </p>
+                    {renderMarkdownBlock(viewSession.gmNotes, "No GM notes yet.")}
+                  </div>
+                )}
+                {isGM && editMode ? (
+                  <div className="mt-4">
+                    <label className="block text-xs uppercase tracking-wide text-purple-200 mb-1">
+                      Secrets &amp; twists
+                    </label>
+                    <textarea
+                      className="w-full bg-transparent border border-purple-500/25 rounded-xl px-3 py-2 text-sm text-zinc-100 focus:outline-none focus:border-purple-400/80"
+                      rows={3}
+                      value={editableSession?.gmSecrets ?? ""}
+                      onChange={(e) => handleFieldChange("gmSecrets", e.target.value)}
+                    />
+                  </div>
+                ) : (
+                  <div className="mb-4">
+                    <p className="text-xs uppercase tracking-wide text-purple-200 mb-1">
+                      Secrets &amp; twists
+                    </p>
+                    {renderMarkdownBlock(viewSession.gmSecrets, "No secrets or twists yet.")}
+                  </div>
+                )}
+                {isGM && editMode ? (
+                  <div className="mt-4">
+                    <label className="block text-xs uppercase tracking-wide text-purple-200 mb-1">
+                      Prep notes
+                    </label>
                     <textarea
                       className="w-full bg-transparent border border-purple-500/25 rounded-xl px-3 py-2 text-sm text-zinc-100 focus:outline-none focus:border-purple-400/80"
                       rows={3}
@@ -506,19 +833,15 @@ export default function SessionProfile() {
                     />
                   </div>
                 ) : (
-                  viewSession.gmPrep &&
-                  viewSession.gmPrep.length > 0 && (
-                    <div className="mt-3">
-                      <p className="text-zinc-500 text-xs mb-1 uppercase tracking-wide">
-                        Prep notes
-                      </p>
-                      <ul className="list-disc list-inside text-zinc-400 text-sm space-y-1">
-                        {viewSession.gmPrep.map((item, idx) => (
-                          <li key={idx}>{item}</li>
-                        ))}
-                      </ul>
-                    </div>
-                  )
+                  <div>
+                    <p className="text-xs uppercase tracking-wide text-purple-200 mb-1">
+                      Prep notes
+                    </p>
+                    {renderMarkdownBlock(
+                      Array.isArray(viewSession.gmPrep) ? viewSession.gmPrep.join("\n") : "",
+                      "No prep notes yet."
+                    )}
+                  </div>
                 )}
               </div>
             </div>
@@ -526,20 +849,15 @@ export default function SessionProfile() {
         </div>
 
         {/* Metadata strip */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-3 sm:gap-4 text-sm text-zinc-400 pt-2">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-3 sm:gap-4 text-sm text-zinc-400 pt-2">
           <div className="flex items-center gap-3">
-            <Users className="w-4 h-4 text-zinc-500" />
-            <span>{Number(viewSession?.players) || 0} active players in this session.</span>
-          </div>
-          <div className="flex items-center gap-3">
-            <Map className="w-4 h-4 text-zinc-500" />
+            <MapIcon className="w-4 h-4 text-zinc-500" />
             <span>Location: {viewSession?.map || ""}</span>
           </div>
           <div className="flex items-center gap-3">
             <Clock className="w-4 h-4 text-zinc-500" />
             <span>
-              Status: {viewSession?.status || "—"} • Duration: {viewSession?.duration || "—"} •
-              Visibility: {isGmOnlyCurrent ? "GM-only" : "Player-visible"}
+              Status: {viewSession?.status || "—"} • Visibility: {isGmOnlyCurrent ? "GM-only" : "Player-visible"}
             </span>
           </div>
         </div>

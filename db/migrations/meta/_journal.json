@@ -71,6 +71,13 @@
       "when": 1781093696371,
       "tag": "0009_naive_venom",
       "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1781098657966,
+      "tag": "0010_lazy_magus",
+      "breakpoints": true
     }
   ]
 }

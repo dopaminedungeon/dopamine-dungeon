@@ -177,6 +177,36 @@ export function CampaignProvider({ children }) {
     }
   };
 
+  const updateCampaignInContext = useCallback((campaignId, updates) => {
+    if (!campaignId || !updates) return;
+
+    setAccessibleCampaigns((currentCampaigns) =>
+      currentCampaigns.map((campaign) => {
+        const matches =
+          String(campaign.campaignId ?? "") === String(campaignId) ||
+          String(campaign.id ?? "") === String(campaignId) ||
+          String(campaign.postgresCampaignId ?? "") === String(campaignId);
+
+        if (!matches) return campaign;
+
+        const nextCampaignId =
+          updates.campaignId ?? updates.slug ?? campaign.campaignId ?? campaignId;
+        const nextPostgresCampaignId =
+          updates.postgresCampaignId ?? updates.id ?? campaign.postgresCampaignId ?? campaign.id;
+
+        return {
+          ...campaign,
+          ...updates,
+          campaignId: nextCampaignId,
+          postgresCampaignId: nextPostgresCampaignId,
+          role: campaign.role,
+          tenantId: campaign.tenantId,
+          postgresWorkspaceId: campaign.postgresWorkspaceId,
+        };
+      })
+    );
+  }, []);
+
   const createCampaign = async ({ name, description = "", system = "" }) => {
     if (!user?.uid) {
       throw new Error("You must be signed in to create a campaign.");
@@ -239,6 +269,7 @@ export function CampaignProvider({ children }) {
         campaignStatus,
         selectedCampaignId,
         selectCampaign,
+        updateCampaignInContext,
         createCampaign,
         refreshCampaigns: loadCampaigns,
         campaignRole,

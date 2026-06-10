@@ -9,6 +9,7 @@ export const campaigns = pgTable("campaigns", {
   name: text("name").notNull(),
   slug: text("slug").notNull(),
   description: text("description"),
+  system: text("system").default("").notNull(),
   status: text("status").default("active").notNull(),
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
