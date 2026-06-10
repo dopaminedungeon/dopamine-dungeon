@@ -18,6 +18,22 @@ import { users } from "../db/schema/users.js";
 
 type User = typeof users.$inferSelect;
 
+function getReadablePersonLabel(params: {
+  displayName?: string | null;
+  email?: string | null;
+  fallback?: string | null;
+}) {
+  const displayName = String(params.displayName || "").trim();
+  if (displayName) return displayName;
+
+  const email = String(params.email || "").trim();
+  if (email && email !== "—") {
+    return email.split("@")[0].replace(/[._-]+/g, " ").trim() || email;
+  }
+
+  return String(params.fallback || "Unknown person").trim();
+}
+
 function getCampaignIdParam(req: VercelRequest) {
   const value = req.query.campaignId;
   if (Array.isArray(value)) return value[0];
@@ -266,6 +282,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const acceptedRows = memberships.map((membership) => {
       const user = usersById.get(membership.userId);
       const email = user?.email || "—";
+      const label = getReadablePersonLabel({
+        displayName: user?.displayName,
+        email,
+        fallback: membership.userId,
+      });
 
       return {
         id: `member-${membership.id}`,
@@ -273,7 +294,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         type: "member",
         status: "accepted",
         email,
-        label: email === "—" ? membership.userId : email,
+        displayName: user?.displayName || null,
+        label,
         userId: membership.userId,
         workspaceRole: workspaceRolesByUserId.get(membership.userId) || "member",
         campaignRole: membership.role || "player",
@@ -287,7 +309,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       type: "invite",
       status: invitation.status || "pending",
       email: invitation.email || "—",
-      label: invitation.email || "Pending invite",
+      displayName: null,
+      label: getReadablePersonLabel({
+        email: invitation.email,
+        fallback: "Pending invite",
+      }),
       userId: null,
       workspaceRole: invitation.workspaceRole || "member",
       campaignRole: invitation.campaignRole || "player",

@@ -705,9 +705,8 @@ export default function CampaignSettings() {
                             <td className="rounded-l-2xl border-y border-l border-white/10 bg-white/[0.025] px-4 py-3">
                               <div className="space-y-1">
                                 <p className="text-sm font-medium text-zinc-100">{person.label}</p>
-                                <p className="text-xs text-zinc-400">{person.email}</p>
-                                {person.userId ? (
-                                  <p className="text-[11px] text-zinc-500">User ID: {person.userId}</p>
+                                {person.email && person.email !== "—" ? (
+                                  <p className="text-xs text-zinc-400">{person.email}</p>
                                 ) : null}
                               </div>
                             </td>

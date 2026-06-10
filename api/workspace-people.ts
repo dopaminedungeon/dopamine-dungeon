@@ -20,6 +20,22 @@ type WorkspaceMembership = typeof workspaceMemberships.$inferSelect;
 type CampaignMembership = typeof campaignMemberships.$inferSelect;
 type User = typeof users.$inferSelect;
 
+function getReadablePersonLabel(params: {
+  displayName?: string | null;
+  email?: string | null;
+  fallback?: string | null;
+}) {
+  const displayName = String(params.displayName || "").trim();
+  if (displayName) return displayName;
+
+  const email = String(params.email || "").trim();
+  if (email && email !== "—") {
+    return email.split("@")[0].replace(/[._-]+/g, " ").trim() || email;
+  }
+
+  return String(params.fallback || "Unknown person").trim();
+}
+
 function getWorkspaceIdParam(req: VercelRequest) {
   const value = req.query.tenantId ?? req.query.workspaceId;
   if (Array.isArray(value)) return value[0];
@@ -116,6 +132,11 @@ function mapWorkspacePeople(params: {
       const campaignMemberships = campaignMembershipsByUserId.get(userId) ?? [];
       const user = usersById.get(userId);
       const email = user?.email || "—";
+      const label = getReadablePersonLabel({
+        displayName: user?.displayName,
+        email,
+        fallback: userId,
+      });
 
       return {
         id: workspaceMembership?.id ?? `campaign-only-${userId}`,
@@ -123,7 +144,8 @@ function mapWorkspacePeople(params: {
         type: workspaceMembership ? "workspace" : "campaign-only",
         userId,
         firebaseUid: user?.firebaseUid ?? null,
-        label: email === "—" ? userId : email,
+        displayName: user?.displayName || null,
+        label,
         email,
         role: workspaceMembership?.role ?? "member",
         campaignMembershipCount: campaignMemberships.length,

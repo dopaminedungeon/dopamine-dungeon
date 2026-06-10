@@ -64,6 +64,13 @@
       "when": 1781033465084,
       "tag": "0008_character_assignments",
       "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1781093696371,
+      "tag": "0009_naive_venom",
+      "breakpoints": true
     }
   ]
 }

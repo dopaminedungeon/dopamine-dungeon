@@ -23,6 +23,10 @@ export async function getCurrentUser(req: VercelRequest): Promise<CurrentUser> {
   const decodedToken = await verifyAuthHeader(req.headers.authorization);
   const firebaseUid = decodedToken.uid;
   const email = decodedToken.email ?? null;
+  const displayName =
+    typeof decodedToken.name === "string" && decodedToken.name.trim()
+      ? decodedToken.name.trim()
+      : null;
 
   const existingUser = await db
     .select()
@@ -31,7 +35,22 @@ export async function getCurrentUser(req: VercelRequest): Promise<CurrentUser> {
     .limit(1);
 
   if (existingUser[0]) {
-    return existingUser[0];
+    const user = existingUser[0];
+
+    if (user.email !== email || user.displayName !== displayName) {
+      const updatedUsers = await db
+        .update(users)
+        .set({
+          email,
+          displayName,
+        })
+        .where(eq(users.id, user.id))
+        .returning();
+
+      return updatedUsers[0] ?? user;
+    }
+
+    return user;
   }
 
   const insertedUsers = await db
@@ -39,6 +58,7 @@ export async function getCurrentUser(req: VercelRequest): Promise<CurrentUser> {
     .values({
       firebaseUid,
       email,
+      displayName,
     })
     .returning();
 

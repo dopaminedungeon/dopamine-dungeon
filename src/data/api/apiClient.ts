@@ -185,6 +185,7 @@ export async function getApiCampaignPeople(campaignId: string) {
       type: "member" | "invite";
       status: string;
       email: string;
+      displayName: string | null;
       label: string;
       userId: string | null;
       workspaceRole: string;
@@ -227,6 +228,7 @@ export async function getApiWorkspacePeople(tenantId: string) {
       type: "workspace" | "campaign-only";
       userId: string;
       firebaseUid: string | null;
+      displayName: string | null;
       label: string;
       email: string;
       role: string;

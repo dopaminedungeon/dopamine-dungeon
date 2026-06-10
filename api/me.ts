@@ -24,6 +24,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     const firebaseUid = decodedToken.uid;
     const email = decodedToken.email ?? null;
+    const displayName =
+      typeof decodedToken.name === "string" && decodedToken.name.trim()
+        ? decodedToken.name.trim()
+        : null;
 
     const existingUser = await db
       .select()
@@ -39,10 +43,22 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         .values({
           firebaseUid,
           email,
+          displayName,
         })
         .returning();
 
       user = insertedUsers[0];
+    } else if (user.email !== email || user.displayName !== displayName) {
+      const updatedUsers = await db
+        .update(users)
+        .set({
+          email,
+          displayName,
+        })
+        .where(eq(users.id, user.id))
+        .returning();
+
+      user = updatedUsers[0] ?? user;
     }
 
     const workspaceMembershipsData = await db
