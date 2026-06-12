@@ -197,9 +197,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     // Firestore mail delivery is intentionally retained temporarily until email sending moves server-side.
     await adminDb.collection("mail").add({
       to: [email],
+      from: inviteEmailFrom,
+      replyTo: inviteEmailReplyTo,
       message: {
-        from: inviteEmailFrom,
-        replyTo: inviteEmailReplyTo,
         subject: "✨You’ve been summoned to a campaign✨",
         html: buildInviteEmailHtml({
           campaignName: campaign.name,
