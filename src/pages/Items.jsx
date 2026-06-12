@@ -1,4 +1,5 @@
 import React, { useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { useNavigate } from "react-router-dom";
 import { useMode } from "../context/ModeContext.jsx";
 import { useCampaign } from "../context/CampaignContext";
@@ -123,6 +124,17 @@ export default function Items() {
 
     load();
   }, [selectedCampaignId]);
+
+  useEffect(() => {
+    if (!showCreateModal) return undefined;
+
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+
+    return () => {
+      document.body.style.overflow = previousOverflow;
+    };
+  }, [showCreateModal]);
 
   const [formData, setFormData] = useState({
     name: "",
@@ -367,10 +379,10 @@ export default function Items() {
       })}
     </div>
 
-    {showCreateModal && (
-      <div className="fixed inset-0 z-50 flex items-start sm:items-center justify-center bg-black/70 backdrop-blur-sm p-4 pt-6 pb-28 sm:pb-6 overflow-y-auto">
-        <div className="w-[92vw] max-w-2xl max-h-[85vh] overflow-y-auto my-auto bg-zinc-950/90 border border-white/10 rounded-2xl shadow-xl">
-          <div className="flex items-center justify-between px-6 py-4 border-b border-white/10">
+    {showCreateModal && typeof document !== "undefined" ? createPortal((
+      <div className="fixed inset-0 z-[100] flex items-start sm:items-center justify-center bg-black/70 backdrop-blur-sm p-4 pt-6 pb-28 sm:pb-6 overflow-hidden">
+        <div className="relative z-[101] flex max-h-[calc(100dvh-1rem)] w-[92vw] max-w-2xl flex-col overflow-hidden my-auto bg-zinc-950/90 border border-white/10 rounded-2xl shadow-xl">
+          <div className="flex shrink-0 items-center justify-between px-6 py-4 border-b border-white/10">
             <h2 className="text-white font-semibold text-lg">Add Item</h2>
 	            <button
 	              type="button"
@@ -383,7 +395,7 @@ export default function Items() {
           </div>
 
           <form
-  className="p-4 sm:p-6 space-y-4"
+  className="flex min-h-0 flex-1 flex-col"
             onSubmit={async (e) => {
               e.preventDefault();
               if (!selectedCampaignId || isCreatingItemRef.current) return;
@@ -431,6 +443,7 @@ export default function Items() {
               }
 	            }}
 	          >
+              <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain p-4 sm:p-6">
               <fieldset disabled={isCreatingItem} className="space-y-4 disabled:opacity-60">
 	            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>
@@ -533,7 +546,10 @@ export default function Items() {
               )}
             </div>
 
-	            <div className="flex flex-col-reverse sm:flex-row sm:items-center sm:justify-end gap-2 pt-2">
+              </fieldset>
+              </div>
+
+		            <div className="flex shrink-0 flex-col-reverse sm:flex-row sm:items-center sm:justify-end gap-2 border-t border-white/10 p-4 sm:p-6">
               <button
                 type="button"
                 disabled={isCreatingItem}
@@ -550,11 +566,10 @@ export default function Items() {
                 {isCreatingItem ? "Saving..." : "Save"}
               </button>
 	            </div>
-              </fieldset>
 	          </form>
         </div>
       </div>
-    )}
+    ), document.body) : null}
   </>
 );
 }
