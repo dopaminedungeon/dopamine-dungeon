@@ -32,6 +32,22 @@ function getFrontendOrigin(req: VercelRequest) {
   );
 }
 
+function formatMailbox(name: string, email: string) {
+  const trimmedName = String(name || "").trim();
+  const trimmedEmail = String(email || "").trim();
+
+  return trimmedName ? `${trimmedName} <${trimmedEmail}>` : trimmedEmail;
+}
+
+const inviteEmailFrom = formatMailbox(
+  process.env.INVITE_EMAIL_FROM_NAME || "Dopamine Dungeon",
+  process.env.INVITE_EMAIL_FROM || "invite@dopamine-dungeon.com"
+);
+const inviteEmailReplyTo = formatMailbox(
+  process.env.INVITE_EMAIL_REPLY_TO_NAME || "Dopamine Dungeon",
+  process.env.INVITE_EMAIL_REPLY_TO || "dopamine.dungeon.info@gmail.com"
+);
+
 function parseInvitationCharacterIds(value?: string | null) {
   return String(value || "")
     .split(",")
@@ -182,6 +198,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     await adminDb.collection("mail").add({
       to: [email],
       message: {
+        from: inviteEmailFrom,
+        replyTo: inviteEmailReplyTo,
         subject: "✨You’ve been summoned to a campaign✨",
         html: buildInviteEmailHtml({
           campaignName: campaign.name,
