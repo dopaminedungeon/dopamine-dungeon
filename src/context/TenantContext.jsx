@@ -1,18 +1,39 @@
 import { createContext, useCallback, useContext, useEffect, useState } from "react";
-import { collection, query, where, getDocs, doc, getDoc } from "firebase/firestore";
-import { db } from "../firebase/firebase";
 import { useAuth } from "./AuthContext";
+import { getApiMe } from "../data/api/apiClient";
 import { createTenant as createTenantRepo } from "../data/tenants/tenant.repo";
 import { createTenantMember } from "../data/tenantMembers/tenantMembers.repo";
 
 const TenantContext = createContext(null);
 const TENANT_STORAGE_KEY = "dd_selectedTenantId";
 
+function getWorkspaceAppId(workspace) {
+  return workspace?.tenantId ?? workspace?.slug ?? null;
+}
+
+function readStoredTenantId() {
+  try {
+    return localStorage.getItem(TENANT_STORAGE_KEY) || null;
+  } catch {
+    return null;
+  }
+}
+
+function writeStoredTenantId(tenantId) {
+  try {
+    if (tenantId) localStorage.setItem(TENANT_STORAGE_KEY, tenantId);
+    else localStorage.removeItem(TENANT_STORAGE_KEY);
+  } catch {
+    // ignore storage failures
+  }
+}
+
 export function TenantProvider({ children }) {
   const { user } = useAuth();
   const [tenants, setTenants] = useState([]);
   const [tenantStatus, setTenantStatus] = useState("loading");
   const [workspaceRole, setWorkspaceRole] = useState(null);
+  const [membershipVersion, setMembershipVersion] = useState(0);
   const [selectedTenantId, setSelectedTenantId] = useState(() => {
     try {
       return localStorage.getItem(TENANT_STORAGE_KEY) || null;
@@ -20,6 +41,22 @@ export function TenantProvider({ children }) {
       return null;
     }
   });
+
+  const findTenantByAnyId = useCallback(
+    (tenantId) => {
+      if (!tenantId) return null;
+
+      return (
+        tenants.find(
+          (tenant) =>
+            tenant.tenantId === tenantId ||
+            tenant.id === tenantId ||
+            tenant.postgresWorkspaceId === tenantId
+        ) ?? null
+      );
+    },
+    [tenants]
+  );
 
   const loadTenants = useCallback(async () => {
     if (!user) {
@@ -33,39 +70,34 @@ export function TenantProvider({ children }) {
     setTenantStatus("loading");
 
     try {
-      const q = query(
-        collection(db, "tenantMembers"),
-        where("userId", "==", user.uid)
-      );
+      const apiMe = await getApiMe();
 
-      const snap = await getDocs(q);
-      const memberships = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+      const memberships = apiMe.workspaceMemberships ?? [];
+      const workspaces = apiMe.workspaces ?? [];
 
-      if (snap.empty) {
+      if (memberships.length === 0 || workspaces.length === 0) {
         setTenants([]);
         setSelectedTenantId(null);
         setTenantStatus("empty");
         setWorkspaceRole(null);
+        setMembershipVersion((version) => version + 1);
+        writeStoredTenantId(null);
         return;
       }
 
-      const tenantIds = snap.docs.map((d) => d.data().tenantId).filter(Boolean);
+      const loaded = workspaces.map((workspace) => {
+        const membership = memberships.find(
+          (m) => m.workspaceId === workspace.id
+        );
 
-      const tenantDocs = await Promise.all(
-        tenantIds.map((id) => getDoc(doc(db, "tenants", id)))
-      );
-
-      const loaded = tenantDocs
-        .filter((d) => d.exists())
-        .map((d) => {
-          const membership = memberships.find((m) => m.tenantId === d.id);
-
-          return {
-            tenantId: d.id,
-            ...d.data(),
-            role: membership?.role ?? null,
-          };
-        });
+        // Keep app state/localStorage on the legacy-safe slug, while retaining the PG UUID for joins.
+        return {
+          ...workspace,
+          tenantId: getWorkspaceAppId(workspace),
+          postgresWorkspaceId: workspace.id,
+          role: membership?.role ?? null,
+        };
+      }).filter((workspace) => Boolean(workspace.tenantId));
 
       setTenants(loaded);
 
@@ -73,43 +105,45 @@ export function TenantProvider({ children }) {
         setSelectedTenantId(null);
         setTenantStatus("empty");
         setWorkspaceRole(null);
+        setMembershipVersion((version) => version + 1);
+        writeStoredTenantId(null);
         return;
       }
 
-      const validSelected = loaded.find((t) => t.tenantId === selectedTenantId);
+      const storedTenantId = readStoredTenantId();
+      const preferredTenantId = storedTenantId;
+      const validSelected = loaded.find(
+        (tenant) =>
+          tenant.tenantId === preferredTenantId ||
+          tenant.postgresWorkspaceId === preferredTenantId
+      );
       const nextTenantId = validSelected ? validSelected.tenantId : loaded[0].tenantId;
       const selectedTenant = loaded.find((t) => t.tenantId === nextTenantId) ?? null;
 
       setSelectedTenantId(nextTenantId);
       setWorkspaceRole(selectedTenant?.role ?? null);
-      try {
-        localStorage.setItem(TENANT_STORAGE_KEY, nextTenantId);
-      } catch {
-        // ignore storage failures
-      }
+      writeStoredTenantId(nextTenantId);
 
       setTenantStatus("ready");
+      setMembershipVersion((version) => version + 1);
     } catch (error) {
       console.error("[TenantContext] Failed to load tenants", error);
       setWorkspaceRole(null);
       setTenantStatus("error");
     }
-  }, [user, selectedTenantId]);
+  }, [user]);
 
   useEffect(() => {
     loadTenants();
   }, [loadTenants]);
 
   const selectTenant = (tenantId) => {
-    setSelectedTenantId(tenantId);
-    const selectedTenant = tenants.find((t) => t.tenantId === tenantId) ?? null;
+    const selectedTenant = findTenantByAnyId(tenantId);
+    const normalizedTenantId = selectedTenant?.tenantId ?? tenantId ?? null;
+
+    setSelectedTenantId(normalizedTenantId);
     setWorkspaceRole(selectedTenant?.role ?? null);
-    try {
-      if (tenantId) localStorage.setItem(TENANT_STORAGE_KEY, tenantId);
-      else localStorage.removeItem(TENANT_STORAGE_KEY);
-    } catch {
-      // ignore storage failures
-    }
+    writeStoredTenantId(normalizedTenantId);
   };
 
   const createTenant = async ({ name, description = "" }) => {
@@ -161,6 +195,7 @@ export function TenantProvider({ children }) {
         tenantStatus,
         selectedTenantId,
         workspaceRole,
+        membershipVersion,
         selectTenant,
         createTenant,
         refreshTenants: loadTenants,

@@ -13,6 +13,7 @@ export default function CreateWorkspaceForm() {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    if (isSubmitting) return;
 
     if (!user?.uid) {
       setError("You must be signed in to create a workspace.");
@@ -48,6 +49,7 @@ export default function CreateWorkspaceForm() {
 
   return (
     <form onSubmit={handleSubmit} className="space-y-4 max-w-md">
+      <fieldset disabled={isSubmitting} className="space-y-4 disabled:opacity-60">
       <div>
         <label className="mb-2 block text-sm font-medium text-zinc-200">
           Workspace name
@@ -58,9 +60,9 @@ export default function CreateWorkspaceForm() {
           onChange={(e) => setName(e.target.value)}
           placeholder="e.g. Chronicles of Varionath"
           className="w-full rounded-xl border border-zinc-700 bg-zinc-900 px-4 py-3 text-zinc-100 outline-none focus:border-violet-500"
-          disabled={isSubmitting}
         />
       </div>
+      </fieldset>
 
       {error ? (
         <p className="text-sm text-red-400">{error}</p>

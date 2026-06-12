@@ -1,11 +1,11 @@
 import { useEffect, useState } from "react";
 import { getAllCharacters } from "../../data/characters/characters.repo";
-import { invitePlayerToCampaign } from "../../domain/invitations/invitation.service";
+import { createApiInvitation, getApiCharacterAssignments } from "../../data/api/apiClient";
 import { useAuth } from "../../context/AuthContext";
 import { useTenant } from "../../context/TenantContext";
 import { useCampaign } from "../../context/CampaignContext";
 
-export default function InvitePlayerForm({ onInvitationCreated }) {
+export default function InvitePlayerForm({ onInvitationCreated, availabilityVersion = 0 }) {
   const { user } = useAuth();
   const { selectedTenantId, workspaceRole } = useTenant();
   const { selectedCampaignId, campaignRole } = useCampaign();
@@ -17,6 +17,7 @@ export default function InvitePlayerForm({ onInvitationCreated }) {
   const [successMessage, setSuccessMessage] = useState("");
   const [availableCharacters, setAvailableCharacters] = useState([]);
   const [selectedCharacterIds, setSelectedCharacterIds] = useState([]);
+  const [charactersVersion, setCharactersVersion] = useState(0);
 
   const canInvite = workspaceRole === "owner" && campaignRole === "gm";
 
@@ -25,18 +26,28 @@ export default function InvitePlayerForm({ onInvitationCreated }) {
 
     const loadCharacters = async () => {
       try {
-        const characters = await getAllCharacters(selectedCampaignId);
-        setAvailableCharacters(characters || []);
+        const [characters, assignmentData] = await Promise.all([
+          getAllCharacters(selectedCampaignId),
+          getApiCharacterAssignments(selectedCampaignId),
+        ]);
+        const blockedCharacterIds = new Set([
+          ...(assignmentData.assignedCharacterIds || []),
+          ...(assignmentData.pendingAssignedCharacterIds || []),
+        ]);
+        setAvailableCharacters(
+          (characters || []).filter((character) => !blockedCharacterIds.has(character.id))
+        );
       } catch (err) {
         console.error("[InvitePlayerForm] Failed to load characters", err);
       }
     };
 
     loadCharacters();
-  }, [selectedCampaignId]);
+  }, [selectedCampaignId, charactersVersion, availabilityVersion]);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    if (isSubmitting) return;
 
     if (!user?.uid) {
       setError("You must be signed in to invite a player.");
@@ -69,28 +80,25 @@ export default function InvitePlayerForm({ onInvitationCreated }) {
     setError("");
     setSuccessMessage("");
 
-    if (typeof onInvitationCreated === "function") {
-      onInvitationCreated();
-    }
-
     try {
-      const invitation = await invitePlayerToCampaign({
+      const { invitation } = await createApiInvitation({
         email: trimmedEmail,
         tenantId: selectedTenantId,
         campaignId: selectedCampaignId,
         campaignRole: selectedCampaignRole,
         characterIds: selectedCharacterIds,
-        invitedBy: user.uid,
       });
 
       setEmail("");
       setSelectedCampaignRole("player");
       setSelectedCharacterIds([]);
+      setCharactersVersion((value) => value + 1);
       setSuccessMessage(
-        selectedCharacterIds.length
-          ? `Invitation created for ${invitation.email} with ${selectedCharacterIds.length} assigned character${selectedCharacterIds.length === 1 ? "" : "s"}.`
-          : `Invitation created for ${invitation.email}.`
+        `Invitation created for ${invitation.email}.`
       );
+      if (typeof onInvitationCreated === "function") {
+        await onInvitationCreated();
+      }
     } catch (err) {
       console.error("[InvitePlayerForm] Failed to create invitation", err);
       setError("Failed to create invitation. Please try again.");
@@ -101,6 +109,7 @@ export default function InvitePlayerForm({ onInvitationCreated }) {
 
   return (
     <form onSubmit={handleSubmit} className="max-w-2xl space-y-4">
+      <fieldset disabled={isSubmitting} className="space-y-4 disabled:opacity-60">
       <div className="grid gap-4 md:grid-cols-[1.4fr_0.8fr]">
         <div>
           <label className="mb-2 block text-sm font-medium text-zinc-200">
@@ -112,7 +121,6 @@ export default function InvitePlayerForm({ onInvitationCreated }) {
             onChange={(e) => setEmail(e.target.value)}
             placeholder="e.g. player@example.com"
             className="w-full rounded-xl border border-white/10 bg-white/[0.03] px-4 py-3 text-zinc-100 outline-none shadow-inner shadow-black/10 placeholder:text-zinc-400 focus:border-fuchsia-400/30 focus:ring-2 focus:ring-fuchsia-400/20"
-            disabled={isSubmitting}
           />
         </div>
 
@@ -124,7 +132,6 @@ export default function InvitePlayerForm({ onInvitationCreated }) {
             value={selectedCampaignRole}
             onChange={(e) => setSelectedCampaignRole(e.target.value)}
             className="w-full rounded-xl border border-white/10 bg-white/[0.03] px-4 py-3 text-zinc-100 outline-none shadow-inner shadow-black/10 focus:border-fuchsia-400/30 focus:ring-2 focus:ring-fuchsia-400/20"
-            disabled={isSubmitting}
           >
             <option value="player">player</option>
             <option value="gm">gm</option>
@@ -147,17 +154,18 @@ export default function InvitePlayerForm({ onInvitationCreated }) {
               const isSelected = selectedCharacterIds.includes(character.id);
 
               return (
-                <button
-                  key={character.id}
-                  type="button"
-                  onClick={() => {
+	                <button
+	                  key={character.id}
+	                  type="button"
+                    disabled={isSubmitting}
+	                  onClick={() => {
                     setSelectedCharacterIds((prev) =>
                       isSelected
                         ? prev.filter((id) => id !== character.id)
                         : [...prev, character.id]
                     );
                   }}
-                  className={`w-full flex items-center justify-between rounded-lg px-3 py-2 text-sm transition ${isSelected
+	                  className={`w-full flex items-center justify-between rounded-lg px-3 py-2 text-sm transition disabled:cursor-not-allowed disabled:opacity-60 ${isSelected
                       ? "bg-violet-500/20 border border-violet-400/30 text-violet-100"
                       : "bg-white/[0.02] border border-white/10 text-zinc-300 hover:bg-white/[0.05]"
                     }`}
@@ -179,14 +187,15 @@ export default function InvitePlayerForm({ onInvitationCreated }) {
             {selectedCharacterIds.length} character{selectedCharacterIds.length === 1 ? "" : "s"} selected.
           </p>
         )}
-      </div>
+	      </div>
+      </fieldset>
 
-      <div className="rounded-2xl border border-white/10 bg-white/3 px-4 py-3 text-sm text-zinc-300 shadow-[0_0_24px_rgba(168,85,247,0.05)]">
+	      <div className="rounded-2xl border border-white/10 bg-white/3 px-4 py-3 text-sm text-zinc-300 shadow-[0_0_24px_rgba(168,85,247,0.05)]">
         <p>
           This will create a pending campaign invitation for the currently selected workspace and campaign.
         </p>
         <p className="mt-2 text-zinc-400">
-          The selected campaign role and any assigned characters will be attached to the invitation now.
+          The selected campaign role and character assignments will be attached to the invitation now.
         </p>
       </div>
 

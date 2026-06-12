@@ -44,21 +44,30 @@ export default function Settings() {
   const [activeTab, setActiveTab] = useState("profile");
 
   const selectedTenant = useMemo(
-    () => (Array.isArray(tenants) ? tenants.find((t) => t.tenantId === selectedTenantId) : null),
+    () =>
+      Array.isArray(tenants)
+        ? tenants.find(
+            (tenant) =>
+              tenant.tenantId === selectedTenantId ||
+              tenant.postgresWorkspaceId === selectedTenantId
+          )
+        : null,
     [tenants, selectedTenantId]
   );
 
   const selectedCampaign = useMemo(
     () =>
       Array.isArray(accessibleCampaigns)
-        ? accessibleCampaigns.find((c) => c.campaignId === selectedCampaignId)
+        ? accessibleCampaigns.find(
+            (campaign) =>
+              campaign.campaignId === selectedCampaignId ||
+              campaign.postgresCampaignId === selectedCampaignId
+          )
         : null,
     [accessibleCampaigns, selectedCampaignId]
   );
 
-  const isWorkspaceOwner = Boolean(
-    user?.uid && selectedTenant && selectedTenant.createdBy === user.uid
-  );
+  const isWorkspaceOwner = workspaceRole === "owner" || selectedTenant?.role === "owner";
 
   const tabs = [
     { id: "profile", label: "Profile" },
@@ -197,8 +206,8 @@ export default function Settings() {
                 </p>
               </div>
 
-              <div className="grid grid-cols-1 gap-4">
-                <div>
+	              <fieldset disabled={saving} className="grid grid-cols-1 gap-4 disabled:opacity-60">
+	                <div>
                   <label className="block text-zinc-400 text-sm mb-2">Display name</label>
                   <div className="relative">
                     <User className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-zinc-500" />
@@ -211,10 +220,10 @@ export default function Settings() {
                       placeholder="How you appear in the app"
                       className="w-full pl-12 pr-4 py-3 bg-white/5 border border-white/10 rounded-xl text-white focus:outline-none focus:border-purple-500/50"
                     />
-                  </div>
-                </div>
+	                  </div>
+	                </div>
 
-                <div>
+	                <div>
                   <label className="block text-zinc-400 text-sm mb-2">Email</label>
                   <div className="relative">
                     <Mail className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-zinc-500" />
@@ -228,15 +237,15 @@ export default function Settings() {
                   <p className="text-zinc-500 text-xs mt-2">
                     Email is managed by your connected authentication provider.
                   </p>
-                </div>
-              </div>
+	                </div>
+	              </fieldset>
 
               <div className="flex flex-wrap items-center gap-3 pt-2">
                 <button
                   type="button"
                   onClick={handleSave}
                   disabled={saving}
-                  className="inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-linear-to-r from-purple-500 to-pink-500 text-white font-medium hover:opacity-90 disabled:opacity-50 transition-opacity"
+	                  className="inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-linear-to-r from-purple-500 to-pink-500 text-white font-medium hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50 transition-opacity"
                 >
                   <Save className="w-4 h-4" />
                   {saving ? "Saving..." : "Save Changes"}

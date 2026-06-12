@@ -1,10 +1,10 @@
 // src/domain/links/link.service.ts
 
-import { Link, LinkEndpoint } from "./link.types";
+import type { Link, LinkEndpoint } from "./link.types.js";
 import {
   assertAllowedEntityPair,
   assertAllowedLabelForPair,
-} from "./link.rules";
+} from "./link.rules.js";
 
 /**
  * Normalizes entity order so that (A,B) and (B,A) are identical.

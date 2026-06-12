@@ -100,11 +100,7 @@ export function buildInviteEmailHtml({
               <p style="margin:0;color:white;font-weight:bold;font-size:14px;line-height:1.3;">
                 ${assignedCharactersLabel}
               </p>
-            ` : `
-              <p style="margin:12px 0 0 0;color:#9ca3af;font-size:12px;line-height:1.4;">
-                No character has been assigned yet. The Dungeon Master is still plotting.
-              </p>
-            `}
+            ` : ""}
           </div>
 
           <p style="margin:16px 0; color:#9ca3af;">

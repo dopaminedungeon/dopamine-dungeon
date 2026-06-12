@@ -1,6 +1,6 @@
 // src/domain/links/link.rules.ts
 
-import { EntityType } from "./link.types";
+import type { EntityType } from "./link.types.js";
 
 /**
  * Canonical list of allowed entity pairings for cross-links (v1).

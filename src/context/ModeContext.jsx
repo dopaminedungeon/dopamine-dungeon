@@ -56,7 +56,7 @@ function writeStoredMode(storageKey, mode) {
 export function ModeProvider({ children }) {
   const { user } = useAuth();
   const { selectedTenantId } = useTenant();
-  const { selectedCampaignId, campaignRole } = useCampaign();
+  const { selectedCampaignId, campaignRole, campaignStatus } = useCampaign();
 
   // Can the user act as GM in the *active campaign*?
   const canActAsGM = useMemo(() => {
@@ -82,6 +82,10 @@ export function ModeProvider({ children }) {
 
   // Rehydrate mode whenever the (tenant,campaign) scope changes.
   useEffect(() => {
+    if (selectedCampaignId && campaignStatus === "loading") {
+      return;
+    }
+
     const stored = readStoredMode(storageKey);
 
     // If we have a stored mode, use it (but never allow GM if role doesn't allow it).
@@ -100,15 +104,19 @@ export function ModeProvider({ children }) {
     } else {
       setMode(null);
     }
-  }, [storageKey, canActAsGM, defaultMode]);
+  }, [storageKey, canActAsGM, defaultMode, selectedCampaignId, campaignStatus]);
 
   // If permissions change (e.g. role is Player) and mode is GM, downgrade.
   useEffect(() => {
+    if (selectedCampaignId && campaignStatus === "loading") {
+      return;
+    }
+
     if (mode === "gm" && !canActAsGM) {
       setMode("player");
       writeStoredMode(storageKey, "player");
     }
-  }, [mode, canActAsGM, storageKey]);
+  }, [mode, canActAsGM, storageKey, selectedCampaignId, campaignStatus]);
 
   const setModeSafe = useCallback(
     (nextMode) => {

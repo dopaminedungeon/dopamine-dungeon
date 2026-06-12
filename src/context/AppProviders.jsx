@@ -6,7 +6,7 @@ import { ModeProvider } from "./ModeContext.jsx";
 import { useAuth } from "./AuthContext.jsx";
 import { useTenant } from "./TenantContext.jsx";
 import { useCampaign } from "./CampaignContext.jsx";
-import { acceptPendingInvitationsForUser } from "../domain/invitations/invitation.service";
+import { acceptPendingApiInvitations } from "../data/api/apiClient";
 
 function InvitationAcceptanceBridge({ children }) {
   const { user } = useAuth();
@@ -32,11 +32,7 @@ function InvitationAcceptanceBridge({ children }) {
       processedKeyRef.current = processingKey;
 
       try {
-        const acceptedInvitations = await acceptPendingInvitationsForUser({
-          userId: user.uid,
-          email: user.email,
-          displayName: user.displayName ?? "",
-        });
+        const { acceptedInvitations } = await acceptPendingApiInvitations();
 
         if (isCancelled || acceptedInvitations.length === 0) {
           return;

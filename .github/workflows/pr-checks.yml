@@ -12,7 +12,7 @@ concurrency:
 
 jobs:
   checks:
-    runs-on: [self-hosted, macOS, ARM64]
+    runs-on: [self-hosted, macOS, X64]
 
     steps:
       - name: Checkout repository
@@ -21,21 +21,30 @@ jobs:
       - name: Setup Node
         uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 22
 
       - name: Enable Corepack
         run: corepack enable
 
       - name: Setup pnpm
-        run: corepack prepare pnpm@latest --activate
+        run: corepack prepare pnpm@10.28.1 --activate
 
       - name: Show versions
         run: |
           node -v
           pnpm -v
 
+      - name: Show pnpm config
+        run: |
+          pwd
+          ls -la
+          cat pnpm-workspace.yaml
+          pnpm config get onlyBuiltDependencies
+
       - name: Install dependencies
-        run: pnpm install --frozen-lockfile
+        run: |
+          pnpm install --frozen-lockfile
+          pnpm approve-builds
 
       - name: Lint
         run: pnpm lint || true

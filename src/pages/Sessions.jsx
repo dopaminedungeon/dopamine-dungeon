@@ -4,8 +4,6 @@ import { useMode } from "../context/ModeContext.jsx";
 import {
   Search,
   Plus,
-  Clock,
-  Users,
   Play,
   Pause,
   Square,
@@ -21,14 +19,6 @@ const statusConfig = {
   scheduled: { color: 'bg-blue-500', text: 'text-blue-400', label: 'Scheduled', icon: Calendar },
 };
 
-const difficultyColors = {
-  Normal: 'text-emerald-400 bg-emerald-500/10',
-  Heroic: 'text-blue-400 bg-blue-500/10',
-  Mythic: 'text-purple-400 bg-purple-500/10',
-  Extreme: 'text-red-400 bg-red-500/10',
-  Competitive: 'text-amber-400 bg-amber-500/10',
-};
-
 function newId(prefix = "session") {
   try {
     return `${prefix}-${crypto.randomUUID()}`;
@@ -41,12 +31,80 @@ function safeArray(value) {
   return Array.isArray(value) ? value : [];
 }
 
+function getSessionDateMs(session) {
+  const rawDate = getSessionDateValue(session?.startTime);
+  if (!rawDate) return null;
+
+  const parsed = Date.parse(`${rawDate}T00:00:00`);
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
+function getSessionDateValue(value) {
+  const rawDate = String(value || "").trim();
+  if (!rawDate) return "";
+  return rawDate.slice(0, 10);
+}
+
+function compareSessionNames(a, b) {
+  return String(a?.name || "").localeCompare(String(b?.name || ""), undefined, {
+    sensitivity: "base",
+    numeric: true,
+  });
+}
+
+function sortSessions(sessions, sortMode) {
+  return sessions
+    .map((session, index) => ({
+      session,
+      index,
+      dateMs: getSessionDateMs(session),
+    }))
+    .sort((a, b) => {
+      const aHasDate = a.dateMs !== null;
+      const bHasDate = b.dateMs !== null;
+
+      if (sortMode === "name-asc" || sortMode === "name-desc") {
+        const byName = compareSessionNames(a.session, b.session);
+        if (byName !== 0) {
+          return sortMode === "name-asc" ? byName : -byName;
+        }
+        return a.index - b.index;
+      }
+
+      if (aHasDate && bHasDate && a.dateMs !== b.dateMs) {
+        return sortMode === "date-asc" ? a.dateMs - b.dateMs : b.dateMs - a.dateMs;
+      }
+
+      if (aHasDate !== bHasDate) {
+        return aHasDate ? -1 : 1;
+      }
+
+      return a.index - b.index;
+    })
+    .map(({ session }) => session);
+}
+
+function formatSessionDate(session) {
+  const rawDate = getSessionDateValue(session?.startTime);
+  if (!rawDate) return "Date not set";
+
+  const parsed = new Date(`${rawDate}T00:00:00`);
+  if (Number.isNaN(parsed.getTime())) return rawDate;
+
+  return parsed.toLocaleDateString(undefined, {
+    year: "numeric",
+    month: "short",
+    day: "numeric",
+  });
+}
+
 export default function Sessions() {
   const [showCreateModal, setShowCreateModal] = useState(false);
 
   const { selectedCampaignId } = useCampaign();
   const [sessions, setSessions] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [isSaving, setIsSaving] = useState(false);
 
 useEffect(() => {
   if (!selectedCampaignId) {
@@ -75,9 +133,6 @@ useEffect(() => {
     name: "",
     sessionNumber: 1,
     map: "",
-    difficulty: "Normal",
-    players: 0,
-    maxPlayers: 4,
     status: "scheduled",
     startTime: "",
     visibility: "public",
@@ -87,18 +142,17 @@ useEffect(() => {
   const { isGM } = useMode();
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedStatus, setSelectedStatus] = useState('All');
+  const [sortMode, setSortMode] = useState("date-desc");
 
   const filteredSessions = sessions.filter((session) => {
     const matchesSearch = String(session.name || "").toLowerCase().includes(searchQuery.toLowerCase());
     const matchesStatus = selectedStatus === 'All' || session.status === selectedStatus.toLowerCase();
     return matchesSearch && matchesStatus;
   });
+  const sortedSessions = sortSessions(filteredSessions, sortMode);
   const visibleSessions = isGM
-    ? filteredSessions
-    : filteredSessions.filter((session) => session.visibility === "public");
-
-const activeSessions = sessions.filter((s) => s.status === "active").length;
-const totalPlayers = sessions.reduce((acc, s) => acc + (Number(s.players) || 0), 0);
+    ? sortedSessions
+    : sortedSessions.filter((session) => session.visibility === "public");
 
 if (!selectedCampaignId) {
   return (
@@ -118,28 +172,6 @@ if (loading) {
 
   return (
     <main className="flex-1 overflow-auto">
-      {/* Stats */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-8">
-        <div className="bg-white/5 border border-white/10 rounded-xl p-4 flex items-center gap-4">
-          <div className="p-3 bg-emerald-500/20 rounded-xl">
-            <Play className="w-5 h-5 text-emerald-400" />
-          </div>
-          <div>
-            <p className="text-zinc-500 text-sm">Active Sessions</p>
-            <p className="text-2xl font-bold text-white">{activeSessions}</p>
-          </div>
-        </div>
-        <div className="bg-white/5 border border-white/10 rounded-xl p-4 flex items-center gap-4">
-          <div className="p-3 bg-blue-500/20 rounded-xl">
-            <Users className="w-5 h-5 text-blue-400" />
-          </div>
-          <div>
-            <p className="text-zinc-500 text-sm">Players Online</p>
-            <p className="text-2xl font-bold text-white">{totalPlayers}</p>
-          </div>
-        </div>
-      </div>
-
       {/* Header Actions */}
       <div className="flex flex-col md:flex-row gap-4 mb-8">
         {/* Search */}
@@ -170,6 +202,18 @@ if (loading) {
           ))}
         </div>
 
+        <select
+          value={sortMode}
+          onChange={(e) => setSortMode(e.target.value)}
+          className="w-full md:w-auto px-3 py-2.5 sm:px-4 sm:py-3 rounded-xl border border-white/10 bg-white/5 text-sm font-medium text-zinc-200 focus:outline-none focus:border-emerald-500/50"
+          aria-label="Sort sessions"
+        >
+          <option value="date-desc">Newest to oldest</option>
+          <option value="date-asc">Oldest to newest</option>
+          <option value="name-asc">A-Z</option>
+          <option value="name-desc">Z-A</option>
+        </select>
+
         {/* Create Button */}
         {isGM && (
           <button
@@ -185,10 +229,9 @@ if (loading) {
       {/* Sessions List */}
       <div className="space-y-4">
         {visibleSessions.map((session) => {
-          const status = statusConfig[session.status];
+          const status = statusConfig[session.status] || statusConfig.scheduled;
           const StatusIcon = status.icon;
           const isGmOnly = session.visibility === "gm-only";
-          const progress = Number(session.progress) || 0;
           return (
             <div
               key={session.id}
@@ -224,37 +267,9 @@ if (loading) {
                         {status.label}
                       </span>
                     </div>
-                    <p className="text-zinc-500 text-sm">Location: {session.map || ""}</p>
-                  </div>
-                </div>
-
-                {/* Session Details */}
-                <div className="flex flex-wrap items-center gap-3 sm:gap-6">
-                  <div className="flex items-center gap-2">
-                    <Users className="w-4 h-4 text-zinc-500" />
-                    <span className="text-white">{Number(session.players) || 0}/{Number(session.maxPlayers) || 0}</span>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <Clock className="w-4 h-4 text-zinc-500" />
-                    <span className="text-white">{session.duration || "—"}</span>
-                  </div>
-                  <span className={`px-3 py-1 rounded-lg text-xs font-medium ${difficultyColors[session.difficulty] || difficultyColors.Normal}`}>
-                    {session.difficulty}
-                  </span>
-                </div>
-
-                {/* Progress Bar */}
-                <div className="w-full lg:w-32">
-                  <div className="flex items-center justify-between mb-1 min-w-0">
-                    <span className="text-zinc-500 text-xs">Progress</span>
-                    <span className="text-white text-xs font-medium">{progress}%</span>
-                  </div>
-                  <div className="h-2 bg-white/10 rounded-full overflow-hidden">
-                    <div
-                      className={`h-full rounded-full transition-all ${progress === 100 ? 'bg-zinc-500' : 'bg-linear-to-r from-emerald-500 to-teal-500'
-                        }`}
-                      style={{ width: `${progress}%` }}
-                    />
+                    <p className="text-zinc-500 text-sm">
+                      {formatSessionDate(session)} • Location: {session.map || "—"}
+                    </p>
                   </div>
                 </div>
               </div>
@@ -267,23 +282,25 @@ if (loading) {
           <div className="w-[92vw] max-w-xl max-h-[85vh] overflow-y-auto my-auto bg-zinc-950 border border-white/10 rounded-xl sm:rounded-2xl p-4 sm:p-6">
             <h2 className="text-lg sm:text-xl font-bold text-white mb-4">Create New Session</h2>
 
-            <form
-              className="space-y-4"
+	            <form
+	              className="space-y-4"
             onSubmit={async (e) => {
               e.preventDefault();
-              if (!selectedCampaignId) return;
+              if (!selectedCampaignId || isSaving) return;
 
               const id = newId("session");
               const nextSession = {
                 id,
                 name: formData.name,
-                sessionNumber: Number(formData.sessionNumber) || 1,
+                sessionNumber: Number.isFinite(Number(formData.sessionNumber))
+                  ? Number(formData.sessionNumber)
+                  : 1,
                 map: formData.map,
-                difficulty: formData.difficulty,
-                players: Number(formData.players) || 0,
-                maxPlayers: Number(formData.maxPlayers) || 0,
+                difficulty: "Normal",
+                players: 0,
+                maxPlayers: 0,
                 status: formData.status,
-                startTime: formData.startTime,
+                startTime: getSessionDateValue(formData.startTime),
                 visibility: formData.visibility,
                 gmNotes: formData.gmNotes,
                 summary: "",
@@ -291,29 +308,33 @@ if (loading) {
                 progress: 0,
               };
 
-              await sessionsRepo.upsert(selectedCampaignId, nextSession);
-              const data = await sessionsRepo.getAll(selectedCampaignId);
-              setSessions(safeArray(data));
+              try {
+                setIsSaving(true);
 
-              setShowCreateModal(false);
-              setFormData({
-                name: "",
-                sessionNumber: 1,
-                map: "",
-                difficulty: "Normal",
-                players: 0,
-                maxPlayers: 4,
-                status: "scheduled",
-                startTime: "",
-                visibility: "public",
-                gmNotes: "",
-              });
+                await sessionsRepo.upsert(selectedCampaignId, nextSession);
+                const data = await sessionsRepo.getAll(selectedCampaignId);
+                setSessions(safeArray(data));
 
-              // Navigate straight to the new session
-              navigate(`/sessions/${id}`);
+                setShowCreateModal(false);
+                setFormData({
+                  name: "",
+                  sessionNumber: 1,
+                  map: "",
+                  status: "scheduled",
+                  startTime: "",
+                  visibility: "public",
+                  gmNotes: "",
+                });
+
+                // Navigate straight to the new session
+                navigate(`/sessions/${id}`);
+              } finally {
+                setIsSaving(false);
+              }
             }}
-            >
-              <div>
+	            >
+                <fieldset disabled={isSaving} className="space-y-4 disabled:opacity-60">
+	              <div>
                 <label className="block text-sm text-zinc-400 mb-1">Session Name</label>
                 <input
                   type="text"
@@ -329,7 +350,7 @@ if (loading) {
                   <label className="block text-sm text-zinc-400 mb-1">Session Number</label>
                   <input
                     type="number"
-                    min={1}
+                    min={0}
                     value={formData.sessionNumber}
                     onChange={(e) =>
                       setFormData({ ...formData, sessionNumber: Number(e.target.value) })
@@ -344,11 +365,12 @@ if (loading) {
                   </label>
                   <div className="grid grid-cols-1 sm:flex gap-2 sm:gap-3">
                     <button
-                      type="button"
-                      onClick={() =>
+	                      type="button"
+                        disabled={isSaving}
+	                      onClick={() =>
                         setFormData({ ...formData, visibility: "public" })
                       }
-                      className={`px-3 py-2 rounded-xl text-sm border ${formData.visibility === "public"
+	                      className={`px-3 py-2 rounded-xl text-sm border disabled:cursor-not-allowed disabled:opacity-50 ${formData.visibility === "public"
                           ? "border-emerald-500 bg-emerald-500/10 text-emerald-300"
                           : "border-white/10 bg-white/5 text-zinc-300"
                         }`}
@@ -356,11 +378,12 @@ if (loading) {
                       Player-visible
                     </button>
                     <button
-                      type="button"
-                      onClick={() =>
+	                      type="button"
+                        disabled={isSaving}
+	                      onClick={() =>
                         setFormData({ ...formData, visibility: "gm-only" })
                       }
-                      className={`px-3 py-2 rounded-xl text-sm border ${formData.visibility === "gm-only"
+	                      className={`px-3 py-2 rounded-xl text-sm border disabled:cursor-not-allowed disabled:opacity-50 ${formData.visibility === "gm-only"
                           ? "border-red-500 bg-red-500/10 text-red-300"
                           : "border-white/10 bg-white/5 text-zinc-300"
                         }`}
@@ -384,23 +407,6 @@ if (loading) {
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
                 <div>
-                  <label className="block text-sm text-zinc-400 mb-1">Difficulty</label>
-                  <select
-                    value={formData.difficulty}
-                    onChange={(e) =>
-                      setFormData({ ...formData, difficulty: e.target.value })
-                    }
-                    className="w-full px-3 py-2 bg-white/5 border border-white/10 rounded-xl text-white"
-                  >
-                    <option>Normal</option>
-                    <option>Heroic</option>
-                    <option>Mythic</option>
-                    <option>Extreme</option>
-                    <option>Competitive</option>
-                  </select>
-                </div>
-
-                <div>
                   <label className="block text-sm text-zinc-400 mb-1">Status</label>
                   <select
                     value={formData.status}
@@ -417,39 +423,13 @@ if (loading) {
                 </div>
               </div>
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
-                <div>
-                  <label className="block text-sm text-zinc-400 mb-1">Players</label>
-                  <input
-                    type="number"
-                    value={formData.players}
-                    onChange={(e) =>
-                      setFormData({ ...formData, players: Number(e.target.value) })
-                    }
-                    className="w-full px-3 py-2 bg-white/5 border border-white/10 rounded-xl text-white"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-sm text-zinc-400 mb-1">Max Players</label>
-                  <input
-                    type="number"
-                    value={formData.maxPlayers}
-                    onChange={(e) =>
-                      setFormData({ ...formData, maxPlayers: Number(e.target.value) })
-                    }
-                    className="w-full px-3 py-2 bg-white/5 border border-white/10 rounded-xl text-white"
-                  />
-                </div>
-              </div>
-
               <div>
-                <label className="block text-sm text-zinc-400 mb-1">Start Time</label>
+                <label className="block text-sm text-zinc-400 mb-1">Date</label>
                 <input
-                  type="datetime-local"
+                  type="date"
                   value={formData.startTime}
                   onChange={(e) =>
-                    setFormData({ ...formData, startTime: e.target.value })
+                    setFormData({ ...formData, startTime: getSessionDateValue(e.target.value) })
                   }
                   className="w-full px-3 py-2 bg-white/5 border border-white/10 rounded-xl text-white"
                 />
@@ -469,20 +449,23 @@ if (loading) {
 
               <div className="grid grid-cols-1 sm:flex sm:justify-end gap-2 sm:gap-3 pt-2">
                 <button
-                  type="button"
-                  onClick={() => setShowCreateModal(false)}
-                  className="w-full sm:w-auto px-4 py-2 rounded-xl bg-white/5 text-zinc-300 hover:bg-white/10"
-                >
+	                  type="button"
+	                  disabled={isSaving}
+	                  onClick={() => setShowCreateModal(false)}
+	                  className="w-full sm:w-auto px-4 py-2 rounded-xl bg-white/5 text-zinc-300 hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-50"
+	                >
                   Cancel
                 </button>
                 <button
                   type="submit"
-                  className="w-full sm:w-auto px-4 py-2 rounded-xl bg-linear-to-r from-purple-500 to-indigo-500 text-white font-medium hover:opacity-90"
-                >
-                  Save Session
+	                  disabled={isSaving}
+	                  className="w-full sm:w-auto px-4 py-2 rounded-xl bg-linear-to-r from-purple-500 to-indigo-500 text-white font-medium hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
+	                >
+                  {isSaving ? "Saving..." : "Save Session"}
                 </button>
-              </div>
-            </form>
+	              </div>
+                </fieldset>
+	            </form>
           </div>
         </div>
       )}

@@ -1,9 +1,13 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { useMode } from "../context/ModeContext.jsx";
 import { ArrowLeft, Swords, Shield, Sparkles, Trash2 } from "lucide-react";
 import { itemsRepo } from "../data/items/items.repo";
+import { sessionsRepo } from "../data/sessions/sessions.repo";
 import { useCampaign } from "../context/CampaignContext";
+import { getLinksForEntity, loadLinks } from "../data/links/links.repo";
+import { getApiCampaignPeople, getApiCharacterAssignments } from "../data/api/apiClient";
+import { getAllCharacters } from "../data/characters/characters.repo";
 
 const ITEM_TYPES = [
   "Weapon",
@@ -54,25 +58,51 @@ const formatSigned = (value) => {
   return n >= 0 ? `+${n}` : `${n}`;
 };
 
+function formatPersonName(value) {
+  const raw = String(value || "").trim();
+  if (!raw || raw === "—") return "Player";
+  const localPart = raw.includes("@") ? raw.split("@")[0] : raw;
+  const looksLikeUuid = /^[0-9a-f]{8}-[0-9a-f-]{27,}$/i.test(localPart);
+  if (looksLikeUuid) return "Player";
+
+  return localPart
+    .replace(/[._-]+/g, " ")
+    .split(" ")
+    .filter(Boolean)
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+    .join(" ") || "Player";
+}
+
+function formatOwnerDisplay(value) {
+  const raw = String(value || "").trim();
+  if (!raw) return "Unassigned";
+  if (raw.includes("@")) return formatPersonName(raw);
+  return raw;
+}
+
 export default function ItemProfile() {
   const { id } = useParams();
   const navigate = useNavigate();
   const { isGM } = useMode();
 
   const { selectedCampaignId } = useCampaign();
-  const [items, setItems] = useState([]);
+  const [item, setItem] = useState(null);
+  const [sessions, setSessions] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [isItemSaving, setIsItemSaving] = useState(false);
+  const [isItemDeleting, setIsItemDeleting] = useState(false);
+  const isItemSavingRef = useRef(false);
+  const [linksVersion, setLinksVersion] = useState(0);
+  const [ownerOptions, setOwnerOptions] = useState([{ value: "", label: "Unassigned" }]);
 
-  const rawItem = useMemo(
-    () => items.find((it) => String(it.id) === String(id)) || null,
-    [items, id]
-  );
+  const rawItem = item && String(item.id) === String(id) ? item : null;
 
-  const [formData, setFormData] = useState(rawItem || null);
+  const [formData, setFormData] = useState(null);
 
   useEffect(() => {
     if (!selectedCampaignId) {
-      setItems([]);
+      setItem(null);
+      setSessions([]);
       setLoading(false);
       return;
     }
@@ -80,24 +110,126 @@ export default function ItemProfile() {
     async function load() {
       setLoading(true);
       try {
-        const data = await itemsRepo.getAll(selectedCampaignId);
-        setItems(Array.isArray(data) ? data : []);
+        const [
+          itemData,
+          sessionData,
+          _links,
+          campaignPeopleResponse,
+          characters,
+          assignmentData,
+        ] = await Promise.all([
+          itemsRepo.getById(selectedCampaignId, String(id)),
+          sessionsRepo.getAll(selectedCampaignId),
+          loadLinks(selectedCampaignId),
+          isGM ? getApiCampaignPeople(selectedCampaignId) : Promise.resolve({ people: [] }),
+          isGM ? getAllCharacters(selectedCampaignId) : Promise.resolve([]),
+          isGM
+            ? getApiCharacterAssignments(selectedCampaignId)
+            : Promise.resolve({ assignments: [] }),
+        ]);
+        void _links;
+        setItem(itemData || null);
+        setSessions(Array.isArray(sessionData) ? sessionData : []);
+        setLinksVersion((version) => version + 1);
+
+        const characterById = new Map(
+          (characters || []).map((character) => [String(character.id), character])
+        );
+        const peopleByUserId = new Map(
+          (campaignPeopleResponse.people || [])
+            .filter((person) => person.type === "member" && person.status === "accepted")
+            .map((person) => [String(person.userId || ""), person])
+        );
+        const nextOwnerOptions = new Map([["", { value: "", label: "Unassigned" }]]);
+        const addOwnerOption = (value, label, aliases = []) => {
+          const trimmedLabel = String(label || "").trim();
+          const trimmedValue = String(value || "").trim();
+          if (!trimmedValue || !trimmedLabel || nextOwnerOptions.has(trimmedValue)) return;
+          nextOwnerOptions.set(trimmedValue, {
+            value: trimmedValue,
+            label: trimmedLabel,
+            aliases: aliases.map((alias) => String(alias || "").trim()).filter(Boolean),
+          });
+        };
+
+        (assignmentData.assignments || []).forEach((assignment) => {
+          const character = characterById.get(String(assignment.characterId));
+          const characterName = String(character?.name || "").trim();
+          const person = peopleByUserId.get(String(assignment.userId || ""));
+          if (!characterName || !person) return;
+
+          const playerName = formatPersonName(person.label || person.email || person.userId);
+          const label = `${characterName} — ${playerName}`;
+          addOwnerOption(label, label, [
+            assignment.characterId,
+            assignment.userId,
+            characterName,
+          ]);
+        });
+
+        setOwnerOptions(Array.from(nextOwnerOptions.values()));
       } catch (error) {
         console.error("[ItemProfile] Failed to load items", error);
-        setItems([]);
+        setItem(null);
+        setSessions([]);
+        setOwnerOptions([{ value: "", label: "Unassigned" }]);
       } finally {
         setLoading(false);
       }
     }
 
     load();
-  }, [selectedCampaignId]);
+  }, [selectedCampaignId, id, isGM]);
 
   useEffect(() => {
     setFormData(rawItem || null);
   }, [rawItem]);
+  useEffect(() => {
+    if (!formData?.owner) return;
+
+    const ownerOption = ownerOptions.find((entry) =>
+      (entry.aliases || []).includes(String(formData.owner))
+    );
+
+    if (ownerOption && ownerOption.value !== formData.owner) {
+      setFormData((prev) => (prev ? { ...prev, owner: ownerOption.value } : prev));
+    }
+  }, [formData?.owner, ownerOptions]);
   const [isEditing, setIsEditing] = useState(false);
-  const linkedSessions = [];
+  const itemLinks = useMemo(
+    () => getLinksForEntity("Item", String(id), isGM ? "GM" : "Player"),
+    [id, isGM, linksVersion]
+  );
+  const sessionsById = useMemo(
+    () => new Map(sessions.map((session) => [String(session?.id), session])),
+    [sessions]
+  );
+  const getEndpointLabel = (endpoint) => {
+    if (endpoint.type === "BagOfHolding") return "Bag of Holding";
+    if (endpoint.type !== "Session") return endpoint.id;
+
+    const session = sessionsById.get(String(endpoint.id));
+    return session?.name || session?.title || endpoint.id;
+  };
+  const getEndpointTypeLabel = (endpoint) => {
+    if (endpoint.type === "BagOfHolding") return "";
+    return `${endpoint.type}: `;
+  };
+  const getLinkLabel = (label) => {
+    if (label === "contained_in") return "contained in";
+    return String(label || "").replaceAll("_", " ");
+  };
+  const getOwnerLabel = (ownerValue) => {
+    const normalized = String(ownerValue || "").trim();
+    if (!normalized) return "Unassigned";
+    const option = ownerOptions.find(
+      (entry) =>
+        entry.value === normalized ||
+        entry.label === normalized ||
+        (entry.aliases || []).includes(normalized)
+    );
+    return option?.label || formatOwnerDisplay(normalized);
+  };
 
   if (loading) {
     return (
@@ -190,43 +322,56 @@ export default function ItemProfile() {
           <div className="flex w-full sm:w-auto flex-col sm:flex-row gap-2">
             <button
               onClick={async () => {
+	                if (isItemSavingRef.current || isItemDeleting) return;
                 if (isEditing && formData && selectedCampaignId) {
-                  await itemsRepo.upsert(selectedCampaignId, formData);
-                  const data = await itemsRepo.getAll(selectedCampaignId);
-                  setItems(Array.isArray(data) ? data : []);
+                  try {
+                    isItemSavingRef.current = true;
+                    setIsItemSaving(true);
+                    const savedItem = await itemsRepo.upsert(selectedCampaignId, formData);
+                    setItem(savedItem || formData);
+                  } finally {
+                    isItemSavingRef.current = false;
+                    setIsItemSaving(false);
+                  }
                 }
                 setIsEditing((prev) => !prev);
               }}
-              className="w-full sm:w-auto px-4 py-2 rounded-xl bg-white/10 text-zinc-200 hover:bg-white/20 text-sm font-medium"
+	              disabled={isItemSaving || isItemDeleting}
+              className="w-full sm:w-auto px-4 py-2 rounded-xl bg-white/10 text-zinc-200 hover:bg-white/20 text-sm font-medium disabled:cursor-not-allowed disabled:opacity-60"
             >
-              {isEditing ? "Done" : "Edit"}
+              {isItemSaving ? "Saving..." : isEditing ? "Done" : "Edit"}
             </button>
 
             <button
               type="button"
               onClick={async () => {
-                if (!selectedCampaignId || !formData?.id) return;
-                const ok = window.confirm("Delete this item? This cannot be undone.");
-                if (!ok) return;
+	                if (isItemSaving || isItemDeleting || !selectedCampaignId || !formData?.id) return;
+	                const ok = window.confirm("Delete this item? This cannot be undone.");
+	                if (!ok) return;
 
-                try {
-                  await itemsRepo.remove(selectedCampaignId, String(formData.id));
-                  navigate("/items");
-                } catch (error) {
-                  console.error("[ItemProfile] Failed to delete item", error);
-                  alert("Could not delete item. Please try again.");
-                }
-              }}
-              className="w-full sm:w-auto px-4 py-2 rounded-xl bg-red-500/15 border border-red-500/40 text-red-200 hover:bg-red-500/25 text-sm font-medium inline-flex items-center justify-center gap-2"
-            >
-              <Trash2 className="w-4 h-4" />
-              Delete
-            </button>
+	                try {
+                    setIsItemDeleting(true);
+	                  await itemsRepo.remove(selectedCampaignId, String(formData.id));
+	                  navigate("/items");
+	                } catch (error) {
+	                  console.error("[ItemProfile] Failed to delete item", error);
+	                  alert("Could not delete item. Please try again.");
+                  } finally {
+                    setIsItemDeleting(false);
+	                }
+	              }}
+	              disabled={isItemSaving || isItemDeleting}
+	              className="w-full sm:w-auto px-4 py-2 rounded-xl bg-red-500/15 border border-red-500/40 text-red-200 hover:bg-red-500/25 text-sm font-medium inline-flex items-center justify-center gap-2 disabled:cursor-not-allowed disabled:opacity-50"
+	            >
+	              <Trash2 className="w-4 h-4" />
+	              {isItemDeleting ? "Deleting..." : "Delete"}
+	            </button>
           </div>
         )}
       </div>
 
-      {/* Header / identity */}
+	      <fieldset disabled={isItemSaving} className="contents disabled:opacity-60">
+	      {/* Header / identity */}
       <div className="bg-white/5 border border-white/10 rounded-2xl p-6 backdrop-blur-sm mb-6">
         <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-6">
           <div className="flex items-center gap-4">
@@ -450,13 +595,37 @@ export default function ItemProfile() {
             <p className="text-zinc-400 text-sm mb-1 flex items-center gap-2">
               <span className="text-zinc-500">Current owner:</span>
               {isEditing && isGM ? (
-                <input
-                  className="bg-transparent border border-white/20 rounded-lg px-2 py-1 text-white font-medium"
-                  value={formData.owner}
+                <select
+                  className="bg-zinc-950 border border-white/20 rounded-lg px-2 py-1 text-white font-medium"
+                  value={
+                    ownerOptions.some((entry) => entry.value === formData.owner)
+                      ? formData.owner
+                      : getOwnerLabel(formData.owner) === "Unassigned"
+                        ? ""
+                        : getOwnerLabel(formData.owner)
+                  }
                   onChange={(e) => handleFieldChange("owner", e.target.value)}
-                />
+                >
+                  {ownerOptions
+                    .concat(
+                      formData.owner &&
+                        !ownerOptions.some(
+                          (entry) =>
+                            entry.value === formData.owner ||
+                            entry.label === formData.owner ||
+                            (entry.aliases || []).includes(formData.owner)
+                        )
+                        ? [{ value: formData.owner, label: getOwnerLabel(formData.owner) }]
+                        : []
+                    )
+                    .map((option) => (
+                      <option key={option.value || "unassigned"} value={option.value}>
+                        {option.label}
+                      </option>
+                    ))}
+                </select>
               ) : (
-                <span className="text-white font-medium">{formData.owner || "Unassigned"}</span>
+                <span className="text-white font-medium">{getOwnerLabel(formData.owner)}</span>
               )}
             </p>
             <p className="text-zinc-400 text-sm mb-1 flex items-center gap-2">
@@ -479,9 +648,33 @@ export default function ItemProfile() {
           {/* v0.1: cross-links */}
           <section className="bg-white/5 border border-white/10 rounded-2xl p-5">
             <h2 className="text-lg font-semibold text-white mb-2">Where it showed up</h2>
-            <p className="text-zinc-400 text-sm">
-              Session linking will return after Firestore link migration.
-            </p>
+            {itemLinks.length === 0 ? (
+              <p className="text-zinc-400 text-sm">No visible links yet.</p>
+            ) : (
+              <div className="space-y-2">
+                {itemLinks.map((link) => {
+                  // Bidirectional display: show the endpoint on the other side of this Item link.
+                  const other =
+                    link.entityA.type === "Item" && link.entityA.id === String(id)
+                      ? link.entityB
+                      : link.entityA;
+
+                  return (
+                    <div
+                      key={link.id}
+                      className="rounded-xl border border-white/10 bg-black/20 px-3 py-2 text-sm text-zinc-300"
+                    >
+                      <span className="text-white">{getEndpointTypeLabel(other)}{getEndpointLabel(other)}</span>
+                      <span className="mx-2 text-zinc-600">•</span>
+                      {getLinkLabel(link.label)}
+                      {isGM ? (
+                        <span className="ml-2 text-xs text-zinc-500">[{link.visibility}]</span>
+                      ) : null}
+                    </div>
+                  );
+                })}
+              </div>
+            )}
           </section>
 
           <section className="bg-white/5 border border-white/10 rounded-2xl p-5">
@@ -564,7 +757,8 @@ export default function ItemProfile() {
             </section>
           </div>
         )}
-      </div>
-    </>
+	      </div>
+        </fieldset>
+	    </>
   );
 }

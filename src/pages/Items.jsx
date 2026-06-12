@@ -1,4 +1,5 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { useNavigate } from "react-router-dom";
 import { useMode } from "../context/ModeContext.jsx";
 import { useCampaign } from "../context/CampaignContext";
@@ -98,6 +99,8 @@ export default function Items() {
   const { selectedCampaignId } = useCampaign();
   const [items, setItems] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [isCreatingItem, setIsCreatingItem] = useState(false);
+  const isCreatingItemRef = useRef(false);
 
   useEffect(() => {
     if (!selectedCampaignId) {
@@ -121,6 +124,17 @@ export default function Items() {
 
     load();
   }, [selectedCampaignId]);
+
+  useEffect(() => {
+    if (!showCreateModal) return undefined;
+
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+
+    return () => {
+      document.body.style.overflow = previousOverflow;
+    };
+  }, [showCreateModal]);
 
   const [formData, setFormData] = useState({
     name: "",
@@ -365,25 +379,26 @@ export default function Items() {
       })}
     </div>
 
-    {showCreateModal && (
-      <div className="fixed inset-0 z-50 flex items-start sm:items-center justify-center bg-black/70 backdrop-blur-sm p-4 pt-6 pb-28 sm:pb-6 overflow-y-auto">
-        <div className="w-[92vw] max-w-2xl max-h-[85vh] overflow-y-auto my-auto bg-zinc-950/90 border border-white/10 rounded-2xl shadow-xl">
-          <div className="flex items-center justify-between px-6 py-4 border-b border-white/10">
+    {showCreateModal && typeof document !== "undefined" ? createPortal((
+      <div className="fixed inset-0 z-[100] flex items-start sm:items-center justify-center bg-black/70 backdrop-blur-sm p-4 pt-6 pb-28 sm:pb-6 overflow-hidden">
+        <div className="relative z-[101] flex max-h-[calc(100dvh-1rem)] w-[92vw] max-w-2xl flex-col overflow-hidden my-auto bg-zinc-950/90 border border-white/10 rounded-2xl shadow-xl">
+          <div className="flex shrink-0 items-center justify-between px-6 py-4 border-b border-white/10">
             <h2 className="text-white font-semibold text-lg">Add Item</h2>
-            <button
-              type="button"
-              className="text-zinc-400 hover:text-white"
-              onClick={() => setShowCreateModal(false)}
-            >
+	            <button
+	              type="button"
+	              disabled={isCreatingItem}
+	              className="text-zinc-400 hover:text-white disabled:cursor-not-allowed disabled:opacity-50"
+	              onClick={() => setShowCreateModal(false)}
+	            >
               ✕
             </button>
           </div>
 
           <form
-  className="p-4 sm:p-6 space-y-4"
+  className="flex min-h-0 flex-1 flex-col"
             onSubmit={async (e) => {
               e.preventDefault();
-              if (!selectedCampaignId) return;
+              if (!selectedCampaignId || isCreatingItemRef.current) return;
 
               const id = newId("item");
               const nextItem = {
@@ -401,27 +416,36 @@ export default function Items() {
                 location: null,
               };
 
-              await itemsRepo.upsert(selectedCampaignId, nextItem);
-              const data = await itemsRepo.getAll(selectedCampaignId);
-              setItems(safeArray(data));
+              try {
+                setIsCreatingItem(true);
+                isCreatingItemRef.current = true;
+                await itemsRepo.upsert(selectedCampaignId, nextItem);
+                const data = await itemsRepo.getAll(selectedCampaignId);
+                setItems(safeArray(data));
 
-              setShowCreateModal(false);
-              setFormData({
-                name: "",
-                type: ITEM_TYPES[0],
-                rarity: "Common",
-                power: 0,
-                description: "",
-                visibility: "public",
-                mechanicalSummary: "",
-                gmNotes: "",
-                stats: {},
-              });
+                setShowCreateModal(false);
+                setFormData({
+                  name: "",
+                  type: ITEM_TYPES[0],
+                  rarity: "Common",
+                  power: 0,
+                  description: "",
+                  visibility: "public",
+                  mechanicalSummary: "",
+                  gmNotes: "",
+                  stats: {},
+                });
 
-              navigate(`/items/${id}`);
-            }}
-          >
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                navigate(`/items/${id}`);
+              } finally {
+                isCreatingItemRef.current = false;
+                setIsCreatingItem(false);
+              }
+	            }}
+	          >
+              <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain p-4 sm:p-6">
+              <fieldset disabled={isCreatingItem} className="space-y-4 disabled:opacity-60">
+	            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>
                 <label className="block text-xs text-zinc-400 mb-1">Name</label>
                 <input
@@ -522,25 +546,30 @@ export default function Items() {
               )}
             </div>
 
-            <div className="flex flex-col-reverse sm:flex-row sm:items-center sm:justify-end gap-2 pt-2">
+              </fieldset>
+              </div>
+
+		            <div className="flex shrink-0 flex-col-reverse sm:flex-row sm:items-center sm:justify-end gap-2 border-t border-white/10 p-4 sm:p-6">
               <button
                 type="button"
+                disabled={isCreatingItem}
                 onClick={() => setShowCreateModal(false)}
-                className="w-full sm:w-auto px-4 py-2.5 rounded-xl bg-white/5 border border-white/10 text-zinc-300 hover:bg-white/10"
+                className="w-full sm:w-auto px-4 py-2.5 rounded-xl bg-white/5 border border-white/10 text-zinc-300 hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-60"
               >
                 Cancel
               </button>
               <button
                 type="submit"
-                className="w-full sm:w-auto px-4 py-2.5 rounded-xl bg-linear-to-r from-indigo-500 to-purple-500 text-white font-medium hover:opacity-90"
+                disabled={isCreatingItem}
+                className="w-full sm:w-auto px-4 py-2.5 rounded-xl bg-linear-to-r from-indigo-500 to-purple-500 text-white font-medium hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60"
               >
-                Save
+                {isCreatingItem ? "Saving..." : "Save"}
               </button>
-            </div>
-          </form>
+	            </div>
+	          </form>
         </div>
       </div>
-    )}
+    ), document.body) : null}
   </>
 );
 }

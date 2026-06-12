@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
-import { Link, NavLink } from "react-router-dom";
+import { Link, NavLink, useNavigate } from "react-router-dom";
 import { getAllCharacters, upsertCharacter } from "../data/characters/characters.repo";
 import { importCharacterFromDdbPdf } from "../data/characters/characterImport.service";
 import { useCampaign } from "../context/CampaignContext";
@@ -238,6 +238,7 @@ const PCs = () => {
   const { selectedCampaignId } = useCampaign();
   const { mode } = useMode();
   const { user } = useAuth();
+  const navigate = useNavigate();
 
   const [pcs, setPcs] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -255,6 +256,17 @@ const PCs = () => {
   const importInputRef = useRef(null);
 
   useEffect(() => {
+    if (!showCreateModal) return undefined;
+
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+
+    return () => {
+      document.body.style.overflow = previousOverflow;
+    };
+  }, [showCreateModal]);
+
+  useEffect(() => {
     const loadCharacters = async () => {
       if (!selectedCampaignId) {
         setPcs([]);
@@ -265,24 +277,7 @@ const PCs = () => {
       try {
         setIsLoading(true);
         const characters = await getAllCharacters(selectedCampaignId);
-
-        const playerVisibleCharacters = characters.filter((character) => {
-          if (String(mode).toLowerCase() === "gm") {
-            return true;
-          }
-
-          if (character.ownerUserId && character.ownerUserId === user?.uid) {
-            return true;
-          }
-
-          if (character.visibility === "player") {
-            return true;
-          }
-
-          return character.isPlayerVisible === true;
-        });
-
-        setPcs(playerVisibleCharacters);
+        setPcs(characters);
       } catch (error) {
         console.error("[PCs] Failed to load characters", error);
         setPcs([]);
@@ -303,29 +298,12 @@ const PCs = () => {
     }
 
     const characters = await getAllCharacters(selectedCampaignId);
-
-    const playerVisibleCharacters = characters.filter((character) => {
-      if (String(mode).toLowerCase() === "gm") {
-        return true;
-      }
-
-      if (character.ownerUserId && character.ownerUserId === user?.uid) {
-        return true;
-      }
-
-      if (character.visibility === "player") {
-        return true;
-      }
-
-      return character.isPlayerVisible === true;
-    });
-
-    setPcs(playerVisibleCharacters);
+    setPcs(characters);
   };
 
-  const handleCreatePc = async (e) => {
-    e.preventDefault();
-    if (!selectedCampaignId || !newPc.name.trim()) return;
+	  const handleCreatePc = async (e) => {
+	    e.preventDefault();
+	    if (isSaving || !selectedCampaignId || !newPc.name.trim()) return;
 
     try {
       setIsSaving(true);
@@ -544,8 +522,8 @@ const PCs = () => {
     setImportTargetCharacterId("");
   };
 
-  const handleCreateImportedPc = async () => {
-    if (!selectedCampaignId || !importDraft?.character?.name?.trim()) return;
+	  const handleCreateImportedPc = async () => {
+	    if (isSavingImportDraft || !selectedCampaignId || !importDraft?.character?.name?.trim()) return;
 
     try {
       setIsSavingImportDraft(true);
@@ -899,6 +877,12 @@ const PCs = () => {
 
   const hasPcs = pcs.length > 0;
 
+  useEffect(() => {
+    if (!isGMMode && !isLoading && pcs.length === 1) {
+      navigate(`/pcs/${pcs[0].id}`, { replace: true });
+    }
+  }, [isGMMode, isLoading, navigate, pcs]);
+
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
     if (!q) return pcs;
@@ -964,7 +948,9 @@ const PCs = () => {
                 ? "Loading character profiles for the active campaign…"
                 : hasPcs
                   ? "Character hub for stats, notes, relationships, conditions, arcs, and session links."
-                  : "Party hub — Bag of Holding is available. Player character profiles will appear here once added to this campaign."}
+                  : isGMMode
+                    ? "Party hub — Bag of Holding is available. Player character profiles will appear here once added to this campaign."
+                    : "No characters assigned yet — check out the Bag of Holding"}
             </p>
           </div>
 
@@ -1029,7 +1015,17 @@ const PCs = () => {
           </div>
         ) : !hasPcs ? (
           <div className="rounded-2xl border border-zinc-800/70 bg-zinc-950/40 p-6 text-zinc-300">
-            <div className="text-base font-semibold text-white mb-1">No PC profiles yet</div>
+            <div className="text-base font-semibold text-white mb-1">
+              {isGMMode ? "No PC profiles yet" : "No characters assigned yet — check out the Bag of Holding"}
+            </div>
+            {!isGMMode ? (
+              <Link
+                to="/pcs/bag"
+                className="mt-3 inline-flex rounded-xl bg-indigo-500/20 border border-indigo-400/50 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-500/30"
+              >
+                Bag of Holding
+              </Link>
+            ) : null}
           </div>
         ) : filtered.length === 0 ? (
           <div className="rounded-2xl border border-zinc-800/70 bg-zinc-950/40 p-6 text-zinc-300">
@@ -1097,16 +1093,17 @@ const PCs = () => {
                     Source file: {importDraft.sourceFileName}
                   </p>
                 </div>
-                <button
-                  type="button"
-                  onClick={handleCloseImportReview}
-                  className="rounded-lg border border-zinc-800/70 bg-zinc-900/70 px-3 py-1.5 text-sm text-zinc-300 hover:text-white hover:bg-zinc-800/70 transition-colors"
-                >
+	                <button
+	                  type="button"
+                    disabled={isSavingImportDraft}
+	                  onClick={handleCloseImportReview}
+	                  className="rounded-lg border border-zinc-800/70 bg-zinc-900/70 px-3 py-1.5 text-sm text-zinc-300 hover:text-white hover:bg-zinc-800/70 disabled:cursor-not-allowed disabled:opacity-50 transition-colors"
+	                >
                   Close
                 </button>
               </div>
 
-              <div className="flex flex-col gap-5">
+	              <div aria-disabled={isSavingImportDraft} className={`flex flex-col gap-5 ${isSavingImportDraft ? "pointer-events-none opacity-60" : ""}`}>
                 <div className="flex gap-2 border-b border-zinc-800/70 pb-2">
                   {[
                     ["core", "Core"],
@@ -1813,11 +1810,12 @@ const PCs = () => {
                   ) : null}
 
                   <div className="sticky bottom-0 z-10 flex items-center justify-end gap-3 rounded-2xl border border-zinc-800/70 bg-zinc-950/95 px-4 py-3">
-                    <button
-                      type="button"
-                      onClick={handleCloseImportReview}
-                      className="rounded-xl border border-zinc-800/70 bg-zinc-900/70 px-4 py-2.5 text-sm text-zinc-300 hover:text-white hover:bg-zinc-800/70 transition-colors"
-                    >
+	                    <button
+	                      type="button"
+                        disabled={isSavingImportDraft}
+	                      onClick={handleCloseImportReview}
+	                      className="rounded-xl border border-zinc-800/70 bg-zinc-900/70 px-4 py-2.5 text-sm text-zinc-300 hover:text-white hover:bg-zinc-800/70 disabled:cursor-not-allowed disabled:opacity-50 transition-colors"
+	                    >
                       Cancel
                     </button>
                     <button
@@ -1834,37 +1832,39 @@ const PCs = () => {
                         ? (importTargetCharacterId ? "Updating..." : "Creating...")
                         : (importTargetCharacterId ? "Update character from import" : "Create character from import")}
                     </button>
-                  </div>
                 </div>
+		                </div>
               </div>
             </div>
           </div>
         ) : null}
 
-        {showCreateModal ? (
-          <div className="fixed inset-0 z-[100] flex items-start justify-center overflow-y-auto bg-black/70 backdrop-blur-sm p-4 pt-24 pb-8">
-            <div className="w-full max-w-2xl rounded-2xl border border-zinc-800/80 bg-zinc-950/95 p-5 md:p-6 shadow-2xl max-h-[calc(100vh-8rem)] overflow-y-auto">
-              <div className="flex items-start justify-between gap-4 mb-5">
-                <div>
-                  <h2 className="text-lg md:text-xl font-semibold text-white">Add new PC</h2>
-                  <p className="mt-1 text-sm text-zinc-400">
+	        {showCreateModal ? (
+	          <div className="fixed bottom-0 left-0 right-0 top-[var(--app-topbar-height)] z-[100] flex items-center justify-center overflow-y-auto overscroll-contain bg-black/70 p-2 backdrop-blur-sm sm:p-3">
+	            <div className="flex min-h-0 max-h-full max-h-[calc(100dvh_-_var(--app-topbar-height)_-_1rem)] w-full max-w-[min(42rem,calc(100vw-1rem))] flex-col overflow-hidden rounded-2xl border border-zinc-800/80 bg-zinc-950/95 shadow-2xl sm:max-w-[min(42rem,calc(100vw-1.5rem))]">
+	              <div className="flex shrink-0 items-start justify-between gap-3 border-b border-zinc-800/70 px-4 py-3 md:px-6 md:py-4">
+	                <div>
+	                  <h2 className="text-lg md:text-xl font-semibold text-white">Add new PC</h2>
+		                  <p className="mt-1 text-sm leading-snug text-zinc-400">
                     Create a player character by hand. PDF import can plug into this same character model later.
                   </p>
                 </div>
-                <button
-                  type="button"
-                  onClick={() => {
+	                <button
+	                  type="button"
+                    disabled={isSaving}
+	                  onClick={() => {
                     setShowCreateModal(false);
                     setNewPc(createManualPcDraft());
                   }}
-                  className="rounded-lg border border-zinc-800/70 bg-zinc-900/70 px-3 py-1.5 text-sm text-zinc-300 hover:text-white hover:bg-zinc-800/70 transition-colors"
-                >
-                  Close
-                </button>
-              </div>
+	                  className="rounded-lg border border-zinc-800/70 bg-zinc-900/70 px-3 py-1.5 text-sm text-zinc-300 hover:text-white hover:bg-zinc-800/70 disabled:cursor-not-allowed disabled:opacity-50 transition-colors"
+	                >
+	                  Close
+	                </button>
+	              </div>
 
-              <form onSubmit={handleCreatePc} className="space-y-4">
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+		              <form onSubmit={handleCreatePc} className="flex min-h-0 flex-col overflow-hidden">
+                  <fieldset disabled={isSaving} className="min-h-0 max-h-[calc(100dvh_-_var(--app-topbar-height)_-_10rem)] space-y-4 overflow-y-auto overscroll-contain px-4 py-3 md:px-6 md:py-4 disabled:opacity-60">
+		                <div className="grid grid-cols-[repeat(auto-fit,minmax(min(100%,15rem),1fr))] gap-4">
                   <div>
                     <label className="block text-sm text-zinc-300 mb-1.5">Character name</label>
                     <input
@@ -1955,8 +1955,8 @@ const PCs = () => {
                   <textarea
                     value={newPc.background}
                     onChange={(e) => setNewPc((prev) => ({ ...prev, background: e.target.value }))}
-                    rows={3}
-                    className="w-full rounded-xl bg-zinc-950/40 border border-zinc-800/70 px-3.5 py-2.5 text-sm text-white placeholder:text-zinc-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/40"
+	                    rows={2}
+	                    className="min-h-20 w-full rounded-xl bg-zinc-950/40 border border-zinc-800/70 px-3.5 py-2.5 text-sm text-white placeholder:text-zinc-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/40"
                     placeholder="Short character background or concept..."
                   />
                 </div>
@@ -1966,34 +1966,36 @@ const PCs = () => {
                   <textarea
                     value={newPc.publicNotes}
                     onChange={(e) => setNewPc((prev) => ({ ...prev, publicNotes: e.target.value }))}
-                    rows={3}
-                    className="w-full rounded-xl bg-zinc-950/40 border border-zinc-800/70 px-3.5 py-2.5 text-sm text-white placeholder:text-zinc-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/40"
+	                    rows={2}
+	                    className="min-h-20 w-full rounded-xl bg-zinc-950/40 border border-zinc-800/70 px-3.5 py-2.5 text-sm text-white placeholder:text-zinc-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/40"
                     placeholder="What should players see right away?"
-                  />
-                </div>
+	                  />
+	                </div>
+                  </fieldset>
 
-                <div className="flex items-center justify-end gap-3 pt-2">
-                  <button
-                    type="button"
-                    onClick={() => {
+			                <div className="flex shrink-0 flex-col-reverse gap-2 border-t border-zinc-800/70 bg-zinc-950/95 px-4 py-3 sm:flex-row sm:items-center sm:justify-end md:px-6 md:py-4">
+	                  <button
+		                    type="button"
+		                    disabled={isSaving}
+	                    onClick={() => {
                       setShowCreateModal(false);
                       setNewPc(createManualPcDraft());
                     }}
-                    className="rounded-xl border border-zinc-800/70 bg-zinc-900/70 px-4 py-2.5 text-sm text-zinc-300 hover:text-white hover:bg-zinc-800/70 transition-colors"
-                  >
+		                    className="w-full rounded-xl border border-zinc-800/70 bg-zinc-900/70 px-4 py-2.5 text-sm text-zinc-300 hover:text-white hover:bg-zinc-800/70 disabled:cursor-not-allowed disabled:opacity-50 transition-colors sm:w-auto"
+	                  >
                     Cancel
                   </button>
                   <button
                     type="submit"
                     disabled={isSaving || !selectedCampaignId}
-                    className="rounded-xl bg-indigo-500/20 border border-indigo-400/50 px-4 py-2.5 text-sm font-medium text-white hover:bg-indigo-500/30 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+	                    className="w-full rounded-xl bg-indigo-500/20 border border-indigo-400/50 px-4 py-2.5 text-sm font-medium text-white hover:bg-indigo-500/30 disabled:opacity-50 disabled:cursor-not-allowed transition-colors sm:w-auto"
                   >
-                    {isSaving ? "Saving..." : "Create PC"}
-                  </button>
-                </div>
-              </form>
-            </div>
-          </div>
+	                    {isSaving ? "Saving..." : "Create PC"}
+	                  </button>
+		                </div>
+		              </form>
+	            </div>
+	          </div>
         ) : null}
       </main>
     </div>

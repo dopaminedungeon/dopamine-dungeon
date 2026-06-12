@@ -1,9 +1,10 @@
 import { useEffect, useMemo, useState } from "react";
-import { useParams, Link, useLocation, useNavigate } from "react-router-dom";
+import { useParams, Link, NavLink, useLocation, useNavigate } from "react-router-dom";
 import { useMode } from "../context/ModeContext.jsx";
 import { useAuth } from "../context/AuthContext";
 import { useCampaign } from "../context/CampaignContext";
 import { getCharacterById, removeCharacter, upsertCharacter } from "../data/characters/characters.repo";
+import { getApiCharacterAssignments, unassignApiCharacter } from "../data/api/apiClient";
 
 const abilityLabels = {
   str: "STR",
@@ -89,6 +90,18 @@ function formatEntryPreview(value) {
   return String(value);
 }
 
+function hasText(value) {
+  return String(value ?? "").trim().length > 0;
+}
+
+function hasNumber(value) {
+  return typeof value === "number" && Number.isFinite(value);
+}
+
+function hasListValues(values) {
+  return Array.isArray(values) && values.some((value) => hasText(value));
+}
+
 function normalizeSkillEntry(skills, key, fallbackKeys = []) {
   if (skills?.[key]) return skills[key];
 
@@ -114,6 +127,8 @@ function buildEditDraftFromPc(pc) {
     alignment: pc?.alignment || "",
     background: pc?.background || "",
     publicNotes: pc?.publicNotes || "",
+    visibility:
+      pc?.visibility || (pc?.isPlayerVisible === false ? "gm" : "player"),
     gmNotes: pc?.gmNotes || "",
     secrets: pc?.secrets || "",
     identity: {
@@ -275,11 +290,29 @@ const PCProfile = () => {
   const [editDraft, setEditDraft] = useState(null);
   const [isSaving, setIsSaving] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
+  const [isUnassigning, setIsUnassigning] = useState(false);
   const [activeTab, setActiveTab] = useState("stats");
+  const [assignmentMeta, setAssignmentMeta] = useState({
+    assignments: [],
+    pendingAssignedCharacterIds: [],
+  });
+
+  const refreshAssignmentMeta = async () => {
+    if (!selectedCampaignId) {
+      setAssignmentMeta({ assignments: [], pendingAssignedCharacterIds: [] });
+      return;
+    }
+
+    const assignments = await getApiCharacterAssignments(selectedCampaignId);
+    setAssignmentMeta({
+      assignments: assignments.assignments || [],
+      pendingAssignedCharacterIds: assignments.pendingAssignedCharacterIds || [],
+    });
+  };
 
   useEffect(() => {
     const loadPc = async () => {
-      if (!pcId) {
+      if (!pcId || !selectedCampaignId) {
         setPc(null);
         setIsLoading(false);
         return;
@@ -287,8 +320,15 @@ const PCProfile = () => {
 
       try {
         setIsLoading(true);
-        const character = await getCharacterById(selectedCampaignId, pcId);
+        const [character, assignments] = await Promise.all([
+          getCharacterById(selectedCampaignId, pcId),
+          getApiCharacterAssignments(selectedCampaignId),
+        ]);
         setPc(character);
+        setAssignmentMeta({
+          assignments: assignments.assignments || [],
+          pendingAssignedCharacterIds: assignments.pendingAssignedCharacterIds || [],
+        });
       } catch (error) {
         console.error("[PCProfile] Failed to load character", error);
         setPc(null);
@@ -301,23 +341,67 @@ const PCProfile = () => {
   }, [pcId, selectedCampaignId]);
 
   const handleStartEdit = () => {
-    if (!pc) return;
+    if (!pc || isSaving || isDeleting || isUnassigning) return;
     setEditDraft(buildEditDraftFromPc(pc));
     setIsEditing(true);
   };
 
   const handleCancelEdit = () => {
+    if (isSaving) return;
     setIsEditing(false);
     setEditDraft(null);
   };
 
   const handleSaveEdit = async () => {
-    if (!pc || !selectedCampaignId || !editDraft) return;
+    if (isSaving || !pc || !selectedCampaignId || !editDraft || !canEditPc) return;
 
     try {
       setIsSaving(true);
 
       const characterLevel = Math.max(1, Number(editDraft.level) || 1);
+      const nextClassName = (editDraft.class || "").trim();
+      const nextSubclass = (editDraft.subclass || "").trim();
+      const playerEditableCharacter = {
+        ...pc,
+        name: editDraft.name.trim(),
+        race: (editDraft.race || "").trim(),
+        class: nextClassName,
+        subclass: nextSubclass,
+        level: characterLevel,
+        alignment: (editDraft.alignment || "").trim(),
+        background: (editDraft.background || "").trim(),
+        publicNotes: (editDraft.publicNotes || "").trim(),
+        classes: Array.isArray(pc.classes) && pc.classes.length > 0
+          ? pc.classes.map((entry, index) =>
+            index === 0
+              ? {
+                ...entry,
+                className: nextClassName,
+                level: characterLevel,
+                subclass: nextSubclass,
+              }
+              : entry
+          )
+          : nextClassName
+            ? [
+              {
+                className: nextClassName,
+                level: characterLevel,
+                subclass: nextSubclass,
+                spellcastingAbility: pc.stats?.spellcastingAbility || "",
+              },
+            ]
+            : [],
+      };
+
+      if (!isGMMode) {
+        const savedCharacter = await upsertCharacter(selectedCampaignId, playerEditableCharacter);
+        setPc(savedCharacter);
+        setIsEditing(false);
+        setEditDraft(null);
+        return;
+      }
+
       const nextAbilityScores = {
         ...(pc.stats?.abilities || {}),
         str: {
@@ -388,15 +472,17 @@ const PCProfile = () => {
 
       const updatedCharacter = {
         ...pc,
-        name: editDraft.name.trim(),
+        name: playerEditableCharacter.name,
         playerName: (editDraft.playerName || "").trim(),
-        race: (editDraft.race || "").trim(),
-        class: (editDraft.class || "").trim(),
-        subclass: (editDraft.subclass || "").trim(),
+        race: playerEditableCharacter.race,
+        class: playerEditableCharacter.class,
+        subclass: playerEditableCharacter.subclass,
         level: characterLevel,
-        alignment: (editDraft.alignment || "").trim(),
-        background: (editDraft.background || "").trim(),
-        publicNotes: (editDraft.publicNotes || "").trim(),
+        alignment: playerEditableCharacter.alignment,
+        background: playerEditableCharacter.background,
+        publicNotes: playerEditableCharacter.publicNotes,
+        visibility: editDraft.visibility === "gm" ? "gm" : "player",
+        isPlayerVisible: editDraft.visibility !== "gm",
         gmNotes: (editDraft.gmNotes || "").trim(),
         secrets: (editDraft.secrets || "").trim(),
         identity: {
@@ -449,21 +535,21 @@ const PCProfile = () => {
             index === 0
               ? {
                 ...entry,
-                className: (editDraft.class || "").trim(),
+                className: nextClassName,
                 level: characterLevel,
-                subclass: (editDraft.subclass || "").trim(),
+                subclass: nextSubclass,
                 spellcastingAbility:
                   nextSpellcastingEntries[index]?.ability ||
                   (editDraft.stats?.spellcastingAbility || "").trim(),
               }
               : entry
           )
-          : (editDraft.class || "").trim()
+          : nextClassName
             ? [
               {
-                className: (editDraft.class || "").trim(),
+                className: nextClassName,
                 level: characterLevel,
-                subclass: (editDraft.subclass || "").trim(),
+                subclass: nextSubclass,
                 spellcastingAbility:
                   nextSpellcastingEntries[0]?.ability ||
                   (editDraft.stats?.spellcastingAbility || "").trim(),
@@ -473,8 +559,8 @@ const PCProfile = () => {
         spellcasting: nextSpellcastingEntries,
       };
 
-      await upsertCharacter(selectedCampaignId, updatedCharacter);
-      setPc(updatedCharacter);
+      const savedCharacter = await upsertCharacter(selectedCampaignId, updatedCharacter);
+      setPc(savedCharacter);
       setIsEditing(false);
       setEditDraft(null);
     } catch (error) {
@@ -484,11 +570,14 @@ const PCProfile = () => {
     }
   };
 
-  const handleDeleteCharacter = async () => {
-    if (!pc || !selectedCampaignId) return;
+	  const handleDeleteCharacter = async () => {
+	    if (isDeleting || isSaving || isUnassigning || !pc || !selectedCampaignId) return;
+    if (isAssignedToPendingInvitation) return;
 
     const confirmed = window.confirm(
-      `Delete ${pc.name || "this character"}? This removes the character from Dopamine Dungeon and Firebase.`
+      acceptedAssignmentForPc
+        ? "Deleting this character will also unassign it from the player."
+        : `Delete ${pc.name || "this character"}? This removes the character from Dopamine Dungeon.`
     );
 
     if (!confirmed) return;
@@ -500,6 +589,39 @@ const PCProfile = () => {
     } catch (error) {
       console.error("[PCProfile] Failed to delete character", error);
       setIsDeleting(false);
+    }
+  };
+  const acceptedAssignmentForPc = useMemo(
+    () =>
+      assignmentMeta.assignments.find(
+        (assignment) => String(assignment.characterId) === String(pc?.id)
+      ) || null,
+    [assignmentMeta.assignments, pc?.id]
+  );
+  const isAssignedToPendingInvitation = useMemo(
+    () => assignmentMeta.pendingAssignedCharacterIds.includes(String(pc?.id || "")),
+    [assignmentMeta.pendingAssignedCharacterIds, pc?.id]
+  );
+  const isAssignedToCurrentPlayer = Boolean(!isGMMode && acceptedAssignmentForPc);
+  const isPlayerVisiblePc = Boolean(
+    pc &&
+    (pc.visibility === "player" || pc.isPlayerVisible === true)
+  );
+  const canEditPc = Boolean(isGMMode || (isAssignedToCurrentPlayer && isPlayerVisiblePc));
+  const handleUnassignCharacter = async () => {
+    if (isUnassigning || isSaving || isDeleting || !selectedCampaignId || !acceptedAssignmentForPc) return;
+
+    const confirmed = window.confirm("Unassign this character from the player?");
+    if (!confirmed) return;
+
+    try {
+      setIsUnassigning(true);
+      await unassignApiCharacter(selectedCampaignId, {
+        assignmentId: acceptedAssignmentForPc.id,
+      });
+      await refreshAssignmentMeta();
+    } finally {
+      setIsUnassigning(false);
     }
   };
   const activeEditDraft = useMemo(() => editDraft || buildEditDraftFromPc(pc), [editDraft, pc]);
@@ -638,15 +760,17 @@ const PCProfile = () => {
       : "—";
 
   const classSummary =
-    classes.length > 0
-      ? classes
+    pc.class
+      ? [pc.class, pc.subclass ? `(${pc.subclass})` : null].filter(Boolean).join(" ")
+      : classes.length > 0
+        ? classes
         .map((entry) =>
           [entry.className, entry.level ? entry.level : null, entry.subclass ? `(${entry.subclass})` : null]
             .filter(Boolean)
             .join(" ")
         )
         .join(" / ")
-      : [pc.class, pc.subclass ? `(${pc.subclass})` : null].filter(Boolean).join(" ") || "—";
+        : "—";
 
   const sensesSummary = [
     stats.passivePerception != null ? `Perception ${stats.passivePerception}` : null,
@@ -658,12 +782,118 @@ const PCProfile = () => {
     .join(" • ") || "—";
 
   const currencySummary = formatCurrencyLabel(inventory.currency);
+  const hasAbilityScores = Object.values(abilities).some((ability) =>
+    hasNumber(ability?.score) || hasNumber(ability?.mod)
+  );
+  const hasSavingThrows = Object.values(saves).some((save) =>
+    hasNumber(save?.mod) || save?.proficient === true
+  );
+  const hasSkillDetails = Object.values(normalizedSkills).some((skill) =>
+    hasNumber(skill?.mod) || skill?.proficient === true || skill?.expertise === true
+  );
+  const hasCombatDetails =
+    hasNumber(stats.hpMax) ||
+    hasNumber(stats.hpCurrent) ||
+    hasNumber(stats.ac) ||
+    hasText(stats.speed) ||
+    hasNumber(stats.initiativeMod) ||
+    hasNumber(stats.proficiencyBonus) ||
+    hasText(stats.spellcastingAbility) ||
+    hasNumber(stats.spellSaveDC) ||
+    hasNumber(stats.spellAttackBonus) ||
+    spellcastingEntries.length > 0;
+  const identityEntries = [
+    ["Faith", identity.faith],
+    ["Size", identity.size],
+    ["Height", identity.height],
+    ["Weight", identity.weight],
+    ["Gender", identity.gender],
+    ["Eyes", identity.eyes],
+    ["Hair", identity.hair],
+    ["Skin", identity.skin],
+  ].filter(([, value]) => hasText(value));
+  const hasSensesDetails =
+    hasNumber(stats.passivePerception) ||
+    hasNumber(stats.passiveInsight) ||
+    hasNumber(stats.passiveInvestigation) ||
+    hasText(stats.additionalSenses);
+  const hasIdentityDetails = identityEntries.length > 0 || hasSensesDetails;
+  const hasCurrencyDetails =
+    inventory.currency &&
+    Object.values(inventory.currency).some((amount) => Number(amount) > 0);
+  const hasProficiencyDetails =
+    hasListValues(proficiencies.languages) ||
+    hasListValues(proficiencies.armor) ||
+    hasListValues(proficiencies.weapons) ||
+    hasListValues(proficiencies.tools);
+  const hasInventoryDetails =
+    hasCurrencyDetails ||
+    hasProficiencyDetails ||
+    equipment.length > 0 ||
+    features.length > 0 ||
+    feats.length > 0;
+  const hasNarrativeDetails =
+    hasText(pc.publicNotes) ||
+    hasText(narrative.personalityTraits) ||
+    hasText(narrative.ideals) ||
+    hasText(narrative.bonds) ||
+    hasText(narrative.flaws);
+  const hasGmNarrativeDetails = isGMMode && (hasText(pc.gmNotes) || hasText(pc.secrets));
+  const visibleProfileTabs = profileTabs.filter((tab) => {
+    if (tab.key === "stats") {
+      return hasAbilityScores || hasSavingThrows || hasIdentityDetails;
+    }
+    if (tab.key === "skills") return hasSkillDetails;
+    if (tab.key === "inventory") return hasInventoryDetails;
+    if (tab.key === "narrative") return hasNarrativeDetails || hasGmNarrativeDetails;
+    return true;
+  });
+  const activeViewTab = visibleProfileTabs.some((tab) => tab.key === activeTab)
+    ? activeTab
+    : visibleProfileTabs[0]?.key || "summary";
+  const hasAnyProfileDetails =
+    hasText(pc.race) ||
+    hasText(pc.class) ||
+    hasText(pc.subclass) ||
+    hasText(pc.alignment) ||
+    hasText(pc.background) ||
+    hasText(pc.publicNotes) ||
+    hasCombatDetails ||
+    hasAbilityScores ||
+    hasSavingThrows ||
+    hasSkillDetails ||
+    hasIdentityDetails ||
+    hasInventoryDetails ||
+    hasNarrativeDetails ||
+    hasGmNarrativeDetails;
 
   // Modal-based edit UI removed in favor of inline editor.
 
   return (
     <div className="p-6 md:p-8 text-white">
       <div className="space-y-6">
+        {!isGMMode ? (
+          <div className="mb-4 flex items-center gap-2">
+            <Link
+              to="/pcs"
+              className="px-3 py-2 rounded-xl text-sm border transition-colors bg-indigo-500/20 border-indigo-400/50 text-white"
+            >
+              Characters
+            </Link>
+            <NavLink
+              to="/pcs/bag"
+              className={({ isActive }) =>
+                `px-3 py-2 rounded-xl text-sm border transition-colors ${isActive
+                  ? "bg-indigo-500/20 border-indigo-400/50 text-white"
+                  : "bg-zinc-950/20 border-zinc-800/60 text-zinc-300 hover:text-white hover:bg-zinc-950/35"
+                }`
+              }
+            >
+              Bag of Holding
+            </NavLink>
+          </div>
+        ) : null}
+
         {/* Title + Back */}
         <header className="flex items-center justify-between gap-4">
           <div className="space-y-1">
@@ -690,23 +920,41 @@ const PCProfile = () => {
           </div>
 
           <div className="flex flex-col items-end gap-2 text-right">
-            {isGMMode && (
+            {canEditPc && (
               <div className="flex flex-wrap justify-end gap-2">
-                <button
-                  type="button"
-                  onClick={handleStartEdit}
-                  className="inline-flex items-center rounded-full bg-white/10 border border-white/15 px-3 py-1 text-[11px] font-medium text-white hover:bg-white/20 transition"
-                >
+	                <button
+	                  type="button"
+	                  onClick={handleStartEdit}
+	                  disabled={isSaving || isDeleting || isUnassigning}
+	                  className="inline-flex items-center rounded-full bg-white/10 border border-white/15 px-3 py-1 text-[11px] font-medium text-white hover:bg-white/20 disabled:cursor-not-allowed disabled:opacity-50 transition"
+	                >
                   Edit In Profile
                 </button>
-                <button
-                  type="button"
-                  onClick={handleDeleteCharacter}
-                  disabled={isDeleting}
-                  className="inline-flex items-center rounded-full bg-rose-500/15 border border-rose-400/40 px-3 py-1 text-[11px] font-medium text-rose-100 hover:bg-rose-500/25 disabled:opacity-50 disabled:cursor-not-allowed transition"
-                >
-                  {isDeleting ? "Deleting..." : "Delete Character"}
-                </button>
+                {isGMMode ? (
+                  <button
+                    type="button"
+                    onClick={handleDeleteCharacter}
+	                    disabled={isDeleting || isSaving || isUnassigning || isAssignedToPendingInvitation}
+                    title={
+                      isAssignedToPendingInvitation
+                        ? "Unable to delete this character because it is assigned to a pending invitation."
+                        : undefined
+                    }
+                    className="inline-flex items-center rounded-full bg-rose-500/15 border border-rose-400/40 px-3 py-1 text-[11px] font-medium text-rose-100 hover:bg-rose-500/25 disabled:opacity-50 disabled:cursor-not-allowed transition"
+                  >
+                    {isDeleting ? "Deleting..." : "Delete Character"}
+                  </button>
+                ) : null}
+                {isGMMode && acceptedAssignmentForPc ? (
+                  <button
+	                    type="button"
+	                    onClick={handleUnassignCharacter}
+	                    disabled={isSaving || isDeleting || isUnassigning}
+	                    className="inline-flex items-center rounded-full bg-white/10 border border-white/15 px-3 py-1 text-[11px] font-medium text-white hover:bg-white/20 disabled:cursor-not-allowed disabled:opacity-50 transition"
+	                  >
+	                    {isUnassigning ? "Unassigning..." : "Unassign Character"}
+	                  </button>
+                ) : null}
               </div>
             )}
             {pc.ddbCharacterUrl && (
@@ -779,6 +1027,7 @@ const PCProfile = () => {
           </div>
 
           {/* Right: core combat stats */}
+          {hasCombatDetails ? (
           <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 md:gap-3 text-[11px] md:text-xs min-w-50">
             <div className="rounded-xl bg-black/50 border border-white/15 px-3 py-2 flex flex-col">
               <span className="text-[10px] uppercase tracking-wide text-zinc-500">
@@ -817,25 +1066,27 @@ const PCProfile = () => {
               <span className="font-semibold text-zinc-100 leading-relaxed">{spellInfo}</span>
             </div>
           </div>
+          ) : null}
         </section>
 
         {isEditing ? (
-          <section className="bg-white/5 border border-indigo-400/40 rounded-2xl p-4 md:p-5 space-y-4">
+	          <fieldset disabled={isSaving} className="bg-white/5 border border-indigo-400/40 rounded-2xl p-4 md:p-5 space-y-4 disabled:opacity-60">
             <div className="flex items-center justify-between gap-3">
               <div>
                 <h3 className="text-sm font-semibold tracking-tight text-indigo-100">
                   Edit Character In Profile
                 </h3>
                 <p className="text-[11px] md:text-xs text-zinc-400 mt-1">
-                  Update the full saved character here, then save directly back to Firebase.
+                  Update the saved character here, then save without leaving the page.
                 </p>
               </div>
               <div className="flex items-center gap-2">
                 <button
-                  type="button"
-                  onClick={handleCancelEdit}
-                  className="rounded-xl border border-zinc-800/70 bg-zinc-900/70 px-4 py-2.5 text-sm text-zinc-300 hover:text-white hover:bg-zinc-800/70 transition-colors"
-                >
+	                  type="button"
+	                  onClick={handleCancelEdit}
+	                  disabled={isSaving}
+	                  className="rounded-xl border border-zinc-800/70 bg-zinc-900/70 px-4 py-2.5 text-sm text-zinc-300 hover:text-white hover:bg-zinc-800/70 disabled:cursor-not-allowed disabled:opacity-50 transition-colors"
+	                >
                   Cancel
                 </button>
                 <button
@@ -854,7 +1105,7 @@ const PCProfile = () => {
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 {[
                   ["Character name", "name"],
-                  ["Player name", "playerName"],
+                  ...(isGMMode ? [["Player name", "playerName"]] : []),
                   ["Race / species", "race"],
                   ["Class", "class"],
                   ["Subclass", "subclass"],
@@ -878,9 +1129,28 @@ const PCProfile = () => {
                     />
                   </div>
                 ))}
+                {isGMMode ? (
+                  <div>
+                    <label className="block text-sm text-zinc-300 mb-1.5">Visibility</label>
+                    <select
+                      value={activeEditDraft.visibility ?? "player"}
+                      onChange={(e) =>
+                        setEditDraft((prev) => ({
+                          ...(prev || buildEditDraftFromPc(pc)),
+                          visibility: e.target.value,
+                        }))
+                      }
+                      className="w-full rounded-xl bg-zinc-950/40 border border-zinc-800/70 px-3.5 py-2.5 text-sm text-white focus:outline-none focus:ring-2 focus:ring-indigo-500/40"
+                    >
+                      <option value="player">Player-visible</option>
+                      <option value="gm">GM-only</option>
+                    </select>
+                  </div>
+                ) : null}
               </div>
             </div>
 
+            {isGMMode ? (
             <div className="rounded-2xl border border-zinc-800/70 bg-zinc-950/40 p-4">
               <h4 className="text-sm font-semibold text-white mb-3">Ability scores</h4>
               <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
@@ -910,7 +1180,9 @@ const PCProfile = () => {
                 ))}
               </div>
             </div>
+            ) : null}
 
+            {isGMMode ? (
             <div className="rounded-2xl border border-zinc-800/70 bg-zinc-950/40 p-4">
               <h4 className="text-sm font-semibold text-white mb-3">Combat & casting</h4>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -944,7 +1216,8 @@ const PCProfile = () => {
                 ))}
               </div>
             </div>
-            {Array.isArray(activeEditDraft.spellcasting) && activeEditDraft.spellcasting.length > 0 ? (
+            ) : null}
+            {isGMMode && Array.isArray(activeEditDraft.spellcasting) && activeEditDraft.spellcasting.length > 0 ? (
               <div className="rounded-2xl border border-zinc-800/70 bg-zinc-950/40 p-4">
                 <h4 className="text-sm font-semibold text-white mb-3">Spellcasting by class</h4>
                 <div className="space-y-3">
@@ -1027,6 +1300,7 @@ const PCProfile = () => {
               </div>
             ) : null}
 
+            {isGMMode ? (
             <div className="rounded-2xl border border-zinc-800/70 bg-zinc-950/40 p-4">
               <h4 className="text-sm font-semibold text-white mb-3">Saving throws</h4>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -1071,7 +1345,9 @@ const PCProfile = () => {
                 })}
               </div>
             </div>
+            ) : null}
 
+            {isGMMode ? (
             <div className="rounded-2xl border border-zinc-800/70 bg-zinc-950/40 p-4">
               <h4 className="text-sm font-semibold text-white mb-3">Skills</h4>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -1148,7 +1424,9 @@ const PCProfile = () => {
                 })}
               </div>
             </div>
+            ) : null}
 
+            {isGMMode ? (
             <div className="rounded-2xl border border-zinc-800/70 bg-zinc-950/40 p-4">
               <h4 className="text-sm font-semibold text-white mb-3">Identity</h4>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -1181,18 +1459,23 @@ const PCProfile = () => {
                 ))}
               </div>
             </div>
+            ) : null}
 
             <div className="rounded-2xl border border-zinc-800/70 bg-zinc-950/40 p-4">
               <h4 className="text-sm font-semibold text-white mb-3">Notes & narrative</h4>
               <div className="grid grid-cols-1 gap-4">
                 {[
                   ["Public Notes", "publicNotes", "root"],
-                  ["GM Notes", "gmNotes", "root"],
-                  ["Secrets", "secrets", "root"],
-                  ["Personality Traits", "personalityTraits", "narrative"],
-                  ["Ideals", "ideals", "narrative"],
-                  ["Bonds", "bonds", "narrative"],
-                  ["Flaws", "flaws", "narrative"],
+                  ...(isGMMode
+                    ? [
+                      ["GM Notes", "gmNotes", "root"],
+                      ["Secrets", "secrets", "root"],
+                      ["Personality Traits", "personalityTraits", "narrative"],
+                      ["Ideals", "ideals", "narrative"],
+                      ["Bonds", "bonds", "narrative"],
+                      ["Flaws", "flaws", "narrative"],
+                    ]
+                    : []),
                 ].map(([label, key, scope]) => (
                   <div key={key}>
                     <label className="block text-sm text-zinc-300 mb-1.5">{label}</label>
@@ -1221,7 +1504,7 @@ const PCProfile = () => {
                 ))}
               </div>
             </div>
-          </section>
+	          </fieldset>
         ) : null}
 
         {/* Metadata strip */}
@@ -1242,9 +1525,10 @@ const PCProfile = () => {
           </span>
         </section>
 
+        {visibleProfileTabs.length > 0 ? (
         <section className="bg-white/5 border border-white/10 rounded-2xl p-3 md:p-4 flex flex-wrap gap-2">
-          {profileTabs.map((tab) => {
-            const isActive = activeTab === tab.key;
+          {visibleProfileTabs.map((tab) => {
+            const isActive = activeViewTab === tab.key;
             return (
               <button
                 key={tab.key}
@@ -1260,13 +1544,21 @@ const PCProfile = () => {
             );
           })}
         </section>
+        ) : null}
+
+        {!hasAnyProfileDetails ? (
+          <section className="bg-white/5 border border-white/10 rounded-2xl p-5 text-sm text-zinc-400">
+            No profile details added yet.
+          </section>
+        ) : null}
 
         {/* Two-column layout */}
+        {visibleProfileTabs.length > 0 ? (
         <section className="grid grid-cols-1 xl:grid-cols-3 gap-4 md:gap-6">
           {/* Left / main column: abilities and skills */}
-          <div className={activeTab === "narrative" ? "hidden" : "xl:col-span-3 space-y-4"}>
+          <div className={activeViewTab === "narrative" ? "hidden" : "xl:col-span-3 space-y-4"}>
             {/* Abilities */}
-            {activeTab === "stats" ? (
+            {activeViewTab === "stats" && hasAbilityScores ? (
               <div className="bg-white/5 border border-white/10 rounded-2xl p-4 md:p-5 space-y-3">
                 <div className="flex items-center justify-between gap-2">
                   <h3 className="text-sm font-semibold tracking-tight">Ability Scores</h3>
@@ -1301,7 +1593,7 @@ const PCProfile = () => {
             ) : null}
 
             {/* Skills */}
-            {activeTab === "skills" ? (
+            {activeViewTab === "skills" && hasSkillDetails ? (
               <div className="bg-white/5 border border-white/10 rounded-2xl p-4 md:p-5 space-y-3">
                 <div className="flex items-center justify-between gap-2">
                   <h3 className="text-sm font-semibold tracking-tight">Skills</h3>
@@ -1353,7 +1645,7 @@ const PCProfile = () => {
               </div>
             ) : null}
 
-            {activeTab === "stats" ? (
+            {activeViewTab === "stats" && hasSavingThrows ? (
               <div className="bg-white/5 border border-white/10 rounded-2xl p-4 md:p-5 space-y-4">
                 <div className="flex items-center justify-between gap-2">
                   <h3 className="text-sm font-semibold tracking-tight">Saving Throws</h3>
@@ -1391,7 +1683,7 @@ const PCProfile = () => {
               </div>
             ) : null}
 
-            {activeTab === "stats" ? (
+            {activeViewTab === "stats" && hasIdentityDetails ? (
               <div className="bg-white/5 border border-white/10 rounded-2xl p-4 md:p-5 space-y-4">
                 <div className="flex items-center justify-between gap-2">
                   <h3 className="text-sm font-semibold tracking-tight">Identity & Senses</h3>
@@ -1399,18 +1691,7 @@ const PCProfile = () => {
                 </div>
 
                 <div className="grid grid-cols-1 xl:grid-cols-2 gap-3 text-xs md:text-sm">
-                  {[
-                    ["Faith", identity.faith],
-                    ["Size", identity.size],
-                    ["Height", identity.height],
-                    ["Weight", identity.weight],
-                    ["Gender", identity.gender],
-                    ["Eyes", identity.eyes],
-                    ["Hair", identity.hair],
-                    ["Skin", identity.skin],
-                  ]
-                    .filter(([, value]) => value)
-                    .map(([label, value]) => (
+                  {identityEntries.map(([label, value]) => (
                       <div
                         key={label}
                         className="rounded-lg bg-black/50 border border-white/10 px-3 py-2 flex flex-col"
@@ -1423,16 +1704,18 @@ const PCProfile = () => {
                     ))}
                 </div>
 
+                {hasSensesDetails ? (
                 <div className="rounded-xl bg-black/50 border border-white/10 px-3 py-3 text-[11px] md:text-xs text-zinc-300">
                   <div className="text-[10px] uppercase tracking-wide text-zinc-500 mb-1">
                     Senses
                   </div>
                   <p>{sensesSummary}</p>
                 </div>
+                ) : null}
               </div>
             ) : null}
 
-            {activeTab === "inventory" ? (
+            {activeViewTab === "inventory" && hasInventoryDetails ? (
               <div className="bg-white/5 border border-white/10 rounded-2xl p-4 md:p-5 space-y-4">
                 <div className="flex items-center justify-between gap-2">
                   <h3 className="text-sm font-semibold tracking-tight">Inventory & Proficiencies</h3>
@@ -1442,6 +1725,7 @@ const PCProfile = () => {
                   </span>
                 </div>
 
+                {hasCurrencyDetails ? (
                 <div className="grid grid-cols-2 md:grid-cols-5 gap-3 text-[11px] md:text-xs">
                   {[
                     ["CP", inventory.currency?.cp ?? 0],
@@ -1461,14 +1745,16 @@ const PCProfile = () => {
                     </div>
                   ))}
                 </div>
+                ) : null}
 
+                {hasProficiencyDetails ? (
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-2 text-[11px] md:text-xs">
                   {[
                     ["Languages", formatList(proficiencies.languages)],
                     ["Armor", formatList(proficiencies.armor)],
                     ["Weapons", formatList(proficiencies.weapons)],
                     ["Tools", formatList(proficiencies.tools)],
-                  ].map(([label, value]) => (
+                  ].filter(([, value]) => value !== "—").map(([label, value]) => (
                     <div
                       key={label}
                       className="rounded-lg bg-black/50 border border-white/10 px-3 py-2 flex flex-col"
@@ -1480,12 +1766,13 @@ const PCProfile = () => {
                     </div>
                   ))}
                 </div>
+                ) : null}
 
+                {equipment.length > 0 ? (
                 <div className="rounded-xl bg-black/50 border border-white/10 px-3 py-3 text-[11px] md:text-xs text-zinc-300">
                   <div className="text-[10px] uppercase tracking-wide text-zinc-500 mb-2">
                     Equipment
                   </div>
-                  {equipment.length > 0 ? (
                     <div className="space-y-2 max-h-96 overflow-y-auto pr-1">
                       {equipment.map((item, index) => (
                         <div
@@ -1503,18 +1790,16 @@ const PCProfile = () => {
                         </div>
                       ))}
                     </div>
-                  ) : (
-                    <p className="text-zinc-500">No equipment imported yet.</p>
-                  )}
                 </div>
+                ) : null}
               </div>
             ) : null}
 
           </div>
 
           {/* Right column: notes & GM section */}
-          <div className={activeTab === "narrative" ? "xl:col-span-3 space-y-4" : "hidden"}>
-            {activeTab === "narrative" ? (
+          <div className={activeViewTab === "narrative" ? "xl:col-span-3 space-y-4" : "hidden"}>
+            {activeViewTab === "narrative" && hasNarrativeDetails ? (
               <div className="bg-white/5 border border-white/10 rounded-2xl p-4 md:p-5 space-y-4">
                 <div className="flex items-center justify-between gap-2">
                   <h3 className="text-sm font-semibold tracking-tight">Narrative Summary</h3>
@@ -1522,36 +1807,46 @@ const PCProfile = () => {
                 </div>
 
                 <div className="space-y-3 text-[11px] md:text-xs text-zinc-300">
+                  {pc.publicNotes ? (
                   <div>
                     <div className="text-[10px] uppercase tracking-wide text-zinc-500 mb-1">Public Notes</div>
-                    <p className="whitespace-pre-wrap">{pc.publicNotes || "No public notes yet."}</p>
+                    <p className="whitespace-pre-wrap">{pc.publicNotes}</p>
                   </div>
+                  ) : null}
 
+                  {narrative.personalityTraits ? (
                   <div>
                     <div className="text-[10px] uppercase tracking-wide text-zinc-500 mb-1">Personality Traits</div>
-                    <p className="whitespace-pre-wrap">{narrative.personalityTraits || "No personality traits recorded."}</p>
+                    <p className="whitespace-pre-wrap">{narrative.personalityTraits}</p>
                   </div>
+                  ) : null}
 
+                  {narrative.ideals ? (
                   <div>
                     <div className="text-[10px] uppercase tracking-wide text-zinc-500 mb-1">Ideals</div>
-                    <p className="whitespace-pre-wrap">{narrative.ideals || "No ideals recorded."}</p>
+                    <p className="whitespace-pre-wrap">{narrative.ideals}</p>
                   </div>
+                  ) : null}
 
+                  {narrative.bonds ? (
                   <div>
                     <div className="text-[10px] uppercase tracking-wide text-zinc-500 mb-1">Bonds</div>
-                    <p className="whitespace-pre-wrap">{narrative.bonds || "No bonds recorded."}</p>
+                    <p className="whitespace-pre-wrap">{narrative.bonds}</p>
                   </div>
+                  ) : null}
 
+                  {narrative.flaws ? (
                   <div>
                     <div className="text-[10px] uppercase tracking-wide text-zinc-500 mb-1">Flaws</div>
-                    <p className="whitespace-pre-wrap">{narrative.flaws || "No flaws recorded."}</p>
+                    <p className="whitespace-pre-wrap">{narrative.flaws}</p>
                   </div>
+                  ) : null}
                 </div>
               </div>
             ) : null}
 
             {/* GM notes */}
-            {activeTab === "narrative" ? (
+            {activeViewTab === "narrative" && hasGmNarrativeDetails ? (
               <div className="bg-white/5 border border-rose-500/40 rounded-2xl p-4 md:p-5 space-y-2">
                 <div className="flex items-center justify-between gap-2">
                   <h3 className="text-sm font-semibold tracking-tight text-rose-100">
@@ -1564,44 +1859,26 @@ const PCProfile = () => {
 
                 {isGMMode ? (
                   <>
-                    <p className="text-[11px] md:text-xs text-zinc-200 whitespace-pre-wrap">
-                      {pc.gmNotes || "No GM notes yet."}
-                    </p>
-                    {pc.secrets && (
+                    {pc.gmNotes ? (
+                      <p className="text-[11px] md:text-xs text-zinc-200 whitespace-pre-wrap">
+                        {pc.gmNotes}
+                      </p>
+                    ) : null}
+                    {pc.secrets ? (
                       <div className="mt-2 rounded-lg bg-black/60 border border-rose-500/40 px-3 py-2 text-[11px] md:text-xs text-rose-100">
                         <div className="text-[10px] uppercase tracking-wide text-rose-300 mb-1">
                           Secrets
                         </div>
                         <p className="whitespace-pre-wrap">{pc.secrets}</p>
                       </div>
-                    )}
+                    ) : null}
                   </>
-                ) : (
-                  <p className="text-[11px] md:text-xs text-zinc-500 italic">
-                    GM-only notes are hidden in player mode.
-                  </p>
-                )}
+                ) : null}
               </div>
             ) : null}
 
             {/* Future: conditions / corruption summary */}
-            {activeTab === "narrative" ? (
-              <div className="bg-white/5 border border-purple-500/40 rounded-2xl p-4 md:p-5 text-[11px] md:text-xs text-zinc-300">
-                <div className="flex items-center justify-between mb-1">
-                  <h3 className="text-sm font-semibold tracking-tight text-purple-100">
-                    Conditions &amp; Corruption (planned)
-                  </h3>
-                  <span className="text-[10px] uppercase tracking-wide text-purple-300/80">
-                    Powered by Conditions module
-                  </span>
-                </div>
-                <p>
-                  Once wired, this panel will summarize active conditions and corruption
-                  trackers targeting this PC, pulled from the Conditions module.
-                </p>
-              </div>
-            ) : null}
-            {activeTab === "narrative" && isGMMode && pc.importMeta?.source ? (
+            {activeViewTab === "narrative" && isGMMode && pc.importMeta?.source ? (
               <div className="bg-white/5 border border-indigo-400/40 rounded-2xl p-4 md:p-5 space-y-2">
                 <div className="flex items-center justify-between gap-2">
                   <h3 className="text-sm font-semibold tracking-tight text-indigo-100">
@@ -1632,6 +1909,7 @@ const PCProfile = () => {
             ) : null}
           </div>
         </section>
+        ) : null}
       </div>
     </div>
   );

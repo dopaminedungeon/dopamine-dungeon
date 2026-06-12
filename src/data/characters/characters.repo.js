@@ -1,12 +1,4 @@
-import {
-  collection,
-  doc,
-  getDoc,
-  getDocs,
-  setDoc,
-  deleteDoc,
-} from "firebase/firestore";
-import { db } from "../../firebase/firebase";
+import { apiFetch } from "../api/apiClient";
 import { createEmptyCharacter } from "./character.model";
 
 function normalizeAbilityEntry(entry = {}) {
@@ -169,38 +161,50 @@ function normalizeCharacter(input = {}) {
   };
 }
 
-const charactersCollection = (campaignId) =>
-  collection(db, "campaigns", campaignId, "characters");
-
-const characterDoc = (campaignId, characterId) =>
-  doc(db, "campaigns", campaignId, "characters", characterId);
-
 export async function getAllCharacters(campaignId) {
   if (!campaignId) return [];
-  const snapshot = await getDocs(charactersCollection(campaignId));
-  return snapshot.docs.map((docSnap) =>
-    normalizeCharacter({ id: docSnap.id, ...docSnap.data() })
+  const response = await apiFetch(
+    `/api/characters?campaignId=${encodeURIComponent(campaignId)}`
+  );
+  return (Array.isArray(response.characters) ? response.characters : []).map((character) =>
+    normalizeCharacter(character)
   );
 }
 
 export async function getCharacterById(campaignId, id) {
   if (!campaignId || !id) return null;
-  const snapshot = await getDoc(characterDoc(campaignId, id));
-  if (!snapshot.exists()) return null;
-  return normalizeCharacter({ id: snapshot.id, ...snapshot.data() });
+  const response = await apiFetch(
+    `/api/characters?campaignId=${encodeURIComponent(
+      campaignId
+    )}&characterId=${encodeURIComponent(id)}`
+  );
+  return response.character ? normalizeCharacter(response.character) : null;
 }
 
 export async function upsertCharacter(campaignId, input) {
   if (!campaignId) throw new Error("campaignId is required");
   const normalized = normalizeCharacter(input);
-  const firestoreSafeCharacter = stripUndefinedDeep(normalized);
-  await setDoc(characterDoc(campaignId, normalized.id), firestoreSafeCharacter);
-  return normalized;
+  const apiSafeCharacter = stripUndefinedDeep(normalized);
+  const response = await apiFetch(
+    `/api/characters?campaignId=${encodeURIComponent(campaignId)}`,
+    {
+      method: "PUT",
+      body: JSON.stringify({ character: apiSafeCharacter }),
+    }
+  );
+  return normalizeCharacter(response.character || normalized);
 }
 
 export async function removeCharacter(campaignId, id) {
   if (!campaignId || !id) return;
-  await deleteDoc(characterDoc(campaignId, id));
+  await apiFetch(
+    `/api/characters?campaignId=${encodeURIComponent(
+      campaignId
+    )}&characterId=${encodeURIComponent(id)}`,
+    {
+      method: "DELETE",
+    }
+  );
 }
 
 export { normalizeCharacter };
