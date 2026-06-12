@@ -10,3 +10,4 @@ pnpm-debug.log*
 .env
 .env.*.local
 .vercel
+*firebase-adminsdk*.json
