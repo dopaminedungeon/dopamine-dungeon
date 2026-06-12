@@ -1,11 +1,11 @@
-import { db } from "../api/_lib/db";
-import { users } from "../db/schema/users";
-import { workspaces } from "../db/schema/workspaces";
-import { campaigns } from "../db/schema/campaigns";
+import { db } from "../src/server/db.js";
+import { users } from "../db/schema/users.js";
+import { workspaces } from "../db/schema/workspaces.js";
+import { campaigns } from "../db/schema/campaigns.js";
 import {
     workspaceMemberships,
     campaignMemberships,
-} from "../db/schema/memberships";
+} from "../db/schema/memberships.js";
 
 import { eq } from "drizzle-orm";
 

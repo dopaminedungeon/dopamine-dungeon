@@ -2,9 +2,9 @@ import { and, eq } from "drizzle-orm";
 import { cert, getApps, initializeApp } from "firebase-admin/app";
 import { getFirestore } from "firebase-admin/firestore";
 
-import { db } from "../api/_lib/db";
-import { campaigns } from "../db/schema/campaigns";
-import { items } from "../db/schema/items";
+import { db } from "../src/server/db.js";
+import { campaigns } from "../db/schema/campaigns.js";
+import { items } from "../db/schema/items.js";
 
 const shouldApply = process.argv.includes("--apply");
 
