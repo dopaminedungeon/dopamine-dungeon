@@ -88,6 +88,39 @@ function toCharacterValues(
   };
 }
 
+function mergePlayerEditableCharacterFields(
+  existingCharacter: Record<string, unknown>,
+  rawCharacter: Record<string, unknown>
+) {
+  const nextClass = normalizeString(rawCharacter.class);
+  const nextSubclass = normalizeString(rawCharacter.subclass);
+  const nextLevel = Math.max(1, normalizeNumber(rawCharacter.level, 1));
+
+  return {
+    ...existingCharacter,
+    name: normalizeString(rawCharacter.name),
+    race: normalizeString(rawCharacter.race),
+    class: nextClass,
+    subclass: nextSubclass,
+    level: nextLevel,
+    alignment: normalizeString(rawCharacter.alignment),
+    background: normalizeString(rawCharacter.background),
+    publicNotes: normalizeString(rawCharacter.publicNotes),
+    classes: Array.isArray(existingCharacter.classes)
+      ? existingCharacter.classes.map((entry, index) =>
+          index === 0 && entry && typeof entry === "object"
+            ? {
+                ...(entry as Record<string, unknown>),
+                className: nextClass,
+                level: nextLevel,
+                subclass: nextSubclass,
+              }
+            : entry
+        )
+      : existingCharacter.classes,
+  };
+}
+
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   setCorsHeaders(res, "GET, PUT, DELETE, OPTIONS");
 
@@ -155,12 +188,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       });
     }
 
-    await requireCampaignGm({
-      campaignId: campaign.id,
-      userId: currentUser.id,
-    });
-
     if (req.method === "PUT") {
+      const membership = await requireCampaignMember({
+        campaignId: campaign.id,
+        userId: currentUser.id,
+      });
+      const isGm = membership.role === "gm";
       const rawCharacter =
         req.body && typeof req.body === "object"
           ? (req.body.character ?? req.body)
@@ -170,6 +203,96 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         return res
           .status(400)
           .json({ ok: false, error: "Character payload is required" });
+      }
+
+      if (!isGm) {
+        const rawCharacterRecord = rawCharacter as Record<string, unknown>;
+        const playerCharacterId = normalizeString(rawCharacterRecord.id);
+
+        if (!playerCharacterId) {
+          return res.status(400).json({ ok: false, error: "Character id is required" });
+        }
+
+        const [assignment] = await db
+          .select()
+          .from(characterAssignments)
+          .where(
+            and(
+              eq(characterAssignments.campaignId, campaign.id),
+              eq(characterAssignments.characterId, playerCharacterId),
+              eq(characterAssignments.userId, currentUser.id)
+            )
+          )
+          .limit(1);
+
+        if (!assignment) {
+          return res.status(403).json({
+            ok: false,
+            error: "Assigned character permission required",
+          });
+        }
+
+        const [existingCharacter] = await db
+          .select()
+          .from(characters)
+          .where(
+            and(
+              eq(characters.campaignId, campaign.id),
+              eq(characters.id, playerCharacterId)
+            )
+          )
+          .limit(1);
+
+        if (!existingCharacter) {
+          return res.status(404).json({ ok: false, error: "Character not found" });
+        }
+
+        const existingData =
+          existingCharacter.data && typeof existingCharacter.data === "object"
+            ? (existingCharacter.data as Record<string, unknown>)
+            : {};
+        const existingVisibility = normalizeString(
+          existingData.visibility ?? existingCharacter.visibility,
+          "player"
+        );
+        const existingIsPlayerVisible =
+          typeof existingData.isPlayerVisible === "boolean"
+            ? existingData.isPlayerVisible
+            : existingCharacter.isPlayerVisible;
+
+        if (existingVisibility !== "player" || existingIsPlayerVisible !== true) {
+          return res.status(403).json({
+            ok: false,
+            error: "Player-visible character permission required",
+          });
+        }
+
+        const mergedCharacter = mergePlayerEditableCharacterFields(
+          existingData,
+          rawCharacterRecord
+        );
+        const values = toCharacterValues(campaign.id, mergedCharacter);
+
+        const returnedRows = await db
+          .update(characters)
+          .set({
+            name: values.name,
+            level: values.level,
+            data: values.data,
+            updatedAt: values.updatedAt,
+          })
+          .where(
+            and(
+              eq(characters.campaignId, campaign.id),
+              eq(characters.id, values.id)
+            )
+          )
+          .returning();
+
+        return res.status(200).json({
+          ok: true,
+          character: toCharacterPayload(returnedRows[0], false),
+        });
       }
 
       const values = toCharacterValues(
@@ -198,6 +321,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         character: toCharacterPayload(returnedRows[0], true),
       });
     }
+
+    await requireCampaignGm({
+      campaignId: campaign.id,
+      userId: currentUser.id,
+    });
 
     if (!characterId) {
       return res.status(400).json({ ok: false, error: "characterId is required" });
