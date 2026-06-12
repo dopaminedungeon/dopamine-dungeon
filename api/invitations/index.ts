@@ -40,7 +40,7 @@ function formatMailbox(name: string, email: string) {
 }
 
 const inviteEmailFrom = formatMailbox(
-  process.env.INVITE_EMAIL_FROM_NAME || "Dopamine Dungeon",
+  process.env.INVITE_EMAIL_FROM_NAME || "Dopamine Dungeon Invites",
   process.env.INVITE_EMAIL_FROM || "invite@dopamine-dungeon.com"
 );
 const inviteEmailReplyTo = formatMailbox(
