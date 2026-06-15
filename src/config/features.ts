@@ -5,7 +5,7 @@ export const features = {
     items: true,
     lore: false,
     maps: false,
-    npcs: false,
+    npcs: true,
     pcs: true,
     quests: false,
     relationships: false,

@@ -1,6 +1,7 @@
 import React, { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useMode } from "../context/ModeContext.jsx";
+import { useCampaign } from "../context/CampaignContext";
 import {
   Users,
   Search,
@@ -28,6 +29,7 @@ const typeColors = {
 
 export default function Npcs() {
   const { isGM } = useMode();
+  const { selectedCampaignId } = useCampaign();
   const navigate = useNavigate();
 
   const [searchQuery, setSearchQuery] = useState("");
@@ -75,6 +77,19 @@ export default function Npcs() {
     });
   };
 
+  if (!selectedCampaignId) {
+    return (
+      <main className="flex-1 overflow-auto flex items-center justify-center p-8">
+        <div className="max-w-md rounded-2xl border border-white/10 bg-white/5 p-6 text-center">
+          <h1 className="text-xl font-semibold text-white">Select a campaign</h1>
+          <p className="mt-2 text-sm text-zinc-400">
+            NPCs are scoped to the active campaign.
+          </p>
+        </div>
+      </main>
+    );
+  }
+
   return (
     <div className="p-8 overflow-auto">
       {/* Header Actions */}
@@ -121,8 +136,9 @@ export default function Npcs() {
       </div>
 
       {/* NPCs Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
-        {visibleNpcs.map((npc) => {
+      {visibleNpcs.length > 0 ? (
+        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
+          {visibleNpcs.map((npc) => {
           const TypeIcon = typeIcons[npc.type] || Users;
           const gradientColor =
             typeColors[npc.type] || "from-zinc-500 to-zinc-600";
@@ -195,8 +211,18 @@ export default function Npcs() {
               </div>
             </div>
           );
-        })}
-      </div>
+          })}
+        </div>
+      ) : (
+        <div className="rounded-2xl border border-white/10 bg-white/5 p-6 text-zinc-300">
+          <h2 className="text-lg font-semibold text-white">No NPCs found</h2>
+          <p className="mt-2 text-sm text-zinc-400">
+            {isGM
+              ? "No NPCs match the current filters yet."
+              : "No player-visible NPCs match the current filters yet."}
+          </p>
+        </div>
+      )}
 
       {/* Create NPC Modal */}
       {showCreateModal && (
