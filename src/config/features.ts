@@ -4,7 +4,7 @@ export const features = {
     dashboard: true,
     items: true,
     lore: true,
-    maps: false,
+    maps: true,
     npcs: true,
     pcs: true,
     quests: false,

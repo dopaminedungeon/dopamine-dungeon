@@ -8,6 +8,7 @@ export * from "./characters.js";
 export * from "./items.js";
 export * from "./npcs.js";
 export * from "./lore.js";
+export * from "./locations.js";
 export * from "./bag.js";
 export * from "./entityLinks.js";
 export * from "./characterAssignments.js";

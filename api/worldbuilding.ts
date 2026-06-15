@@ -5,6 +5,7 @@ import charactersHandler from "../src/server/api-handlers/characters.js";
 import entityLinksHandler from "../src/server/api-handlers/entity-links.js";
 import itemsHandler from "../src/server/api-handlers/items.js";
 import loreHandler from "../src/server/api-handlers/lore.js";
+import locationsHandler from "../src/server/api-handlers/locations.js";
 import npcsHandler from "../src/server/api-handlers/npcs.js";
 import sessionsHandler from "../src/server/api-handlers/sessions.js";
 import { setCorsHeaders } from "../src/server/cors.js";
@@ -55,6 +56,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
   if (resource === "lore") {
     return loreHandler(req, res);
+  }
+
+  if (resource === "locations") {
+    return locationsHandler(req, res);
   }
 
   if (resource === "npcs") {
