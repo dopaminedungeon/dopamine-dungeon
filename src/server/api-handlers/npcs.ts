@@ -21,6 +21,25 @@ function normalizeString(value: unknown, fallback = "") {
   return String(value ?? fallback).trim();
 }
 
+const NPC_TYPE_VALUES = new Set(["NPC", "Deity", "Monster", "Other"]);
+const NPC_ROLE_VALUES = new Set(["ally", "neutral", "antagonist", "unknown"]);
+
+function normalizeNpcType(value: unknown) {
+  const raw = normalizeString(value, "NPC");
+  if (NPC_TYPE_VALUES.has(raw)) return raw;
+
+  const lower = raw.toLowerCase();
+  if (lower === "deity") return "Deity";
+  if (lower === "monster") return "Monster";
+  if (lower === "other") return "Other";
+  return "NPC";
+}
+
+function normalizeNpcRole(value: unknown) {
+  const role = normalizeString(value, "unknown").toLowerCase();
+  return NPC_ROLE_VALUES.has(role) ? role : "unknown";
+}
+
 function stripGmOnlyNpcFields(data: Record<string, unknown>) {
   const { gmNotes, ...safeData } = data;
   void gmNotes;
@@ -42,6 +61,15 @@ function toNpcValues(campaignId: string, rawNpc: Record<string, unknown>) {
     throw new Error("NPC id is required");
   }
 
+  const sourceData =
+    rawNpc.data && typeof rawNpc.data === "object" && !Array.isArray(rawNpc.data)
+      ? (rawNpc.data as Record<string, unknown>)
+      : {};
+  const legacyRole = NPC_ROLE_VALUES.has(normalizeString(rawNpc.type).toLowerCase())
+    ? rawNpc.type
+    : undefined;
+  const type = normalizeNpcType(rawNpc.type);
+  const role = normalizeNpcRole(rawNpc.role ?? sourceData.role ?? legacyRole);
   const visibility =
     normalizeString(rawNpc.visibility, "public") === "gm-only"
       ? "gm-only"
@@ -53,7 +81,7 @@ function toNpcValues(campaignId: string, rawNpc: Record<string, unknown>) {
     id: npcId,
     name: normalizeString(rawNpc.name),
     title: normalizeString(rawNpc.title),
-    type: normalizeString(rawNpc.type, "unknown") || "unknown",
+    type,
     status: normalizeString(rawNpc.status, "active") || "active",
     visibility,
     summary: normalizeString(rawNpc.summary),
@@ -61,12 +89,14 @@ function toNpcValues(campaignId: string, rawNpc: Record<string, unknown>) {
     gmNotes: normalizeString(rawNpc.gmNotes),
     imageUrl: normalizeString(rawNpc.imageUrl),
     data: {
+      ...sourceData,
       ...rawNpc,
       id: npcId,
       visibility,
       name: normalizeString(rawNpc.name),
       title: normalizeString(rawNpc.title),
-      type: normalizeString(rawNpc.type, "unknown") || "unknown",
+      type,
+      role,
       status: normalizeString(rawNpc.status, "active") || "active",
       summary: normalizeString(rawNpc.summary),
       description: normalizeString(rawNpc.description),
