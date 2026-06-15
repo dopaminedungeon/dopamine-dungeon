@@ -1,10 +1,16 @@
 // src/pages/NpcProfile.jsx
 import React, { useEffect, useMemo, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
-import { ArrowLeft, Eye, Lock, Plus, Trash2, Users } from "lucide-react";
+import { ArrowLeft, Eye, Lock, Plus, Trash2 } from "lucide-react";
 import { useMode } from "../context/ModeContext.jsx";
 import { useCampaign } from "../context/CampaignContext";
 import { npcsRepo } from "../data/npcs/npcs.repo";
+import {
+  getNpcTypeIcon,
+  normalizeNpcType,
+  NPC_TYPE_LABELS,
+  NPC_TYPES,
+} from "../data/npcs/npcMeta.jsx";
 
 const NPC_ROLES = ["ally", "neutral", "antagonist", "unknown"];
 const NPC_STATUSES = ["active", "missing", "dead", "unknown"];
@@ -361,7 +367,8 @@ function buildDraft(npc) {
     name: npc?.name || "",
     title: npc?.title || "",
     aliases: normalizeAliases(npc?.aliases),
-    type: normalizeRole(npc?.type),
+    type: normalizeNpcType(npc?.type),
+    role: normalizeRole(npc?.role),
     status: normalizeStatus(npc?.status || "active"),
     visibility: npc?.visibility === "gm-only" ? "gm-only" : "public",
     summary: npc?.summary || "",
@@ -1049,6 +1056,8 @@ export default function NpcProfile() {
         name: draft.name.trim(),
         title: draft.title.trim(),
         aliases: normalizeAliases(draft.aliases),
+        type: normalizeNpcType(draft.type),
+        role: normalizeRole(draft.role),
         summary: draft.summary.trim(),
         description: draft.description.trim(),
         gmNotes: draft.gmNotes.trim(),
@@ -1145,6 +1154,7 @@ export default function NpcProfile() {
   const statBlockVisibility = normalizeStatBlockVisibility(viewNpc.statBlockVisibility);
   const canShowStatBlockCard = isGM || statBlockVisibility === "public";
   const hasRightColumnContent = isGM || canShowStatBlockCard;
+  const TypeIcon = getNpcTypeIcon(viewNpc.type);
 
   return (
     <main className="p-4 sm:p-8">
@@ -1165,7 +1175,7 @@ export default function NpcProfile() {
                 {viewNpc.imageUrl ? (
                   <img src={viewNpc.imageUrl} alt="" className="h-full w-full object-cover" />
                 ) : (
-                  (viewNpc.name || "?").charAt(0)
+                  <TypeIcon className="h-8 w-8" />
                 )}
               </div>
               <div className="min-w-0 flex-1">
@@ -1222,8 +1232,17 @@ export default function NpcProfile() {
                     </div>
 
                     <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+                      <Field label="Type">
+                        <SelectInput disabled={isSaving} value={draft?.type ?? "NPC"} onChange={(value) => updateDraft("type", value)}>
+                          {NPC_TYPES.map((type) => (
+                            <option key={type} value={type}>
+                              {NPC_TYPE_LABELS[type]}
+                            </option>
+                          ))}
+                        </SelectInput>
+                      </Field>
                       <Field label="Role">
-                        <SelectInput disabled={isSaving} value={draft?.type ?? "unknown"} onChange={(value) => updateDraft("type", value)}>
+                        <SelectInput disabled={isSaving} value={draft?.role ?? "unknown"} onChange={(value) => updateDraft("role", value)}>
                           {NPC_ROLES.map((role) => (
                             <option key={role} value={role}>
                               {ROLE_LABELS[role]}
@@ -1240,12 +1259,16 @@ export default function NpcProfile() {
                           ))}
                         </SelectInput>
                       </Field>
-                      <Field label="Visibility">
-                        <SelectInput disabled={isSaving} value={draft?.visibility ?? "public"} onChange={(value) => updateDraft("visibility", value)}>
-                          <option value="public">Player-visible</option>
-                          <option value="gm-only">GM-only</option>
-                        </SelectInput>
-                      </Field>
+                    </div>
+
+                    <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-4">
+                      <p className="mb-3 text-xs font-semibold uppercase tracking-[0.2em] text-zinc-500">
+                        Visibility
+                      </p>
+                      <SelectInput disabled={isSaving} value={draft?.visibility ?? "public"} onChange={(value) => updateDraft("visibility", value)}>
+                        <option value="public">Player-visible</option>
+                        <option value="gm-only">GM-only</option>
+                      </SelectInput>
                     </div>
                   </div>
                 ) : (
@@ -1269,8 +1292,11 @@ export default function NpcProfile() {
                   <div className="mt-4 flex flex-wrap items-center gap-2">
                     <>
                       <span className="inline-flex items-center gap-1 rounded-full border border-white/10 bg-white/5 px-3 py-1 text-xs text-zinc-300">
-                        <Users className="w-3 h-3" />
-                        {ROLE_LABELS[normalizeRole(viewNpc.type)]}
+                        <TypeIcon className="w-3 h-3" />
+                        {NPC_TYPE_LABELS[normalizeNpcType(viewNpc.type)]}
+                      </span>
+                      <span className="inline-flex items-center gap-1 rounded-full border border-white/10 bg-white/5 px-3 py-1 text-xs text-zinc-300">
+                        {ROLE_LABELS[normalizeRole(viewNpc.role)]}
                       </span>
                       <span className="rounded-full border border-white/10 bg-white/5 px-3 py-1 text-xs text-zinc-300">
                         {STATUS_LABELS[normalizeStatus(viewNpc.status)]}

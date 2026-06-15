@@ -3,11 +3,16 @@ import { useNavigate } from "react-router-dom";
 import { useMode } from "../context/ModeContext.jsx";
 import { useCampaign } from "../context/CampaignContext";
 import {
-  Users,
   Search,
   Plus,
 } from "lucide-react";
 import { npcsRepo } from "../data/npcs/npcs.repo";
+import {
+  getNpcTypeIcon,
+  normalizeNpcType,
+  NPC_TYPE_LABELS,
+  NPC_TYPES,
+} from "../data/npcs/npcMeta.jsx";
 
 const NPC_ROLES = ["ally", "neutral", "antagonist", "unknown"];
 const NPC_STATUSES = ["active", "missing", "dead", "unknown"];
@@ -53,7 +58,8 @@ function createNpcDraft() {
   return {
     name: "",
     title: "",
-    type: "unknown",
+    type: "NPC",
+    role: "unknown",
     status: "active",
     visibility: "public",
     summary: "",
@@ -72,6 +78,7 @@ export default function Npcs() {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState("");
   const [searchQuery, setSearchQuery] = useState("");
+  const [selectedType, setSelectedType] = useState("All");
   const [selectedRole, setSelectedRole] = useState("All");
   const [selectedStatus, setSelectedStatus] = useState("All");
   const [selectedVisibility, setSelectedVisibility] = useState("All");
@@ -81,6 +88,7 @@ export default function Npcs() {
   const isSavingRef = useRef(false);
   const hasActiveFilters =
     searchQuery.trim() ||
+    selectedType !== "All" ||
     selectedRole !== "All" ||
     selectedStatus !== "All" ||
     selectedVisibility !== "All";
@@ -124,12 +132,14 @@ export default function Npcs() {
         return false;
       }
 
-      const npcRole = normalizeRole(npc.type);
+      const npcType = normalizeNpcType(npc.type);
+      const npcRole = normalizeRole(npc.role);
       const npcStatus = normalizeStatus(npc.status);
       const npcVisibility = npc.visibility === "gm-only" ? "gm-only" : "public";
       const searchable = [
         npc.name,
         npc.title,
+        NPC_TYPE_LABELS[npcType],
         ROLE_LABELS[npcRole],
         STATUS_LABELS[npcStatus],
         npc.summary,
@@ -140,13 +150,14 @@ export default function Npcs() {
         .join(" ")
         .toLowerCase();
       const matchesSearch = searchable.includes(searchQuery.toLowerCase());
+      const matchesType = selectedType === "All" || npcType === selectedType;
       const matchesRole = selectedRole === "All" || npcRole === selectedRole;
       const matchesStatus = selectedStatus === "All" || npcStatus === selectedStatus;
       const matchesVisibility =
         !isGM || selectedVisibility === "All" || npcVisibility === selectedVisibility;
-      return matchesSearch && matchesRole && matchesStatus && matchesVisibility;
+      return matchesSearch && matchesType && matchesRole && matchesStatus && matchesVisibility;
     });
-  }, [isGM, npcs, searchQuery, selectedRole, selectedStatus, selectedVisibility]);
+  }, [isGM, npcs, searchQuery, selectedType, selectedRole, selectedStatus, selectedVisibility]);
 
   const handleCreate = async (e) => {
     e.preventDefault();
@@ -181,6 +192,7 @@ export default function Npcs() {
 
   const handleResetFilters = () => {
     setSearchQuery("");
+    setSelectedType("All");
     setSelectedRole("All");
     setSelectedStatus("All");
     setSelectedVisibility("All");
@@ -227,6 +239,21 @@ export default function Npcs() {
           </div>
 
           <div className="mt-3 flex flex-wrap items-center gap-2 text-sm">
+            <label className="inline-flex items-center gap-2 text-zinc-500">
+              <span className="text-xs font-medium uppercase tracking-wide">Type</span>
+              <select
+                value={selectedType}
+                onChange={(e) => setSelectedType(e.target.value)}
+                className="h-9 rounded-lg border border-white/10 bg-zinc-950/70 px-2.5 text-sm text-zinc-200 focus:border-purple-500/50 focus:outline-none focus:ring-2 focus:ring-purple-500/20"
+              >
+                {["All", ...NPC_TYPES].map((type) => (
+                  <option key={type} value={type}>
+                    {type === "All" ? "All" : NPC_TYPE_LABELS[type]}
+                  </option>
+                ))}
+              </select>
+            </label>
+
             <label className="inline-flex items-center gap-2 text-zinc-500">
               <span className="text-xs font-medium uppercase tracking-wide">Role</span>
               <select
@@ -300,8 +327,10 @@ export default function Npcs() {
       ) : filteredNpcs.length > 0 ? (
         <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
           {filteredNpcs.map((npc) => {
-            const npcRole = normalizeRole(npc.type);
+            const npcType = normalizeNpcType(npc.type);
+            const npcRole = normalizeRole(npc.role);
             const npcStatus = normalizeStatus(npc.status);
+            const TypeIcon = getNpcTypeIcon(npcType);
 
             return (
               <button
@@ -312,9 +341,12 @@ export default function Npcs() {
               >
                 <div className="flex items-start justify-between mb-4">
                   <div className="w-14 h-14 rounded-xl bg-linear-to-br from-zinc-600 to-zinc-800 flex items-center justify-center shadow-lg">
-                    <Users className="w-7 h-7 text-white" />
+                    <TypeIcon className="w-7 h-7 text-white" />
                   </div>
-                  <div className="flex items-center gap-2">
+                  <div className="flex flex-wrap items-center justify-end gap-2">
+                    <span className="px-3 py-1 rounded-lg text-xs font-medium bg-white/5 text-zinc-300 border border-white/10">
+                      {NPC_TYPE_LABELS[npcType]}
+                    </span>
                     <span className="px-3 py-1 rounded-lg text-xs font-medium bg-zinc-500/20 text-zinc-300">
                       {ROLE_LABELS[npcRole]}
                     </span>
@@ -334,10 +366,16 @@ export default function Npcs() {
                   {npc.summary || npc.description || "No NPC details added yet."}
                 </p>
 
-                <div className="flex items-center justify-between pt-4 border-t border-white/10">
-                  <span className="text-xs text-zinc-500">Status</span>
-                  <span className="text-sm font-medium text-zinc-200">
+                <div className="flex flex-wrap items-center gap-2 pt-4 border-t border-white/10">
+                  <span className="rounded-full bg-white/5 px-2.5 py-1 text-xs text-zinc-300">
                     {STATUS_LABELS[npcStatus]}
+                  </span>
+                  <span className={`rounded-full px-2.5 py-1 text-xs ${
+                    npc.visibility === "gm-only"
+                      ? "bg-red-500/15 text-red-300"
+                      : "bg-emerald-500/15 text-emerald-300"
+                  }`}>
+                    {VISIBILITY_LABELS[npc.visibility === "gm-only" ? "gm-only" : "public"]}
                   </span>
                 </div>
               </button>
@@ -357,7 +395,7 @@ export default function Npcs() {
 
       {showCreateModal && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/70 backdrop-blur-sm p-4">
-          <div className="w-full max-w-lg max-h-[calc(100dvh-1rem)] overflow-hidden bg-zinc-950 border border-white/10 rounded-2xl shadow-xl">
+          <div className="w-full max-w-3xl max-h-[calc(100dvh-1rem)] overflow-hidden bg-zinc-950 border border-white/10 rounded-2xl shadow-xl">
             <form className="flex max-h-[calc(100dvh-1rem)] flex-col" onSubmit={handleCreate}>
               <div className="shrink-0 border-b border-white/10 p-6">
                 <h2 className="text-xl font-bold text-white mb-1">Add NPC</h2>
@@ -367,34 +405,58 @@ export default function Npcs() {
               </div>
 
               <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain p-6">
-                <fieldset disabled={isSaving} className="space-y-4 disabled:opacity-60">
-                  <div>
-                    <label className="block text-sm text-zinc-400 mb-1">Name</label>
-                    <input
-                      type="text"
-                      required
-                      value={formData.name}
-                      onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                      className="w-full px-3 py-2 bg-white/5 border border-white/10 rounded-xl text-white focus:outline-none focus:border-purple-500/50"
-                    />
-                  </div>
+                <fieldset disabled={isSaving} className="space-y-6 disabled:opacity-60">
+                  <section className="space-y-3">
+                    <h3 className="text-xs font-semibold uppercase tracking-[0.2em] text-zinc-500">
+                      Identity
+                    </h3>
+                    <div className="grid grid-cols-1 gap-4 md:grid-cols-[1.2fr_0.8fr]">
+                      <label className="block text-sm text-zinc-400">
+                        <span className="mb-1 block">Name</span>
+                        <input
+                          type="text"
+                          required
+                          value={formData.name}
+                          onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                          className="w-full px-3 py-2 bg-white/5 border border-white/10 rounded-xl text-white focus:outline-none focus:border-purple-500/50"
+                        />
+                      </label>
+                      <label className="block text-sm text-zinc-400">
+                        <span className="mb-1 block">Title</span>
+                        <input
+                          type="text"
+                          value={formData.title}
+                          onChange={(e) => setFormData({ ...formData, title: e.target.value })}
+                          className="w-full px-3 py-2 bg-white/5 border border-white/10 rounded-xl text-white focus:outline-none focus:border-purple-500/50"
+                        />
+                      </label>
+                    </div>
+                  </section>
 
-                  <div>
-                    <label className="block text-sm text-zinc-400 mb-1">Title</label>
-                    <input
-                      type="text"
-                      value={formData.title}
-                      onChange={(e) => setFormData({ ...formData, title: e.target.value })}
-                      className="w-full px-3 py-2 bg-white/5 border border-white/10 rounded-xl text-white focus:outline-none focus:border-purple-500/50"
-                    />
-                  </div>
-
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                    <div>
-                      <label className="block text-sm text-zinc-400 mb-1">Role</label>
+                  <section className="space-y-3">
+                    <h3 className="text-xs font-semibold uppercase tracking-[0.2em] text-zinc-500">
+                      Metadata
+                    </h3>
+                    <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
+                      <label className="block text-sm text-zinc-400">
+                        <span className="mb-1 block">Type</span>
                       <select
                         value={formData.type}
                         onChange={(e) => setFormData({ ...formData, type: e.target.value })}
+                        className="w-full px-3 py-2 bg-white/5 border border-white/10 rounded-xl text-white focus:outline-none focus:border-purple-500/50"
+                      >
+                        {NPC_TYPES.map((type) => (
+                          <option key={type} value={type}>
+                          {NPC_TYPE_LABELS[type]}
+                          </option>
+                        ))}
+                      </select>
+                      </label>
+                      <label className="block text-sm text-zinc-400">
+                        <span className="mb-1 block">Role</span>
+                      <select
+                        value={formData.role}
+                        onChange={(e) => setFormData({ ...formData, role: e.target.value })}
                         className="w-full px-3 py-2 bg-white/5 border border-white/10 rounded-xl text-white focus:outline-none focus:border-purple-500/50"
                       >
                         {NPC_ROLES.map((role) => (
@@ -403,9 +465,9 @@ export default function Npcs() {
                           </option>
                         ))}
                       </select>
-                    </div>
-                    <div>
-                      <label className="block text-sm text-zinc-400 mb-1">Status</label>
+                      </label>
+                      <label className="block text-sm text-zinc-400">
+                        <span className="mb-1 block">Status</span>
                       <select
                         value={formData.status}
                         onChange={(e) => setFormData({ ...formData, status: e.target.value })}
@@ -417,46 +479,59 @@ export default function Npcs() {
                           </option>
                         ))}
                       </select>
+                      </label>
                     </div>
-                  </div>
+                  </section>
 
-                  <div>
-                    <label className="block text-sm text-zinc-400 mb-1">Summary</label>
+                  <section className="space-y-3">
+                    <h3 className="text-xs font-semibold uppercase tracking-[0.2em] text-zinc-500">
+                      Player-facing details
+                    </h3>
+                    <label className="block text-sm text-zinc-400">
+                      <span className="mb-1 block">Summary</span>
                     <input
                       type="text"
                       value={formData.summary}
                       onChange={(e) => setFormData({ ...formData, summary: e.target.value })}
                       className="w-full px-3 py-2 bg-white/5 border border-white/10 rounded-xl text-white focus:outline-none focus:border-purple-500/50"
                     />
-                  </div>
+                    </label>
 
-                  <div>
-                    <label className="block text-sm text-zinc-400 mb-1">Description</label>
+                    <label className="block text-sm text-zinc-400">
+                      <span className="mb-1 block">Description</span>
                     <textarea
-                      rows={3}
+                      rows={7}
                       value={formData.description}
                       onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-                      className="w-full px-3 py-2 bg-white/5 border border-white/10 rounded-xl text-white focus:outline-none focus:border-purple-500/50 resize-none"
+                      className="w-full px-3 py-2 bg-white/5 border border-white/10 rounded-xl text-white focus:outline-none focus:border-purple-500/50 resize-y min-h-36"
                     />
-                  </div>
+                    </label>
 
-                  <div>
-                    <label className="block text-sm text-zinc-400 mb-1">Image URL</label>
+                    <label className="block text-sm text-zinc-400">
+                      <span className="mb-1 block">Image URL</span>
                     <input
                       type="url"
                       value={formData.imageUrl}
                       onChange={(e) => setFormData({ ...formData, imageUrl: e.target.value })}
                       className="w-full px-3 py-2 bg-white/5 border border-white/10 rounded-xl text-white focus:outline-none focus:border-purple-500/50"
                     />
-                  </div>
+                    </label>
+                  </section>
 
-                  <div>
-                    <label className="block text-sm text-zinc-400 mb-1">Visibility</label>
-                    <div className="flex gap-3">
+                  <section className="space-y-3 rounded-2xl border border-white/10 bg-white/[0.03] p-4">
+                    <div>
+                      <h3 className="text-xs font-semibold uppercase tracking-[0.2em] text-zinc-500">
+                        Visibility
+                      </h3>
+                      <p className="mt-1 text-xs text-zinc-500">
+                        Controls whether players can see this NPC.
+                      </p>
+                    </div>
+                    <div className="flex flex-col gap-3 sm:flex-row">
                       <button
                         type="button"
                         onClick={() => setFormData({ ...formData, visibility: "public" })}
-                        className={`px-3 py-2 rounded-xl text-sm border ${
+                        className={`px-4 py-2 rounded-xl text-sm border text-left ${
                           formData.visibility === "public"
                             ? "border-emerald-500 bg-emerald-500/10 text-emerald-300"
                             : "border-white/10 bg-white/5 text-zinc-300"
@@ -467,7 +542,7 @@ export default function Npcs() {
                       <button
                         type="button"
                         onClick={() => setFormData({ ...formData, visibility: "gm-only" })}
-                        className={`px-3 py-2 rounded-xl text-sm border ${
+                        className={`px-4 py-2 rounded-xl text-sm border text-left ${
                           formData.visibility === "gm-only"
                             ? "border-red-500 bg-red-500/10 text-red-300"
                             : "border-white/10 bg-white/5 text-zinc-300"
@@ -476,17 +551,22 @@ export default function Npcs() {
                         GM only
                       </button>
                     </div>
-                  </div>
+                  </section>
 
-                  <div>
-                    <label className="block text-sm text-zinc-400 mb-1">GM Notes</label>
+                  <section className="space-y-3">
+                    <h3 className="text-xs font-semibold uppercase tracking-[0.2em] text-zinc-500">
+                      GM context
+                    </h3>
+                    <label className="block text-sm text-zinc-400">
+                      <span className="mb-1 block">GM Notes</span>
                     <textarea
-                      rows={3}
+                      rows={7}
                       value={formData.gmNotes}
                       onChange={(e) => setFormData({ ...formData, gmNotes: e.target.value })}
-                      className="w-full px-3 py-2 bg-white/5 border border-white/10 rounded-xl text-white focus:outline-none focus:border-purple-500/50 resize-none"
+                      className="w-full px-3 py-2 bg-white/5 border border-white/10 rounded-xl text-white focus:outline-none focus:border-purple-500/50 resize-y min-h-36"
                     />
-                  </div>
+                    </label>
+                  </section>
                 </fieldset>
               </div>
 
