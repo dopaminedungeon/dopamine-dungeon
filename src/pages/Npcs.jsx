@@ -134,6 +134,7 @@ export default function Npcs() {
         STATUS_LABELS[npcStatus],
         npc.summary,
         npc.description,
+        ...(Array.isArray(npc.aliases) ? npc.aliases : []),
       ]
         .filter(Boolean)
         .join(" ")
