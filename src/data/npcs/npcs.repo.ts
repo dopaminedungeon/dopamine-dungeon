@@ -1,0 +1,86 @@
+import { apiFetch } from "../api/apiClient";
+
+export type NpcRecord = {
+  id: string;
+  campaignId?: string;
+  name: string;
+  title?: string;
+  type?: string;
+  status?: string;
+  visibility?: "public" | "gm-only";
+  summary?: string;
+  description?: string;
+  gmNotes?: string;
+  imageUrl?: string;
+  createdAt?: string;
+  updatedAt?: string;
+};
+
+function normalizeNpc(input: any = {}): NpcRecord {
+  return {
+    ...input,
+    id: String(input?.id || ""),
+    name: String(input?.name || ""),
+    title: String(input?.title || ""),
+    type: String(input?.type || "unknown"),
+    status: String(input?.status || "active"),
+    visibility: input?.visibility === "gm-only" ? "gm-only" : "public",
+    summary: String(input?.summary || ""),
+    description: String(input?.description || ""),
+    gmNotes: String(input?.gmNotes || ""),
+    imageUrl: String(input?.imageUrl || ""),
+  };
+}
+
+function getNpcsEndpoint(campaignId: string, id?: string) {
+  const params = new URLSearchParams({
+    entity: "npcs",
+    campaignId,
+  });
+
+  if (id) {
+    params.set("npcId", id);
+  }
+
+  return `/api/worldbuilding?${params.toString()}`;
+}
+
+export const npcsRepo = {
+  async getAll(campaignId: string) {
+    const response = await apiFetch<{
+      ok: true;
+      npcs: unknown[];
+    }>(getNpcsEndpoint(campaignId));
+
+    return (response.npcs ?? []).map(normalizeNpc);
+  },
+
+  async getById(campaignId: string, id: string) {
+    const response = await apiFetch<{
+      ok: true;
+      npc: unknown | null;
+    }>(
+      getNpcsEndpoint(campaignId, id)
+    );
+
+    return response.npc ? normalizeNpc(response.npc) : null;
+  },
+
+  async upsert(campaignId: string, npc: NpcRecord) {
+    const response = await apiFetch<{ ok: true; npc: unknown }>(
+      getNpcsEndpoint(campaignId),
+      {
+        method: "PUT",
+        body: JSON.stringify({ npc }),
+      }
+    );
+
+    return normalizeNpc(response.npc || npc);
+  },
+
+  async remove(campaignId: string, id: string) {
+    await apiFetch(getNpcsEndpoint(campaignId, id), {
+      method: "DELETE",
+    });
+  },
+};

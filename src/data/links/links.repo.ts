@@ -40,7 +40,7 @@ export async function loadLinks(campaignId = getSelectedCampaignId()): Promise<L
   }
 
   const response = await apiFetch<{ ok: true; links: Link[] }>(
-    `/api/entity-links?campaignId=${encodeURIComponent(campaignId)}`
+    `/api/worldbuilding?resource=entityLinks&campaignId=${encodeURIComponent(campaignId)}`
   );
 
   links = Array.isArray(response.links) ? response.links : [];
@@ -71,7 +71,7 @@ export async function addLink(
   }
 
   const response = await apiFetch<{ ok: true; link: Link }>(
-    `/api/entity-links?campaignId=${encodeURIComponent(campaignId)}`,
+    `/api/worldbuilding?resource=entityLinks&campaignId=${encodeURIComponent(campaignId)}`,
     {
       method: "PUT",
       body: JSON.stringify({ link }),
@@ -130,7 +130,7 @@ export async function removeLink(
   if (!link) return;
 
   await apiFetch(
-    `/api/entity-links?campaignId=${encodeURIComponent(
+    `/api/worldbuilding?resource=entityLinks&campaignId=${encodeURIComponent(
       campaignId
     )}&linkId=${encodeURIComponent(linkId)}`,
     {
