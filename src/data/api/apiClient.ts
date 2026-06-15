@@ -185,7 +185,7 @@ export async function updateApiCampaign(input: {
   return apiFetch<{
     ok: true;
     campaign: unknown;
-  }>("/api/campaign-people", {
+  }>("/api/campaign-content?resource=campaignPeople", {
     method: "PATCH",
     body: JSON.stringify(input),
   });
@@ -208,11 +208,13 @@ export async function getApiCampaignPeople(campaignId: string) {
       campaignRole: string;
       characterIds: string[];
     }>;
-  }>(`/api/campaign-people?campaignId=${encodeURIComponent(campaignId)}`);
+  }>(
+    `/api/campaign-content?resource=campaignPeople&campaignId=${encodeURIComponent(campaignId)}`
+  );
 }
 
 export async function revokeApiCampaignInvite(campaignId: string, inviteId: string) {
-  return apiFetch<{ ok: true }>("/api/campaign-people", {
+  return apiFetch<{ ok: true }>("/api/campaign-content?resource=campaignPeople", {
     method: "DELETE",
     body: JSON.stringify({
       campaignId,
@@ -223,7 +225,7 @@ export async function revokeApiCampaignInvite(campaignId: string, inviteId: stri
 }
 
 export async function removeApiCampaignMember(campaignId: string, memberId: string) {
-  return apiFetch<{ ok: true }>("/api/campaign-people", {
+  return apiFetch<{ ok: true }>("/api/campaign-content?resource=campaignPeople", {
     method: "DELETE",
     body: JSON.stringify({
       campaignId,
@@ -252,7 +254,7 @@ export async function getApiWorkspacePeople(tenantId: string) {
       campaignRoles: string[];
       createdAt: string | null;
     }>;
-  }>(`/api/workspace-people?tenantId=${encodeURIComponent(tenantId)}`);
+  }>(`/api/workspace?resource=workspacePeople&tenantId=${encodeURIComponent(tenantId)}`);
 }
 
 export async function updateApiWorkspaceMemberRole(
@@ -260,7 +262,7 @@ export async function updateApiWorkspaceMemberRole(
   memberId: string,
   role: string
 ) {
-  return apiFetch<{ ok: true }>("/api/workspace-people", {
+  return apiFetch<{ ok: true }>("/api/workspace?resource=workspacePeople", {
     method: "PATCH",
     body: JSON.stringify({
       tenantId,
@@ -271,7 +273,7 @@ export async function updateApiWorkspaceMemberRole(
 }
 
 export async function removeApiWorkspaceMember(tenantId: string, memberId: string) {
-  return apiFetch<{ ok: true }>("/api/workspace-people", {
+  return apiFetch<{ ok: true }>("/api/workspace?resource=workspacePeople", {
     method: "DELETE",
     body: JSON.stringify({
       tenantId,
@@ -293,7 +295,9 @@ export async function getApiCharacterAssignments(campaignId: string) {
     assignedCharacterIds: string[];
     pendingAssignedCharacterIds: string[];
     characters: unknown[];
-  }>(`/api/character-assignments?campaignId=${encodeURIComponent(campaignId)}`);
+  }>(
+    `/api/campaign-content?resource=characterAssignments&campaignId=${encodeURIComponent(campaignId)}`
+  );
 }
 
 export async function assignApiCharacter(
@@ -301,17 +305,20 @@ export async function assignApiCharacter(
   userId: string,
   characterId: string
 ) {
-  return apiFetch<{ ok: true; assignment: unknown }>("/api/character-assignments", {
+  return apiFetch<{ ok: true; assignment: unknown }>(
+    "/api/campaign-content?resource=characterAssignments",
+    {
     method: "POST",
     body: JSON.stringify({ campaignId, userId, characterId }),
-  });
+    }
+  );
 }
 
 export async function unassignApiCharacter(
   campaignId: string,
   input: { assignmentId?: string; characterId?: string }
 ) {
-  return apiFetch<{ ok: true }>("/api/character-assignments", {
+  return apiFetch<{ ok: true }>("/api/campaign-content?resource=characterAssignments", {
     method: "DELETE",
     body: JSON.stringify({ campaignId, ...input }),
   });

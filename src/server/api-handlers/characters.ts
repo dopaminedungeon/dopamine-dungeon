@@ -6,12 +6,12 @@ import {
   requireCampaignGm,
   requireCampaignMember,
   resolveCampaignBySlug,
-} from "../src/server/access.js";
-import { setCorsHeaders } from "../src/server/cors.js";
-import { db } from "../src/server/db.js";
-import { characters } from "../db/schema/characters.js";
-import { characterAssignments } from "../db/schema/characterAssignments.js";
-import { invitations } from "../db/schema/invitations.js";
+} from "../access.js";
+import { setCorsHeaders } from "../cors.js";
+import { db } from "../db.js";
+import { characters } from "../../../db/schema/characters.js";
+import { characterAssignments } from "../../../db/schema/characterAssignments.js";
+import { invitations } from "../../../db/schema/invitations.js";
 
 type CharacterRow = typeof characters.$inferSelect;
 

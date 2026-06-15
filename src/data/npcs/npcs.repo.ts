@@ -32,12 +32,25 @@ function normalizeNpc(input: any = {}): NpcRecord {
   };
 }
 
+function getNpcsEndpoint(campaignId: string, id?: string) {
+  const params = new URLSearchParams({
+    entity: "npcs",
+    campaignId,
+  });
+
+  if (id) {
+    params.set("npcId", id);
+  }
+
+  return `/api/worldbuilding?${params.toString()}`;
+}
+
 export const npcsRepo = {
   async getAll(campaignId: string) {
     const response = await apiFetch<{
       ok: true;
       npcs: unknown[];
-    }>(`/api/npcs?campaignId=${encodeURIComponent(campaignId)}`);
+    }>(getNpcsEndpoint(campaignId));
 
     return (response.npcs ?? []).map(normalizeNpc);
   },
@@ -47,7 +60,7 @@ export const npcsRepo = {
       ok: true;
       npc: unknown | null;
     }>(
-      `/api/npcs?campaignId=${encodeURIComponent(campaignId)}&npcId=${encodeURIComponent(id)}`
+      getNpcsEndpoint(campaignId, id)
     );
 
     return response.npc ? normalizeNpc(response.npc) : null;
@@ -55,7 +68,7 @@ export const npcsRepo = {
 
   async upsert(campaignId: string, npc: NpcRecord) {
     const response = await apiFetch<{ ok: true; npc: unknown }>(
-      `/api/npcs?campaignId=${encodeURIComponent(campaignId)}`,
+      getNpcsEndpoint(campaignId),
       {
         method: "PUT",
         body: JSON.stringify({ npc }),
@@ -66,11 +79,8 @@ export const npcsRepo = {
   },
 
   async remove(campaignId: string, id: string) {
-    await apiFetch(
-      `/api/npcs?campaignId=${encodeURIComponent(campaignId)}&npcId=${encodeURIComponent(id)}`,
-      {
-        method: "DELETE",
-      }
-    );
+    await apiFetch(getNpcsEndpoint(campaignId, id), {
+      method: "DELETE",
+    });
   },
 };

@@ -6,15 +6,15 @@ import {
   requireCampaignGm,
   requireCampaignMember,
   resolveCampaignBySlug,
-} from "../src/server/access.js";
-import { setCorsHeaders } from "../src/server/cors.js";
-import { db } from "../src/server/db.js";
-import { entityLinks } from "../db/schema/entityLinks.js";
+} from "../access.js";
+import { setCorsHeaders } from "../cors.js";
+import { db } from "../db.js";
+import { entityLinks } from "../../../db/schema/entityLinks.js";
 import {
   assertAllowedEntityPair,
   assertAllowedLabelForPair,
-} from "../src/domain/links/link.rules.js";
-import type { EntityType, Link, LinkEndpoint } from "../src/domain/links/link.types.js";
+} from "../../domain/links/link.rules.js";
+import type { EntityType, Link, LinkEndpoint } from "../../domain/links/link.types.js";
 
 type EntityLinkRow = typeof entityLinks.$inferSelect;
 type EntityLinkInsert = typeof entityLinks.$inferInsert;
