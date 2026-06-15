@@ -6,6 +6,7 @@ export * from "./invitations.js";
 export * from "./sessions.js";
 export * from "./characters.js";
 export * from "./items.js";
+export * from "./npcs.js";
 export * from "./bag.js";
 export * from "./entityLinks.js";
 export * from "./characterAssignments.js";

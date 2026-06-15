@@ -1,41 +1,337 @@
 // src/pages/NpcProfile.jsx
-import React, { useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { useMode } from "../context/ModeContext.jsx";
+import { useCampaign } from "../context/CampaignContext";
 import {
   ArrowLeft,
-  MapPin,
-  Users,
   Eye,
   Lock,
-  Star,
-  Clock,
-  Tag,
+  Trash2,
+  Users,
 } from "lucide-react";
-import { MOCK_NPC_DATA } from "../data/mockNpcs.js";
+import { npcsRepo } from "../data/npcs/npcs.repo";
 
+const NPC_ROLES = ["ally", "neutral", "antagonist", "unknown"];
+const NPC_STATUSES = ["active", "missing", "dead", "unknown"];
+
+const ROLE_LABELS = {
+  ally: "Ally",
+  neutral: "Neutral",
+  antagonist: "Antagonist",
+  unknown: "Unknown",
+};
+
+const STATUS_LABELS = {
+  active: "Active",
+  missing: "Missing",
+  dead: "Dead",
+  unknown: "Unknown",
+};
+
+function normalizeRole(value) {
+  const role = String(value || "").trim().toLowerCase();
+  return NPC_ROLES.includes(role) ? role : "unknown";
+}
+
+function normalizeStatus(value) {
+  const status = String(value || "").trim().toLowerCase();
+  return NPC_STATUSES.includes(status) ? status : "unknown";
+}
+
+function renderInlineMarkdown(text) {
+  const raw = String(text || "");
+  const parts = [];
+  const pattern = /(\*\*[^*]+\*\*|_[^_]+_|\*[^*]+\*)/g;
+  let lastIndex = 0;
+  let match;
+
+  while ((match = pattern.exec(raw)) !== null) {
+    if (match.index > lastIndex) {
+      parts.push(raw.slice(lastIndex, match.index));
+    }
+
+    const token = match[0];
+    if (token.startsWith("**")) {
+      parts.push(<strong key={parts.length}>{token.slice(2, -2)}</strong>);
+    } else {
+      parts.push(<em key={parts.length}>{token.slice(1, -1)}</em>);
+    }
+
+    lastIndex = match.index + token.length;
+  }
+
+  if (lastIndex < raw.length) {
+    parts.push(raw.slice(lastIndex));
+  }
+
+  return parts.map((part, index) =>
+    typeof part === "string" ? <React.Fragment key={index}>{part}</React.Fragment> : part
+  );
+}
+
+function renderMarkdownBlock(value, placeholder = "") {
+  const text = String(value || "").trim();
+  if (!text) {
+    return <p className="text-zinc-500 text-sm italic">{placeholder}</p>;
+  }
+
+  const nodes = [];
+  let paragraphLines = [];
+  let listItems = [];
+
+  const flushParagraph = () => {
+    if (paragraphLines.length === 0) return;
+    const content = paragraphLines.join("\n");
+    nodes.push(
+      <p key={`p-${nodes.length}`} className="whitespace-pre-line leading-6">
+        {renderInlineMarkdown(content)}
+      </p>
+    );
+    paragraphLines = [];
+  };
+
+  const flushList = () => {
+    if (listItems.length === 0) return;
+    nodes.push(
+      <ul key={`ul-${nodes.length}`} className="list-disc space-y-1 pl-5">
+        {listItems.map((item, index) => (
+          <li key={index}>{renderInlineMarkdown(item)}</li>
+        ))}
+      </ul>
+    );
+    listItems = [];
+  };
+
+  text.split("\n").forEach((line) => {
+    const trimmed = line.trim();
+
+    if (!trimmed) {
+      flushParagraph();
+      flushList();
+      return;
+    }
+
+    const heading = trimmed.match(/^(#{1,3})\s+(.+)$/);
+    if (heading) {
+      flushParagraph();
+      flushList();
+
+      const level = heading[1].length;
+      const className =
+        level === 1
+          ? "text-xl font-semibold text-white"
+          : level === 2
+            ? "text-lg font-semibold text-white"
+            : "text-base font-semibold text-zinc-100";
+
+      nodes.push(
+        <h3 key={`h-${nodes.length}`} className={className}>
+          {renderInlineMarkdown(heading[2])}
+        </h3>
+      );
+      return;
+    }
+
+    const listItem = trimmed.match(/^[-*]\s+(.+)$/);
+    if (listItem) {
+      flushParagraph();
+      listItems.push(listItem[1]);
+      return;
+    }
+
+    flushList();
+    paragraphLines.push(line.trimEnd());
+  });
+
+  flushParagraph();
+  flushList();
+
+  return <div className="space-y-3 text-sm text-zinc-300">{nodes}</div>;
+}
+
+function buildDraft(npc) {
+  return {
+    id: npc?.id || "",
+    name: npc?.name || "",
+    title: npc?.title || "",
+    type: normalizeRole(npc?.type),
+    status: normalizeStatus(npc?.status || "active"),
+    visibility: npc?.visibility === "gm-only" ? "gm-only" : "public",
+    summary: npc?.summary || "",
+    description: npc?.description || "",
+    gmNotes: npc?.gmNotes || "",
+    imageUrl: npc?.imageUrl || "",
+  };
+}
 
 export default function NpcProfile() {
   const { id } = useParams();
   const navigate = useNavigate();
   const { isGM } = useMode();
+  const { selectedCampaignId } = useCampaign();
 
+  const [npc, setNpc] = useState(null);
+  const [draft, setDraft] = useState(null);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState("");
   const [isEditing, setIsEditing] = useState(false);
-  const [editableNpc, setEditableNpc] = useState(null);
+  const [isSaving, setIsSaving] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
 
-  const baseNpc = MOCK_NPC_DATA[id];
-  const npc = isEditing && editableNpc ? editableNpc : baseNpc;
+  useEffect(() => {
+    let cancelled = false;
 
-  // Hard gate: players should not be able to open GM-only NPCs via direct URL.
-  if (!isGM && npc && npc.visibility === "gm-only") {
+    async function loadNpc() {
+      if (!selectedCampaignId || !id) {
+        setNpc(null);
+        setIsLoading(false);
+        return;
+      }
+
+      try {
+        setIsLoading(true);
+        setError("");
+        const data = await npcsRepo.getById(selectedCampaignId, id);
+        if (!cancelled) {
+          setNpc(data);
+          setDraft(data ? buildDraft(data) : null);
+        }
+      } catch (loadError) {
+        console.error("[NpcProfile] Failed to load NPC", loadError);
+        if (!cancelled) {
+          setNpc(null);
+          setError("Unable to load this NPC right now.");
+        }
+      } finally {
+        if (!cancelled) setIsLoading(false);
+      }
+    }
+
+    loadNpc();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [selectedCampaignId, id]);
+
+  const visibleDescription = useMemo(
+    () => [npc?.summary, npc?.description].filter(Boolean).join("\n\n"),
+    [npc]
+  );
+
+  const updateDraft = (field, value) => {
+    setDraft((current) => ({
+      ...(current || buildDraft(npc)),
+      [field]: value,
+    }));
+  };
+
+  const handleStartEdit = () => {
+    if (!isGM || !npc || isSaving || isDeleting) return;
+    setDraft(buildDraft(npc));
+    setIsEditing(true);
+  };
+
+  const handleCancelEdit = () => {
+    if (isSaving) return;
+    setDraft(buildDraft(npc));
+    setIsEditing(false);
+  };
+
+  const handleSave = async () => {
+    if (!isGM || !selectedCampaignId || !draft || isSaving) return;
+
+    try {
+      setIsSaving(true);
+      const savedNpc = await npcsRepo.upsert(selectedCampaignId, {
+        ...draft,
+        name: draft.name.trim(),
+        title: draft.title.trim(),
+        summary: draft.summary.trim(),
+        description: draft.description.trim(),
+        gmNotes: draft.gmNotes.trim(),
+        imageUrl: draft.imageUrl.trim(),
+      });
+      setNpc(savedNpc);
+      setDraft(buildDraft(savedNpc));
+      setIsEditing(false);
+    } catch (saveError) {
+      console.error("[NpcProfile] Failed to save NPC", saveError);
+      setError("Unable to save this NPC right now.");
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const handleDelete = async () => {
+    if (!isGM || !selectedCampaignId || !npc || isDeleting || isSaving) return;
+    const confirmed = window.confirm(`Delete ${npc.name || "this NPC"}?`);
+    if (!confirmed) return;
+
+    try {
+      setIsDeleting(true);
+      await npcsRepo.remove(selectedCampaignId, npc.id);
+      navigate("/npcs");
+    } catch (deleteError) {
+      console.error("[NpcProfile] Failed to delete NPC", deleteError);
+      setError("Unable to delete this NPC right now.");
+      setIsDeleting(false);
+    }
+  };
+
+  if (!selectedCampaignId) {
+    return (
+      <main className="flex-1 overflow-auto flex items-center justify-center p-8">
+        <div className="max-w-md rounded-2xl border border-white/10 bg-white/5 p-6 text-center">
+          <h1 className="text-xl font-semibold text-white">Select a campaign</h1>
+          <p className="mt-2 text-sm text-zinc-400">
+            NPC profiles are scoped to the active campaign.
+          </p>
+        </div>
+      </main>
+    );
+  }
+
+  if (isLoading) {
+    return (
+      <main className="p-8 text-zinc-400">
+        Loading NPC...
+      </main>
+    );
+  }
+
+  if (!npc) {
+    return (
+      <main className="p-8 text-white">
+        <div className="max-w-xl bg-white/5 border border-white/10 rounded-2xl p-8">
+          <h1 className="text-2xl font-bold">NPC not found</h1>
+          <p className="mt-2 text-sm text-zinc-400">
+            This NPC does not exist in the active campaign, or it is not visible in the current mode.
+          </p>
+          {error ? <p className="mt-3 text-sm text-rose-300">{error}</p> : null}
+          <button
+            type="button"
+            onClick={() => navigate("/npcs")}
+            className="mt-5 px-4 py-2 bg-white/10 rounded-xl text-zinc-300 hover:bg-white/20"
+          >
+            Back to NPCs
+          </button>
+        </div>
+      </main>
+    );
+  }
+
+  if (!isGM && npc.visibility === "gm-only") {
     return (
       <main className="flex-1 p-8 overflow-auto">
         <div className="max-w-xl mx-auto bg-white/5 border border-white/10 rounded-2xl p-8 text-center">
           <h1 className="text-2xl font-bold text-white mb-2">DM Eyes Only</h1>
           <p className="text-zinc-400 text-sm mb-4">
-            This NPC is marked GM-only. Players don’t get to see it until it’s revealed in play. 💜
+            This NPC is marked GM-only.
           </p>
           <button
+            type="button"
             className="mt-2 px-4 py-2 rounded-xl bg-white/10 text-white hover:bg-white/20"
             onClick={() => navigate("/npcs")}
           >
@@ -46,50 +342,13 @@ export default function NpcProfile() {
     );
   }
 
-  const handleFieldChange = (field, value) => {
-    setEditableNpc((prev) => ({
-      ...(prev || baseNpc || {}),
-      [field]: value,
-    }));
-  };
-
-  const handleToggleEdit = () => {
-    if (!isGM) return;
-
-    if (!isEditing) {
-      // Enter edit mode: seed editableNpc from baseNpc (or keep existing edits)
-      setEditableNpc((prev) => prev || baseNpc || {});
-      setIsEditing(true);
-    } else {
-      // Leaving edit mode: "save" into mock store for now
-      if (editableNpc && baseNpc) {
-        MOCK_NPC_DATA[id] = editableNpc;
-      }
-      setIsEditing(false);
-    }
-  };
-
-  if (!npc) {
-    return (
-      <div className="p-8 text-white">
-        <h1 className="text-3xl font-bold">NPC Not Found</h1>
-        <button
-          onClick={() => navigate(-1)}
-          className="mt-4 px-4 py-2 bg-white/10 rounded-xl text-zinc-300 hover:bg-white/20"
-        >
-          Go Back
-        </button>
-      </div>
-    );
-  }
-
-  const starCount = Math.min(5, Math.ceil((npc.level || 0) / 10));
+  const viewNpc = isEditing && draft ? draft : npc;
 
   return (
     <main className="p-8">
-      {/* Top bar: Back + Edit */}
-      <div className="flex items-center justify-between mb-6">
+      <div className="flex items-center justify-between gap-4 mb-6">
         <button
+          type="button"
           className="flex items-center gap-2 text-zinc-400 hover:text-white"
           onClick={() => navigate("/npcs")}
         >
@@ -97,59 +356,100 @@ export default function NpcProfile() {
           Back to NPCs
         </button>
 
-        {isGM && (
-          <button
-            onClick={handleToggleEdit}
-            className="px-3 py-1 text-xs rounded-full border border-white/20 text-zinc-200 hover:bg-white/10 transition"
-          >
-            {isEditing ? "Done" : "Edit"}
-          </button>
-        )}
+        {isGM ? (
+          <div className="flex items-center gap-2">
+            {isEditing ? (
+              <>
+                <button
+                  type="button"
+                  onClick={handleCancelEdit}
+                  disabled={isSaving}
+                  className="px-3 py-1.5 text-xs rounded-full border border-white/20 text-zinc-200 hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-50 transition"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  onClick={handleSave}
+                  disabled={isSaving || !draft?.name?.trim()}
+                  className="px-3 py-1.5 text-xs rounded-full border border-indigo-400/50 bg-indigo-500/20 text-white hover:bg-indigo-500/30 disabled:cursor-not-allowed disabled:opacity-50 transition"
+                >
+                  {isSaving ? "Saving..." : "Save"}
+                </button>
+              </>
+            ) : (
+              <>
+                <button
+                  type="button"
+                  onClick={handleStartEdit}
+                  disabled={isDeleting}
+                  className="px-3 py-1.5 text-xs rounded-full border border-white/20 text-zinc-200 hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-50 transition"
+                >
+                  Edit
+                </button>
+                <button
+                  type="button"
+                  onClick={handleDelete}
+                  disabled={isDeleting}
+                  className="inline-flex items-center gap-1 px-3 py-1.5 text-xs rounded-full border border-rose-400/40 bg-rose-500/15 text-rose-100 hover:bg-rose-500/25 disabled:cursor-not-allowed disabled:opacity-50 transition"
+                >
+                  <Trash2 className="w-3 h-3" />
+                  {isDeleting ? "Deleting..." : "Delete"}
+                </button>
+              </>
+            )}
+          </div>
+        ) : null}
       </div>
 
-      {/* HEADER – full-width core identity, like ItemProfile */}
-      <div className="bg-white/5 border border-white/10 rounded-2xl p-6 mb-6 backdrop-blur-sm">
-        <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
-          <div className="flex items-center gap-4">
-            <div className="w-14 h-14 rounded-2xl bg-linear-to-br from-purple-500 to-pink-500 flex items-center justify-center text-white text-2xl font-bold">
-              {(editableNpc?.name || npc.name || "?").charAt(0)}
+      {error ? (
+        <div className="mb-4 rounded-xl border border-rose-500/30 bg-rose-500/10 px-4 py-3 text-sm text-rose-100">
+          {error}
+        </div>
+      ) : null}
+
+      <section className="bg-white/5 border border-white/10 rounded-2xl p-6 mb-6 backdrop-blur-sm">
+        <div className="flex flex-col md:flex-row md:items-start md:justify-between gap-4">
+          <div className="flex items-start gap-4 min-w-0">
+            <div className="w-14 h-14 rounded-2xl bg-linear-to-br from-purple-500 to-pink-500 flex items-center justify-center text-white text-2xl font-bold overflow-hidden shrink-0">
+              {viewNpc.imageUrl ? (
+                <img src={viewNpc.imageUrl} alt="" className="h-full w-full object-cover" />
+              ) : (
+                (viewNpc.name || "?").charAt(0)
+              )}
             </div>
-            <div>
-              {isGM && isEditing ? (
+            <div className="min-w-0">
+              {isEditing ? (
                 <input
-                  className="bg-transparent border-b border-white/20 text-2xl font-bold text-white focus:outline-none focus:border-purple-400"
-                  value={editableNpc?.name ?? npc.name ?? ""}
-                  onChange={(e) => handleFieldChange("name", e.target.value)}
+                  className="w-full bg-transparent border-b border-white/20 text-2xl font-bold text-white focus:outline-none focus:border-purple-400"
+                  value={draft?.name ?? ""}
+                  onChange={(e) => updateDraft("name", e.target.value)}
                 />
               ) : (
-                <h1 className="text-2xl font-bold text-white">{npc.name || "Unknown NPC"}</h1>
+                <h1 className="text-2xl font-bold text-white">{viewNpc.name || "Unnamed NPC"}</h1>
               )}
 
-              <p className="text-zinc-400 text-sm flex items-center gap-2 mt-1">
-                <MapPin className="w-4 h-4 text-zinc-500" />
-                <span>
-                  {isGM && isEditing ? (
-                    <input
-                      className="bg-transparent border-b border-white/20 text-sm text-zinc-200 focus:outline-none focus:border-purple-400"
-                      value={editableNpc?.location ?? npc.location ?? ""}
-                      onChange={(e) => handleFieldChange("location", e.target.value)}
-                    />
-                  ) : (
-                    npc.location || "Unknown location"
-                  )}
-                </span>
-              </p>
+              {isEditing ? (
+                <input
+                  className="mt-2 w-full bg-transparent border-b border-white/20 text-sm text-zinc-200 focus:outline-none focus:border-purple-400"
+                  placeholder="Title"
+                  value={draft?.title ?? ""}
+                  onChange={(e) => updateDraft("title", e.target.value)}
+                />
+              ) : viewNpc.title ? (
+                <p className="mt-1 text-sm text-zinc-400">{viewNpc.title}</p>
+              ) : null}
             </div>
           </div>
 
-          <div className="flex flex-col items-end gap-2 md:justify-end">
-            {isGM && isEditing ? (
+          <div className="flex flex-col items-start md:items-end gap-2">
+            {isEditing ? (
               <div className="flex flex-wrap items-center gap-2">
                 <button
                   type="button"
-                  onClick={() => handleFieldChange("visibility", "public")}
+                  onClick={() => updateDraft("visibility", "public")}
                   className={`inline-flex items-center gap-1 px-3 py-1 rounded-full text-xs font-semibold border transition ${
-                    (editableNpc?.visibility ?? npc.visibility) === "public"
+                    draft?.visibility === "public"
                       ? "bg-emerald-500/20 text-emerald-200 border-emerald-500/40"
                       : "bg-white/5 text-zinc-300 border-white/10 hover:bg-white/10"
                   }`}
@@ -159,9 +459,9 @@ export default function NpcProfile() {
                 </button>
                 <button
                   type="button"
-                  onClick={() => handleFieldChange("visibility", "gm-only")}
+                  onClick={() => updateDraft("visibility", "gm-only")}
                   className={`inline-flex items-center gap-1 px-3 py-1 rounded-full text-xs font-semibold border transition ${
-                    (editableNpc?.visibility ?? npc.visibility) === "gm-only"
+                    draft?.visibility === "gm-only"
                       ? "bg-red-500/20 text-red-200 border-red-500/40"
                       : "bg-white/5 text-zinc-300 border-white/10 hover:bg-white/10"
                   }`}
@@ -170,7 +470,7 @@ export default function NpcProfile() {
                   GM only
                 </button>
               </div>
-            ) : (editableNpc?.visibility ?? npc.visibility) === "gm-only" ? (
+            ) : viewNpc.visibility === "gm-only" ? (
               <span className="inline-flex items-center gap-1 px-3 py-1 rounded-full text-xs font-semibold bg-red-500/20 text-red-300 border border-red-500/40">
                 <Lock className="w-3 h-3" />
                 GM ONLY
@@ -181,342 +481,100 @@ export default function NpcProfile() {
                 Player-visible
               </span>
             )}
+            <span className="inline-flex items-center gap-1 px-3 py-1 rounded-full text-xs bg-white/5 text-zinc-300 border border-white/10">
+              <Users className="w-3 h-3" />
+              {ROLE_LABELS[normalizeRole(viewNpc.type)]} / {STATUS_LABELS[normalizeStatus(viewNpc.status)]}
+            </span>
           </div>
         </div>
+      </section>
 
-        {isGM && isEditing ? (
-          <textarea
-            rows={3}
-            className="mt-4 w-full bg-white/5 border border-white/10 rounded-xl text-sm text-zinc-100 px-3 py-2 focus:outline-none focus:border-purple-400"
-            value={editableNpc?.description ?? npc.description ?? ""}
-            onChange={(e) => handleFieldChange("description", e.target.value)}
-          />
-        ) : (
-          <p className="mt-4 text-zinc-300 text-sm leading-relaxed">{npc.description}</p>
-        )}
-      </div>
-
-      {/* Main layout grid:
-         - GM mode: 2 columns (player-safe + GM zone)
-         - Player mode: 1 column full-width (player-safe only) */}
-      <div className={`grid grid-cols-1 gap-6 ${isGM ? "xl:grid-cols-[minmax(0,2fr)_minmax(0,1.4fr)]" : ""}`}>
-        {/* LEFT COLUMN – PLAYER SAFE */}
-        <div className="space-y-6">
-          {/* What the party knows */}
-          <div className="bg-white/5 border border-white/10 rounded-2xl p-6 backdrop-blur-sm">
-            <h2 className="text-lg font-semibold text-white mb-3">What the party knows</h2>
-            {isGM && isEditing ? (
-              <textarea
-                rows={4}
-                className="w-full bg-white/5 border border-white/10 rounded-xl text-sm text-zinc-100 px-3 py-2 focus:outline-none focus:border-purple-400"
-                value={editableNpc?.playerKnownInfo ?? npc.playerKnownInfo ?? ""}
-                onChange={(e) => handleFieldChange("playerKnownInfo", e.target.value)}
-              />
-            ) : (
-              <p className="text-zinc-400 text-sm leading-relaxed">
-                {npc.playerKnownInfo ||
-                  "Placeholder: player-known facts about this NPC. You’ll later replace this with real notes from your sessions (public motives, history they’ve revealed, deals made, promises, etc.)."}
-              </p>
-            )}
-          </div>
-
-          {/* Appearance & quirks */}
-          <div className="bg-white/5 border border-white/10 rounded-2xl p-6 backdrop-blur-sm">
-            <h2 className="text-lg font-semibold text-white mb-3">Appearance & quirks</h2>
-            {isGM && isEditing ? (
-              <textarea
-                rows={4}
-                className="w-full bg-white/5 border border-white/10 rounded-xl text-sm text-zinc-100 px-3 py-2 focus:outline-none focus:border-purple-400"
-                value={editableNpc?.appearanceQuirks ?? npc.appearanceQuirks ?? ""}
-                onChange={(e) => handleFieldChange("appearanceQuirks", e.target.value)}
-              />
-            ) : (
-              <p className="text-zinc-400 text-sm leading-relaxed">
-                {npc.appearanceQuirks ||
-                  "Placeholder: visual description, mannerisms, speech patterns, recurring gestures, and any memorable quirks the players notice."}
-              </p>
-            )}
-          </div>
-
-          {/* Player-facing lore blurbs */}
-          <div className="bg-white/5 border border-white/10 rounded-2xl p-6 backdrop-blur-sm">
-            <h2 className="text-lg font-semibold text-white mb-3">Player lore</h2>
-            {isGM && isEditing ? (
-              <textarea
-                rows={4}
-                className="w-full bg-white/5 border border-white/10 rounded-xl text-sm text-zinc-100 px-3 py-2 focus:outline-none focus:border-purple-400"
-                value={editableNpc?.playerLore ?? npc.playerLore ?? ""}
-                onChange={(e) => handleFieldChange("playerLore", e.target.value)}
-              />
-            ) : (
-              <p className="text-zinc-400 text-sm leading-relaxed">
-                {npc.playerLore ||
-                  "Placeholder: legends, rumors and stories about this NPC that are safe for the players to know. Use this to keep the “public myth” consistent."}
-              </p>
-            )}
-          </div>
-
-          {/* Relationship to party (player-safe view) */}
-          <div className="bg-white/5 border border-white/10 rounded-2xl p-6 backdrop-blur-sm">
-            <h2 className="text-lg font-semibold text-white mb-3">Relationship to the party</h2>
-            {isGM && isEditing ? (
-              <textarea
-                rows={3}
-                className="w-full bg-white/5 border border-white/10 rounded-xl text-sm text-zinc-100 px-3 py-2 focus:outline-none focus:border-purple-400"
-                value={editableNpc?.relationshipToParty ?? npc.relationshipToParty ?? ""}
-                onChange={(e) => handleFieldChange("relationshipToParty", e.target.value)}
-              />
-            ) : (
-              <p className="text-zinc-400 text-sm leading-relaxed">
-                {npc.relationshipToParty ||
-                  "Placeholder: how the party currently perceives this NPC (ally, wary, hostile, indebted, suspicious, etc.). Later we’ll sync this with your relationship trackers."}
-              </p>
-            )}
-          </div>
-
-          {/* Sessions involving this NPC */}
-          <div className="bg-white/5 border border-white/10 rounded-2xl p-6 backdrop-blur-sm">
-            <h2 className="text-lg font-semibold text-white mb-3">Sessions involving this NPC</h2>
-            {isGM && isEditing ? (
-              <textarea
-                rows={3}
-                className="w-full bg-white/5 border border-white/10 rounded-xl text-sm text-zinc-100 px-3 py-2 focus:outline-none focus:border-purple-400"
-                value={editableNpc?.sessionsInvolving ?? npc.sessionsInvolving ?? ""}
-                onChange={(e) => handleFieldChange("sessionsInvolving", e.target.value)}
-              />
-            ) : (
-              <p className="text-zinc-400 text-sm leading-relaxed">
-                {npc.sessionsInvolving ||
-                  "Placeholder list of sessions where this NPC appeared. Later this will auto-link to Session profiles (first appearance, major turning points, betrayals, deals, etc.)."}
-              </p>
-            )}
-          </div>
-        </div>
-
-        {/* RIGHT COLUMN – GM-ONLY ZONE */}
-        {isGM && (
-          <div className="space-y-6">
-            {/* Combat / role profile (GM-only fields: type, CR, health) */}
-            <div className="bg-white/5 border border-white/10 rounded-2xl p-6 backdrop-blur-sm">
-              <h2 className="text-lg font-semibold text-white mb-3">GM Combat / Role Profile</h2>
-              <div className="grid grid-cols-2 gap-4 mb-4 text-sm">
-                <div>
-                  <p className="text-zinc-500 text-xs">Type</p>
-                  {isEditing ? (
-                    <input
-                      className="w-full bg-white/5 border border-white/10 rounded-xl px-2 py-1 text-sm text-zinc-100 focus:outline-none focus:border-purple-400"
-                      value={editableNpc?.type ?? npc.type ?? ""}
-                      onChange={(e) => handleFieldChange("type", e.target.value)}
-                    />
-                  ) : (
-                    <p className="text-white font-medium">{npc.type || "—"}</p>
-                  )}
-                </div>
-                <div>
-                  <p className="text-zinc-500 text-xs">CR</p>
-                  {isEditing ? (
-                    <input
-                      type="number"
-                      className="w-full bg-white/5 border border-white/10 rounded-xl px-2 py-1 text-sm text-zinc-100 focus:outline-none focus:border-purple-400"
-                      value={editableNpc?.level ?? npc.level ?? ""}
-                      onChange={(e) => handleFieldChange("level", Number(e.target.value) || 0)}
-                    />
-                  ) : (
-                    <p className="text-white font-medium">{npc.level}</p>
-                  )}
-                </div>
-                <div>
-                  <p className="text-zinc-500 text-xs">Health</p>
-                  {isEditing ? (
-                    <input
-                      type="number"
-                      className="w-full bg-white/5 border border-white/10 rounded-xl px-2 py-1 text-sm text-zinc-100 focus:outline-none focus:border-purple-400"
-                      value={editableNpc?.health ?? npc.health ?? ""}
-                      onChange={(e) => handleFieldChange("health", Number(e.target.value) || 0)}
-                    />
-                  ) : (
-                    <p className="text-white font-medium">{npc.health.toLocaleString()}</p>
-                  )}
-                </div>
-              </div>
-
-              <div className="flex items-center gap-2">
-                <span className="text-zinc-500 text-xs">Danger impression</span>
-                <div className="flex gap-1">
-                  {Array.from({ length: starCount }).map((_, i) => (
-                    <Star key={i} className="w-4 h-4 text-amber-400 fill-amber-400" />
+      {isEditing ? (
+        <fieldset disabled={isSaving} className="space-y-6 disabled:opacity-60">
+          <section className="bg-white/5 border border-white/10 rounded-2xl p-6 backdrop-blur-sm">
+            <h2 className="text-lg font-semibold text-white mb-4">Core details</h2>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <label className="block text-sm text-zinc-400 mb-1">Role</label>
+                <select
+                  value={draft?.type ?? "unknown"}
+                  onChange={(e) => updateDraft("type", e.target.value)}
+                  className="w-full px-3 py-2 bg-white/5 border border-white/10 rounded-xl text-white focus:outline-none focus:border-purple-500/50"
+                >
+                  {NPC_ROLES.map((role) => (
+                    <option key={role} value={role}>
+                      {ROLE_LABELS[role]}
+                    </option>
                   ))}
-                </div>
+                </select>
+              </div>
+              <div>
+                <label className="block text-sm text-zinc-400 mb-1">Status</label>
+                <select
+                  value={draft?.status ?? "active"}
+                  onChange={(e) => updateDraft("status", e.target.value)}
+                  className="w-full px-3 py-2 bg-white/5 border border-white/10 rounded-xl text-white focus:outline-none focus:border-purple-500/50"
+                >
+                  {NPC_STATUSES.map((status) => (
+                    <option key={status} value={status}>
+                      {STATUS_LABELS[status]}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div className="md:col-span-2">
+                <label className="block text-sm text-zinc-400 mb-1">Image URL</label>
+                <input
+                  type="url"
+                  value={draft?.imageUrl ?? ""}
+                  onChange={(e) => updateDraft("imageUrl", e.target.value)}
+                  className="w-full px-3 py-2 bg-white/5 border border-white/10 rounded-xl text-white focus:outline-none focus:border-purple-500/50"
+                />
+              </div>
+              <div className="md:col-span-2">
+                <label className="block text-sm text-zinc-400 mb-1">Summary</label>
+                <input
+                  value={draft?.summary ?? ""}
+                  onChange={(e) => updateDraft("summary", e.target.value)}
+                  className="w-full px-3 py-2 bg-white/5 border border-white/10 rounded-xl text-white focus:outline-none focus:border-purple-500/50"
+                />
+              </div>
+              <div className="md:col-span-2">
+                <label className="block text-sm text-zinc-400 mb-1">Description</label>
+                <textarea
+                  rows={5}
+                  value={draft?.description ?? ""}
+                  onChange={(e) => updateDraft("description", e.target.value)}
+                  className="w-full px-3 py-2 bg-white/5 border border-white/10 rounded-xl text-white focus:outline-none focus:border-purple-500/50"
+                />
+              </div>
+              <div className="md:col-span-2">
+                <label className="block text-sm text-zinc-400 mb-1">GM Notes</label>
+                <textarea
+                  rows={5}
+                  value={draft?.gmNotes ?? ""}
+                  onChange={(e) => updateDraft("gmNotes", e.target.value)}
+                  className="w-full px-3 py-2 bg-white/5 border border-white/10 rounded-xl text-white focus:outline-none focus:border-purple-500/50"
+                />
               </div>
             </div>
+          </section>
+        </fieldset>
+      ) : (
+        <div className={`grid grid-cols-1 gap-6 ${isGM ? "xl:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]" : ""}`}>
+          <section className="bg-white/5 border border-white/10 rounded-2xl p-6 backdrop-blur-sm">
+            <h2 className="text-lg font-semibold text-white mb-3">Profile</h2>
+            {renderMarkdownBlock(visibleDescription, "No public NPC details added yet.")}
+          </section>
 
-            {/* Secret motivations & hidden truths */}
-            <div className="bg-white/5 border border-white/10 rounded-2xl p-6 backdrop-blur-sm">
-              <h2 className="text-lg font-semibold text-white mb-2">Secret motivations &amp; hidden truths</h2>
-              {isEditing ? (
-                <textarea
-                  rows={4}
-                  className="w-full bg-white/5 border border-white/10 rounded-xl text-sm text-zinc-100 px-3 py-2 focus:outline-none focus:border-purple-400"
-                  value={editableNpc?.gmSecretMotivations ?? npc.gmSecretMotivations ?? ""}
-                  onChange={(e) => handleFieldChange("gmSecretMotivations", e.target.value)}
-                />
-              ) : (
-                <p className="text-zinc-400 text-sm leading-relaxed">
-                  {npc.gmSecretMotivations ||
-                    "GM-only placeholder: what this NPC really wants, who they serve, what they are hiding, and how those goals intersect with the party."}
-                </p>
-              )}
-            </div>
-
-            {/* Relationship tracker (players think vs truth) */}
-            <div className="bg-white/5 border border-white/10 rounded-2xl p-6 backdrop-blur-sm">
-              <h2 className="text-lg font-semibold text-white mb-3">Relationship tracker</h2>
-              <div className="grid grid-cols-1 gap-3 text-sm">
-                <div>
-                  <p className="text-zinc-500 text-xs mb-1">What the players think</p>
-                  {isEditing ? (
-                    <textarea
-                      rows={3}
-                      className="w-full bg-white/5 border border-white/10 rounded-xl text-sm text-zinc-100 px-3 py-2 focus:outline-none focus:border-purple-400"
-                      value={editableNpc?.gmRelPlayersThink ?? npc.gmRelPlayersThink ?? ""}
-                      onChange={(e) => handleFieldChange("gmRelPlayersThink", e.target.value)}
-                    />
-                  ) : (
-                    <p className="text-zinc-300">
-                      {npc.gmRelPlayersThink ||
-                        "Placeholder: their assumptions about loyalty, power, alignment, and intentions."}
-                    </p>
-                  )}
-                </div>
-                <div>
-                  <p className="text-zinc-500 text-xs mb-1">What&apos;s actually true</p>
-                  {isEditing ? (
-                    <textarea
-                      rows={3}
-                      className="w-full bg-white/5 border border-white/10 rounded-xl text-sm text-zinc-100 px-3 py-2 focus:outline-none focus:border-purple-400"
-                      value={editableNpc?.gmRelTruth ?? npc.gmRelTruth ?? ""}
-                      onChange={(e) => handleFieldChange("gmRelTruth", e.target.value)}
-                    />
-                  ) : (
-                    <p className="text-zinc-300">
-                      {npc.gmRelTruth ||
-                        "Placeholder: real loyalties, secret allegiances, hidden relationships, and future betrayals."}
-                    </p>
-                  )}
-                </div>
-              </div>
-            </div>
-
-            {/* Foreshadowing / future plans */}
-            <div className="bg-white/5 border border-white/10 rounded-2xl p-6 backdrop-blur-sm">
-              <h2 className="text-lg font-semibold text-white mb-2">Foreshadowing &amp; future plans</h2>
-              {isEditing ? (
-                <textarea
-                  rows={4}
-                  className="w-full bg-white/5 border border-white/10 rounded-xl text-sm text-zinc-100 px-3 py-2 focus:outline-none focus:border-purple-400"
-                  value={editableNpc?.gmForeshadowing ?? npc.gmForeshadowing ?? ""}
-                  onChange={(e) => handleFieldChange("gmForeshadowing", e.target.value)}
-                />
-              ) : (
-                <p className="text-zinc-400 text-sm leading-relaxed">
-                  {npc.gmForeshadowing ||
-                    "GM-only placeholder: how this NPC will appear again, what future arcs they are tied to, and what hints you want to drop in upcoming sessions."}
-                </p>
-              )}
-            </div>
-
-            {/* NPC secrets & consequences */}
-            <div className="bg-white/5 border border-white/10 rounded-2xl p-6 backdrop-blur-sm">
-              <h2 className="text-lg font-semibold text-white mb-2">NPC secrets &amp; consequences</h2>
-              {isEditing ? (
-                <textarea
-                  rows={4}
-                  className="w-full bg-white/5 border border-white/10 rounded-xl text-sm text-zinc-100 px-3 py-2 focus:outline-none focus:border-purple-400"
-                  value={editableNpc?.gmSecretsConsequences ?? npc.gmSecretsConsequences ?? ""}
-                  onChange={(e) => handleFieldChange("gmSecretsConsequences", e.target.value)}
-                />
-              ) : (
-                <p className="text-zinc-400 text-sm leading-relaxed">
-                  {npc.gmSecretsConsequences ||
-                    "GM-only placeholder: secrets the players don&apos;t know yet and notes on how these will bite them in the ass later. You can mirror the structure you use in Session profiles (secret, trigger, payoff)."}
-                </p>
-              )}
-            </div>
-
-            {/* GM notes */}
-            <div className="bg-white/5 border border-white/10 rounded-2xl p-6 backdrop-blur-sm">
-              <h2 className="text-lg font-semibold text-white mb-2">GM notes</h2>
-              {isEditing ? (
-                <textarea
-                  rows={4}
-                  className="w-full bg-white/5 border border-white/10 rounded-xl text-sm text-zinc-100 px-3 py-2 focus:outline-none focus:border-purple-400"
-                  value={editableNpc?.gmNotes ?? npc.gmNotes ?? ""}
-                  onChange={(e) => handleFieldChange("gmNotes", e.target.value)}
-                />
-              ) : (
-                <p className="text-zinc-400 text-sm leading-relaxed">
-                  {npc.gmNotes ||
-                    "Freeform notes for you: improvisation tips, voice notes, how to play them under stress, and any table meta (which player is attached, etc.)."}
-                </p>
-              )}
-            </div>
-          </div>
-        )}
-      </div>
-
-      {/* Metadata strip */}
-      <div className="mt-6 bg-white/5 border border-white/10 rounded-2xl p-4 backdrop-blur-sm">
-        <div className="flex flex-wrap items-center gap-4 text-xs text-zinc-400">
-          <div className="flex items-center gap-2">
-            <Tag className="w-3 h-3" />
-            {isGM && isEditing ? (
-              <>
-                <span>Tags:</span>
-                <input
-                  className="ml-1 bg-white/5 border border-white/10 rounded-lg px-2 py-1 text-[11px] text-zinc-100 focus:outline-none focus:border-purple-400"
-                  placeholder="e.g. faction, role, arc"
-                  value={editableNpc?.tags ?? npc.tags ?? ""}
-                  onChange={(e) => handleFieldChange("tags", e.target.value)}
-                />
-              </>
-            ) : (
-              <span>Tags: {npc.tags || "placeholder (e.g. faction, role, arc)"}</span>
-            )}
-          </div>
-          <div className="flex items-center gap-2">
-            <Users className="w-3 h-3" />
-            {isGM && isEditing ? (
-              <>
-                <span>First appearance:</span>
-                <input
-                  className="ml-1 bg-white/5 border border-white/10 rounded-lg px-2 py-1 text-[11px] text-zinc-100 focus:outline-none focus:border-purple-400"
-                  placeholder="e.g. Session 3"
-                  value={editableNpc?.firstAppearance ?? npc.firstAppearance ?? ""}
-                  onChange={(e) => handleFieldChange("firstAppearance", e.target.value)}
-                />
-              </>
-            ) : (
-              <span>First appearance: {npc.firstAppearance || "placeholder session"}</span>
-            )}
-          </div>
-          <div className="flex items-center gap-2">
-            <Clock className="w-3 h-3" />
-            {isGM && isEditing ? (
-              <>
-                <span>Last updated:</span>
-                <input
-                  className="ml-1 bg-white/5 border border-white/10 rounded-lg px-2 py-1 text-[11px] text-zinc-100 focus:outline-none focus:border-purple-400"
-                  placeholder="e.g. 2025-12-01"
-                  value={editableNpc?.lastUpdated ?? npc.lastUpdated ?? ""}
-                  onChange={(e) => handleFieldChange("lastUpdated", e.target.value)}
-                />
-              </>
-            ) : (
-              <span>Last updated: {npc.lastUpdated || "placeholder"}</span>
-            )}
-          </div>
+          {isGM ? (
+            <section className="bg-white/5 border border-rose-500/30 rounded-2xl p-6 backdrop-blur-sm">
+              <h2 className="text-lg font-semibold text-rose-100 mb-3">GM Notes</h2>
+              {renderMarkdownBlock(npc.gmNotes, "No GM notes yet.")}
+            </section>
+          ) : null}
         </div>
-      </div>
+      )}
     </main>
   );
 }
