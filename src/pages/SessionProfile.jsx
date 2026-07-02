@@ -4,6 +4,7 @@ import { ArrowLeft, Clock, Map as MapIcon, Trash2 } from "lucide-react";
 import { useMode } from "../context/ModeContext.jsx";
 import { sessionsRepo } from "../data/sessions/sessions.repo";
 import { itemsRepo } from "../data/items/items.repo";
+import { npcsRepo } from "../data/npcs/npcs.repo";
 import SessionEntityLinkManager from "../components/session/SessionEntityLinkManager.jsx";
 import { useCampaign } from "../context/CampaignContext";
 import { getApiCampaignPeople, getApiCharacterAssignments } from "../data/api/apiClient.ts";
@@ -155,15 +156,17 @@ export default function SessionProfile() {
   const [allSessions, setAllSessions] = useState([]);
   const [loading, setLoading] = useState(true);
   const [allItems, setAllItems] = useState([]);
+  const [allNpcs, setAllNpcs] = useState([]);
   const [campaignPeople, setCampaignPeople] = useState([]);
   const [campaignCharacters, setCampaignCharacters] = useState([]);
   const [assignmentRows, setAssignmentRows] = useState([]);
 
   useEffect(() => {
-    if (!selectedCampaignId) {
-      setAllSessions([]);
-      setAllItems([]);
-      setCampaignPeople([]);
+      if (!selectedCampaignId) {
+        setAllSessions([]);
+        setAllItems([]);
+        setAllNpcs([]);
+        setCampaignPeople([]);
       setCampaignCharacters([]);
       setAssignmentRows([]);
       setLoading(false);
@@ -173,16 +176,19 @@ export default function SessionProfile() {
     async function load() {
       setLoading(true);
       try {
-        const [sessionData, itemData] = await Promise.all([
+        const [sessionData, itemData, npcData] = await Promise.all([
           sessionsRepo.getAll(selectedCampaignId),
           itemsRepo.getAll(selectedCampaignId),
+          npcsRepo.getAll(selectedCampaignId),
         ]);
         setAllSessions(Array.isArray(sessionData) ? sessionData : []);
         setAllItems(Array.isArray(itemData) ? itemData : []);
+        setAllNpcs(Array.isArray(npcData) ? npcData : []);
       } catch (error) {
         console.error("[SessionProfile] Failed to load session data", error);
         setAllSessions([]);
         setAllItems([]);
+        setAllNpcs([]);
       } finally {
         setLoading(false);
       }
@@ -308,6 +314,16 @@ export default function SessionProfile() {
       .filter(Boolean)
       .sort((a, b) => a.label.localeCompare(b.label));
   }, [assignmentRows, campaignCharacters, campaignPeople]);
+
+  const visibleItems = useMemo(() => {
+    if (isGM) return allItems;
+    return allItems.filter((item) => item?.visibility !== "gm-only");
+  }, [allItems, isGM]);
+
+  const visibleNpcs = useMemo(() => {
+    if (isGM) return allNpcs;
+    return allNpcs.filter((npc) => npc?.visibility !== "gm-only");
+  }, [allNpcs, isGM]);
 
   if (loading) {
     return (
@@ -656,6 +672,68 @@ export default function SessionProfile() {
             </div>
 
             {/* Items discovered, Notable NPCs, timeline, Moments, Quotes, NPC relationships */}
+            <SessionEntityLinkManager
+              sessionId={String(id)}
+              entityType="NPC"
+              allowedLabels={["present", "mentioned", "ally", "antagonist"]}
+              defaultLabel="present"
+              sectionTitle="Notable NPCs"
+              isGM={isGM}
+              editMode={editMode}
+              visibilityMode={isGM ? "GM" : "Player"}
+              dataSource={visibleNpcs}
+              getEntityLabel={(npc) => npc?.name}
+              onAddNew={() => navigate("/npcs")}
+              renderCard={(npc, link, helpers) => {
+                const { isGM, editMode, navigate, handleRemove, isBusy } = helpers;
+
+                return (
+                  <div
+                    key={link.id}
+                    className="relative group bg-white/5 hover:bg-white/10 border border-white/10 rounded-xl p-4 transition flex flex-col justify-between"
+                  >
+                    {isGM && editMode && (
+                      <button
+                        type="button"
+                        disabled={isBusy}
+                        onClick={() => handleRemove(link.id)}
+                        className="absolute top-2 right-2 text-[10px] text-red-400 hover:text-red-200 opacity-0 group-hover:opacity-100 transition-opacity disabled:cursor-not-allowed disabled:opacity-50"
+                      >
+                        Remove
+                      </button>
+                    )}
+
+                    <div
+                      role="button"
+                      onClick={() => navigate(`/npcs/${npc.id}`)}
+                      className="cursor-pointer"
+                    >
+                      <p className="text-white font-semibold text-sm">{npc?.name || "Unnamed NPC"}</p>
+                      {npc?.title ? (
+                        <p className="text-zinc-400 text-xs mt-1">{npc.title}</p>
+                      ) : null}
+                      <p className="text-zinc-500 text-xs mt-2">
+                        {String(link.label || "").replaceAll("_", " ")}
+                      </p>
+                    </div>
+
+                    <div className="flex items-center justify-end mt-3">
+                      {isGM && (
+                        <span
+                          className={`text-[10px] px-2 py-0.5 rounded-full ${link.visibility === "GM"
+                            ? "bg-red-500/20 text-red-300 border border-red-500/40"
+                            : "bg-emerald-500/20 text-emerald-300 border border-emerald-500/40"
+                            }`}
+                        >
+                          {link.visibility}
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                );
+              }}
+            />
+
             {/* Items discovered (player-visible) */}
             {/* Items (player-visible) */}
 	            <SessionEntityLinkManager
@@ -666,7 +744,7 @@ export default function SessionProfile() {
               isGM={isGM}
               editMode={editMode}
               visibilityMode={isGM ? "GM" : "Player"}
-              dataSource={allItems}
+              dataSource={visibleItems}
               getEntityLabel={(item) => item?.name}
               onAddNew={() => navigate("/items")}
               renderCard={(item, link, helpers) => {

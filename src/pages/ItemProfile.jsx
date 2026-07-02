@@ -4,6 +4,7 @@ import { useMode } from "../context/ModeContext.jsx";
 import { ArrowLeft, Swords, Shield, Sparkles, Trash2 } from "lucide-react";
 import { itemsRepo } from "../data/items/items.repo";
 import { sessionsRepo } from "../data/sessions/sessions.repo";
+import { npcsRepo } from "../data/npcs/npcs.repo";
 import { useCampaign } from "../context/CampaignContext";
 import { getLinksForEntity, loadLinks } from "../data/links/links.repo";
 import { getApiCampaignPeople, getApiCharacterAssignments } from "../data/api/apiClient";
@@ -90,6 +91,7 @@ export default function ItemProfile() {
   const { selectedCampaignId } = useCampaign();
   const [item, setItem] = useState(null);
   const [sessions, setSessions] = useState([]);
+  const [npcs, setNpcs] = useState([]);
   const [loading, setLoading] = useState(true);
   const [isItemSaving, setIsItemSaving] = useState(false);
   const [isItemDeleting, setIsItemDeleting] = useState(false);
@@ -105,6 +107,7 @@ export default function ItemProfile() {
     if (!selectedCampaignId) {
       setItem(null);
       setSessions([]);
+      setNpcs([]);
       setLoading(false);
       return;
     }
@@ -115,6 +118,7 @@ export default function ItemProfile() {
         const [
           itemData,
           sessionData,
+          npcData,
           _links,
           campaignPeopleResponse,
           characters,
@@ -122,6 +126,7 @@ export default function ItemProfile() {
         ] = await Promise.all([
           itemsRepo.getById(selectedCampaignId, String(id)),
           sessionsRepo.getAll(selectedCampaignId),
+          npcsRepo.getAll(selectedCampaignId),
           loadLinks(selectedCampaignId),
           isGM ? getApiCampaignPeople(selectedCampaignId) : Promise.resolve({ people: [] }),
           isGM ? getAllCharacters(selectedCampaignId) : Promise.resolve([]),
@@ -132,6 +137,7 @@ export default function ItemProfile() {
         void _links;
         setItem(itemData || null);
         setSessions(Array.isArray(sessionData) ? sessionData : []);
+        setNpcs(Array.isArray(npcData) ? npcData : []);
         setLinksVersion((version) => version + 1);
 
         const characterById = new Map(
@@ -174,6 +180,7 @@ export default function ItemProfile() {
         console.error("[ItemProfile] Failed to load items", error);
         setItem(null);
         setSessions([]);
+        setNpcs([]);
         setOwnerOptions([{ value: "", label: "Unassigned" }]);
       } finally {
         setLoading(false);
@@ -198,25 +205,64 @@ export default function ItemProfile() {
     }
   }, [formData?.owner, ownerOptions]);
   const [isEditing, setIsEditing] = useState(false);
-  const itemLinks = useMemo(
-    () => getLinksForEntity("Item", String(id), isGM ? "GM" : "Player"),
-    [id, isGM, linksVersion]
-  );
+  const itemLinks = useMemo(() => {
+    void linksVersion;
+    return getLinksForEntity("Item", String(id), isGM ? "GM" : "Player");
+  }, [id, isGM, linksVersion]);
+  const visibleSessions = useMemo(() => {
+    if (isGM) return sessions;
+    return sessions.filter((session) => session?.visibility !== "gm-only");
+  }, [isGM, sessions]);
+  const visibleNpcs = useMemo(() => {
+    if (isGM) return npcs;
+    return npcs.filter((npc) => npc?.visibility !== "gm-only");
+  }, [isGM, npcs]);
   const sessionsById = useMemo(
-    () => new Map(sessions.map((session) => [String(session?.id), session])),
-    [sessions]
+    () => new Map(visibleSessions.map((session) => [String(session?.id), session])),
+    [visibleSessions]
   );
-  const getEndpointLabel = (endpoint) => {
-    if (endpoint.type === "BagOfHolding") return "Bag of Holding";
-    if (endpoint.type !== "Session") return endpoint.id;
+  const npcsById = useMemo(
+    () => new Map(visibleNpcs.map((npc) => [String(npc?.id), npc])),
+    [visibleNpcs]
+  );
+  const displayedItemLinks = useMemo(() => {
+    return itemLinks
+      .map((link) => {
+        const other =
+          link.entityA.type === "Item" && link.entityA.id === String(id)
+            ? link.entityB
+            : link.entityA;
 
-    const session = sessionsById.get(String(endpoint.id));
-    return session?.name || session?.title || endpoint.id;
-  };
-  const getEndpointTypeLabel = (endpoint) => {
-    if (endpoint.type === "BagOfHolding") return "";
-    return `${endpoint.type}: `;
-  };
+        if (other.type === "BagOfHolding") {
+          return { link, typeLabel: "", label: "Bag of Holding", path: "/pcs/bag" };
+        }
+
+        if (other.type === "Session") {
+          const session = sessionsById.get(String(other.id));
+          if (!session) return null;
+          return {
+            link,
+            typeLabel: "Session: ",
+            label: session.name || session.title || "Untitled session",
+            path: `/sessions/${session.id}`,
+          };
+        }
+
+        if (other.type === "NPC") {
+          const npc = npcsById.get(String(other.id));
+          if (!npc) return null;
+          return {
+            link,
+            typeLabel: "NPC: ",
+            label: npc.name || "Unnamed NPC",
+            path: `/npcs/${npc.id}`,
+          };
+        }
+
+        return null;
+      })
+      .filter(Boolean);
+  }, [id, itemLinks, npcsById, sessionsById]);
   const getLinkLabel = (label) => {
     if (label === "contained_in") return "contained in";
     return String(label || "").replaceAll("_", " ");
@@ -650,31 +696,25 @@ export default function ItemProfile() {
           {/* v0.1: cross-links */}
           <section className="bg-white/5 border border-white/10 rounded-2xl p-5">
             <h2 className="text-lg font-semibold text-white mb-2">Where it showed up</h2>
-            {itemLinks.length === 0 ? (
+            {displayedItemLinks.length === 0 ? (
               <p className="text-zinc-400 text-sm">No visible links yet.</p>
             ) : (
               <div className="space-y-2">
-                {itemLinks.map((link) => {
-                  // Bidirectional display: show the endpoint on the other side of this Item link.
-                  const other =
-                    link.entityA.type === "Item" && link.entityA.id === String(id)
-                      ? link.entityB
-                      : link.entityA;
-
-                  return (
-                    <div
-                      key={link.id}
-                      className="rounded-xl border border-white/10 bg-black/20 px-3 py-2 text-sm text-zinc-300"
-                    >
-                      <span className="text-white">{getEndpointTypeLabel(other)}{getEndpointLabel(other)}</span>
-                      <span className="mx-2 text-zinc-600">•</span>
-                      {getLinkLabel(link.label)}
-                      {isGM ? (
-                        <span className="ml-2 text-xs text-zinc-500">[{link.visibility}]</span>
-                      ) : null}
-                    </div>
-                  );
-                })}
+                {displayedItemLinks.map(({ link, typeLabel, label, path }) => (
+                  <button
+                    key={link.id}
+                    type="button"
+                    onClick={() => navigate(path)}
+                    className="block w-full rounded-xl border border-white/10 bg-black/20 px-3 py-2 text-left text-sm text-zinc-300 hover:bg-white/5"
+                  >
+                    <span className="text-white">{typeLabel}{label}</span>
+                    <span className="mx-2 text-zinc-600">•</span>
+                    {getLinkLabel(link.label)}
+                    {isGM ? (
+                      <span className="ml-2 text-xs text-zinc-500">[{link.visibility}]</span>
+                    ) : null}
+                  </button>
+                ))}
               </div>
             )}
           </section>

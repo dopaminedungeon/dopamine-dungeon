@@ -5,6 +5,15 @@ import { ArrowLeft, Eye, Lock, Plus, Trash2 } from "lucide-react";
 import { useMode } from "../context/ModeContext.jsx";
 import { useCampaign } from "../context/CampaignContext";
 import { npcsRepo } from "../data/npcs/npcs.repo";
+import { sessionsRepo } from "../data/sessions/sessions.repo";
+import { itemsRepo } from "../data/items/items.repo";
+import { createLink } from "../domain/links/link.service";
+import {
+  addLink,
+  getLinksForEntity,
+  loadLinks,
+  removeLink,
+} from "../data/links/links.repo";
 import {
   getNpcTypeIcon,
   normalizeNpcType,
@@ -14,6 +23,8 @@ import {
 
 const NPC_ROLES = ["ally", "neutral", "antagonist", "unknown"];
 const NPC_STATUSES = ["active", "missing", "dead", "unknown"];
+const NPC_SESSION_LABELS = ["present", "mentioned", "ally", "antagonist"];
+const NPC_ITEM_LABELS = ["owns", "uses"];
 const ABILITIES = ["str", "dex", "con", "int", "wis", "cha"];
 const SIZE_OPTIONS = ["Tiny", "Small", "Medium", "Large", "Huge", "Gargantuan"];
 const CREATURE_TYPE_OPTIONS = [
@@ -453,6 +464,297 @@ function PlaceholderCard({ title, children }) {
   );
 }
 
+function formatLinkLabel(label) {
+  return String(label || "").replaceAll("_", " ");
+}
+
+function getSessionLabel(session) {
+  const number = session?.sessionNumber ? `Session ${session.sessionNumber}: ` : "";
+  return `${number}${session?.name || session?.title || "Untitled session"}`;
+}
+
+function getItemLabel(item) {
+  return item?.name || "Untitled item";
+}
+
+function NpcLinkSection({
+  title,
+  emptyText,
+  npcId,
+  entityType,
+  entities,
+  links,
+  allowedLabels,
+  defaultLabel,
+  defaultVisibility = "GM",
+  isGM,
+  isEditing,
+  selectedCampaignId,
+  getEntityLabel,
+  getEntityMeta,
+  getEntityPath,
+  onLinksChanged,
+}) {
+  const navigate = useNavigate();
+  const [searchOpen, setSearchOpen] = useState(false);
+  const [query, setQuery] = useState("");
+  const [selectedLabel, setSelectedLabel] = useState(defaultLabel);
+  const [selectedVisibility, setSelectedVisibility] = useState(defaultVisibility);
+  const [busyId, setBusyId] = useState("");
+  const [error, setError] = useState("");
+
+  const entityList = useMemo(
+    () => (Array.isArray(entities) ? entities.filter((entity) => entity?.id) : []),
+    [entities]
+  );
+
+  const entitiesById = useMemo(
+    () => new Map(entityList.map((entity) => [String(entity.id), entity])),
+    [entityList]
+  );
+
+  const relevantLinks = useMemo(() => {
+    return links
+      .map((link) => {
+        const other =
+          link.entityA.type === "NPC" && String(link.entityA.id) === String(npcId)
+            ? link.entityB
+            : link.entityA;
+        const entity = other.type === entityType ? entitiesById.get(String(other.id)) : null;
+
+        if (!entity) return null;
+        if (!allowedLabels.includes(link.label)) return null;
+        if (!isGM && link.visibility !== "Player") return null;
+
+        return { link, entity };
+      })
+      .filter(Boolean);
+  }, [allowedLabels, entitiesById, entityType, isGM, links, npcId]);
+
+  const candidateEntities = useMemo(() => {
+    const normalizedQuery = query.trim().toLowerCase();
+
+    return entityList
+      .filter((entity) => {
+        const label = getEntityLabel(entity);
+        if (normalizedQuery && !String(label || "").toLowerCase().includes(normalizedQuery)) {
+          return false;
+        }
+
+        return !links.some((link) => {
+          const other =
+            link.entityA.type === "NPC" && String(link.entityA.id) === String(npcId)
+              ? link.entityB
+              : link.entityA;
+
+          return (
+            other.type === entityType &&
+            String(other.id) === String(entity.id)
+          );
+        });
+      })
+      .slice(0, 30);
+  }, [
+    entityList,
+    entityType,
+    getEntityLabel,
+    links,
+    npcId,
+    query,
+  ]);
+
+  async function refreshLinks() {
+    await loadLinks(selectedCampaignId);
+    onLinksChanged();
+  }
+
+  async function handleAdd(entityId) {
+    if (!selectedCampaignId || busyId) return;
+    const normalizedEntityId = String(entityId);
+
+    const duplicate = links.some((link) => {
+      const other =
+        link.entityA.type === "NPC" && String(link.entityA.id) === String(npcId)
+          ? link.entityB
+          : link.entityA;
+
+      return (
+        other.type === entityType &&
+        String(other.id) === normalizedEntityId
+      );
+    });
+
+    if (duplicate) {
+      setError("That entity is already linked.");
+      return;
+    }
+
+    try {
+      setBusyId(`add-${normalizedEntityId}`);
+      setError("");
+      const link = createLink({
+        entityA: { type: "NPC", id: String(npcId) },
+        entityB: { type: entityType, id: normalizedEntityId },
+        label: selectedLabel,
+        visibility: selectedVisibility,
+      });
+
+      await addLink(link, selectedCampaignId);
+      await refreshLinks();
+      setQuery("");
+      setSearchOpen(false);
+    } catch (linkError) {
+      console.error("[NpcProfile] Failed to add link", linkError);
+      setError("Unable to add this link right now.");
+    } finally {
+      setBusyId("");
+    }
+  }
+
+  async function handleRemove(linkId) {
+    if (!selectedCampaignId || busyId) return;
+
+    try {
+      setBusyId(`remove-${linkId}`);
+      setError("");
+      await removeLink(linkId, selectedCampaignId);
+      await refreshLinks();
+    } catch (linkError) {
+      console.error("[NpcProfile] Failed to remove link", linkError);
+      setError("Unable to remove this link right now.");
+    } finally {
+      setBusyId("");
+    }
+  }
+
+  return (
+    <section className="rounded-2xl border border-white/10 bg-white/5 p-6 backdrop-blur-sm">
+      <div className="flex items-start justify-between gap-3">
+        <h2 className="text-sm font-semibold uppercase tracking-wide text-zinc-300">{title}</h2>
+        {isGM && isEditing ? (
+          <button
+            type="button"
+            disabled={Boolean(busyId)}
+            onClick={() => {
+              setSearchOpen((current) => !current);
+              setError("");
+            }}
+            className="rounded-full border border-white/10 bg-white/5 px-3 py-1.5 text-xs text-zinc-200 hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            {searchOpen ? "Close" : `Add ${entityType}`}
+          </button>
+        ) : null}
+      </div>
+
+      {isGM && isEditing && searchOpen ? (
+        <div className="mt-4 space-y-3 rounded-2xl border border-white/10 bg-black/10 p-4">
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-[minmax(0,1fr)_160px_140px]">
+            <input
+              value={query}
+              disabled={Boolean(busyId)}
+              onChange={(event) => setQuery(event.target.value)}
+              placeholder={`Search ${title.toLowerCase()}...`}
+              className="min-w-0 rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-sm text-white focus:border-purple-500/50 focus:outline-none disabled:cursor-not-allowed disabled:opacity-50"
+            />
+            <SelectInput
+              disabled={Boolean(busyId)}
+              value={selectedLabel}
+              onChange={setSelectedLabel}
+            >
+              {allowedLabels.map((label) => (
+                <option key={label} value={label}>
+                  {formatLinkLabel(label)}
+                </option>
+              ))}
+            </SelectInput>
+            <SelectInput
+              disabled={Boolean(busyId)}
+              value={selectedVisibility}
+              onChange={setSelectedVisibility}
+            >
+              <option value="GM">GM-only</option>
+              <option value="Player">Player-visible</option>
+            </SelectInput>
+          </div>
+
+          {error ? <p className="text-sm text-rose-300">{error}</p> : null}
+
+          <div className="max-h-48 overflow-auto rounded-xl border border-white/10">
+            {candidateEntities.length === 0 ? (
+              <p className="px-3 py-2 text-sm text-zinc-500">No results.</p>
+            ) : (
+              candidateEntities.map((entity) => (
+                <button
+                  key={entity.id}
+                  type="button"
+                  disabled={Boolean(busyId)}
+                  onClick={() => handleAdd(entity.id)}
+                  className="block w-full px-3 py-2 text-left text-sm text-zinc-200 hover:bg-white/5 disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  {busyId === `add-${entity.id}` ? "Linking..." : getEntityLabel(entity)}
+                </button>
+              ))
+            )}
+          </div>
+        </div>
+      ) : null}
+
+      {relevantLinks.length === 0 ? (
+        <p className="mt-3 text-sm text-zinc-500">{emptyText}</p>
+      ) : (
+        <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2">
+          {relevantLinks.map(({ link, entity }) => (
+            <div
+              key={link.id}
+              className="group relative rounded-xl border border-white/10 bg-black/15 p-4"
+            >
+              {isGM && isEditing ? (
+                <button
+                  type="button"
+                  disabled={Boolean(busyId)}
+                  onClick={() => handleRemove(link.id)}
+                  className="absolute right-3 top-3 rounded-full border border-rose-400/30 bg-rose-500/10 p-1.5 text-rose-100 opacity-0 transition hover:bg-rose-500/20 group-hover:opacity-100 disabled:cursor-not-allowed disabled:opacity-50"
+                  aria-label="Remove link"
+                >
+                  <Trash2 className="h-3.5 w-3.5" />
+                </button>
+              ) : null}
+
+              <button
+                type="button"
+                onClick={() => navigate(getEntityPath(entity))}
+                className="block max-w-full text-left"
+              >
+                <p className="pr-8 text-sm font-semibold text-white">{getEntityLabel(entity)}</p>
+                {getEntityMeta ? (
+                  <p className="mt-1 text-xs text-zinc-500">{getEntityMeta(entity)}</p>
+                ) : null}
+              </button>
+
+              <div className="mt-3 flex flex-wrap items-center gap-2">
+                <span className="rounded-full border border-white/10 bg-white/5 px-2.5 py-1 text-[11px] text-zinc-300">
+                  {formatLinkLabel(link.label)}
+                </span>
+                {isGM ? (
+                  <span
+                    className={`rounded-full border px-2.5 py-1 text-[11px] font-semibold ${
+                      link.visibility === "Player"
+                        ? "border-emerald-500/30 bg-emerald-500/15 text-emerald-300"
+                        : "border-red-500/40 bg-red-500/20 text-red-300"
+                    }`}
+                  >
+                    {link.visibility === "Player" ? "Player-visible" : "GM-only"}
+                  </span>
+                ) : null}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </section>
+  );
+}
+
 function StatBlockView({ statBlock }) {
   const block = normalizeStatBlock(statBlock);
   const creatureDescriptor =
@@ -870,6 +1172,9 @@ export default function NpcProfile() {
   const [isSaving, setIsSaving] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
   const [isStatBlockCollapsed, setIsStatBlockCollapsed] = useState(true);
+  const [sessions, setSessions] = useState([]);
+  const [items, setItems] = useState([]);
+  const [linksVersion, setLinksVersion] = useState(0);
 
   useEffect(() => {
     let cancelled = false;
@@ -877,6 +1182,8 @@ export default function NpcProfile() {
     async function loadNpc() {
       if (!selectedCampaignId || !id) {
         setNpc(null);
+        setSessions([]);
+        setItems([]);
         setIsLoading(false);
         return;
       }
@@ -884,16 +1191,26 @@ export default function NpcProfile() {
       try {
         setIsLoading(true);
         setError("");
-        const data = await npcsRepo.getById(selectedCampaignId, id);
+        const [data, sessionData, itemData] = await Promise.all([
+          npcsRepo.getById(selectedCampaignId, id),
+          sessionsRepo.getAll(selectedCampaignId),
+          itemsRepo.getAll(selectedCampaignId),
+          loadLinks(selectedCampaignId),
+        ]);
         if (!cancelled) {
           setNpc(data);
           setDraft(data ? buildDraft(data) : null);
           setIsStatBlockCollapsed(data ? isStatBlockEmpty(data.statBlock) : true);
+          setSessions(Array.isArray(sessionData) ? sessionData : []);
+          setItems(Array.isArray(itemData) ? itemData : []);
+          setLinksVersion((version) => version + 1);
         }
       } catch (loadError) {
         console.error("[NpcProfile] Failed to load NPC", loadError);
         if (!cancelled) {
           setNpc(null);
+          setSessions([]);
+          setItems([]);
           setError("Unable to load this NPC right now.");
         }
       } finally {
@@ -908,10 +1225,24 @@ export default function NpcProfile() {
     };
   }, [selectedCampaignId, id]);
 
-  const visibleDescription = useMemo(
-    () => [npc?.summary, npc?.description].filter(Boolean).join("\n\n"),
-    [npc]
-  );
+  const npcLinks = useMemo(() => {
+    void linksVersion;
+    return npc ? getLinksForEntity("NPC", String(npc.id), isGM ? "GM" : "Player") : [];
+  }, [npc, isGM, linksVersion]);
+
+  const visibleSessions = useMemo(() => {
+    if (isGM) return sessions;
+    return sessions.filter((session) => session?.visibility !== "gm-only");
+  }, [isGM, sessions]);
+
+  const visibleItems = useMemo(() => {
+    if (isGM) return items;
+    return items.filter((item) => item?.visibility !== "gm-only");
+  }, [isGM, items]);
+
+  const handleLinksChanged = () => {
+    setLinksVersion((version) => version + 1);
+  };
 
   const updateDraft = (field, value) => {
     setDraft((current) => ({
@@ -1411,7 +1742,50 @@ export default function NpcProfile() {
             )}
           </section>
 
-          <PlaceholderCard title="Sessions">Session links coming soon</PlaceholderCard>
+          <NpcLinkSection
+            title="Sessions"
+            emptyText="No linked sessions yet."
+            npcId={String(npc.id)}
+            entityType="Session"
+            entities={visibleSessions}
+            links={npcLinks}
+            allowedLabels={NPC_SESSION_LABELS}
+            defaultLabel="present"
+            defaultVisibility="GM"
+            isGM={isGM}
+            isEditing={isEditing}
+            selectedCampaignId={selectedCampaignId}
+            getEntityLabel={getSessionLabel}
+            getEntityMeta={(session) => {
+              const parts = [
+                session?.status,
+                session?.startTime ? String(session.startTime).slice(0, 10) : "",
+              ].filter(Boolean);
+              return parts.join(" • ");
+            }}
+            getEntityPath={(session) => `/sessions/${session.id}`}
+            onLinksChanged={handleLinksChanged}
+          />
+
+          <NpcLinkSection
+            title="Associated Items"
+            emptyText="No associated items yet."
+            npcId={String(npc.id)}
+            entityType="Item"
+            entities={visibleItems}
+            links={npcLinks}
+            allowedLabels={NPC_ITEM_LABELS}
+            defaultLabel="owns"
+            defaultVisibility="GM"
+            isGM={isGM}
+            isEditing={isEditing}
+            selectedCampaignId={selectedCampaignId}
+            getEntityLabel={getItemLabel}
+            getEntityMeta={(item) => [item?.rarity, item?.type].filter(Boolean).join(" • ")}
+            getEntityPath={(item) => `/items/${item.id}`}
+            onLinksChanged={handleLinksChanged}
+          />
+
           <PlaceholderCard title="Relationships">Relationship links coming soon</PlaceholderCard>
           <PlaceholderCard title="Quests">Quest links coming soon</PlaceholderCard>
         </div>
