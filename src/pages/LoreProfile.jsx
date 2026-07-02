@@ -14,6 +14,8 @@ import {
 import { useCampaign } from "../context/CampaignContext";
 import { useMode } from "../context/ModeContext.jsx";
 import { loreRepo } from "../data/lore/lore.repo";
+import { npcsRepo } from "../data/npcs/npcs.repo";
+import { getLinksForEntity, loadLinks } from "../data/links/links.repo";
 
 const LORE_TYPES = [
   "Religion",
@@ -290,6 +292,8 @@ export default function LoreProfile() {
   const [isEditing, setIsEditing] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
+  const [npcs, setNpcs] = useState([]);
+  const [linksVersion, setLinksVersion] = useState(0);
   const isSavingRef = useRef(false);
 
   useEffect(() => {
@@ -298,6 +302,7 @@ export default function LoreProfile() {
     async function loadLore() {
       if (!selectedCampaignId || !id) {
         setLore(null);
+        setNpcs([]);
         setIsLoading(false);
         return;
       }
@@ -305,15 +310,22 @@ export default function LoreProfile() {
       try {
         setIsLoading(true);
         setError("");
-        const loadedLore = await loreRepo.getById(selectedCampaignId, id);
+        const [loadedLore, npcData] = await Promise.all([
+          loreRepo.getById(selectedCampaignId, id),
+          npcsRepo.getAll(selectedCampaignId),
+          loadLinks(selectedCampaignId),
+        ]);
         if (!cancelled) {
           setLore(loadedLore ? normalizeLore(loadedLore) : null);
           setDraft(loadedLore ? normalizeLore(loadedLore) : null);
+          setNpcs(Array.isArray(npcData) ? npcData : []);
+          setLinksVersion((version) => version + 1);
         }
       } catch (loadError) {
         console.error("[LoreProfile] Failed to load Lore", loadError);
         if (!cancelled) {
           setLore(null);
+          setNpcs([]);
           setError("Unable to load this Lore entry.");
         }
       } finally {
@@ -339,6 +351,34 @@ export default function LoreProfile() {
   const hasTemplateContent = templateFields.some(([key]) =>
     String(viewLore?.data?.[key] || "").trim()
   );
+  const visibleNpcs = useMemo(() => {
+    if (isGM) return npcs;
+    return npcs.filter((npc) => npc?.visibility !== "gm-only");
+  }, [isGM, npcs]);
+  const npcsById = useMemo(
+    () => new Map(visibleNpcs.map((npc) => [String(npc.id), npc])),
+    [visibleNpcs]
+  );
+  const relatedNpcLinks = useMemo(() => {
+    void linksVersion;
+    if (!lore) return [];
+
+    return getLinksForEntity("Lore", String(lore.id), isGM ? "GM" : "Player")
+      .map((link) => {
+        const other =
+          link.entityA.type === "Lore" && String(link.entityA.id) === String(lore.id)
+            ? link.entityB
+            : link.entityA;
+        const npc = other.type === "NPC" ? npcsById.get(String(other.id)) : null;
+
+        if (!npc) return null;
+        if (link.label !== "connected") return null;
+        if (!isGM && link.visibility !== "Player") return null;
+
+        return { link, npc };
+      })
+      .filter(Boolean);
+  }, [isGM, linksVersion, lore, npcsById]);
 
   function updateDraftField(field, value) {
     setDraft((current) => ({
@@ -705,6 +745,42 @@ export default function LoreProfile() {
 
           <Card title="Relationships">
             <p className="text-sm text-zinc-500">Relationship links coming soon</p>
+          </Card>
+
+          <Card title="Related NPCs">
+            {relatedNpcLinks.length === 0 ? (
+              <p className="text-sm text-zinc-500">No related NPCs yet.</p>
+            ) : (
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                {relatedNpcLinks.map(({ link, npc }) => (
+                  <button
+                    key={link.id}
+                    type="button"
+                    onClick={() => navigate(`/npcs/${npc.id}`)}
+                    className="rounded-xl border border-white/10 bg-black/15 p-4 text-left hover:bg-white/5"
+                  >
+                    <p className="text-sm font-semibold text-white">{npc.name || "Unnamed NPC"}</p>
+                    {npc.title ? <p className="mt-1 text-xs text-zinc-500">{npc.title}</p> : null}
+                    <div className="mt-3 flex flex-wrap items-center gap-2">
+                      <span className="rounded-full border border-white/10 bg-white/5 px-2.5 py-1 text-[11px] text-zinc-300">
+                        connected
+                      </span>
+                      {isGM ? (
+                        <span
+                          className={`rounded-full border px-2.5 py-1 text-[11px] font-semibold ${
+                            link.visibility === "Player"
+                              ? "border-emerald-500/30 bg-emerald-500/15 text-emerald-300"
+                              : "border-red-500/40 bg-red-500/20 text-red-300"
+                          }`}
+                        >
+                          {link.visibility === "Player" ? "Player-visible" : "GM-only"}
+                        </span>
+                      ) : null}
+                    </div>
+                  </button>
+                ))}
+              </div>
+            )}
           </Card>
         </div>
 

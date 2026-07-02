@@ -7,6 +7,7 @@ import { useCampaign } from "../context/CampaignContext";
 import { npcsRepo } from "../data/npcs/npcs.repo";
 import { sessionsRepo } from "../data/sessions/sessions.repo";
 import { itemsRepo } from "../data/items/items.repo";
+import { loreRepo } from "../data/lore/lore.repo";
 import { createLink } from "../domain/links/link.service";
 import {
   addLink,
@@ -25,6 +26,7 @@ const NPC_ROLES = ["ally", "neutral", "antagonist", "unknown"];
 const NPC_STATUSES = ["active", "missing", "dead", "unknown"];
 const NPC_SESSION_LABELS = ["present", "mentioned", "ally", "antagonist"];
 const NPC_ITEM_LABELS = ["owns", "uses"];
+const NPC_LORE_LABELS = ["connected"];
 const ABILITIES = ["str", "dex", "con", "int", "wis", "cha"];
 const SIZE_OPTIONS = ["Tiny", "Small", "Medium", "Large", "Huge", "Gargantuan"];
 const CREATURE_TYPE_OPTIONS = [
@@ -477,6 +479,25 @@ function getItemLabel(item) {
   return item?.name || "Untitled item";
 }
 
+function getLoreLabel(lore) {
+  return lore?.name || "Untitled lore";
+}
+
+function getOtherEndpoint(link, baseType, baseId) {
+  return link.entityA.type === baseType && String(link.entityA.id) === String(baseId)
+    ? link.entityB
+    : link.entityA;
+}
+
+function getLinkSignature(link) {
+  return [
+    `${link.entityA.type}:${link.entityA.id}`,
+    `${link.entityB.type}:${link.entityB.id}`,
+    link.label,
+    link.visibility,
+  ].join("|");
+}
+
 function NpcLinkSection({
   title,
   emptyText,
@@ -489,7 +510,7 @@ function NpcLinkSection({
   defaultVisibility = "GM",
   isGM,
   isEditing,
-  selectedCampaignId,
+  isSaving,
   getEntityLabel,
   getEntityMeta,
   getEntityPath,
@@ -500,8 +521,10 @@ function NpcLinkSection({
   const [query, setQuery] = useState("");
   const [selectedLabel, setSelectedLabel] = useState(defaultLabel);
   const [selectedVisibility, setSelectedVisibility] = useState(defaultVisibility);
-  const [busyId, setBusyId] = useState("");
+  const [busyId] = useState("");
   const [error, setError] = useState("");
+  const canChangeLabel = allowedLabels.length > 1;
+  const isDisabled = Boolean(isSaving || busyId);
 
   const entityList = useMemo(
     () => (Array.isArray(entities) ? entities.filter((entity) => entity?.id) : []),
@@ -516,10 +539,7 @@ function NpcLinkSection({
   const relevantLinks = useMemo(() => {
     return links
       .map((link) => {
-        const other =
-          link.entityA.type === "NPC" && String(link.entityA.id) === String(npcId)
-            ? link.entityB
-            : link.entityA;
+        const other = getOtherEndpoint(link, "NPC", npcId);
         const entity = other.type === entityType ? entitiesById.get(String(other.id)) : null;
 
         if (!entity) return null;
@@ -542,10 +562,7 @@ function NpcLinkSection({
         }
 
         return !links.some((link) => {
-          const other =
-            link.entityA.type === "NPC" && String(link.entityA.id) === String(npcId)
-              ? link.entityB
-              : link.entityA;
+          const other = getOtherEndpoint(link, "NPC", npcId);
 
           return (
             other.type === entityType &&
@@ -563,20 +580,12 @@ function NpcLinkSection({
     query,
   ]);
 
-  async function refreshLinks() {
-    await loadLinks(selectedCampaignId);
-    onLinksChanged();
-  }
-
-  async function handleAdd(entityId) {
-    if (!selectedCampaignId || busyId) return;
+  function handleAdd(entityId) {
+    if (isDisabled) return;
     const normalizedEntityId = String(entityId);
 
     const duplicate = links.some((link) => {
-      const other =
-        link.entityA.type === "NPC" && String(link.entityA.id) === String(npcId)
-          ? link.entityB
-          : link.entityA;
+      const other = getOtherEndpoint(link, "NPC", npcId);
 
       return (
         other.type === entityType &&
@@ -590,7 +599,6 @@ function NpcLinkSection({
     }
 
     try {
-      setBusyId(`add-${normalizedEntityId}`);
       setError("");
       const link = createLink({
         entityA: { type: "NPC", id: String(npcId) },
@@ -599,32 +607,51 @@ function NpcLinkSection({
         visibility: selectedVisibility,
       });
 
-      await addLink(link, selectedCampaignId);
-      await refreshLinks();
+      onLinksChanged([...links, link]);
       setQuery("");
       setSearchOpen(false);
     } catch (linkError) {
-      console.error("[NpcProfile] Failed to add link", linkError);
+      console.error("[NpcProfile] Failed to stage link", linkError);
       setError("Unable to add this link right now.");
-    } finally {
-      setBusyId("");
     }
   }
 
-  async function handleRemove(linkId) {
-    if (!selectedCampaignId || busyId) return;
+  function handleRemove(linkId) {
+    if (isDisabled) return;
 
-    try {
-      setBusyId(`remove-${linkId}`);
-      setError("");
-      await removeLink(linkId, selectedCampaignId);
-      await refreshLinks();
-    } catch (linkError) {
-      console.error("[NpcProfile] Failed to remove link", linkError);
-      setError("Unable to remove this link right now.");
-    } finally {
-      setBusyId("");
+    setError("");
+    onLinksChanged(links.filter((link) => link.id !== linkId));
+  }
+
+  function handleUpdateLink(link, entity, changes) {
+    if (isDisabled) return;
+
+    const nextLabel = changes.label ?? link.label;
+    const nextVisibility = changes.visibility ?? link.visibility;
+
+    if (nextLabel === link.label && nextVisibility === link.visibility) return;
+
+    const duplicate = links.some((candidate) => {
+      if (candidate.id === link.id) return false;
+
+      const other = getOtherEndpoint(candidate, "NPC", npcId);
+
+      return other.type === entityType && String(other.id) === String(entity.id);
+    });
+
+    if (duplicate) {
+      setError("That entity is already linked.");
+      return;
     }
+
+    setError("");
+    onLinksChanged(
+      links.map((candidate) =>
+        candidate.id === link.id
+          ? { ...candidate, label: nextLabel, visibility: nextVisibility }
+          : candidate
+      )
+    );
   }
 
   return (
@@ -634,7 +661,7 @@ function NpcLinkSection({
         {isGM && isEditing ? (
           <button
             type="button"
-            disabled={Boolean(busyId)}
+            disabled={isDisabled}
             onClick={() => {
               setSearchOpen((current) => !current);
               setError("");
@@ -648,27 +675,35 @@ function NpcLinkSection({
 
       {isGM && isEditing && searchOpen ? (
         <div className="mt-4 space-y-3 rounded-2xl border border-white/10 bg-black/10 p-4">
-          <div className="grid grid-cols-1 gap-3 sm:grid-cols-[minmax(0,1fr)_160px_140px]">
+          <div
+            className={`grid grid-cols-1 gap-3 ${
+              canChangeLabel
+                ? "sm:grid-cols-[minmax(0,1fr)_160px_140px]"
+                : "sm:grid-cols-[minmax(0,1fr)_140px]"
+            }`}
+          >
             <input
               value={query}
-              disabled={Boolean(busyId)}
+              disabled={isDisabled}
               onChange={(event) => setQuery(event.target.value)}
               placeholder={`Search ${title.toLowerCase()}...`}
               className="min-w-0 rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-sm text-white focus:border-purple-500/50 focus:outline-none disabled:cursor-not-allowed disabled:opacity-50"
             />
+            {canChangeLabel ? (
+              <SelectInput
+                disabled={isDisabled}
+                value={selectedLabel}
+                onChange={setSelectedLabel}
+              >
+                {allowedLabels.map((label) => (
+                  <option key={label} value={label}>
+                    {formatLinkLabel(label)}
+                  </option>
+                ))}
+              </SelectInput>
+            ) : null}
             <SelectInput
-              disabled={Boolean(busyId)}
-              value={selectedLabel}
-              onChange={setSelectedLabel}
-            >
-              {allowedLabels.map((label) => (
-                <option key={label} value={label}>
-                  {formatLinkLabel(label)}
-                </option>
-              ))}
-            </SelectInput>
-            <SelectInput
-              disabled={Boolean(busyId)}
+              disabled={isDisabled}
               value={selectedVisibility}
               onChange={setSelectedVisibility}
             >
@@ -687,7 +722,7 @@ function NpcLinkSection({
                 <button
                   key={entity.id}
                   type="button"
-                  disabled={Boolean(busyId)}
+                  disabled={isDisabled}
                   onClick={() => handleAdd(entity.id)}
                   className="block w-full px-3 py-2 text-left text-sm text-zinc-200 hover:bg-white/5 disabled:cursor-not-allowed disabled:opacity-50"
                 >
@@ -711,7 +746,7 @@ function NpcLinkSection({
               {isGM && isEditing ? (
                 <button
                   type="button"
-                  disabled={Boolean(busyId)}
+                  disabled={isDisabled}
                   onClick={() => handleRemove(link.id)}
                   className="absolute right-3 top-3 rounded-full border border-rose-400/30 bg-rose-500/10 p-1.5 text-rose-100 opacity-0 transition hover:bg-rose-500/20 group-hover:opacity-100 disabled:cursor-not-allowed disabled:opacity-50"
                   aria-label="Remove link"
@@ -732,10 +767,40 @@ function NpcLinkSection({
               </button>
 
               <div className="mt-3 flex flex-wrap items-center gap-2">
-                <span className="rounded-full border border-white/10 bg-white/5 px-2.5 py-1 text-[11px] text-zinc-300">
-                  {formatLinkLabel(link.label)}
-                </span>
-                {isGM ? (
+                {isGM && isEditing ? (
+                  <div className="grid w-full grid-cols-1 gap-2 sm:grid-cols-2">
+                    {canChangeLabel ? (
+                      <SelectInput
+                        disabled={isDisabled}
+                        value={link.label}
+                        onChange={(label) => handleUpdateLink(link, entity, { label })}
+                      >
+                        {allowedLabels.map((label) => (
+                          <option key={label} value={label}>
+                            {formatLinkLabel(label)}
+                          </option>
+                        ))}
+                      </SelectInput>
+                    ) : (
+                      <span className="rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-xs text-zinc-300">
+                        {formatLinkLabel(link.label)}
+                      </span>
+                    )}
+                    <SelectInput
+                      disabled={isDisabled}
+                      value={link.visibility}
+                      onChange={(visibility) => handleUpdateLink(link, entity, { visibility })}
+                    >
+                      <option value="GM">GM-only</option>
+                      <option value="Player">Player-visible</option>
+                    </SelectInput>
+                  </div>
+                ) : (
+                  <span className="rounded-full border border-white/10 bg-white/5 px-2.5 py-1 text-[11px] text-zinc-300">
+                    {formatLinkLabel(link.label)}
+                  </span>
+                )}
+                {isGM && !isEditing ? (
                   <span
                     className={`rounded-full border px-2.5 py-1 text-[11px] font-semibold ${
                       link.visibility === "Player"
@@ -745,6 +810,9 @@ function NpcLinkSection({
                   >
                     {link.visibility === "Player" ? "Player-visible" : "GM-only"}
                   </span>
+                ) : null}
+                {busyId === `edit-${link.id}` ? (
+                  <span className="text-[11px] text-zinc-500">Saving...</span>
                 ) : null}
               </div>
             </div>
@@ -1174,7 +1242,10 @@ export default function NpcProfile() {
   const [isStatBlockCollapsed, setIsStatBlockCollapsed] = useState(true);
   const [sessions, setSessions] = useState([]);
   const [items, setItems] = useState([]);
+  const [loreEntries, setLoreEntries] = useState([]);
   const [linksVersion, setLinksVersion] = useState(0);
+  const [draftLinks, setDraftLinks] = useState(null);
+  const [linkDraftKey, setLinkDraftKey] = useState(0);
 
   useEffect(() => {
     let cancelled = false;
@@ -1184,6 +1255,7 @@ export default function NpcProfile() {
         setNpc(null);
         setSessions([]);
         setItems([]);
+        setLoreEntries([]);
         setIsLoading(false);
         return;
       }
@@ -1191,10 +1263,11 @@ export default function NpcProfile() {
       try {
         setIsLoading(true);
         setError("");
-        const [data, sessionData, itemData] = await Promise.all([
+        const [data, sessionData, itemData, loreData] = await Promise.all([
           npcsRepo.getById(selectedCampaignId, id),
           sessionsRepo.getAll(selectedCampaignId),
           itemsRepo.getAll(selectedCampaignId),
+          loreRepo.getAll(selectedCampaignId),
           loadLinks(selectedCampaignId),
         ]);
         if (!cancelled) {
@@ -1203,6 +1276,7 @@ export default function NpcProfile() {
           setIsStatBlockCollapsed(data ? isStatBlockEmpty(data.statBlock) : true);
           setSessions(Array.isArray(sessionData) ? sessionData : []);
           setItems(Array.isArray(itemData) ? itemData : []);
+          setLoreEntries(Array.isArray(loreData) ? loreData : []);
           setLinksVersion((version) => version + 1);
         }
       } catch (loadError) {
@@ -1211,6 +1285,7 @@ export default function NpcProfile() {
           setNpc(null);
           setSessions([]);
           setItems([]);
+          setLoreEntries([]);
           setError("Unable to load this NPC right now.");
         }
       } finally {
@@ -1230,6 +1305,8 @@ export default function NpcProfile() {
     return npc ? getLinksForEntity("NPC", String(npc.id), isGM ? "GM" : "Player") : [];
   }, [npc, isGM, linksVersion]);
 
+  const visibleNpcLinks = isEditing && draftLinks ? draftLinks : npcLinks;
+
   const visibleSessions = useMemo(() => {
     if (isGM) return sessions;
     return sessions.filter((session) => session?.visibility !== "gm-only");
@@ -1240,9 +1317,44 @@ export default function NpcProfile() {
     return items.filter((item) => item?.visibility !== "gm-only");
   }, [isGM, items]);
 
+  const visibleLoreEntries = useMemo(() => {
+    if (isGM) return loreEntries;
+    return loreEntries.filter((entry) => entry?.visibility === "public");
+  }, [isGM, loreEntries]);
+
   const handleLinksChanged = () => {
     setLinksVersion((version) => version + 1);
   };
+
+  async function applyDraftLinkChanges(originalLinks, nextLinks) {
+    if (!selectedCampaignId) return;
+
+    const originalById = new Map(originalLinks.map((link) => [link.id, link]));
+    const nextById = new Map(nextLinks.map((link) => [link.id, link]));
+
+    for (const originalLink of originalLinks) {
+      if (!nextById.has(originalLink.id)) {
+        await removeLink(originalLink.id, selectedCampaignId);
+      }
+    }
+
+    for (const nextLink of nextLinks) {
+      const originalLink = originalById.get(nextLink.id);
+
+      if (!originalLink) {
+        await addLink(nextLink, selectedCampaignId);
+        continue;
+      }
+
+      if (getLinkSignature(originalLink) !== getLinkSignature(nextLink)) {
+        await removeLink(originalLink.id, selectedCampaignId);
+        await addLink(nextLink, selectedCampaignId);
+      }
+    }
+
+    await loadLinks(selectedCampaignId);
+    handleLinksChanged();
+  }
 
   const updateDraft = (field, value) => {
     setDraft((current) => ({
@@ -1368,12 +1480,16 @@ export default function NpcProfile() {
   const handleStartEdit = () => {
     if (!isGM || !npc || isSaving || isDeleting) return;
     setDraft(buildDraft(npc));
+    setDraftLinks(npcLinks);
+    setLinkDraftKey((key) => key + 1);
     setIsEditing(true);
   };
 
   const handleCancelEdit = () => {
     if (isSaving) return;
     setDraft(buildDraft(npc));
+    setDraftLinks(null);
+    setLinkDraftKey((key) => key + 1);
     setIsEditing(false);
   };
 
@@ -1396,8 +1512,13 @@ export default function NpcProfile() {
         statBlock: normalizeStatBlock(draft.statBlock),
         statBlockVisibility: normalizeStatBlockVisibility(draft.statBlockVisibility),
       });
+      if (draftLinks) {
+        await applyDraftLinkChanges(npcLinks, draftLinks);
+      }
       setNpc(savedNpc);
       setDraft(buildDraft(savedNpc));
+      setDraftLinks(null);
+      setLinkDraftKey((key) => key + 1);
       setIsStatBlockCollapsed(isStatBlockEmpty(savedNpc.statBlock));
       setIsEditing(false);
     } catch (saveError) {
@@ -1743,17 +1864,19 @@ export default function NpcProfile() {
           </section>
 
           <NpcLinkSection
+            key={`npc-sessions-${linkDraftKey}`}
             title="Sessions"
             emptyText="No linked sessions yet."
             npcId={String(npc.id)}
             entityType="Session"
             entities={visibleSessions}
-            links={npcLinks}
+            links={visibleNpcLinks}
             allowedLabels={NPC_SESSION_LABELS}
             defaultLabel="present"
             defaultVisibility="GM"
             isGM={isGM}
             isEditing={isEditing}
+            isSaving={isSaving}
             selectedCampaignId={selectedCampaignId}
             getEntityLabel={getSessionLabel}
             getEntityMeta={(session) => {
@@ -1764,26 +1887,49 @@ export default function NpcProfile() {
               return parts.join(" • ");
             }}
             getEntityPath={(session) => `/sessions/${session.id}`}
-            onLinksChanged={handleLinksChanged}
+            onLinksChanged={setDraftLinks}
           />
 
           <NpcLinkSection
+            key={`npc-items-${linkDraftKey}`}
             title="Associated Items"
             emptyText="No associated items yet."
             npcId={String(npc.id)}
             entityType="Item"
             entities={visibleItems}
-            links={npcLinks}
+            links={visibleNpcLinks}
             allowedLabels={NPC_ITEM_LABELS}
             defaultLabel="owns"
             defaultVisibility="GM"
             isGM={isGM}
             isEditing={isEditing}
+            isSaving={isSaving}
             selectedCampaignId={selectedCampaignId}
             getEntityLabel={getItemLabel}
             getEntityMeta={(item) => [item?.rarity, item?.type].filter(Boolean).join(" • ")}
             getEntityPath={(item) => `/items/${item.id}`}
-            onLinksChanged={handleLinksChanged}
+            onLinksChanged={setDraftLinks}
+          />
+
+          <NpcLinkSection
+            key={`npc-lore-${linkDraftKey}`}
+            title="Lore"
+            emptyText="No linked lore yet."
+            npcId={String(npc.id)}
+            entityType="Lore"
+            entities={visibleLoreEntries}
+            links={visibleNpcLinks}
+            allowedLabels={NPC_LORE_LABELS}
+            defaultLabel="connected"
+            defaultVisibility="GM"
+            isGM={isGM}
+            isEditing={isEditing}
+            isSaving={isSaving}
+            selectedCampaignId={selectedCampaignId}
+            getEntityLabel={getLoreLabel}
+            getEntityMeta={(entry) => entry?.type || ""}
+            getEntityPath={(entry) => `/lore/${entry.id}`}
+            onLinksChanged={setDraftLinks}
           />
 
           <PlaceholderCard title="Relationships">Relationship links coming soon</PlaceholderCard>

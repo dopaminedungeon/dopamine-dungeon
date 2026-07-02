@@ -180,7 +180,7 @@ export const ALLOWED_LINK_LABELS: Record<string, string[]> = {
   // ─────────────────────────
   // Lore
   // ─────────────────────────
-  "Lore|NPC": ["describes", "origin_of"],
+  "Lore|NPC": ["connected", "describes", "origin_of"],
   "Lore|PC": ["connected_to"],
   "Lore|Item": ["explains", "origin_of"],
   "Lore|Map": ["describes", "historical_site"],
