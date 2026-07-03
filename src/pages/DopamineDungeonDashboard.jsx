@@ -1,12 +1,11 @@
 import React from "react";
-import { useNavigate } from "react-router-dom";
+import { Link } from "react-router-dom";
 import { Home, ScrollText, Package, Users, Settings, Sparkles } from "lucide-react";
 import { useCampaign } from "../context/CampaignContext";
 import { useTenant } from "../context/TenantContext";
 import { useMode } from "../context/ModeContext";
 
 export default function DopamineDungeonDashboard() {
-  const navigate = useNavigate();
   const campaignContext = useCampaign();
   const tenantContext = useTenant();
   const { mode } = useMode();
@@ -221,10 +220,9 @@ export default function DopamineDungeonDashboard() {
             {quickActions.map((action) => {
               const Icon = action.icon;
               return (
-                <button
+                <Link
                   key={action.label}
-                  type="button"
-                  onClick={() => navigate(action.to)}
+                  to={action.to}
                   className={`flex items-center gap-3 rounded-2xl border border-white/10 bg-white/5 px-4 py-4 text-left text-white transition duration-300 motion-safe:hover:-translate-y-0.5 ${modeTheme.quickButtonHover}`}
                 >
                   <div className={`flex h-10 w-10 items-center justify-center rounded-2xl border ${modeTheme.quickIcon}`}>
@@ -234,7 +232,7 @@ export default function DopamineDungeonDashboard() {
                     <p className="text-sm font-semibold">{action.label}</p>
                     <p className="text-xs text-zinc-500">Open {action.label.toLowerCase()}</p>
                   </div>
-                </button>
+                </Link>
               );
             })}
           </div>

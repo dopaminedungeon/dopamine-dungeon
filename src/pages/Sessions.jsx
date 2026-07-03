@@ -1,5 +1,5 @@
-import React, { useEffect, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import React, { useEffect, useMemo, useState } from "react";
+import { Link, useNavigate } from "react-router-dom";
 import { useMode } from "../context/ModeContext.jsx";
 import {
   Search,
@@ -11,6 +11,11 @@ import {
 } from "lucide-react";
 import { useCampaign } from "../context/CampaignContext";
 import { sessionsRepo } from "../data/sessions/sessions.repo";
+import { locationsRepo } from "../data/maps/locations.repo";
+import { createLink } from "../domain/links/link.service";
+import { addLink, getLinksForEntity, loadLinks } from "../data/links/links.repo";
+
+const MAIN_LOCATION_LINK_NOTE = "auto:session-main-location";
 
 const statusConfig = {
   active: { color: 'bg-emerald-500', text: 'text-emerald-400', label: 'Live', icon: Play },
@@ -29,6 +34,48 @@ function newId(prefix = "session") {
 
 function safeArray(value) {
   return Array.isArray(value) ? value : [];
+}
+
+function getOtherEndpoint(link, baseType, baseId) {
+  return link.entityA.type === baseType && String(link.entityA.id) === String(baseId)
+    ? link.entityB
+    : link.entityA;
+}
+
+function hasVisitedPlayerSessionLocationLink(links, sessionId, locationId) {
+  return links.some((link) => {
+    const other = getOtherEndpoint(link, "Session", sessionId);
+    return (
+      other.type === "Map" &&
+      String(other.id) === String(locationId) &&
+      link.label === "visited" &&
+      link.visibility === "Player"
+    );
+  });
+}
+
+async function ensureMainLocationLink(campaignId, sessionId, locationId) {
+  if (!campaignId || !sessionId || !locationId) return;
+
+  await loadLinks(campaignId);
+  const sessionLinks = getLinksForEntity("Session", String(sessionId), "GM");
+  if (hasVisitedPlayerSessionLocationLink(sessionLinks, sessionId, locationId)) return;
+
+  const link = createLink({
+    entityA: { type: "Session", id: String(sessionId) },
+    entityB: { type: "Map", id: String(locationId) },
+    label: "visited",
+    visibility: "Player",
+    note: MAIN_LOCATION_LINK_NOTE,
+  });
+
+  try {
+    await addLink(link, campaignId);
+  } catch (error) {
+    if (!String(error?.message || "").includes("Duplicate link prevented")) {
+      throw error;
+    }
+  }
 }
 
 function getSessionDateMs(session) {
@@ -98,13 +145,43 @@ function formatSessionDate(session) {
   });
 }
 
+function getSessionPreview(session) {
+  return String(session?.summary || session?.description || "").trim() || "No summary yet.";
+}
+
+function getHighlightSessionId(sessions) {
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+
+  const datedSessions = sessions
+    .map((session) => ({
+      session,
+      dateMs: getSessionDateMs(session),
+    }))
+    .filter(({ dateMs }) => dateMs !== null);
+
+  const upcoming = datedSessions
+    .filter(({ dateMs }) => dateMs >= today.getTime())
+    .sort((a, b) => a.dateMs - b.dateMs)[0];
+
+  if (upcoming) return String(upcoming.session.id);
+
+  const mostRecentCompleted = datedSessions
+    .filter(({ session }) => session.status === "completed")
+    .sort((a, b) => b.dateMs - a.dateMs)[0];
+
+  return mostRecentCompleted ? String(mostRecentCompleted.session.id) : null;
+}
+
 export default function Sessions() {
   const [showCreateModal, setShowCreateModal] = useState(false);
 
   const { selectedCampaignId } = useCampaign();
   const [sessions, setSessions] = useState([]);
+  const [locations, setLocations] = useState([]);
   const [loading, setLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
+  const [locationQuery, setLocationQuery] = useState("");
 
 useEffect(() => {
   if (!selectedCampaignId) {
@@ -116,11 +193,16 @@ useEffect(() => {
   async function load() {
     setLoading(true);
     try {
-      const data = await sessionsRepo.getAll(selectedCampaignId);
-      setSessions(safeArray(data));
+      const [sessionData, locationData] = await Promise.all([
+        sessionsRepo.getAll(selectedCampaignId),
+        locationsRepo.getAll(selectedCampaignId),
+      ]);
+      setSessions(safeArray(sessionData));
+      setLocations(safeArray(locationData));
     } catch (error) {
       console.error("[Sessions] Failed to load sessions", error);
       setSessions([]);
+      setLocations([]);
     } finally {
       setLoading(false);
     }
@@ -153,7 +235,42 @@ useEffect(() => {
   const visibleSessions = isGM
     ? sortedSessions
     : sortedSessions.filter((session) => session.visibility === "public");
+  const highlightSessionId = useMemo(
+    () => getHighlightSessionId(visibleSessions),
+    [visibleSessions]
+  );
+  const visibleLocations = useMemo(() => {
+    if (isGM) return locations;
+    return locations.filter((location) => location?.visibility === "public");
+  }, [isGM, locations]);
+  const locationsById = useMemo(
+    () => new Map(visibleLocations.map((location) => [String(location.id), location])),
+    [visibleLocations]
+  );
+  const allLocationsById = useMemo(
+    () => new Map(locations.map((location) => [String(location.id), location])),
+    [locations]
+  );
+  const filteredLocations = useMemo(() => {
+    const normalizedQuery = locationQuery.trim().toLowerCase();
 
+    return locations
+      .filter((location) => {
+        if (!location?.id) return false;
+        if (!normalizedQuery) return true;
+
+        return [location.name, location.category]
+          .filter(Boolean)
+          .some((value) => String(value).toLowerCase().includes(normalizedQuery));
+      })
+      .sort((a, b) =>
+        String(a?.name || "").localeCompare(String(b?.name || ""), undefined, {
+          sensitivity: "base",
+          numeric: true,
+        })
+      );
+  }, [locationQuery, locations]);
+  const selectedLocation = formData.map ? allLocationsById.get(String(formData.map)) : null;
 if (!selectedCampaignId) {
   return (
     <main className="flex-1 overflow-auto flex items-center justify-center">
@@ -232,48 +349,90 @@ if (loading) {
           const status = statusConfig[session.status] || statusConfig.scheduled;
           const StatusIcon = status.icon;
           const isGmOnly = session.visibility === "gm-only";
+          const locationId = String(session?.map || "").trim();
+          const location = locationId ? locationsById.get(locationId) : null;
+          const locationLabel = !locationId
+            ? "No location"
+            : location?.name || "Unknown location";
+          const sessionNumber =
+            session.sessionNumber !== undefined &&
+            session.sessionNumber !== null &&
+            session.sessionNumber !== ""
+              ? `Session ${session.sessionNumber}`
+              : "Session";
+          const isHighlighted = String(session.id) === highlightSessionId;
           return (
-            <div
+            <article
               key={session.id}
-              className="group bg-white/5 backdrop-blur-sm border border-white/10 rounded-xl sm:rounded-2xl p-4 sm:p-6 hover:border-purple-500/30 hover:bg-white/10 transition-all cursor-pointer"
-              onClick={() => navigate(`/sessions/${session.id}`)}
+              className={`group relative rounded-xl border bg-white/5 p-5 backdrop-blur-sm transition-all hover:border-purple-500/30 hover:bg-white/10 sm:rounded-2xl ${
+                isHighlighted
+                  ? "border-emerald-400/35 shadow-[0_0_24px_rgba(16,185,129,0.12)]"
+                  : "border-white/10"
+              }`}
             >
-              <div className="flex flex-col lg:flex-row lg:items-center gap-3 sm:gap-4">
-                {/* Session Info */}
-                <div className="flex items-center gap-4 flex-1">
-                  <div className={`w-10 h-10 sm:w-12 sm:h-12 rounded-xl bg-linear-to-br from-emerald-500 to-teal-500 flex items-center justify-center`}>
-                    <StatusIcon className="w-6 h-6 text-white" />
-                  </div>
-                  <div>
-                    <div className="flex flex-wrap items-center gap-2 sm:gap-3">
-                      <h3 className="text-lg font-bold text-white group-hover:text-emerald-300 transition-colors">
-                        {session.name}
+              <Link
+                to={`/sessions/${session.id}`}
+                aria-label={`Open ${session.name || "session"}`}
+                className="absolute inset-0 rounded-xl focus:outline-none focus:ring-2 focus:ring-purple-400/60 sm:rounded-2xl"
+              />
+
+              <div className="relative pointer-events-none flex gap-4">
+                <div className="mt-1 flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-linear-to-br from-emerald-500 to-teal-500 text-white">
+                  <StatusIcon className="h-5 w-5" />
+                </div>
+
+                <div className="min-w-0 flex-1 space-y-3">
+                  <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+                    <div className="min-w-0">
+                      <p className="text-xs font-medium uppercase tracking-wide text-zinc-500">
+                        {sessionNumber}
+                      </p>
+                      <h3 className="mt-0.5 text-lg font-bold leading-tight text-white transition-colors group-hover:text-emerald-300 sm:text-xl">
+                        {session.name || "Untitled session"}
                       </h3>
+                    </div>
 
-                      {/* GM-only badge – only visible in GM mode */}
-                      {isGM && isGmOnly && (
-                        <span className="px-2 py-0.5 rounded-full text-[10px] font-medium bg-red-500/20 text-red-300 border border-red-500/40">
-                          GM ONLY
-                        </span>
-                      )}
-
+                    <div className="flex shrink-0 flex-wrap items-center gap-2">
                       <span
-                        className={`flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium ${status.text} bg-white/5`}
+                        className={`inline-flex items-center gap-1.5 rounded-full bg-white/5 px-2.5 py-1 text-xs font-medium ${status.text}`}
                       >
                         <span
-                          className={`w-1.5 h-1.5 rounded-full ${status.color} ${session.status === "active" ? "animate-pulse" : ""
-                            }`}
+                          className={`h-1.5 w-1.5 rounded-full ${status.color} ${
+                            session.status === "active" ? "animate-pulse" : ""
+                          }`}
                         />
                         {status.label}
                       </span>
+
+                      {isGM && isGmOnly ? (
+                        <span className="rounded-full border border-red-500/40 bg-red-500/20 px-2.5 py-1 text-xs font-medium text-red-300">
+                          GM only
+                        </span>
+                      ) : null}
                     </div>
-                    <p className="text-zinc-500 text-sm">
-                      {formatSessionDate(session)} • Location: {session.map || "—"}
-                    </p>
                   </div>
+
+                  <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-zinc-500">
+                    <span>{formatSessionDate(session)}</span>
+                    <span className="hidden text-zinc-700 sm:inline">•</span>
+                    {location ? (
+                      <Link
+                        to={`/maps/${location.id}`}
+                        className="pointer-events-auto relative z-10 text-zinc-300 hover:text-purple-200"
+                      >
+                        {locationLabel}
+                      </Link>
+                    ) : (
+                      <span>{locationLabel}</span>
+                    )}
+                  </div>
+
+                  <p className="line-clamp-2 text-sm leading-6 text-zinc-400">
+                    {getSessionPreview(session)}
+                  </p>
                 </div>
               </div>
-            </div>
+            </article>
           );
         })}
       </div>
@@ -312,6 +471,9 @@ if (loading) {
                 setIsSaving(true);
 
                 await sessionsRepo.upsert(selectedCampaignId, nextSession);
+                if (nextSession.map) {
+                  await ensureMainLocationLink(selectedCampaignId, id, nextSession.map);
+                }
                 const data = await sessionsRepo.getAll(selectedCampaignId);
                 setSessions(safeArray(data));
 
@@ -325,6 +487,7 @@ if (loading) {
                   visibility: "public",
                   gmNotes: "",
                 });
+                setLocationQuery("");
 
                 // Navigate straight to the new session
                 navigate(`/sessions/${id}`);
@@ -394,15 +557,111 @@ if (loading) {
                 </div>
               </div>
 
-              <div>
-                <label className="block text-sm text-zinc-400 mb-1">Location</label>
+              <div className="space-y-2">
+                <label className="block text-sm text-zinc-400">Main Location</label>
                 <input
-                  type="text"
-                  required
-                  value={formData.map}
-                  onChange={(e) => setFormData({ ...formData, map: e.target.value })}
-                  className="w-full px-3 py-2 bg-white/5 border border-white/10 rounded-xl text-white"
+                  type="search"
+                  value={locationQuery}
+                  onChange={(e) => setLocationQuery(e.target.value)}
+                  placeholder="Search locations..."
+                  className="w-full px-3 py-2 bg-white/5 border border-white/10 rounded-xl text-white placeholder-zinc-500"
                 />
+
+                <div className="rounded-xl border border-white/10 bg-black/10">
+                  <div className="flex items-center justify-between gap-3 border-b border-white/10 px-3 py-2">
+                    <div className="min-w-0">
+                      <p className="text-xs uppercase tracking-wide text-zinc-500">
+                        Selected
+                      </p>
+                      <p className="truncate text-sm text-zinc-200">
+                        {selectedLocation?.name || "No location"}
+                        {selectedLocation?.category ? (
+                          <span className="text-zinc-500"> • {selectedLocation.category}</span>
+                        ) : null}
+                      </p>
+                    </div>
+                    {formData.map ? (
+                      <button
+                        type="button"
+                        disabled={isSaving}
+                        onClick={() => {
+                          setFormData({ ...formData, map: "" });
+                          setLocationQuery("");
+                        }}
+                        className="shrink-0 rounded-lg border border-white/10 bg-white/5 px-2.5 py-1 text-xs text-zinc-300 hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-50"
+                      >
+                        Clear
+                      </button>
+                    ) : (
+                      <span className="shrink-0 rounded-full border border-white/10 bg-white/5 px-2.5 py-1 text-[11px] text-zinc-500">
+                        None
+                      </span>
+                    )}
+                  </div>
+
+                  <div className="max-h-48 overflow-y-auto p-1.5">
+                    <button
+                      type="button"
+                      disabled={isSaving}
+                      onClick={() => {
+                        setFormData({ ...formData, map: "" });
+                        setLocationQuery("");
+                      }}
+                      className={`mb-1 flex w-full items-center justify-between rounded-lg px-3 py-2 text-left text-sm transition disabled:cursor-not-allowed disabled:opacity-50 ${
+                        !formData.map
+                          ? "border border-emerald-500/40 bg-emerald-500/10 text-emerald-200"
+                          : "border border-transparent text-zinc-300 hover:bg-white/5 hover:text-white"
+                      }`}
+                    >
+                      <span>No location</span>
+                      {!formData.map ? (
+                        <span className="text-[11px] uppercase tracking-wide text-emerald-300">
+                          Selected
+                        </span>
+                      ) : null}
+                    </button>
+
+                    {filteredLocations.length === 0 ? (
+                      <p className="px-3 py-2 text-sm text-zinc-500">No matching locations.</p>
+                    ) : (
+                      filteredLocations.map((location) => {
+                        const isSelected = String(formData.map || "") === String(location.id);
+                        return (
+                          <button
+                            key={location.id}
+                            type="button"
+                            disabled={isSaving}
+                            onClick={() => {
+                              setFormData({ ...formData, map: String(location.id) });
+                              setLocationQuery(location.name || "");
+                            }}
+                            className={`flex w-full items-center justify-between gap-3 rounded-lg px-3 py-2 text-left text-sm transition disabled:cursor-not-allowed disabled:opacity-50 ${
+                              isSelected
+                                ? "border border-emerald-500/40 bg-emerald-500/10 text-emerald-200"
+                                : "border border-transparent text-zinc-300 hover:bg-white/5 hover:text-white"
+                            }`}
+                          >
+                            <span className="min-w-0">
+                              <span className="block truncate">
+                                {location.name || "Untitled location"}
+                              </span>
+                              {location.category ? (
+                                <span className="block truncate text-xs text-zinc-500">
+                                  {location.category}
+                                </span>
+                              ) : null}
+                            </span>
+                            {isSelected ? (
+                              <span className="shrink-0 text-[11px] uppercase tracking-wide text-emerald-300">
+                                Selected
+                              </span>
+                            ) : null}
+                          </button>
+                        );
+                      })
+                    )}
+                  </div>
+                </div>
               </div>
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
@@ -451,7 +710,10 @@ if (loading) {
                 <button
 	                  type="button"
 	                  disabled={isSaving}
-	                  onClick={() => setShowCreateModal(false)}
+	                  onClick={() => {
+                      setShowCreateModal(false);
+                      setLocationQuery("");
+                    }}
 	                  className="w-full sm:w-auto px-4 py-2 rounded-xl bg-white/5 text-zinc-300 hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-50"
 	                >
                   Cancel

@@ -1,11 +1,15 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
-import { useParams, useNavigate } from "react-router-dom";
+import { Link, useParams, useNavigate } from "react-router-dom";
 import { useMode } from "../context/ModeContext.jsx";
 import { ArrowLeft, Swords, Shield, Sparkles, Trash2 } from "lucide-react";
 import { itemsRepo } from "../data/items/items.repo";
 import { sessionsRepo } from "../data/sessions/sessions.repo";
+import { npcsRepo } from "../data/npcs/npcs.repo";
+import { loreRepo } from "../data/lore/lore.repo";
+import { locationsRepo } from "../data/maps/locations.repo";
 import { useCampaign } from "../context/CampaignContext";
-import { getLinksForEntity, loadLinks } from "../data/links/links.repo";
+import { createLink } from "../domain/links/link.service";
+import { addLink, getLinksForEntity, loadLinks, removeLink } from "../data/links/links.repo";
 import { getApiCampaignPeople, getApiCharacterAssignments } from "../data/api/apiClient";
 import { getAllCharacters } from "../data/characters/characters.repo";
 
@@ -21,6 +25,7 @@ const ITEM_TYPES = [
   "Rod",
   "Ring",
   "Wondrous Item",
+  "Artifact",
   "Tool",
   "Adventuring Gear",
   "Mount / Vehicle",
@@ -48,6 +53,7 @@ const typeIcons = {
   Rod: Sparkles,
   Ring: Sparkles,
   "Wondrous Item": Sparkles,
+  Artifact: Sparkles,
   Tool: Sparkles,
   "Adventuring Gear": Sparkles,
   "Mount / Vehicle": Sparkles,
@@ -80,6 +86,346 @@ function formatOwnerDisplay(value) {
   return raw;
 }
 
+function formatLinkLabel(label) {
+  return String(label || "").replaceAll("_", " ");
+}
+
+function getOtherEndpoint(link, baseType, baseId) {
+  return link.entityA.type === baseType && String(link.entityA.id) === String(baseId)
+    ? link.entityB
+    : link.entityA;
+}
+
+function getLinkSignature(link) {
+  return [
+    `${link.entityA.type}:${link.entityA.id}`,
+    `${link.entityB.type}:${link.entityB.id}`,
+    link.label,
+    link.visibility,
+  ].join("|");
+}
+
+function getSessionLabel(session) {
+  const number = session?.sessionNumber ? `Session ${session.sessionNumber}: ` : "";
+  return `${number}${session?.name || session?.title || "Untitled session"}`;
+}
+
+function getLoreLabel(lore) {
+  return lore?.name || "Untitled lore";
+}
+
+function getNpcLabel(npc) {
+  return npc?.name || "Unnamed NPC";
+}
+
+function getLocationLabel(location) {
+  return location?.name || "Untitled location";
+}
+
+function SelectInput({ value, onChange, disabled, children }) {
+  return (
+    <select
+      value={value}
+      disabled={disabled}
+      onChange={(event) => onChange(event.target.value)}
+      className="min-w-0 rounded-xl border border-white/10 bg-zinc-950 px-3 py-2 text-sm text-white outline-none focus:border-purple-500/60 disabled:cursor-not-allowed disabled:opacity-50"
+    >
+      {children}
+    </select>
+  );
+}
+
+function ItemLinkSection({
+  title,
+  emptyText,
+  itemId,
+  entityType,
+  addLabel,
+  entities,
+  links,
+  allowedLabels,
+  defaultLabel,
+  defaultVisibility = "GM",
+  isGM,
+  isEditing,
+  isSaving,
+  getEntityLabel,
+  getEntityMeta,
+  getEntityPath,
+  onLinksChanged,
+}) {
+  const [searchOpen, setSearchOpen] = useState(false);
+  const [query, setQuery] = useState("");
+  const [selectedLabel, setSelectedLabel] = useState(defaultLabel);
+  const [selectedVisibility, setSelectedVisibility] = useState(defaultVisibility);
+  const [error, setError] = useState("");
+  const isDisabled = Boolean(isSaving);
+
+  const entityList = useMemo(
+    () => (Array.isArray(entities) ? entities.filter((entity) => entity?.id) : []),
+    [entities]
+  );
+
+  const entitiesById = useMemo(
+    () => new Map(entityList.map((entity) => [String(entity.id), entity])),
+    [entityList]
+  );
+
+  const relevantLinks = useMemo(() => {
+    return links
+      .map((link) => {
+        const other = getOtherEndpoint(link, "Item", itemId);
+        const entity = other.type === entityType ? entitiesById.get(String(other.id)) : null;
+
+        if (!entity) return null;
+        if (!allowedLabels.includes(link.label)) return null;
+        if (!isGM && link.visibility !== "Player") return null;
+
+        return { link, entity };
+      })
+      .filter(Boolean);
+  }, [allowedLabels, entitiesById, entityType, isGM, itemId, links]);
+
+  const candidateEntities = useMemo(() => {
+    const normalizedQuery = query.trim().toLowerCase();
+
+    return entityList
+      .filter((entity) => {
+        const label = getEntityLabel(entity);
+        if (normalizedQuery && !String(label || "").toLowerCase().includes(normalizedQuery)) {
+          return false;
+        }
+
+        return !links.some((link) => {
+          const other = getOtherEndpoint(link, "Item", itemId);
+          return other.type === entityType && String(other.id) === String(entity.id);
+        });
+      })
+      .slice(0, 30);
+  }, [entityList, entityType, getEntityLabel, itemId, links, query]);
+
+  function handleAdd(entityId) {
+    if (isDisabled) return;
+    const normalizedEntityId = String(entityId);
+
+    const duplicate = links.some((link) => {
+      const other = getOtherEndpoint(link, "Item", itemId);
+      return other.type === entityType && String(other.id) === normalizedEntityId;
+    });
+
+    if (duplicate) {
+      setError("That entity is already linked.");
+      return;
+    }
+
+    try {
+      setError("");
+      const link = createLink({
+        entityA: { type: "Item", id: String(itemId) },
+        entityB: { type: entityType, id: normalizedEntityId },
+        label: selectedLabel,
+        visibility: selectedVisibility,
+      });
+
+      onLinksChanged([...links, link]);
+      setQuery("");
+      setSearchOpen(false);
+    } catch (linkError) {
+      console.error("[ItemProfile] Failed to stage link", linkError);
+      setError("Unable to add this link right now.");
+    }
+  }
+
+  function handleRemove(linkId) {
+    if (isDisabled) return;
+
+    setError("");
+    onLinksChanged(links.filter((link) => link.id !== linkId));
+  }
+
+  function handleUpdateLink(link, entity, changes) {
+    if (isDisabled) return;
+
+    const nextLabel = changes.label ?? link.label;
+    const nextVisibility = changes.visibility ?? link.visibility;
+
+    if (nextLabel === link.label && nextVisibility === link.visibility) return;
+
+    const duplicate = links.some((candidate) => {
+      if (candidate.id === link.id) return false;
+
+      const other = getOtherEndpoint(candidate, "Item", itemId);
+      return other.type === entityType && String(other.id) === String(entity.id);
+    });
+
+    if (duplicate) {
+      setError("That entity is already linked.");
+      return;
+    }
+
+    setError("");
+    onLinksChanged(
+      links.map((candidate) =>
+        candidate.id === link.id
+          ? { ...candidate, label: nextLabel, visibility: nextVisibility }
+          : candidate
+      )
+    );
+  }
+
+  return (
+    <section className="rounded-2xl border border-white/10 bg-white/5 p-5">
+      <div className="flex items-start justify-between gap-3">
+        <h2 className="text-lg font-semibold text-white">{title}</h2>
+        {isGM && isEditing ? (
+          <button
+            type="button"
+            disabled={isDisabled}
+            onClick={() => {
+              if (isDisabled) return;
+              setSearchOpen((current) => !current);
+              setError("");
+            }}
+            className="rounded-lg border border-white/10 bg-white/5 px-3 py-1.5 text-xs text-zinc-200 hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            {searchOpen ? "Close" : `Add ${addLabel}`}
+          </button>
+        ) : null}
+      </div>
+
+      {isGM && isEditing && searchOpen ? (
+        <div className="mt-4 space-y-3 rounded-xl border border-white/10 bg-black/10 p-4">
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-[minmax(0,1fr)_160px_140px]">
+            <input
+              value={query}
+              disabled={isDisabled}
+              onChange={(event) => {
+                if (!isDisabled) setQuery(event.target.value);
+              }}
+              placeholder={`Search ${title.toLowerCase()}...`}
+              className="min-w-0 rounded-xl border border-white/10 bg-transparent px-3 py-2 text-sm text-zinc-100 outline-none focus:border-purple-500/60 disabled:cursor-not-allowed disabled:opacity-50"
+            />
+            <SelectInput
+              disabled={isDisabled}
+              value={selectedLabel}
+              onChange={setSelectedLabel}
+            >
+              {allowedLabels.map((label) => (
+                <option key={label} value={label}>
+                  {formatLinkLabel(label)}
+                </option>
+              ))}
+            </SelectInput>
+            <SelectInput
+              disabled={isDisabled}
+              value={selectedVisibility}
+              onChange={setSelectedVisibility}
+            >
+              <option value="GM">GM-only</option>
+              <option value="Player">Player-visible</option>
+            </SelectInput>
+          </div>
+
+          {error ? <p className="text-sm text-rose-300">{error}</p> : null}
+
+          <div className="max-h-48 overflow-auto rounded-xl border border-white/10">
+            {candidateEntities.length === 0 ? (
+              <p className="px-3 py-2 text-sm text-zinc-500">No results.</p>
+            ) : (
+              candidateEntities.map((entity) => (
+                <button
+                  key={entity.id}
+                  type="button"
+                  disabled={isDisabled}
+                  onClick={() => handleAdd(entity.id)}
+                  className="block w-full px-3 py-2 text-left text-sm text-zinc-200 hover:bg-white/5 disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  {getEntityLabel(entity)}
+                </button>
+              ))
+            )}
+          </div>
+        </div>
+      ) : null}
+
+      {relevantLinks.length === 0 ? (
+        <p className="mt-3 text-sm text-zinc-500">{emptyText}</p>
+      ) : (
+        <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2">
+          {relevantLinks.map(({ link, entity }) => (
+            <div
+              key={link.id}
+              className="group relative rounded-xl border border-white/10 bg-black/15 p-4"
+            >
+              {isGM && isEditing ? (
+                <button
+                  type="button"
+                  disabled={isDisabled}
+                  onClick={() => handleRemove(link.id)}
+                  className="absolute right-3 top-3 text-[10px] text-red-400 opacity-0 transition hover:text-red-200 group-hover:opacity-100 disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  Remove
+                </button>
+              ) : null}
+
+              <Link
+                to={getEntityPath(entity)}
+                className="block max-w-full cursor-pointer text-left hover:text-purple-200"
+              >
+                <p className="pr-8 text-sm font-semibold text-white">{getEntityLabel(entity)}</p>
+                {getEntityMeta ? (
+                  <p className="mt-1 text-xs text-zinc-500">{getEntityMeta(entity)}</p>
+                ) : null}
+              </Link>
+
+              <div className="mt-3 flex flex-wrap items-center gap-2">
+                {isGM && isEditing ? (
+                  <div className="grid w-full grid-cols-1 gap-2 sm:grid-cols-2">
+                    <SelectInput
+                      disabled={isDisabled}
+                      value={link.label}
+                      onChange={(label) => handleUpdateLink(link, entity, { label })}
+                    >
+                      {allowedLabels.map((label) => (
+                        <option key={label} value={label}>
+                          {formatLinkLabel(label)}
+                        </option>
+                      ))}
+                    </SelectInput>
+                    <SelectInput
+                      disabled={isDisabled}
+                      value={link.visibility}
+                      onChange={(visibility) => handleUpdateLink(link, entity, { visibility })}
+                    >
+                      <option value="GM">GM-only</option>
+                      <option value="Player">Player-visible</option>
+                    </SelectInput>
+                  </div>
+                ) : (
+                  <span className="rounded-full border border-white/10 bg-white/5 px-2.5 py-1 text-[11px] text-zinc-300">
+                    {formatLinkLabel(link.label)}
+                  </span>
+                )}
+                {isGM && !isEditing ? (
+                  <span
+                    className={`rounded-full border px-2.5 py-1 text-[11px] font-semibold ${
+                      link.visibility === "Player"
+                        ? "border-emerald-500/30 bg-emerald-500/15 text-emerald-300"
+                        : "border-red-500/40 bg-red-500/20 text-red-300"
+                    }`}
+                  >
+                    {link.visibility === "Player" ? "Player-visible" : "GM-only"}
+                  </span>
+                ) : null}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </section>
+  );
+}
+
 export default function ItemProfile() {
   const { id } = useParams();
   const navigate = useNavigate();
@@ -88,11 +434,16 @@ export default function ItemProfile() {
   const { selectedCampaignId } = useCampaign();
   const [item, setItem] = useState(null);
   const [sessions, setSessions] = useState([]);
+  const [npcs, setNpcs] = useState([]);
+  const [loreEntries, setLoreEntries] = useState([]);
+  const [locations, setLocations] = useState([]);
   const [loading, setLoading] = useState(true);
   const [isItemSaving, setIsItemSaving] = useState(false);
   const [isItemDeleting, setIsItemDeleting] = useState(false);
   const isItemSavingRef = useRef(false);
   const [linksVersion, setLinksVersion] = useState(0);
+  const [draftLinks, setDraftLinks] = useState(null);
+  const [linkDraftKey, setLinkDraftKey] = useState(0);
   const [ownerOptions, setOwnerOptions] = useState([{ value: "", label: "Unassigned" }]);
 
   const rawItem = item && String(item.id) === String(id) ? item : null;
@@ -103,6 +454,10 @@ export default function ItemProfile() {
     if (!selectedCampaignId) {
       setItem(null);
       setSessions([]);
+      setNpcs([]);
+      setLoreEntries([]);
+      setLocations([]);
+      setDraftLinks(null);
       setLoading(false);
       return;
     }
@@ -113,6 +468,9 @@ export default function ItemProfile() {
         const [
           itemData,
           sessionData,
+          npcData,
+          loreData,
+          locationData,
           _links,
           campaignPeopleResponse,
           characters,
@@ -120,6 +478,9 @@ export default function ItemProfile() {
         ] = await Promise.all([
           itemsRepo.getById(selectedCampaignId, String(id)),
           sessionsRepo.getAll(selectedCampaignId),
+          npcsRepo.getAll(selectedCampaignId),
+          loreRepo.getAll(selectedCampaignId),
+          locationsRepo.getAll(selectedCampaignId),
           loadLinks(selectedCampaignId),
           isGM ? getApiCampaignPeople(selectedCampaignId) : Promise.resolve({ people: [] }),
           isGM ? getAllCharacters(selectedCampaignId) : Promise.resolve([]),
@@ -130,6 +491,9 @@ export default function ItemProfile() {
         void _links;
         setItem(itemData || null);
         setSessions(Array.isArray(sessionData) ? sessionData : []);
+        setNpcs(Array.isArray(npcData) ? npcData : []);
+        setLoreEntries(Array.isArray(loreData) ? loreData : []);
+        setLocations(Array.isArray(locationData) ? locationData : []);
         setLinksVersion((version) => version + 1);
 
         const characterById = new Map(
@@ -172,6 +536,10 @@ export default function ItemProfile() {
         console.error("[ItemProfile] Failed to load items", error);
         setItem(null);
         setSessions([]);
+        setNpcs([]);
+        setLoreEntries([]);
+        setLocations([]);
+        setDraftLinks(null);
         setOwnerOptions([{ value: "", label: "Unassigned" }]);
       } finally {
         setLoading(false);
@@ -196,29 +564,99 @@ export default function ItemProfile() {
     }
   }, [formData?.owner, ownerOptions]);
   const [isEditing, setIsEditing] = useState(false);
-  const itemLinks = useMemo(
-    () => getLinksForEntity("Item", String(id), isGM ? "GM" : "Player"),
-    [id, isGM, linksVersion]
-  );
-  const sessionsById = useMemo(
-    () => new Map(sessions.map((session) => [String(session?.id), session])),
-    [sessions]
-  );
-  const getEndpointLabel = (endpoint) => {
-    if (endpoint.type === "BagOfHolding") return "Bag of Holding";
-    if (endpoint.type !== "Session") return endpoint.id;
+  const itemLinks = useMemo(() => {
+    void linksVersion;
+    return getLinksForEntity("Item", String(id), isGM ? "GM" : "Player");
+  }, [id, isGM, linksVersion]);
+  const visibleItemLinks = isEditing && draftLinks ? draftLinks : itemLinks;
+  const visibleSessions = useMemo(() => {
+    if (isGM) return sessions;
+    return sessions.filter((session) => session?.visibility !== "gm-only");
+  }, [isGM, sessions]);
+  const visibleNpcs = useMemo(() => {
+    if (isGM) return npcs;
+    return npcs.filter((npc) => npc?.visibility !== "gm-only");
+  }, [isGM, npcs]);
+  const visibleLoreEntries = useMemo(() => {
+    if (isGM) return loreEntries;
+    return loreEntries.filter((entry) => entry?.visibility === "public");
+  }, [isGM, loreEntries]);
+  const visibleLocations = useMemo(() => {
+    if (isGM) return locations;
+    return locations.filter((location) => location?.visibility === "public");
+  }, [isGM, locations]);
 
-    const session = sessionsById.get(String(endpoint.id));
-    return session?.name || session?.title || endpoint.id;
+  const handleLinksChanged = (nextLinks) => {
+    setDraftLinks(nextLinks);
   };
-  const getEndpointTypeLabel = (endpoint) => {
-    if (endpoint.type === "BagOfHolding") return "";
-    return `${endpoint.type}: `;
-  };
-  const getLinkLabel = (label) => {
-    if (label === "contained_in") return "contained in";
-    return String(label || "").replaceAll("_", " ");
-  };
+
+  async function applyDraftLinkChanges(originalLinks, nextLinks) {
+    if (!selectedCampaignId) return;
+
+    const originalById = new Map(originalLinks.map((link) => [link.id, link]));
+    const nextById = new Map(nextLinks.map((link) => [link.id, link]));
+
+    for (const originalLink of originalLinks) {
+      if (!nextById.has(originalLink.id)) {
+        await removeLink(originalLink.id, selectedCampaignId);
+      }
+    }
+
+    for (const nextLink of nextLinks) {
+      const originalLink = originalById.get(nextLink.id);
+
+      if (!originalLink) {
+        await addLink(nextLink, selectedCampaignId);
+        continue;
+      }
+
+      if (getLinkSignature(originalLink) !== getLinkSignature(nextLink)) {
+        await removeLink(originalLink.id, selectedCampaignId);
+        await addLink(nextLink, selectedCampaignId);
+      }
+    }
+
+    await loadLinks(selectedCampaignId);
+    setLinksVersion((version) => version + 1);
+  }
+
+  function handleStartEdit() {
+    if (!isGM || isItemSaving || isItemDeleting) return;
+
+    setFormData(rawItem || null);
+    setDraftLinks(itemLinks);
+    setLinkDraftKey((key) => key + 1);
+    setIsEditing(true);
+  }
+
+  function handleCancelEdit() {
+    if (isItemSaving) return;
+
+    setFormData(rawItem || null);
+    setDraftLinks(null);
+    setLinkDraftKey((key) => key + 1);
+    setIsEditing(false);
+  }
+
+  async function handleSave() {
+    if (isItemSavingRef.current || isItemDeleting || !formData || !selectedCampaignId) return;
+
+    try {
+      isItemSavingRef.current = true;
+      setIsItemSaving(true);
+      const savedItem = await itemsRepo.upsert(selectedCampaignId, formData);
+      if (draftLinks) {
+        await applyDraftLinkChanges(itemLinks, draftLinks);
+      }
+      setItem(savedItem || formData);
+      setDraftLinks(null);
+      setLinkDraftKey((key) => key + 1);
+      setIsEditing(false);
+    } finally {
+      isItemSavingRef.current = false;
+      setIsItemSaving(false);
+    }
+  }
   const getOwnerLabel = (ownerValue) => {
     const normalized = String(ownerValue || "").trim();
     if (!normalized) return "Unassigned";
@@ -281,7 +719,7 @@ export default function ItemProfile() {
   // Hard gate: players should not be able to open GM-only items via direct URL.
   if (!isGM && visibility === "gm-only") {
     return (
-      <main className="flex-1 p-8 overflow-auto">
+      <main className="flex-1 overflow-auto p-4 sm:p-6 lg:p-8">
         <div className="max-w-xl mx-auto bg-white/5 border border-white/10 rounded-2xl p-8 text-center">
           <h1 className="text-2xl font-bold text-white mb-2">DM Eyes Only</h1>
           <p className="text-zinc-400 text-sm mb-4">
@@ -299,52 +737,62 @@ export default function ItemProfile() {
   }
 
   return (
-    <>
-      {/* Page title (since TopBar is now provided by AppLayout) */}
-      <div className="mb-6">
-        <h1 className="text-2xl md:text-3xl font-semibold tracking-tight text-white">
-          {formData.name}
-        </h1>
-        <p className="mt-1 text-xs md:text-sm text-zinc-400">
-          {formData.type} • <span className="font-medium">{formData.rarity}</span>
-        </p>
-      </div>
+    <main className="flex-1 overflow-auto p-4 sm:p-6 lg:p-8">
+      <div className="mx-auto max-w-7xl">
+        <div className="mb-6 flex flex-col gap-4">
+          <button
+            className="inline-flex w-fit items-center gap-2 text-sm text-zinc-300 hover:text-white"
+            onClick={() => navigate("/items")}
+          >
+            <ArrowLeft className="w-5 h-5" />
+            Back to Items
+          </button>
 
-      <div className="flex items-center justify-between mb-6">
-        <button
-          className="flex items-center gap-2 text-zinc-400 hover:text-white"
-          onClick={() => navigate("/items")}
-        >
-          <ArrowLeft className="w-5 h-5" />
-          Back to Items
-        </button>
-        {isGM && (
-          <div className="flex w-full sm:w-auto flex-col sm:flex-row gap-2">
-            <button
-              onClick={async () => {
-	                if (isItemSavingRef.current || isItemDeleting) return;
-                if (isEditing && formData && selectedCampaignId) {
-                  try {
-                    isItemSavingRef.current = true;
-                    setIsItemSaving(true);
-                    const savedItem = await itemsRepo.upsert(selectedCampaignId, formData);
-                    setItem(savedItem || formData);
-                  } finally {
-                    isItemSavingRef.current = false;
-                    setIsItemSaving(false);
-                  }
-                }
-                setIsEditing((prev) => !prev);
-              }}
-	              disabled={isItemSaving || isItemDeleting}
-              className="w-full sm:w-auto px-4 py-2 rounded-xl bg-white/10 text-zinc-200 hover:bg-white/20 text-sm font-medium disabled:cursor-not-allowed disabled:opacity-60"
-            >
-              {isItemSaving ? "Saving..." : isEditing ? "Done" : "Edit"}
-            </button>
+          <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
+            <div>
+              <h1 className="text-2xl md:text-3xl font-semibold tracking-tight text-white">
+                {formData.name}
+              </h1>
+              <p className="mt-1 text-xs md:text-sm text-zinc-400">
+                {formData.type} • <span className="font-medium">{formData.rarity}</span>
+              </p>
+            </div>
 
-            <button
-              type="button"
-              onClick={async () => {
+            {isGM && (
+              <div className="flex w-full sm:w-auto flex-col sm:flex-row gap-2">
+                {isEditing ? (
+                  <>
+                    <button
+                      type="button"
+                      onClick={handleCancelEdit}
+                      disabled={isItemSaving || isItemDeleting}
+                      className="w-full sm:w-auto px-4 py-2 rounded-xl bg-white/10 text-zinc-200 hover:bg-white/20 text-sm font-medium disabled:cursor-not-allowed disabled:opacity-60"
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      type="button"
+                      onClick={handleSave}
+                      disabled={isItemSaving || isItemDeleting}
+                      className="w-full sm:w-auto px-4 py-2 rounded-xl bg-purple-500 text-white hover:bg-purple-400 text-sm font-medium disabled:cursor-not-allowed disabled:opacity-60"
+                    >
+                      {isItemSaving ? "Saving..." : "Save"}
+                    </button>
+                  </>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={handleStartEdit}
+                    disabled={isItemSaving || isItemDeleting}
+                    className="w-full sm:w-auto px-4 py-2 rounded-xl bg-white/10 text-zinc-200 hover:bg-white/20 text-sm font-medium disabled:cursor-not-allowed disabled:opacity-60"
+                  >
+                    Edit
+                  </button>
+                )}
+
+                <button
+                  type="button"
+                  onClick={async () => {
 	                if (isItemSaving || isItemDeleting || !selectedCampaignId || !formData?.id) return;
 	                const ok = window.confirm("Delete this item? This cannot be undone.");
 	                if (!ok) return;
@@ -360,15 +808,16 @@ export default function ItemProfile() {
                     setIsItemDeleting(false);
 	                }
 	              }}
-	              disabled={isItemSaving || isItemDeleting}
-	              className="w-full sm:w-auto px-4 py-2 rounded-xl bg-red-500/15 border border-red-500/40 text-red-200 hover:bg-red-500/25 text-sm font-medium inline-flex items-center justify-center gap-2 disabled:cursor-not-allowed disabled:opacity-50"
-	            >
-	              <Trash2 className="w-4 h-4" />
-	              {isItemDeleting ? "Deleting..." : "Delete"}
-	            </button>
+	                disabled={isItemSaving || isItemDeleting}
+	                className="w-full sm:w-auto px-4 py-2 rounded-xl bg-red-500/15 border border-red-500/40 text-red-200 hover:bg-red-500/25 text-sm font-medium inline-flex items-center justify-center gap-2 disabled:cursor-not-allowed disabled:opacity-50"
+	              >
+	                <Trash2 className="w-4 h-4" />
+	                {isItemDeleting ? "Deleting..." : "Delete"}
+	              </button>
+              </div>
+            )}
           </div>
-        )}
-      </div>
+        </div>
 
 	      <fieldset disabled={isItemSaving} className="contents disabled:opacity-60">
 	      {/* Header / identity */}
@@ -640,42 +1089,87 @@ export default function ItemProfile() {
                 <span className="text-white/90">{formData.location || "—"}</span>
               )}
             </p>
-            <p className="text-zinc-500 text-xs mt-2">
-              Later this card will auto-link to PCs, sessions and maps that reference this item.
-            </p>
           </section>
 
-          {/* v0.1: cross-links */}
-          <section className="bg-white/5 border border-white/10 rounded-2xl p-5">
-            <h2 className="text-lg font-semibold text-white mb-2">Where it showed up</h2>
-            {itemLinks.length === 0 ? (
-              <p className="text-zinc-400 text-sm">No visible links yet.</p>
-            ) : (
-              <div className="space-y-2">
-                {itemLinks.map((link) => {
-                  // Bidirectional display: show the endpoint on the other side of this Item link.
-                  const other =
-                    link.entityA.type === "Item" && link.entityA.id === String(id)
-                      ? link.entityB
-                      : link.entityA;
+          <ItemLinkSection
+            key={`item-sessions-${linkDraftKey}`}
+            title="Sessions"
+            emptyText="No linked sessions yet."
+            itemId={String(id)}
+            entityType="Session"
+            addLabel="Session"
+            entities={visibleSessions}
+            links={visibleItemLinks}
+            allowedLabels={["introduced", "used", "consumed", "lost"]}
+            defaultLabel="introduced"
+            isGM={isGM}
+            isEditing={isEditing}
+            isSaving={isItemSaving}
+            getEntityLabel={getSessionLabel}
+            getEntityMeta={(session) => session?.date || session?.status || ""}
+            getEntityPath={(session) => `/sessions/${session.id}`}
+            onLinksChanged={handleLinksChanged}
+          />
 
-                  return (
-                    <div
-                      key={link.id}
-                      className="rounded-xl border border-white/10 bg-black/20 px-3 py-2 text-sm text-zinc-300"
-                    >
-                      <span className="text-white">{getEndpointTypeLabel(other)}{getEndpointLabel(other)}</span>
-                      <span className="mx-2 text-zinc-600">•</span>
-                      {getLinkLabel(link.label)}
-                      {isGM ? (
-                        <span className="ml-2 text-xs text-zinc-500">[{link.visibility}]</span>
-                      ) : null}
-                    </div>
-                  );
-                })}
-              </div>
-            )}
-          </section>
+          <ItemLinkSection
+            key={`item-lore-${linkDraftKey}`}
+            title="Lore"
+            emptyText="No linked lore yet."
+            itemId={String(id)}
+            entityType="Lore"
+            addLabel="Lore"
+            entities={visibleLoreEntries}
+            links={visibleItemLinks}
+            allowedLabels={["explains", "origin_of"]}
+            defaultLabel="explains"
+            isGM={isGM}
+            isEditing={isEditing}
+            isSaving={isItemSaving}
+            getEntityLabel={getLoreLabel}
+            getEntityMeta={(lore) => lore?.type || ""}
+            getEntityPath={(lore) => `/lore/${lore.id}`}
+            onLinksChanged={handleLinksChanged}
+          />
+
+          <ItemLinkSection
+            key={`item-npcs-${linkDraftKey}`}
+            title="NPCs"
+            emptyText="No linked NPCs yet."
+            itemId={String(id)}
+            entityType="NPC"
+            addLabel="NPC"
+            entities={visibleNpcs}
+            links={visibleItemLinks}
+            allowedLabels={["owns", "uses"]}
+            defaultLabel="owns"
+            isGM={isGM}
+            isEditing={isEditing}
+            isSaving={isItemSaving}
+            getEntityLabel={getNpcLabel}
+            getEntityMeta={(npc) => npc?.title || npc?.role || ""}
+            getEntityPath={(npc) => `/npcs/${npc.id}`}
+            onLinksChanged={handleLinksChanged}
+          />
+
+          <ItemLinkSection
+            key={`item-locations-${linkDraftKey}`}
+            title="Locations"
+            emptyText="No linked locations yet."
+            itemId={String(id)}
+            entityType="Map"
+            addLabel="Location"
+            entities={visibleLocations}
+            links={visibleItemLinks}
+            allowedLabels={["found_in", "hidden_in"]}
+            defaultLabel="found_in"
+            isGM={isGM}
+            isEditing={isEditing}
+            isSaving={isItemSaving}
+            getEntityLabel={getLocationLabel}
+            getEntityMeta={(location) => location?.category || ""}
+            getEntityPath={(location) => `/maps/${location.id}`}
+            onLinksChanged={handleLinksChanged}
+          />
 
           <section className="bg-white/5 border border-white/10 rounded-2xl p-5">
             <h2 className="text-lg font-semibold text-white mb-2">Bag of Holding</h2>
@@ -746,19 +1240,17 @@ export default function ItemProfile() {
                   onChange={(e) => handleFieldChange("storyHooks", e.target.value)}
                 />
               ) : (
-                <>
-                  <p className="text-zinc-400 mb-2">
-                    {formData.storyHooks ||
-                      "Notes on which NPCs, factions, maps or future sessions this item is tied to."}
-                  </p>
-                  <p className="text-zinc-500 text-xs">Later this will connect to Sessions, NPCs and Maps automatically.</p>
-                </>
+                <p className="text-zinc-400 mb-2">
+                  {formData.storyHooks ||
+                    "Notes on which NPCs, factions, locations or future sessions this item is tied to."}
+                </p>
               )}
             </section>
           </div>
         )}
 	      </div>
         </fieldset>
-	    </>
+      </div>
+    </main>
   );
 }

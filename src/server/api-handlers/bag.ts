@@ -5,10 +5,10 @@ import {
   getCurrentUser,
   requireCampaignMember,
   resolveCampaignBySlug,
-} from "../src/server/access.js";
-import { setCorsHeaders } from "../src/server/cors.js";
-import { db } from "../src/server/db.js";
-import { bagCurrency, bagEntries } from "../db/schema/bag.js";
+} from "../access.js";
+import { setCorsHeaders } from "../cors.js";
+import { db } from "../db.js";
+import { bagCurrency, bagEntries } from "../../../db/schema/bag.js";
 
 type BagCurrency = Partial<Record<"gp" | "sp" | "cp" | "ep" | "pp", number>>;
 type LooseBagItem = {

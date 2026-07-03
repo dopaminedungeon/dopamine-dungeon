@@ -6,12 +6,12 @@ import {
   requireCampaignGm,
   requireCampaignMember,
   resolveCampaignBySlug,
-} from "../src/server/access.js";
-import { setCorsHeaders } from "../src/server/cors.js";
-import { db } from "../src/server/db.js";
-import { characterAssignments } from "../db/schema/characterAssignments.js";
-import { characters } from "../db/schema/characters.js";
-import { invitations } from "../db/schema/invitations.js";
+} from "../access.js";
+import { setCorsHeaders } from "../cors.js";
+import { db } from "../db.js";
+import { characterAssignments } from "../../../db/schema/characterAssignments.js";
+import { characters } from "../../../db/schema/characters.js";
+import { invitations } from "../../../db/schema/invitations.js";
 
 function getQueryValue(value: string | string[] | undefined) {
   return Array.isArray(value) ? value[0] : value;

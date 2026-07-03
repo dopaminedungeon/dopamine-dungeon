@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { useNavigate } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { useMode } from "../context/ModeContext.jsx";
 import { useCampaign } from "../context/CampaignContext";
 import { itemsRepo } from "../data/items/items.repo";
@@ -27,6 +27,7 @@ const ITEM_TYPES = [
   "Rod",
   "Ring",
   "Wondrous Item",
+  "Artifact",
   "Tool",
   "Adventuring Gear",
   "Mount / Vehicle",
@@ -48,6 +49,7 @@ const ITEM_TYPE_LABELS = {
   Rod: "Rod",
   Ring: "Ring",
   "Wondrous Item": "Wondrous",
+  Artifact: "Artifact",
   Tool: "Tool",
   "Adventuring Gear": "Gear",
   "Mount / Vehicle": "Mounts/Vehicles",
@@ -67,6 +69,7 @@ const typeIcons = {
   Rod: Sparkles,
   Ring: Sparkles,
   "Wondrous Item": Sparkles,
+  Artifact: Sparkles,
   Tool: Sparkles,
   "Adventuring Gear": Sparkles,
   "Mount / Vehicle": Sparkles,
@@ -293,12 +296,10 @@ export default function Items() {
 
         if (viewMode === "list") {
           return (
-            <div
+            <Link
               key={item.id}
+              to={`/items/${item.id}`}
               className={`group bg-white/5 backdrop-blur-sm border ${rarity.border} rounded-xl p-4 hover:bg-white/10 transition-all cursor-pointer flex items-center gap-4`}
-              onClick={() =>
-                navigate(`/items/${item.id}`)
-              }
             >
               <div
                 className={`w-14 h-14 rounded-xl bg-linear-to-br ${rarity.bg} flex items-center justify-center shadow-lg ${rarity.glow}`}
@@ -317,17 +318,15 @@ export default function Items() {
                 {item.rarity}
               </span>
               <span className="text-white font-bold">+{item.power}</span>
-            </div>
+            </Link>
           );
         }
 
         return (
-          <div
+          <Link
             key={item.id}
+            to={`/items/${item.id}`}
             className={`group bg-white/5 backdrop-blur-sm border ${rarity.border} rounded-2xl p-5 hover:bg-white/10 transition-all cursor-pointer`}
-            onClick={() =>
-              navigate(`/items/${item.id}`)
-            }
           >
             <div className="flex items-start justify-between mb-4">
               <div
@@ -374,7 +373,7 @@ export default function Items() {
               </div>
               <span className="text-white font-bold text-lg">+{item.power}</span>
             </div>
-          </div>
+          </Link>
         );
       })}
     </div>

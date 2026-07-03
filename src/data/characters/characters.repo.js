@@ -164,7 +164,7 @@ function normalizeCharacter(input = {}) {
 export async function getAllCharacters(campaignId) {
   if (!campaignId) return [];
   const response = await apiFetch(
-    `/api/characters?campaignId=${encodeURIComponent(campaignId)}`
+    `/api/worldbuilding?resource=characters&campaignId=${encodeURIComponent(campaignId)}`
   );
   return (Array.isArray(response.characters) ? response.characters : []).map((character) =>
     normalizeCharacter(character)
@@ -174,7 +174,7 @@ export async function getAllCharacters(campaignId) {
 export async function getCharacterById(campaignId, id) {
   if (!campaignId || !id) return null;
   const response = await apiFetch(
-    `/api/characters?campaignId=${encodeURIComponent(
+    `/api/worldbuilding?resource=characters&campaignId=${encodeURIComponent(
       campaignId
     )}&characterId=${encodeURIComponent(id)}`
   );
@@ -186,7 +186,7 @@ export async function upsertCharacter(campaignId, input) {
   const normalized = normalizeCharacter(input);
   const apiSafeCharacter = stripUndefinedDeep(normalized);
   const response = await apiFetch(
-    `/api/characters?campaignId=${encodeURIComponent(campaignId)}`,
+    `/api/worldbuilding?resource=characters&campaignId=${encodeURIComponent(campaignId)}`,
     {
       method: "PUT",
       body: JSON.stringify({ character: apiSafeCharacter }),
@@ -198,7 +198,7 @@ export async function upsertCharacter(campaignId, input) {
 export async function removeCharacter(campaignId, id) {
   if (!campaignId || !id) return;
   await apiFetch(
-    `/api/characters?campaignId=${encodeURIComponent(
+    `/api/worldbuilding?resource=characters&campaignId=${encodeURIComponent(
       campaignId
     )}&characterId=${encodeURIComponent(id)}`,
     {

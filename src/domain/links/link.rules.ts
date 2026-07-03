@@ -180,7 +180,7 @@ export const ALLOWED_LINK_LABELS: Record<string, string[]> = {
   // ─────────────────────────
   // Lore
   // ─────────────────────────
-  "Lore|NPC": ["describes", "origin_of"],
+  "Lore|NPC": ["connected", "describes", "origin_of"],
   "Lore|PC": ["connected_to"],
   "Lore|Item": ["explains", "origin_of"],
   "Lore|Map": ["describes", "historical_site"],
@@ -189,7 +189,7 @@ export const ALLOWED_LINK_LABELS: Record<string, string[]> = {
   // ─────────────────────────
   // Map
   // ─────────────────────────
-  "Map|NPC": ["resides_in", "controls"],
+  "Map|NPC": ["connected", "resides_in", "controls"],
   "Map|PC": ["home", "current_location"],
   "Map|Item": ["found_in", "hidden_in"],
 

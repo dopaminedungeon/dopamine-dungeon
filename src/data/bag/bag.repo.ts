@@ -147,7 +147,7 @@ export const bagRepo = {
     if (!campaignId) return { ...EMPTY_BAG };
 
     const response = await apiFetch<{ ok: true; bag?: Partial<BagState> }>(
-      `/api/bag?campaignId=${encodeURIComponent(campaignId)}`
+      `/api/worldbuilding?resource=bag&campaignId=${encodeURIComponent(campaignId)}`
     );
     return normalizeBag(response.bag);
   },
@@ -155,7 +155,7 @@ export const bagRepo = {
   async save(campaignId: string, bag: BagState): Promise<void> {
     if (!campaignId) return;
     const normalizedBag = normalizeBag(bag);
-    await apiFetch(`/api/bag?campaignId=${encodeURIComponent(campaignId)}`, {
+    await apiFetch(`/api/worldbuilding?resource=bag&campaignId=${encodeURIComponent(campaignId)}`, {
       method: "PUT",
       body: JSON.stringify({ bag: normalizedBag }),
     });

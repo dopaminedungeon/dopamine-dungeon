@@ -6,7 +6,7 @@ export const itemsRepo = {
       ok: true;
       items: unknown[];
     }>(
-      `/api/items?campaignId=${encodeURIComponent(campaignId)}`
+      `/api/worldbuilding?resource=items&campaignId=${encodeURIComponent(campaignId)}`
     );
 
     return response.items ?? [];
@@ -17,7 +17,7 @@ export const itemsRepo = {
       ok: true;
       item: unknown | null;
     }>(
-      `/api/items?campaignId=${encodeURIComponent(
+      `/api/worldbuilding?resource=items&campaignId=${encodeURIComponent(
         campaignId
       )}&itemId=${encodeURIComponent(id)}`
     );
@@ -27,7 +27,7 @@ export const itemsRepo = {
 
   async upsert(campaignId: string, item: any) {
     const response = await apiFetch<{ ok: true; item: unknown }>(
-      `/api/items?campaignId=${encodeURIComponent(campaignId)}`,
+      `/api/worldbuilding?resource=items&campaignId=${encodeURIComponent(campaignId)}`,
       {
       method: "PUT",
       body: JSON.stringify({ item }),
@@ -39,7 +39,7 @@ export const itemsRepo = {
 
   async remove(campaignId: string, id: string) {
     await apiFetch(
-      `/api/items?campaignId=${encodeURIComponent(
+      `/api/worldbuilding?resource=items&campaignId=${encodeURIComponent(
         campaignId
       )}&itemId=${encodeURIComponent(id)}`,
       {

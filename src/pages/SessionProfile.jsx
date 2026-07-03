@@ -1,15 +1,20 @@
 import React, { useEffect, useMemo, useState } from "react";
-import { useParams, useNavigate } from "react-router-dom";
-import { ArrowLeft, Clock, Map as MapIcon, Trash2 } from "lucide-react";
+import { Link, useParams, useNavigate } from "react-router-dom";
+import { ArrowLeft, Clock, Trash2 } from "lucide-react";
 import { useMode } from "../context/ModeContext.jsx";
 import { sessionsRepo } from "../data/sessions/sessions.repo";
 import { itemsRepo } from "../data/items/items.repo";
-import SessionEntityLinkManager from "../components/session/SessionEntityLinkManager.jsx";
+import { npcsRepo } from "../data/npcs/npcs.repo";
+import { loreRepo } from "../data/lore/lore.repo";
+import { locationsRepo } from "../data/maps/locations.repo";
+import { createLink } from "../domain/links/link.service";
+import { addLink, getLinksForEntity, loadLinks, removeLink } from "../data/links/links.repo";
 import { useCampaign } from "../context/CampaignContext";
 import { getApiCampaignPeople, getApiCharacterAssignments } from "../data/api/apiClient.ts";
 import { getAllCharacters } from "../data/characters/characters.repo";
 
 const SESSION_STATUSES = ["scheduled", "active", "paused", "completed"];
+const MAIN_LOCATION_LINK_NOTE = "auto:session-main-location";
 
 function getSessionDateValue(value) {
   const rawDate = String(value || "").trim();
@@ -146,6 +151,402 @@ function renderMarkdownBlock(value, placeholder = "") {
   );
 }
 
+function formatLinkLabel(label) {
+  return String(label || "").replaceAll("_", " ");
+}
+
+function getOtherEndpoint(link, baseType, baseId) {
+  return link.entityA.type === baseType && String(link.entityA.id) === String(baseId)
+    ? link.entityB
+    : link.entityA;
+}
+
+function getLinkSignature(link) {
+  return [
+    `${link.entityA.type}:${link.entityA.id}`,
+    `${link.entityB.type}:${link.entityB.id}`,
+    link.label,
+    link.visibility,
+  ].join("|");
+}
+
+function isSessionLocationLink(link, sessionId, locationId) {
+  const other = getOtherEndpoint(link, "Session", sessionId);
+  return other.type === "Map" && String(other.id) === String(locationId);
+}
+
+function isAutoMainLocationLink(link, sessionId, locationId) {
+  return (
+    isSessionLocationLink(link, sessionId, locationId) &&
+    link.label === "visited" &&
+    link.visibility === "Player" &&
+    link.note === MAIN_LOCATION_LINK_NOTE
+  );
+}
+
+function isVisitedPlayerSessionLocationLink(link, sessionId, locationId) {
+  return (
+    isSessionLocationLink(link, sessionId, locationId) &&
+    link.label === "visited" &&
+    link.visibility === "Player"
+  );
+}
+
+function reconcileMainLocationLinks({ sessionId, originalLocationId, nextLocationId, links }) {
+  let nextLinks = Array.isArray(links) ? [...links] : [];
+  const previousLocationId = String(originalLocationId || "").trim();
+  const selectedLocationId = String(nextLocationId || "").trim();
+
+  if (previousLocationId && previousLocationId !== selectedLocationId) {
+    nextLinks = nextLinks.filter(
+      (link) => !isAutoMainLocationLink(link, sessionId, previousLocationId)
+    );
+  }
+
+  if (!selectedLocationId) {
+    nextLinks = nextLinks.filter(
+      (link) => !isAutoMainLocationLink(link, sessionId, previousLocationId)
+    );
+    return nextLinks;
+  }
+
+  const alreadyLinked = nextLinks.some((link) =>
+    isVisitedPlayerSessionLocationLink(link, sessionId, selectedLocationId)
+  );
+  if (alreadyLinked) return nextLinks;
+
+  return [
+    ...nextLinks,
+    createLink({
+      entityA: { type: "Session", id: String(sessionId) },
+      entityB: { type: "Map", id: selectedLocationId },
+      label: "visited",
+      visibility: "Player",
+      note: MAIN_LOCATION_LINK_NOTE,
+    }),
+  ];
+}
+
+function getItemLabel(item) {
+  return item?.name || "Untitled item";
+}
+
+function getLoreLabel(lore) {
+  return lore?.name || "Untitled lore";
+}
+
+function getNpcLabel(npc) {
+  return npc?.name || "Unnamed NPC";
+}
+
+function getLocationLabel(location) {
+  return location?.name || "Untitled location";
+}
+
+function SelectInput({ value, onChange, disabled, children }) {
+  return (
+    <select
+      value={value}
+      disabled={disabled}
+      onChange={(event) => onChange(event.target.value)}
+      className="min-w-0 rounded-xl border border-white/10 bg-zinc-950 px-3 py-2 text-sm text-white outline-none focus:border-purple-500/60 disabled:cursor-not-allowed disabled:opacity-50"
+    >
+      {children}
+    </select>
+  );
+}
+
+function SessionLinkSection({
+  title,
+  emptyText,
+  sessionId,
+  entityType,
+  addLabel,
+  entities,
+  links,
+  allowedLabels,
+  defaultLabel,
+  defaultVisibility = "Player",
+  isGM,
+  editMode,
+  isSaving,
+  getEntityLabel,
+  getEntityMeta,
+  getEntityPath,
+  onLinksChanged,
+}) {
+  const [searchOpen, setSearchOpen] = useState(false);
+  const [query, setQuery] = useState("");
+  const [selectedLabel, setSelectedLabel] = useState(defaultLabel);
+  const [selectedVisibility, setSelectedVisibility] = useState(defaultVisibility);
+  const [error, setError] = useState("");
+  const isDisabled = Boolean(isSaving);
+
+  const entityList = useMemo(
+    () => (Array.isArray(entities) ? entities.filter((entity) => entity?.id) : []),
+    [entities]
+  );
+
+  const entitiesById = useMemo(
+    () => new Map(entityList.map((entity) => [String(entity.id), entity])),
+    [entityList]
+  );
+
+  const relevantLinks = useMemo(() => {
+    return links
+      .map((link) => {
+        const other = getOtherEndpoint(link, "Session", sessionId);
+        const entity = other.type === entityType ? entitiesById.get(String(other.id)) : null;
+
+        if (!entity) return null;
+        if (!allowedLabels.includes(link.label)) return null;
+        if (!isGM && link.visibility !== "Player") return null;
+
+        return { link, entity };
+      })
+      .filter(Boolean);
+  }, [allowedLabels, entitiesById, entityType, isGM, links, sessionId]);
+
+  const candidateEntities = useMemo(() => {
+    const normalizedQuery = query.trim().toLowerCase();
+
+    return entityList
+      .filter((entity) => {
+        const label = getEntityLabel(entity);
+        if (normalizedQuery && !String(label || "").toLowerCase().includes(normalizedQuery)) {
+          return false;
+        }
+
+        return !links.some((link) => {
+          const other = getOtherEndpoint(link, "Session", sessionId);
+          return other.type === entityType && String(other.id) === String(entity.id);
+        });
+      })
+      .slice(0, 30);
+  }, [entityList, entityType, getEntityLabel, links, query, sessionId]);
+
+  function handleAdd(entityId) {
+    if (isDisabled) return;
+    const normalizedEntityId = String(entityId);
+
+    const duplicate = links.some((link) => {
+      const other = getOtherEndpoint(link, "Session", sessionId);
+      return other.type === entityType && String(other.id) === normalizedEntityId;
+    });
+
+    if (duplicate) {
+      setError("That entity is already linked.");
+      return;
+    }
+
+    try {
+      setError("");
+      const link = createLink({
+        entityA: { type: "Session", id: String(sessionId) },
+        entityB: { type: entityType, id: normalizedEntityId },
+        label: selectedLabel,
+        visibility: selectedVisibility,
+      });
+
+      onLinksChanged([...links, link]);
+      setQuery("");
+      setSearchOpen(false);
+    } catch (linkError) {
+      console.error("[SessionProfile] Failed to stage link", linkError);
+      setError("Unable to add this link right now.");
+    }
+  }
+
+  function handleRemove(linkId) {
+    if (isDisabled) return;
+
+    setError("");
+    onLinksChanged(links.filter((link) => link.id !== linkId));
+  }
+
+  function handleUpdateLink(link, entity, changes) {
+    if (isDisabled) return;
+
+    const nextLabel = changes.label ?? link.label;
+    const nextVisibility = changes.visibility ?? link.visibility;
+
+    if (nextLabel === link.label && nextVisibility === link.visibility) return;
+
+    const duplicate = links.some((candidate) => {
+      if (candidate.id === link.id) return false;
+
+      const other = getOtherEndpoint(candidate, "Session", sessionId);
+      return other.type === entityType && String(other.id) === String(entity.id);
+    });
+
+    if (duplicate) {
+      setError("That entity is already linked.");
+      return;
+    }
+
+    setError("");
+    onLinksChanged(
+      links.map((candidate) =>
+        candidate.id === link.id
+          ? { ...candidate, label: nextLabel, visibility: nextVisibility }
+          : candidate
+      )
+    );
+  }
+
+  return (
+    <section className="rounded-xl border border-white/10 bg-white/5 p-4 sm:p-5">
+      <div className="flex items-start justify-between gap-3">
+        <h2 className="text-lg font-semibold text-white">{title}</h2>
+        {isGM && editMode ? (
+          <button
+            type="button"
+            disabled={isDisabled}
+            onClick={() => {
+              if (isDisabled) return;
+              setSearchOpen((current) => !current);
+              setError("");
+            }}
+            className="rounded-lg border border-white/10 bg-white/5 px-3 py-1.5 text-xs text-zinc-200 hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            {searchOpen ? "Close" : `Add ${addLabel}`}
+          </button>
+        ) : null}
+      </div>
+
+      {isGM && editMode && searchOpen ? (
+        <div className="mt-4 space-y-3 rounded-xl border border-white/10 bg-black/10 p-4">
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-[minmax(0,1fr)_160px_140px]">
+            <input
+              value={query}
+              disabled={isDisabled}
+              onChange={(event) => {
+                if (!isDisabled) setQuery(event.target.value);
+              }}
+              placeholder={`Search ${title.toLowerCase()}...`}
+              className="min-w-0 rounded-xl border border-white/10 bg-transparent px-3 py-2 text-sm text-zinc-100 outline-none focus:border-purple-500/60 disabled:cursor-not-allowed disabled:opacity-50"
+            />
+            <SelectInput
+              disabled={isDisabled}
+              value={selectedLabel}
+              onChange={setSelectedLabel}
+            >
+              {allowedLabels.map((label) => (
+                <option key={label} value={label}>
+                  {formatLinkLabel(label)}
+                </option>
+              ))}
+            </SelectInput>
+            <SelectInput
+              disabled={isDisabled}
+              value={selectedVisibility}
+              onChange={setSelectedVisibility}
+            >
+              <option value="GM">GM-only</option>
+              <option value="Player">Player-visible</option>
+            </SelectInput>
+          </div>
+
+          {error ? <p className="text-sm text-rose-300">{error}</p> : null}
+
+          <div className="max-h-48 overflow-auto rounded-xl border border-white/10">
+            {candidateEntities.length === 0 ? (
+              <p className="px-3 py-2 text-sm text-zinc-500">No results.</p>
+            ) : (
+              candidateEntities.map((entity) => (
+                <button
+                  key={entity.id}
+                  type="button"
+                  disabled={isDisabled}
+                  onClick={() => handleAdd(entity.id)}
+                  className="block w-full px-3 py-2 text-left text-sm text-zinc-200 hover:bg-white/5 disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  {getEntityLabel(entity)}
+                </button>
+              ))
+            )}
+          </div>
+        </div>
+      ) : null}
+
+      {relevantLinks.length === 0 ? (
+        <p className="mt-3 text-sm text-zinc-500">{emptyText}</p>
+      ) : (
+        <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2">
+          {relevantLinks.map(({ link, entity }) => (
+            <div
+              key={link.id}
+              className="group relative rounded-xl border border-white/10 bg-black/15 p-4"
+            >
+              {isGM && editMode ? (
+                <button
+                  type="button"
+                  disabled={isDisabled}
+                  onClick={() => handleRemove(link.id)}
+                  className="absolute right-3 top-3 text-[10px] text-red-400 opacity-0 transition hover:text-red-200 group-hover:opacity-100 disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  Remove
+                </button>
+              ) : null}
+
+              <Link
+                to={getEntityPath(entity)}
+                className="block max-w-full cursor-pointer text-left hover:text-purple-200"
+              >
+                <p className="pr-8 text-sm font-semibold text-white">{getEntityLabel(entity)}</p>
+                {getEntityMeta ? (
+                  <p className="mt-1 text-xs text-zinc-500">{getEntityMeta(entity)}</p>
+                ) : null}
+              </Link>
+
+              <div className="mt-3 flex flex-wrap items-center gap-2">
+                {isGM && editMode ? (
+                  <div className="grid w-full grid-cols-1 gap-2 sm:grid-cols-2">
+                    <SelectInput
+                      disabled={isDisabled}
+                      value={link.label}
+                      onChange={(label) => handleUpdateLink(link, entity, { label })}
+                    >
+                      {allowedLabels.map((label) => (
+                        <option key={label} value={label}>
+                          {formatLinkLabel(label)}
+                        </option>
+                      ))}
+                    </SelectInput>
+                    <SelectInput
+                      disabled={isDisabled}
+                      value={link.visibility}
+                      onChange={(visibility) => handleUpdateLink(link, entity, { visibility })}
+                    >
+                      <option value="GM">GM-only</option>
+                      <option value="Player">Player-visible</option>
+                    </SelectInput>
+                  </div>
+                ) : (
+                  <span className="rounded-full border border-white/10 bg-white/5 px-2.5 py-1 text-[11px] text-zinc-300">
+                    {formatLinkLabel(link.label)}
+                  </span>
+                )}
+                {isGM && !editMode ? (
+                  <span
+                    className={`rounded-full border px-2.5 py-1 text-[11px] font-semibold ${
+                      link.visibility === "Player"
+                        ? "border-emerald-500/30 bg-emerald-500/15 text-emerald-300"
+                        : "border-red-500/40 bg-red-500/20 text-red-300"
+                    }`}
+                  >
+                    {link.visibility === "Player" ? "Player-visible" : "GM-only"}
+                  </span>
+                ) : null}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </section>
+  );
+}
+
 export default function SessionProfile() {
   const { id } = useParams();
   const navigate = useNavigate();
@@ -155,15 +556,22 @@ export default function SessionProfile() {
   const [allSessions, setAllSessions] = useState([]);
   const [loading, setLoading] = useState(true);
   const [allItems, setAllItems] = useState([]);
+  const [allNpcs, setAllNpcs] = useState([]);
+  const [allLore, setAllLore] = useState([]);
+  const [allLocations, setAllLocations] = useState([]);
+  const [linksVersion, setLinksVersion] = useState(0);
   const [campaignPeople, setCampaignPeople] = useState([]);
   const [campaignCharacters, setCampaignCharacters] = useState([]);
   const [assignmentRows, setAssignmentRows] = useState([]);
 
   useEffect(() => {
-    if (!selectedCampaignId) {
-      setAllSessions([]);
-      setAllItems([]);
-      setCampaignPeople([]);
+      if (!selectedCampaignId) {
+        setAllSessions([]);
+        setAllItems([]);
+        setAllNpcs([]);
+        setAllLore([]);
+        setAllLocations([]);
+        setCampaignPeople([]);
       setCampaignCharacters([]);
       setAssignmentRows([]);
       setLoading(false);
@@ -173,16 +581,27 @@ export default function SessionProfile() {
     async function load() {
       setLoading(true);
       try {
-        const [sessionData, itemData] = await Promise.all([
+        const [sessionData, itemData, npcData, loreData, locationData] = await Promise.all([
           sessionsRepo.getAll(selectedCampaignId),
           itemsRepo.getAll(selectedCampaignId),
+          npcsRepo.getAll(selectedCampaignId),
+          loreRepo.getAll(selectedCampaignId),
+          locationsRepo.getAll(selectedCampaignId),
+          loadLinks(selectedCampaignId),
         ]);
         setAllSessions(Array.isArray(sessionData) ? sessionData : []);
         setAllItems(Array.isArray(itemData) ? itemData : []);
+        setAllNpcs(Array.isArray(npcData) ? npcData : []);
+        setAllLore(Array.isArray(loreData) ? loreData : []);
+        setAllLocations(Array.isArray(locationData) ? locationData : []);
+        setLinksVersion((version) => version + 1);
       } catch (error) {
         console.error("[SessionProfile] Failed to load session data", error);
         setAllSessions([]);
         setAllItems([]);
+        setAllNpcs([]);
+        setAllLore([]);
+        setAllLocations([]);
       } finally {
         setLoading(false);
       }
@@ -253,6 +672,8 @@ export default function SessionProfile() {
   const [editMode, setEditMode] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
+  const [draftLinks, setDraftLinks] = useState(null);
+  const [linkDraftKey, setLinkDraftKey] = useState(0);
   const [editableSession, setEditableSession] = useState(() =>
     normalizedSession ? { ...normalizedSession } : null
   );
@@ -309,6 +730,133 @@ export default function SessionProfile() {
       .sort((a, b) => a.label.localeCompare(b.label));
   }, [assignmentRows, campaignCharacters, campaignPeople]);
 
+  const visibleItems = useMemo(() => {
+    if (isGM) return allItems;
+    return allItems.filter((item) => item?.visibility !== "gm-only");
+  }, [allItems, isGM]);
+
+  const visibleNpcs = useMemo(() => {
+    if (isGM) return allNpcs;
+    return allNpcs.filter((npc) => npc?.visibility !== "gm-only");
+  }, [allNpcs, isGM]);
+
+  const visibleLore = useMemo(() => {
+    if (isGM) return allLore;
+    return allLore.filter((lore) => lore?.visibility === "public");
+  }, [allLore, isGM]);
+
+  const visibleLocations = useMemo(() => {
+    if (isGM) return allLocations;
+    return allLocations.filter((location) => location?.visibility === "public");
+  }, [allLocations, isGM]);
+  const visibleLocationsById = useMemo(
+    () => new Map(visibleLocations.map((location) => [String(location.id), location])),
+    [visibleLocations]
+  );
+
+  const sessionLinks = useMemo(() => {
+    void linksVersion;
+    return normalizedSession
+      ? getLinksForEntity("Session", String(normalizedSession.id), isGM ? "GM" : "Player")
+      : [];
+  }, [isGM, linksVersion, normalizedSession]);
+
+  const visibleSessionLinks = editMode && draftLinks ? draftLinks : sessionLinks;
+
+  const handleLinksChanged = (nextLinks) => {
+    setDraftLinks(nextLinks);
+  };
+
+  async function applyDraftLinkChanges(originalLinks, nextLinks) {
+    if (!selectedCampaignId) return;
+
+    const originalById = new Map(originalLinks.map((link) => [link.id, link]));
+    const nextById = new Map(nextLinks.map((link) => [link.id, link]));
+
+    for (const originalLink of originalLinks) {
+      if (!nextById.has(originalLink.id)) {
+        await removeLink(originalLink.id, selectedCampaignId);
+      }
+    }
+
+    for (const nextLink of nextLinks) {
+      const originalLink = originalById.get(nextLink.id);
+
+      if (!originalLink) {
+        await addLink(nextLink, selectedCampaignId);
+        continue;
+      }
+
+      if (getLinkSignature(originalLink) !== getLinkSignature(nextLink)) {
+        await removeLink(originalLink.id, selectedCampaignId);
+        await addLink(nextLink, selectedCampaignId);
+      }
+    }
+
+    await loadLinks(selectedCampaignId);
+    setLinksVersion((version) => version + 1);
+  }
+
+  function handleStartEdit() {
+    if (!isGM || isSaving || isDeleting) return;
+
+    setEditableSession(normalizedSession ? { ...normalizedSession } : null);
+    setDraftLinks(sessionLinks);
+    setLinkDraftKey((key) => key + 1);
+    setEditMode(true);
+  }
+
+  function handleCancelEdit() {
+    if (isSaving) return;
+
+    setEditableSession(normalizedSession ? { ...normalizedSession } : null);
+    setGmPrepText(normalizedSession?.gmPrep?.join("\n") || "");
+    setDraftLinks(null);
+    setLinkDraftKey((key) => key + 1);
+    setEditMode(false);
+  }
+
+  async function handleSave() {
+    if (!selectedCampaignId || !normalizedEditable || isSaving) return;
+
+    const gmPrep = gmPrepText
+      .split("\n")
+      .map((l) => l.trim())
+      .filter(Boolean);
+
+    const toSave = {
+      ...normalizedEditable,
+      summary: normalizedEditable.summary,
+      timeline: normalizedEditable.timeline ?? "",
+      moments: normalizedEditable.moments ?? "",
+      quotes: normalizedEditable.quotes ?? "",
+      startTime: getSessionDateValue(normalizedEditable.startTime),
+      gmPrep,
+      attendees: Array.isArray(normalizedEditable.attendees)
+        ? normalizedEditable.attendees
+        : [],
+    };
+    const nextLinks = reconcileMainLocationLinks({
+      sessionId: String(toSave.id),
+      originalLocationId: normalizedSession?.map,
+      nextLocationId: toSave.map,
+      links: draftLinks || sessionLinks,
+    });
+
+    try {
+      setIsSaving(true);
+      await sessionsRepo.upsert(selectedCampaignId, toSave);
+      await applyDraftLinkChanges(sessionLinks, nextLinks);
+      const data = await sessionsRepo.getAll(selectedCampaignId);
+      setAllSessions(Array.isArray(data) ? data : []);
+      setDraftLinks(null);
+      setLinkDraftKey((key) => key + 1);
+      setEditMode(false);
+    } finally {
+      setIsSaving(false);
+    }
+  }
+
   if (loading) {
     return (
       <main className="flex-1 overflow-auto flex items-center justify-center">
@@ -319,7 +867,7 @@ export default function SessionProfile() {
   // No such session at all
   if (!normalizedSession) {
     return (
-      <main className="flex-1 overflow-auto text-white">
+      <main className="flex-1 overflow-auto p-4 sm:p-6 lg:p-8 text-white">
         <h1 className="text-3xl font-bold">Session Not Found</h1>
         <p className="text-zinc-400 mt-2">
           There is no session with this ID.
@@ -337,9 +885,9 @@ export default function SessionProfile() {
   // GM restriction guard: prevent players from viewing GM-only sessions
   if (normalizedSession?.visibility === "gm-only" && !isGM) {
     return (
-      <main className="flex-1 overflow-auto">
+      <main className="flex-1 overflow-auto p-4 sm:p-6 lg:p-8">
         <button
-          className="flex items-center gap-2 text-zinc-400 hover:text-white mb-4 sm:mb-6"
+          className="mb-5 inline-flex items-center gap-2 text-sm text-zinc-300 hover:text-white"
           onClick={() => navigate("/sessions")}
         >
           <ArrowLeft className="w-5 h-5" />
@@ -363,6 +911,8 @@ export default function SessionProfile() {
 
   const viewSession = editMode ? (normalizedEditable ?? normalizedSession) : normalizedSession;
   const isGmOnlyCurrent = viewSession?.visibility === "gm-only";
+  const mainLocationId = String(viewSession?.map || "").trim();
+  const mainLocation = mainLocationId ? visibleLocationsById.get(mainLocationId) : null;
 
   const handleFieldChange = (field, value) => {
     setEditableSession((prev) => {
@@ -392,16 +942,17 @@ export default function SessionProfile() {
   };
 
   return (
-    <main className="flex-1 overflow-auto">
-      <button
-        className="flex items-center gap-2 text-zinc-400 hover:text-white mb-4 sm:mb-6"
-        onClick={() => navigate("/sessions")}
-      >
-        <ArrowLeft className="w-5 h-5" />
-        Back to Sessions
-      </button>
+    <main className="flex-1 overflow-auto p-4 sm:p-6 lg:p-8">
+      <div className="mx-auto max-w-7xl">
+        <button
+          className="mb-5 inline-flex items-center gap-2 text-sm text-zinc-300 hover:text-white"
+          onClick={() => navigate("/sessions")}
+        >
+          <ArrowLeft className="w-5 h-5" />
+          Back to Sessions
+        </button>
 
-      <div className="bg-white/5 border border-white/10 rounded-xl sm:rounded-2xl p-4 sm:p-8 backdrop-blur-sm space-y-5 sm:space-y-6">
+        <div className="bg-white/5 border border-white/10 rounded-2xl p-5 sm:p-6 lg:p-8 backdrop-blur-sm space-y-5 sm:space-y-6">
         {/* Header */}
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 sm:gap-4">
           <div>
@@ -414,7 +965,16 @@ export default function SessionProfile() {
               )}
             </h1>
             <p className="text-zinc-400 text-sm">
-              {viewSession?.map || ""}
+              {mainLocation ? (
+                <Link
+                  to={`/maps/${mainLocation.id}`}
+                  className="text-zinc-300 hover:text-purple-200"
+                >
+                  {getLocationLabel(mainLocation)}
+                </Link>
+              ) : (
+                "No location"
+              )}
               {viewSession.sessionNumber !== undefined &&
                 viewSession.sessionNumber !== null &&
                 viewSession.sessionNumber !== "" && (
@@ -450,47 +1010,35 @@ export default function SessionProfile() {
                   GM-only
                 </button>
               </div>
-              <button
-                type="button"
-                disabled={isSaving}
-                onClick={async () => {
-                  if (isSaving) return;
-
-                  if (editMode && normalizedEditable) {
-                    const gmPrep = gmPrepText
-                      .split("\n")
-                      .map((l) => l.trim())
-                      .filter(Boolean);
-
-                    const toSave = {
-                      ...normalizedEditable,
-                      summary: normalizedEditable.summary,
-                      timeline: normalizedEditable.timeline ?? "",
-                      moments: normalizedEditable.moments ?? "",
-                      quotes: normalizedEditable.quotes ?? "",
-                      startTime: getSessionDateValue(normalizedEditable.startTime),
-                      gmPrep,
-                      attendees: Array.isArray(normalizedEditable.attendees)
-                        ? normalizedEditable.attendees
-                        : [],
-                    };
-
-                    try {
-                      setIsSaving(true);
-                      await sessionsRepo.upsert(selectedCampaignId, toSave);
-                      const data = await sessionsRepo.getAll(selectedCampaignId);
-                      setAllSessions(data);
-                    } finally {
-                      setIsSaving(false);
-                    }
-                  }
-
-                  setEditMode((prev) => !prev);
-                }}
-                className="px-3 py-1.5 sm:px-3 sm:py-1.5 rounded-xl bg-white/5 border border-white/10 text-xs text-zinc-300 hover:bg-white/10 transition disabled:opacity-50"
-              >
-                {isSaving ? "Saving..." : editMode ? "Done" : "Edit"}
-              </button>
+              {editMode ? (
+                <>
+                  <button
+                    type="button"
+                    disabled={isSaving}
+                    onClick={handleCancelEdit}
+                    className="px-3 py-1.5 sm:px-3 sm:py-1.5 rounded-xl bg-white/5 border border-white/10 text-xs text-zinc-300 hover:bg-white/10 transition disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="button"
+                    disabled={isSaving}
+                    onClick={handleSave}
+                    className="px-3 py-1.5 sm:px-3 sm:py-1.5 rounded-xl bg-purple-500 text-xs font-medium text-white hover:bg-purple-400 transition disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    {isSaving ? "Saving..." : "Save"}
+                  </button>
+                </>
+              ) : (
+                <button
+                  type="button"
+                  disabled={isSaving || isDeleting}
+                  onClick={handleStartEdit}
+                  className="px-3 py-1.5 sm:px-3 sm:py-1.5 rounded-xl bg-white/5 border border-white/10 text-xs text-zinc-300 hover:bg-white/10 transition disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  Edit
+                </button>
+              )}
 	              <button
 	                type="button"
 	                disabled={isDeleting || isSaving}
@@ -555,12 +1103,20 @@ export default function SessionProfile() {
                 />
               </label>
               <label className="block">
-                <span className="block text-xs uppercase tracking-wide text-zinc-500 mb-1">Location</span>
-                <input
-                  className="w-full bg-transparent border border-white/15 rounded-xl px-3 py-2 text-sm text-zinc-100 focus:outline-none focus:border-purple-500/60"
+                <span className="block text-xs uppercase tracking-wide text-zinc-500 mb-1">Main Location</span>
+                <select
+                  className="w-full bg-zinc-950 border border-white/15 rounded-xl px-3 py-2 text-sm text-zinc-100 focus:outline-none focus:border-purple-500/60"
                   value={editableSession?.map ?? ""}
                   onChange={(e) => handleFieldChange("map", e.target.value)}
-                />
+                >
+                  <option value="">No location</option>
+                  {allLocations.map((location) => (
+                    <option key={location.id} value={location.id}>
+                      {location.name || "Untitled location"}
+                      {location.category ? ` (${location.category})` : ""}
+                    </option>
+                  ))}
+                </select>
               </label>
               <label className="block">
                 <span className="block text-xs uppercase tracking-wide text-zinc-500 mb-1">Status</span>
@@ -655,65 +1211,84 @@ export default function SessionProfile() {
               )}
             </div>
 
-            {/* Items discovered, Notable NPCs, timeline, Moments, Quotes, NPC relationships */}
-            {/* Items discovered (player-visible) */}
-            {/* Items (player-visible) */}
-	            <SessionEntityLinkManager
+            <SessionLinkSection
+              key={`session-npcs-${linkDraftKey}`}
+              title="Notable NPCs"
+              emptyText="No notable NPCs yet."
               sessionId={String(id)}
-              entityType="Item"
-              label="introduced"
-              sectionTitle="Items discovered"
+              entityType="NPC"
+              addLabel="NPC"
+              entities={visibleNpcs}
+              links={visibleSessionLinks}
+              allowedLabels={["present", "mentioned", "antagonist", "ally"]}
+              defaultLabel="present"
               isGM={isGM}
               editMode={editMode}
-              visibilityMode={isGM ? "GM" : "Player"}
-              dataSource={allItems}
-              getEntityLabel={(item) => item?.name}
-              onAddNew={() => navigate("/items")}
-              renderCard={(item, link, helpers) => {
-	                const { isGM, editMode, navigate, handleRemove, isBusy } = helpers;
+              isSaving={isSaving}
+              getEntityLabel={getNpcLabel}
+              getEntityMeta={(npc) => npc?.title || npc?.role || ""}
+              getEntityPath={(npc) => `/npcs/${npc.id}`}
+              onLinksChanged={handleLinksChanged}
+            />
 
-                return (
-                  <div
-                    key={link.id}
-                    className="relative group bg-white/5 hover:bg-white/10 border border-white/10 rounded-xl p-4 transition flex flex-col justify-between"
-                  >
-                    {isGM && editMode && (
-	                      <button
-	                        type="button"
-                          disabled={isBusy}
-	                        onClick={() => handleRemove(link.id)}
-	                        className="absolute top-2 right-2 text-[10px] text-red-400 hover:text-red-200 opacity-0 group-hover:opacity-100 transition-opacity disabled:cursor-not-allowed disabled:opacity-50"
-	                      >
-                        Remove
-                      </button>
-                    )}
+            <SessionLinkSection
+              key={`session-items-${linkDraftKey}`}
+              title="Items discovered"
+              emptyText="No linked items yet."
+              sessionId={String(id)}
+              entityType="Item"
+              addLabel="Item"
+              entities={visibleItems}
+              links={visibleSessionLinks}
+              allowedLabels={["introduced", "used", "consumed", "lost"]}
+              defaultLabel="introduced"
+              isGM={isGM}
+              editMode={editMode}
+              isSaving={isSaving}
+              getEntityLabel={getItemLabel}
+              getEntityMeta={(item) => item?.rarity || item?.type || ""}
+              getEntityPath={(item) => `/items/${item.id}`}
+              onLinksChanged={handleLinksChanged}
+            />
 
-                    <div
-                      role="button"
-                      onClick={() => navigate(`/items/${item.id}`)}
-                      className="cursor-pointer"
-                    >
-                      <p className="text-white font-semibold text-sm">{item?.name || "Untitled item"}</p>
-                      {item?.rarity && (
-                        <p className="text-zinc-400 text-xs mt-1">{item.rarity}</p>
-                      )}
-		        </div>
+            <SessionLinkSection
+              key={`session-lore-${linkDraftKey}`}
+              title="Lore"
+              emptyText="No linked lore yet."
+              sessionId={String(id)}
+              entityType="Lore"
+              addLabel="Lore"
+              entities={visibleLore}
+              links={visibleSessionLinks}
+              allowedLabels={["revealed", "hinted"]}
+              defaultLabel="revealed"
+              isGM={isGM}
+              editMode={editMode}
+              isSaving={isSaving}
+              getEntityLabel={getLoreLabel}
+              getEntityMeta={(lore) => lore?.type || ""}
+              getEntityPath={(lore) => `/lore/${lore.id}`}
+              onLinksChanged={handleLinksChanged}
+            />
 
-                    <div className="flex items-center justify-end mt-3">
-                      {isGM && (
-                        <span
-                          className={`text-[10px] px-2 py-0.5 rounded-full ${link.visibility === "GM"
-                            ? "bg-red-500/20 text-red-300 border border-red-500/40"
-                            : "bg-emerald-500/20 text-emerald-300 border border-emerald-500/40"
-                            }`}
-                        >
-                          {link.visibility}
-                        </span>
-                      )}
-                    </div>
-                  </div>
-                );
-              }}
+            <SessionLinkSection
+              key={`session-locations-${linkDraftKey}`}
+              title="Locations"
+              emptyText="No linked locations yet."
+              sessionId={String(id)}
+              entityType="Map"
+              addLabel="Location"
+              entities={visibleLocations}
+              links={visibleSessionLinks}
+              allowedLabels={["visited", "revealed"]}
+              defaultLabel="visited"
+              isGM={isGM}
+              editMode={editMode}
+              isSaving={isSaving}
+              getEntityLabel={getLocationLabel}
+              getEntityMeta={(location) => location?.category || ""}
+              getEntityPath={(location) => `/maps/${location.id}`}
+              onLinksChanged={handleLinksChanged}
             />
 
             {/* Session timeline */}
@@ -852,17 +1427,14 @@ export default function SessionProfile() {
 	        </fieldset>
 
 	        {/* Metadata strip */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-3 sm:gap-4 text-sm text-zinc-400 pt-2">
-          <div className="flex items-center gap-3">
-            <MapIcon className="w-4 h-4 text-zinc-500" />
-            <span>Location: {viewSession?.map || ""}</span>
-          </div>
+        <div className="grid grid-cols-1 gap-3 sm:gap-4 text-sm text-zinc-400 pt-2">
           <div className="flex items-center gap-3">
             <Clock className="w-4 h-4 text-zinc-500" />
             <span>
               Status: {viewSession?.status || "—"} • Visibility: {isGmOnlyCurrent ? "GM-only" : "Player-visible"}
             </span>
           </div>
+        </div>
         </div>
       </div>
     </main>

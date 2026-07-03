@@ -5,17 +5,17 @@ import {
   getCurrentUser,
   requireCampaignGmOrWorkspaceOwner,
   resolveCampaignBySlug,
-} from "../src/server/access.js";
-import { setCorsHeaders } from "../src/server/cors.js";
-import { db } from "../src/server/db.js";
-import { campaigns } from "../db/schema/campaigns.js";
-import { invitations } from "../db/schema/invitations.js";
+} from "../access.js";
+import { setCorsHeaders } from "../cors.js";
+import { db } from "../db.js";
+import { campaigns } from "../../../db/schema/campaigns.js";
+import { invitations } from "../../../db/schema/invitations.js";
 import {
   campaignMemberships,
   workspaceMemberships,
-} from "../db/schema/memberships.js";
-import { characterAssignments } from "../db/schema/characterAssignments.js";
-import { users } from "../db/schema/users.js";
+} from "../../../db/schema/memberships.js";
+import { characterAssignments } from "../../../db/schema/characterAssignments.js";
+import { users } from "../../../db/schema/users.js";
 
 type User = typeof users.$inferSelect;
 

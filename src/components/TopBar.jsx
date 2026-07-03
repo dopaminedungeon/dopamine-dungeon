@@ -7,7 +7,7 @@ import { useTenant } from "../context/TenantContext.jsx";
 import { useAuth } from "../context/AuthContext.jsx";
 import DebugPanel from "./DebugPanel";
 import { features } from "../config/features";
-import { useNavigate } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 
 export default function TopBar({ title }) {
   const { mode, setMode } = useMode();
@@ -264,26 +264,26 @@ export default function TopBar({ title }) {
                   <p className="text-zinc-500 text-xs truncate">{user?.email || "No email"}</p>
                 </div>
 
-                <button
-                  className="w-full text-left px-3 py-2 text-zinc-300 hover:bg-white/5"
+                <Link
+                  to="/settings/profile"
+                  className="block w-full px-3 py-2 text-left text-zinc-300 hover:bg-white/5"
                   onClick={() => {
                     setShowProfileMenu(false);
-                    navigate("/settings/profile");
                   }}
                 >
                   Profile Settings
-                </button>
+                </Link>
 
                 {String(mode).toLowerCase() === "gm" && (
-                  <button
-                    className="w-full text-left px-3 py-2 text-zinc-300 hover:bg-white/5"
+                  <Link
+                    to="/campaigns/settings"
+                    className="block w-full px-3 py-2 text-left text-zinc-300 hover:bg-white/5"
                     onClick={() => {
                       setShowProfileMenu(false);
-                      navigate("/campaigns/settings");
                     }}
                   >
                     Campaign Settings
-                  </button>
+                  </Link>
                 )}
 
                 <div className="border-t border-white/10 my-1" />
