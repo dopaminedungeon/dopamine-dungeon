@@ -1,6 +1,6 @@
 // src/pages/Quests.jsx
 import React, { useMemo, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { useMode } from "../context/ModeContext.jsx";
 import {
   Search,
@@ -79,10 +79,6 @@ export default function Quests() {
       </main>
     );
   }
-
-  const handleCardClick = (id) => {
-    navigate(`/quests/${id}`);
-  };
 
   return (
     <main className="flex-1 p-8 overflow-auto text-white">
@@ -199,10 +195,9 @@ export default function Quests() {
                     const StatusIcon = statusConfig[quest.status].icon;
 
                     return (
-                      <button
+                      <Link
                         key={quest.id}
-                        type="button"
-                        onClick={() => handleCardClick(quest.id)}
+                        to={`/quests/${quest.id}`}
                         className="w-full text-left group bg-zinc-900/60 hover:bg-zinc-900/90 border border-white/10 hover:border-purple-400/40 rounded-xl p-4 transition flex flex-col gap-3"
                       >
                         {/* Top row: name + status + GM-only */}
@@ -285,7 +280,7 @@ export default function Quests() {
                             ))}
                           </div>
                         )}
-                      </button>
+                      </Link>
                     );
                   })}
                 </div>

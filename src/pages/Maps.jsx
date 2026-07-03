@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { useNavigate } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import {
   Building2,
   Castle,
@@ -371,10 +371,9 @@ export default function Maps() {
             const Icon = meta.icon;
 
             return (
-              <button
+              <Link
                 key={location.id}
-                type="button"
-                onClick={() => navigate(`/maps/${location.id}`)}
+                to={`/maps/${location.id}`}
                 className="group flex h-full flex-col overflow-hidden rounded-2xl border border-white/10 bg-white/[0.04] text-left transition hover:border-indigo-300/40 hover:bg-white/[0.07]"
               >
                 {location.imageUrl ? (
@@ -417,7 +416,7 @@ export default function Maps() {
                     {getPlainTextPreview(location.summary || location.description)}
                   </p>
                 </div>
-              </button>
+              </Link>
             );
           })}
         </div>

@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from "react";
-import { useParams, useNavigate } from "react-router-dom";
+import { Link, useParams, useNavigate } from "react-router-dom";
 import { ArrowLeft, Clock, Map as MapIcon, Trash2 } from "lucide-react";
 import { useMode } from "../context/ModeContext.jsx";
 import { sessionsRepo } from "../data/sessions/sessions.repo";
@@ -217,7 +217,6 @@ function SessionLinkSection({
   getEntityPath,
   onLinksChanged,
 }) {
-  const navigate = useNavigate();
   const [searchOpen, setSearchOpen] = useState(false);
   const [query, setQuery] = useState("");
   const [selectedLabel, setSelectedLabel] = useState(defaultLabel);
@@ -432,16 +431,15 @@ function SessionLinkSection({
                 </button>
               ) : null}
 
-              <button
-                type="button"
-                onClick={() => navigate(getEntityPath(entity))}
+              <Link
+                to={getEntityPath(entity)}
                 className="block max-w-full cursor-pointer text-left hover:text-purple-200"
               >
                 <p className="pr-8 text-sm font-semibold text-white">{getEntityLabel(entity)}</p>
                 {getEntityMeta ? (
                   <p className="mt-1 text-xs text-zinc-500">{getEntityMeta(entity)}</p>
                 ) : null}
-              </button>
+              </Link>
 
               <div className="mt-3 flex flex-wrap items-center gap-2">
                 {isGM && editMode ? (

@@ -2,7 +2,7 @@ import React, { useEffect, useMemo, useRef, useState } from "react";
 import { useMode } from "../context/ModeContext.jsx";
 import { useCampaign } from "../context/CampaignContext";
 import { Search, Plus } from "lucide-react";
-import { NavLink, useNavigate } from "react-router-dom";
+import { Link, NavLink } from "react-router-dom";
 import { createLink } from "../domain/links/link.service";
 import { addLink, getLinksForEntity, loadLinks, removeLink } from "../data/links/links.repo";
 import { itemsRepo } from "../data/items/items.repo";
@@ -11,7 +11,6 @@ import { bagRepo } from "../data/bag/bag.repo";
 export default function BagOfHolding() {
   const { isGM } = useMode();
   const { selectedCampaignId } = useCampaign();
-  const navigate = useNavigate();
   const bagTypes = [
     "All",
     "Weapon",
@@ -817,14 +816,13 @@ export default function BagOfHolding() {
                     </div>
 
                     {item ? (
-                      <button
-                        type="button"
-                        onClick={() => navigate(`/items/${item.id}`)}
+                      <Link
+                        to={`/items/${item.id}`}
                         className="mt-2 block max-w-full cursor-pointer text-left text-white font-semibold wrap-break-word leading-snug hover:underline"
                         title={displayName}
                       >
                         {displayName}
-                      </button>
+                      </Link>
                     ) : (
                       <div
                         className="mt-2 text-white font-semibold wrap-break-word leading-snug"

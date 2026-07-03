@@ -1,6 +1,6 @@
 // src/pages/Arcs.jsx
 import { useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { useMode } from "../context/ModeContext";
 import { Plus, Search } from "lucide-react";
 import { mockArcs } from "../data/mockArcs";
@@ -157,9 +157,9 @@ export default function Arcs() {
 
               <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
                 {arcsInLane.map((arc) => (
-                  <div
+                  <Link
                     key={arc.id}
-                    onClick={() => navigate(`/arcs/${arc.id}`)}
+                    to={`/arcs/${arc.id}`}
                     className="relative group bg-white/5 backdrop-blur-sm border border-white/10 rounded-2xl p-6 hover:border-violet-500/40 hover:bg-white/10 transition cursor-pointer"
                   >
                     {/* GM ONLY BADGE */}
@@ -209,7 +209,7 @@ export default function Arcs() {
 
                       <p className="text-zinc-500 text-xs">Updated {arc.lastUpdated}</p>
                     </div>
-                  </div>
+                  </Link>
                 ))}
               </div>
             </section>
