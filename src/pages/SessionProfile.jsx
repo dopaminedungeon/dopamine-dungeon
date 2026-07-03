@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { Link, useParams, useNavigate } from "react-router-dom";
-import { ArrowLeft, Clock, Map as MapIcon, Trash2 } from "lucide-react";
+import { ArrowLeft, Clock, Trash2 } from "lucide-react";
 import { useMode } from "../context/ModeContext.jsx";
 import { sessionsRepo } from "../data/sessions/sessions.repo";
 import { itemsRepo } from "../data/items/items.repo";
@@ -14,6 +14,7 @@ import { getApiCampaignPeople, getApiCharacterAssignments } from "../data/api/ap
 import { getAllCharacters } from "../data/characters/characters.repo";
 
 const SESSION_STATUSES = ["scheduled", "active", "paused", "completed"];
+const MAIN_LOCATION_LINK_NOTE = "auto:session-main-location";
 
 function getSessionDateValue(value) {
   const rawDate = String(value || "").trim();
@@ -167,6 +168,63 @@ function getLinkSignature(link) {
     link.label,
     link.visibility,
   ].join("|");
+}
+
+function isSessionLocationLink(link, sessionId, locationId) {
+  const other = getOtherEndpoint(link, "Session", sessionId);
+  return other.type === "Map" && String(other.id) === String(locationId);
+}
+
+function isAutoMainLocationLink(link, sessionId, locationId) {
+  return (
+    isSessionLocationLink(link, sessionId, locationId) &&
+    link.label === "visited" &&
+    link.visibility === "Player" &&
+    link.note === MAIN_LOCATION_LINK_NOTE
+  );
+}
+
+function isVisitedPlayerSessionLocationLink(link, sessionId, locationId) {
+  return (
+    isSessionLocationLink(link, sessionId, locationId) &&
+    link.label === "visited" &&
+    link.visibility === "Player"
+  );
+}
+
+function reconcileMainLocationLinks({ sessionId, originalLocationId, nextLocationId, links }) {
+  let nextLinks = Array.isArray(links) ? [...links] : [];
+  const previousLocationId = String(originalLocationId || "").trim();
+  const selectedLocationId = String(nextLocationId || "").trim();
+
+  if (previousLocationId && previousLocationId !== selectedLocationId) {
+    nextLinks = nextLinks.filter(
+      (link) => !isAutoMainLocationLink(link, sessionId, previousLocationId)
+    );
+  }
+
+  if (!selectedLocationId) {
+    nextLinks = nextLinks.filter(
+      (link) => !isAutoMainLocationLink(link, sessionId, previousLocationId)
+    );
+    return nextLinks;
+  }
+
+  const alreadyLinked = nextLinks.some((link) =>
+    isVisitedPlayerSessionLocationLink(link, sessionId, selectedLocationId)
+  );
+  if (alreadyLinked) return nextLinks;
+
+  return [
+    ...nextLinks,
+    createLink({
+      entityA: { type: "Session", id: String(sessionId) },
+      entityB: { type: "Map", id: selectedLocationId },
+      label: "visited",
+      visibility: "Player",
+      note: MAIN_LOCATION_LINK_NOTE,
+    }),
+  ];
 }
 
 function getItemLabel(item) {
@@ -691,6 +749,10 @@ export default function SessionProfile() {
     if (isGM) return allLocations;
     return allLocations.filter((location) => location?.visibility === "public");
   }, [allLocations, isGM]);
+  const visibleLocationsById = useMemo(
+    () => new Map(visibleLocations.map((location) => [String(location.id), location])),
+    [visibleLocations]
+  );
 
   const sessionLinks = useMemo(() => {
     void linksVersion;
@@ -774,13 +836,17 @@ export default function SessionProfile() {
         ? normalizedEditable.attendees
         : [],
     };
+    const nextLinks = reconcileMainLocationLinks({
+      sessionId: String(toSave.id),
+      originalLocationId: normalizedSession?.map,
+      nextLocationId: toSave.map,
+      links: draftLinks || sessionLinks,
+    });
 
     try {
       setIsSaving(true);
       await sessionsRepo.upsert(selectedCampaignId, toSave);
-      if (draftLinks) {
-        await applyDraftLinkChanges(sessionLinks, draftLinks);
-      }
+      await applyDraftLinkChanges(sessionLinks, nextLinks);
       const data = await sessionsRepo.getAll(selectedCampaignId);
       setAllSessions(Array.isArray(data) ? data : []);
       setDraftLinks(null);
@@ -845,6 +911,8 @@ export default function SessionProfile() {
 
   const viewSession = editMode ? (normalizedEditable ?? normalizedSession) : normalizedSession;
   const isGmOnlyCurrent = viewSession?.visibility === "gm-only";
+  const mainLocationId = String(viewSession?.map || "").trim();
+  const mainLocation = mainLocationId ? visibleLocationsById.get(mainLocationId) : null;
 
   const handleFieldChange = (field, value) => {
     setEditableSession((prev) => {
@@ -897,7 +965,16 @@ export default function SessionProfile() {
               )}
             </h1>
             <p className="text-zinc-400 text-sm">
-              {viewSession?.map || ""}
+              {mainLocation ? (
+                <Link
+                  to={`/maps/${mainLocation.id}`}
+                  className="text-zinc-300 hover:text-purple-200"
+                >
+                  {getLocationLabel(mainLocation)}
+                </Link>
+              ) : (
+                "No location"
+              )}
               {viewSession.sessionNumber !== undefined &&
                 viewSession.sessionNumber !== null &&
                 viewSession.sessionNumber !== "" && (
@@ -1026,12 +1103,20 @@ export default function SessionProfile() {
                 />
               </label>
               <label className="block">
-                <span className="block text-xs uppercase tracking-wide text-zinc-500 mb-1">Location</span>
-                <input
-                  className="w-full bg-transparent border border-white/15 rounded-xl px-3 py-2 text-sm text-zinc-100 focus:outline-none focus:border-purple-500/60"
+                <span className="block text-xs uppercase tracking-wide text-zinc-500 mb-1">Main Location</span>
+                <select
+                  className="w-full bg-zinc-950 border border-white/15 rounded-xl px-3 py-2 text-sm text-zinc-100 focus:outline-none focus:border-purple-500/60"
                   value={editableSession?.map ?? ""}
                   onChange={(e) => handleFieldChange("map", e.target.value)}
-                />
+                >
+                  <option value="">No location</option>
+                  {allLocations.map((location) => (
+                    <option key={location.id} value={location.id}>
+                      {location.name || "Untitled location"}
+                      {location.category ? ` (${location.category})` : ""}
+                    </option>
+                  ))}
+                </select>
               </label>
               <label className="block">
                 <span className="block text-xs uppercase tracking-wide text-zinc-500 mb-1">Status</span>
@@ -1342,11 +1427,7 @@ export default function SessionProfile() {
 	        </fieldset>
 
 	        {/* Metadata strip */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-3 sm:gap-4 text-sm text-zinc-400 pt-2">
-          <div className="flex items-center gap-3">
-            <MapIcon className="w-4 h-4 text-zinc-500" />
-            <span>Location: {viewSession?.map || ""}</span>
-          </div>
+        <div className="grid grid-cols-1 gap-3 sm:gap-4 text-sm text-zinc-400 pt-2">
           <div className="flex items-center gap-3">
             <Clock className="w-4 h-4 text-zinc-500" />
             <span>
