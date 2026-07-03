@@ -6,7 +6,7 @@ import {
   Building2,
   Castle,
   Landmark,
-  Map,
+  Map as MapIcon,
   Mountain,
   Trash2,
   Trees,
@@ -17,6 +17,8 @@ import {
 import { useMode } from "../context/ModeContext.jsx";
 import { useCampaign } from "../context/CampaignContext";
 import { locationsRepo } from "../data/maps/locations.repo";
+import { npcsRepo } from "../data/npcs/npcs.repo";
+import { getLinksForEntity, loadLinks } from "../data/links/links.repo";
 
 const IMAGE_MAX_BYTES = 1024 * 1024;
 const LOCATION_CATEGORIES = [
@@ -32,13 +34,13 @@ const LOCATION_CATEGORIES = [
 
 const CATEGORY_META = {
   City: { icon: Building2, badge: "border-sky-400/25 bg-sky-500/10 text-sky-200", iconWrap: "bg-sky-500/15 text-sky-200" },
-  District: { icon: Map, badge: "border-indigo-400/25 bg-indigo-500/10 text-indigo-200", iconWrap: "bg-indigo-500/15 text-indigo-200" },
+  District: { icon: MapIcon, badge: "border-indigo-400/25 bg-indigo-500/10 text-indigo-200", iconWrap: "bg-indigo-500/15 text-indigo-200" },
   Building: { icon: Castle, badge: "border-stone-400/25 bg-stone-500/10 text-stone-200", iconWrap: "bg-stone-500/15 text-stone-200" },
   Region: { icon: Mountain, badge: "border-emerald-400/25 bg-emerald-500/10 text-emerald-200", iconWrap: "bg-emerald-500/15 text-emerald-200" },
   Landmark: { icon: Landmark, badge: "border-amber-400/25 bg-amber-500/10 text-amber-200", iconWrap: "bg-amber-500/15 text-amber-200" },
   Wilderness: { icon: Trees, badge: "border-green-400/25 bg-green-500/10 text-green-200", iconWrap: "bg-green-500/15 text-green-200" },
   Dungeon: { icon: Castle, badge: "border-rose-400/25 bg-rose-500/10 text-rose-200", iconWrap: "bg-rose-500/15 text-rose-200" },
-  Other: { icon: Map, badge: "border-zinc-400/20 bg-zinc-500/10 text-zinc-200", iconWrap: "bg-zinc-500/15 text-zinc-200" },
+  Other: { icon: MapIcon, badge: "border-zinc-400/20 bg-zinc-500/10 text-zinc-200", iconWrap: "bg-zinc-500/15 text-zinc-200" },
 };
 
 function getCategoryMeta(category) {
@@ -234,6 +236,8 @@ export default function MapProfile() {
   const [isEditing, setIsEditing] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
+  const [npcs, setNpcs] = useState([]);
+  const [linksVersion, setLinksVersion] = useState(0);
   const [isImageOpen, setIsImageOpen] = useState(false);
   const [imageZoom, setImageZoom] = useState(1);
   const [imagePan, setImagePan] = useState({ x: 0, y: 0 });
@@ -247,6 +251,7 @@ export default function MapProfile() {
     async function loadLocation() {
       if (!selectedCampaignId || !id) {
         setLocation(null);
+        setNpcs([]);
         setIsLoading(false);
         return;
       }
@@ -254,16 +259,23 @@ export default function MapProfile() {
       try {
         setIsLoading(true);
         setError("");
-        const loadedLocation = await locationsRepo.getById(selectedCampaignId, id);
+        const [loadedLocation, npcData] = await Promise.all([
+          locationsRepo.getById(selectedCampaignId, id),
+          npcsRepo.getAll(selectedCampaignId),
+          loadLinks(selectedCampaignId),
+        ]);
         if (!cancelled) {
           const normalized = loadedLocation ? normalizeLocation(loadedLocation) : null;
           setLocation(normalized);
           setDraft(normalized);
+          setNpcs(Array.isArray(npcData) ? npcData : []);
+          setLinksVersion((version) => version + 1);
         }
       } catch (loadError) {
         console.error("[LocationProfile] Failed to load location", loadError);
         if (!cancelled) {
           setLocation(null);
+          setNpcs([]);
           setError("Unable to load this Location.");
         }
       } finally {
@@ -315,6 +327,34 @@ export default function MapProfile() {
       viewLocation?.description?.trim() ||
       viewLocation?.imageUrl
   );
+  const visibleNpcs = useMemo(() => {
+    if (isGM) return npcs;
+    return npcs.filter((npc) => npc?.visibility !== "gm-only");
+  }, [isGM, npcs]);
+  const npcsById = useMemo(
+    () => new Map(visibleNpcs.map((npc) => [String(npc.id), npc])),
+    [visibleNpcs]
+  );
+  const relatedNpcLinks = useMemo(() => {
+    void linksVersion;
+    if (!location) return [];
+
+    return getLinksForEntity("Map", String(location.id), isGM ? "GM" : "Player")
+      .map((link) => {
+        const other =
+          link.entityA.type === "Map" && String(link.entityA.id) === String(location.id)
+            ? link.entityB
+            : link.entityA;
+        const npc = other.type === "NPC" ? npcsById.get(String(other.id)) : null;
+
+        if (!npc) return null;
+        if (link.label !== "connected") return null;
+        if (!isGM && link.visibility !== "Player") return null;
+
+        return { link, npc };
+      })
+      .filter(Boolean);
+  }, [isGM, linksVersion, location, npcsById]);
 
   function updateDraft(field, value) {
     setDraft((current) => ({ ...current, [field]: value }));
@@ -714,7 +754,39 @@ export default function MapProfile() {
           </Card>
 
           <Card title="NPCs">
-            <p className="text-sm text-zinc-500">NPC links coming soon</p>
+            {relatedNpcLinks.length === 0 ? (
+              <p className="text-sm text-zinc-500">No related NPCs yet.</p>
+            ) : (
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                {relatedNpcLinks.map(({ link, npc }) => (
+                  <button
+                    key={link.id}
+                    type="button"
+                    onClick={() => navigate(`/npcs/${npc.id}`)}
+                    className="rounded-xl border border-white/10 bg-black/15 p-4 text-left hover:bg-white/5"
+                  >
+                    <p className="text-sm font-semibold text-white">{npc.name || "Unnamed NPC"}</p>
+                    {npc.title ? <p className="mt-1 text-xs text-zinc-500">{npc.title}</p> : null}
+                    <div className="mt-3 flex flex-wrap items-center gap-2">
+                      <span className="rounded-full border border-white/10 bg-white/5 px-2.5 py-1 text-[11px] text-zinc-300">
+                        connected
+                      </span>
+                      {isGM ? (
+                        <span
+                          className={`rounded-full border px-2.5 py-1 text-[11px] font-semibold ${
+                            link.visibility === "Player"
+                              ? "border-emerald-500/30 bg-emerald-500/15 text-emerald-300"
+                              : "border-red-500/40 bg-red-500/20 text-red-300"
+                          }`}
+                        >
+                          {link.visibility === "Player" ? "Player-visible" : "GM-only"}
+                        </span>
+                      ) : null}
+                    </div>
+                  </button>
+                ))}
+              </div>
+            )}
           </Card>
 
           <Card title="Lore">

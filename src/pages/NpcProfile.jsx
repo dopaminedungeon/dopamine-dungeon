@@ -8,6 +8,7 @@ import { npcsRepo } from "../data/npcs/npcs.repo";
 import { sessionsRepo } from "../data/sessions/sessions.repo";
 import { itemsRepo } from "../data/items/items.repo";
 import { loreRepo } from "../data/lore/lore.repo";
+import { locationsRepo } from "../data/maps/locations.repo";
 import { createLink } from "../domain/links/link.service";
 import {
   addLink,
@@ -27,6 +28,7 @@ const NPC_STATUSES = ["active", "missing", "dead", "unknown"];
 const NPC_SESSION_LABELS = ["present", "mentioned", "ally", "antagonist"];
 const NPC_ITEM_LABELS = ["owns", "uses"];
 const NPC_LORE_LABELS = ["connected"];
+const NPC_LOCATION_LABELS = ["connected"];
 const ABILITIES = ["str", "dex", "con", "int", "wis", "cha"];
 const SIZE_OPTIONS = ["Tiny", "Small", "Medium", "Large", "Huge", "Gargantuan"];
 const CREATURE_TYPE_OPTIONS = [
@@ -481,6 +483,10 @@ function getItemLabel(item) {
 
 function getLoreLabel(lore) {
   return lore?.name || "Untitled lore";
+}
+
+function getLocationLabel(location) {
+  return location?.name || "Untitled location";
 }
 
 function getOtherEndpoint(link, baseType, baseId) {
@@ -1243,6 +1249,7 @@ export default function NpcProfile() {
   const [sessions, setSessions] = useState([]);
   const [items, setItems] = useState([]);
   const [loreEntries, setLoreEntries] = useState([]);
+  const [locations, setLocations] = useState([]);
   const [linksVersion, setLinksVersion] = useState(0);
   const [draftLinks, setDraftLinks] = useState(null);
   const [linkDraftKey, setLinkDraftKey] = useState(0);
@@ -1256,6 +1263,7 @@ export default function NpcProfile() {
         setSessions([]);
         setItems([]);
         setLoreEntries([]);
+        setLocations([]);
         setIsLoading(false);
         return;
       }
@@ -1263,11 +1271,12 @@ export default function NpcProfile() {
       try {
         setIsLoading(true);
         setError("");
-        const [data, sessionData, itemData, loreData] = await Promise.all([
+        const [data, sessionData, itemData, loreData, locationData] = await Promise.all([
           npcsRepo.getById(selectedCampaignId, id),
           sessionsRepo.getAll(selectedCampaignId),
           itemsRepo.getAll(selectedCampaignId),
           loreRepo.getAll(selectedCampaignId),
+          locationsRepo.getAll(selectedCampaignId),
           loadLinks(selectedCampaignId),
         ]);
         if (!cancelled) {
@@ -1277,6 +1286,7 @@ export default function NpcProfile() {
           setSessions(Array.isArray(sessionData) ? sessionData : []);
           setItems(Array.isArray(itemData) ? itemData : []);
           setLoreEntries(Array.isArray(loreData) ? loreData : []);
+          setLocations(Array.isArray(locationData) ? locationData : []);
           setLinksVersion((version) => version + 1);
         }
       } catch (loadError) {
@@ -1286,6 +1296,7 @@ export default function NpcProfile() {
           setSessions([]);
           setItems([]);
           setLoreEntries([]);
+          setLocations([]);
           setError("Unable to load this NPC right now.");
         }
       } finally {
@@ -1321,6 +1332,11 @@ export default function NpcProfile() {
     if (isGM) return loreEntries;
     return loreEntries.filter((entry) => entry?.visibility === "public");
   }, [isGM, loreEntries]);
+
+  const visibleLocations = useMemo(() => {
+    if (isGM) return locations;
+    return locations.filter((location) => location?.visibility === "public");
+  }, [isGM, locations]);
 
   const handleLinksChanged = () => {
     setLinksVersion((version) => version + 1);
@@ -1929,6 +1945,27 @@ export default function NpcProfile() {
             getEntityLabel={getLoreLabel}
             getEntityMeta={(entry) => entry?.type || ""}
             getEntityPath={(entry) => `/lore/${entry.id}`}
+            onLinksChanged={setDraftLinks}
+          />
+
+          <NpcLinkSection
+            key={`npc-locations-${linkDraftKey}`}
+            title="Locations"
+            emptyText="No linked locations yet."
+            npcId={String(npc.id)}
+            entityType="Map"
+            entities={visibleLocations}
+            links={visibleNpcLinks}
+            allowedLabels={NPC_LOCATION_LABELS}
+            defaultLabel="connected"
+            defaultVisibility="GM"
+            isGM={isGM}
+            isEditing={isEditing}
+            isSaving={isSaving}
+            selectedCampaignId={selectedCampaignId}
+            getEntityLabel={getLocationLabel}
+            getEntityMeta={(location) => location?.category || ""}
+            getEntityPath={(location) => `/maps/${location.id}`}
             onLinksChanged={setDraftLinks}
           />
 
