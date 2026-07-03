@@ -3,6 +3,7 @@ import { NavLink, useLocation } from "react-router-dom";
 import {
   LayoutDashboard,
   Users,
+  Drama,
   Package,
   ScrollText,
   BookOpen,
@@ -49,7 +50,7 @@ export default function Sidebar() {
     { to: "/bag", icon: ScrollText, label: "Bag of Holding", on: features.bagOfHolding },
 
     // Future modules (kept here for when you flip flags back on)
-    { to: "/npcs", icon: Users, label: "NPCs", on: features.npcs },
+    { to: "/npcs", icon: Drama, label: "NPCs", on: features.npcs },
     { to: "/pcs", icon: Users, label: "PCs", on: features.pcs },
     { to: "/maps", icon: Map, label: "Locations", on: features.maps },
     { to: "/arcs", icon: Sparkles, label: "Arcs", on: features.arcs },
