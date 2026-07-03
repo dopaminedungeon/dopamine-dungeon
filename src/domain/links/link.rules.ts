@@ -189,7 +189,7 @@ export const ALLOWED_LINK_LABELS: Record<string, string[]> = {
   // ─────────────────────────
   // Map
   // ─────────────────────────
-  "Map|NPC": ["resides_in", "controls"],
+  "Map|NPC": ["connected", "resides_in", "controls"],
   "Map|PC": ["home", "current_location"],
   "Map|Item": ["found_in", "hidden_in"],
 
