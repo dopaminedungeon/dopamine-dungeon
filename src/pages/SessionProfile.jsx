@@ -801,7 +801,7 @@ export default function SessionProfile() {
   // No such session at all
   if (!normalizedSession) {
     return (
-      <main className="flex-1 overflow-auto text-white">
+      <main className="flex-1 overflow-auto p-4 sm:p-6 lg:p-8 text-white">
         <h1 className="text-3xl font-bold">Session Not Found</h1>
         <p className="text-zinc-400 mt-2">
           There is no session with this ID.
@@ -819,9 +819,9 @@ export default function SessionProfile() {
   // GM restriction guard: prevent players from viewing GM-only sessions
   if (normalizedSession?.visibility === "gm-only" && !isGM) {
     return (
-      <main className="flex-1 overflow-auto">
+      <main className="flex-1 overflow-auto p-4 sm:p-6 lg:p-8">
         <button
-          className="flex items-center gap-2 text-zinc-400 hover:text-white mb-4 sm:mb-6"
+          className="mb-5 inline-flex items-center gap-2 text-sm text-zinc-300 hover:text-white"
           onClick={() => navigate("/sessions")}
         >
           <ArrowLeft className="w-5 h-5" />
@@ -874,16 +874,17 @@ export default function SessionProfile() {
   };
 
   return (
-    <main className="flex-1 overflow-auto">
-      <button
-        className="flex items-center gap-2 text-zinc-400 hover:text-white mb-4 sm:mb-6"
-        onClick={() => navigate("/sessions")}
-      >
-        <ArrowLeft className="w-5 h-5" />
-        Back to Sessions
-      </button>
+    <main className="flex-1 overflow-auto p-4 sm:p-6 lg:p-8">
+      <div className="mx-auto max-w-7xl">
+        <button
+          className="mb-5 inline-flex items-center gap-2 text-sm text-zinc-300 hover:text-white"
+          onClick={() => navigate("/sessions")}
+        >
+          <ArrowLeft className="w-5 h-5" />
+          Back to Sessions
+        </button>
 
-      <div className="bg-white/5 border border-white/10 rounded-xl sm:rounded-2xl p-4 sm:p-8 backdrop-blur-sm space-y-5 sm:space-y-6">
+        <div className="bg-white/5 border border-white/10 rounded-2xl p-5 sm:p-6 lg:p-8 backdrop-blur-sm space-y-5 sm:space-y-6">
         {/* Header */}
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 sm:gap-4">
           <div>
@@ -1352,6 +1353,7 @@ export default function SessionProfile() {
               Status: {viewSession?.status || "—"} • Visibility: {isGmOnlyCurrent ? "GM-only" : "Player-visible"}
             </span>
           </div>
+        </div>
         </div>
       </div>
     </main>

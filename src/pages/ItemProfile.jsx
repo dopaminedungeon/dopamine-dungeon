@@ -719,7 +719,7 @@ export default function ItemProfile() {
   // Hard gate: players should not be able to open GM-only items via direct URL.
   if (!isGM && visibility === "gm-only") {
     return (
-      <main className="flex-1 p-8 overflow-auto">
+      <main className="flex-1 overflow-auto p-4 sm:p-6 lg:p-8">
         <div className="max-w-xl mx-auto bg-white/5 border border-white/10 rounded-2xl p-8 text-center">
           <h1 className="text-2xl font-bold text-white mb-2">DM Eyes Only</h1>
           <p className="text-zinc-400 text-sm mb-4">
@@ -737,60 +737,62 @@ export default function ItemProfile() {
   }
 
   return (
-    <>
-      {/* Page title (since TopBar is now provided by AppLayout) */}
-      <div className="mb-6">
-        <h1 className="text-2xl md:text-3xl font-semibold tracking-tight text-white">
-          {formData.name}
-        </h1>
-        <p className="mt-1 text-xs md:text-sm text-zinc-400">
-          {formData.type} • <span className="font-medium">{formData.rarity}</span>
-        </p>
-      </div>
+    <main className="flex-1 overflow-auto p-4 sm:p-6 lg:p-8">
+      <div className="mx-auto max-w-7xl">
+        <div className="mb-6 flex flex-col gap-4">
+          <button
+            className="inline-flex w-fit items-center gap-2 text-sm text-zinc-300 hover:text-white"
+            onClick={() => navigate("/items")}
+          >
+            <ArrowLeft className="w-5 h-5" />
+            Back to Items
+          </button>
 
-      <div className="flex items-center justify-between mb-6">
-        <button
-          className="flex items-center gap-2 text-zinc-400 hover:text-white"
-          onClick={() => navigate("/items")}
-        >
-          <ArrowLeft className="w-5 h-5" />
-          Back to Items
-        </button>
-        {isGM && (
-          <div className="flex w-full sm:w-auto flex-col sm:flex-row gap-2">
-            {isEditing ? (
-              <>
+          <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
+            <div>
+              <h1 className="text-2xl md:text-3xl font-semibold tracking-tight text-white">
+                {formData.name}
+              </h1>
+              <p className="mt-1 text-xs md:text-sm text-zinc-400">
+                {formData.type} • <span className="font-medium">{formData.rarity}</span>
+              </p>
+            </div>
+
+            {isGM && (
+              <div className="flex w-full sm:w-auto flex-col sm:flex-row gap-2">
+                {isEditing ? (
+                  <>
+                    <button
+                      type="button"
+                      onClick={handleCancelEdit}
+                      disabled={isItemSaving || isItemDeleting}
+                      className="w-full sm:w-auto px-4 py-2 rounded-xl bg-white/10 text-zinc-200 hover:bg-white/20 text-sm font-medium disabled:cursor-not-allowed disabled:opacity-60"
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      type="button"
+                      onClick={handleSave}
+                      disabled={isItemSaving || isItemDeleting}
+                      className="w-full sm:w-auto px-4 py-2 rounded-xl bg-purple-500 text-white hover:bg-purple-400 text-sm font-medium disabled:cursor-not-allowed disabled:opacity-60"
+                    >
+                      {isItemSaving ? "Saving..." : "Save"}
+                    </button>
+                  </>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={handleStartEdit}
+                    disabled={isItemSaving || isItemDeleting}
+                    className="w-full sm:w-auto px-4 py-2 rounded-xl bg-white/10 text-zinc-200 hover:bg-white/20 text-sm font-medium disabled:cursor-not-allowed disabled:opacity-60"
+                  >
+                    Edit
+                  </button>
+                )}
+
                 <button
                   type="button"
-                  onClick={handleCancelEdit}
-                  disabled={isItemSaving || isItemDeleting}
-                  className="w-full sm:w-auto px-4 py-2 rounded-xl bg-white/10 text-zinc-200 hover:bg-white/20 text-sm font-medium disabled:cursor-not-allowed disabled:opacity-60"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="button"
-                  onClick={handleSave}
-                  disabled={isItemSaving || isItemDeleting}
-                  className="w-full sm:w-auto px-4 py-2 rounded-xl bg-purple-500 text-white hover:bg-purple-400 text-sm font-medium disabled:cursor-not-allowed disabled:opacity-60"
-                >
-                  {isItemSaving ? "Saving..." : "Save"}
-                </button>
-              </>
-            ) : (
-              <button
-                type="button"
-                onClick={handleStartEdit}
-                disabled={isItemSaving || isItemDeleting}
-                className="w-full sm:w-auto px-4 py-2 rounded-xl bg-white/10 text-zinc-200 hover:bg-white/20 text-sm font-medium disabled:cursor-not-allowed disabled:opacity-60"
-              >
-                Edit
-              </button>
-            )}
-
-            <button
-              type="button"
-              onClick={async () => {
+                  onClick={async () => {
 	                if (isItemSaving || isItemDeleting || !selectedCampaignId || !formData?.id) return;
 	                const ok = window.confirm("Delete this item? This cannot be undone.");
 	                if (!ok) return;
@@ -806,15 +808,16 @@ export default function ItemProfile() {
                     setIsItemDeleting(false);
 	                }
 	              }}
-	              disabled={isItemSaving || isItemDeleting}
-	              className="w-full sm:w-auto px-4 py-2 rounded-xl bg-red-500/15 border border-red-500/40 text-red-200 hover:bg-red-500/25 text-sm font-medium inline-flex items-center justify-center gap-2 disabled:cursor-not-allowed disabled:opacity-50"
-	            >
-	              <Trash2 className="w-4 h-4" />
-	              {isItemDeleting ? "Deleting..." : "Delete"}
-	            </button>
+	                disabled={isItemSaving || isItemDeleting}
+	                className="w-full sm:w-auto px-4 py-2 rounded-xl bg-red-500/15 border border-red-500/40 text-red-200 hover:bg-red-500/25 text-sm font-medium inline-flex items-center justify-center gap-2 disabled:cursor-not-allowed disabled:opacity-50"
+	              >
+	                <Trash2 className="w-4 h-4" />
+	                {isItemDeleting ? "Deleting..." : "Delete"}
+	              </button>
+              </div>
+            )}
           </div>
-        )}
-      </div>
+        </div>
 
 	      <fieldset disabled={isItemSaving} className="contents disabled:opacity-60">
 	      {/* Header / identity */}
@@ -1247,6 +1250,7 @@ export default function ItemProfile() {
         )}
 	      </div>
         </fieldset>
-	    </>
+      </div>
+    </main>
   );
 }
