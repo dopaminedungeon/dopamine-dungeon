@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
-import { useNavigate, useParams } from "react-router-dom";
+import { Link, useNavigate, useParams } from "react-router-dom";
 import {
   ArrowLeft,
   BookOpen,
@@ -336,7 +336,6 @@ function LoreLinkSection({
   getEntityPath,
   onLinksChanged,
 }) {
-  const navigate = useNavigate();
   const [searchOpen, setSearchOpen] = useState(false);
   const [query, setQuery] = useState("");
   const [selectedLabel, setSelectedLabel] = useState(defaultLabel);
@@ -563,16 +562,15 @@ function LoreLinkSection({
                 </button>
               ) : null}
 
-              <button
-                type="button"
-                onClick={() => navigate(getEntityPath(entity))}
+              <Link
+                to={getEntityPath(entity)}
                 className="block max-w-full cursor-pointer text-left hover:text-purple-200"
               >
                 <p className="pr-8 text-sm font-semibold text-white">{getEntityLabel(entity)}</p>
                 {getEntityMeta ? (
                   <p className="mt-1 text-xs text-zinc-500">{getEntityMeta(entity)}</p>
                 ) : null}
-              </button>
+              </Link>
 
               <div className="mt-3 flex flex-wrap items-center gap-2">
                 {isGM && isEditing ? (

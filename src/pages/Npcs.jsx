@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { Link } from "react-router-dom";
 import { useMode } from "../context/ModeContext.jsx";
 import { useCampaign } from "../context/CampaignContext";
 import {
@@ -112,7 +112,6 @@ function createNpcDraft() {
 export default function Npcs() {
   const { isGM } = useMode();
   const { selectedCampaignId } = useCampaign();
-  const navigate = useNavigate();
 
   const [npcs, setNpcs] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -374,11 +373,10 @@ export default function Npcs() {
             const accent = getNpcCardAccent(npc, npcRole, npcType);
 
             return (
-              <button
-                type="button"
+              <Link
                 key={npc.id}
+                to={`/npcs/${npc.id}`}
                 className={`group text-left backdrop-blur-sm border rounded-2xl p-6 transition-all ${accent.card}`}
-                onClick={() => navigate(`/npcs/${npc.id}`)}
               >
                 <div className="flex items-start justify-between mb-4">
                   <div className={`w-14 h-14 rounded-xl bg-linear-to-br ${accent.icon} flex items-center justify-center shadow-lg`}>
@@ -419,7 +417,7 @@ export default function Npcs() {
                     {VISIBILITY_LABELS[npc.visibility === "gm-only" ? "gm-only" : "public"]}
                   </span>
                 </div>
-              </button>
+              </Link>
             );
           })}
         </div>

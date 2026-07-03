@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import {
   BookOpen,
   Flag,
@@ -393,10 +393,9 @@ export default function Lore() {
                     const EntryIcon = entryMeta.icon;
 
                     return (
-                      <button
+                      <Link
                         key={entry.id}
-                        type="button"
-                        onClick={() => navigate(`/lore/${entry.id}`)}
+                        to={`/lore/${entry.id}`}
                         className="group flex h-full flex-col rounded-2xl border border-white/10 bg-white/[0.04] p-5 text-left transition hover:border-violet-300/40 hover:bg-white/[0.07]"
                       >
                         <div className="mb-4 flex items-start justify-between gap-3">
@@ -427,7 +426,7 @@ export default function Lore() {
                         <p className="line-clamp-4 text-sm leading-6 text-zinc-400">
                           {getPlainTextPreview(entry.summary || entry.content)}
                         </p>
-                      </button>
+                      </Link>
                     );
                   })}
                 </div>

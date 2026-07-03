@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { useMode } from "../context/ModeContext.jsx";
 import {
   Search,
@@ -233,10 +233,10 @@ if (loading) {
           const StatusIcon = status.icon;
           const isGmOnly = session.visibility === "gm-only";
           return (
-            <div
+            <Link
               key={session.id}
+              to={`/sessions/${session.id}`}
               className="group bg-white/5 backdrop-blur-sm border border-white/10 rounded-xl sm:rounded-2xl p-4 sm:p-6 hover:border-purple-500/30 hover:bg-white/10 transition-all cursor-pointer"
-              onClick={() => navigate(`/sessions/${session.id}`)}
             >
               <div className="flex flex-col lg:flex-row lg:items-center gap-3 sm:gap-4">
                 {/* Session Info */}
@@ -273,7 +273,7 @@ if (loading) {
                   </div>
                 </div>
               </div>
-            </div>
+            </Link>
           );
         })}
       </div>
