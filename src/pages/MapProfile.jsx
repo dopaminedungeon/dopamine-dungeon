@@ -18,7 +18,11 @@ import { useMode } from "../context/ModeContext.jsx";
 import { useCampaign } from "../context/CampaignContext";
 import { locationsRepo } from "../data/maps/locations.repo";
 import { npcsRepo } from "../data/npcs/npcs.repo";
-import { getLinksForEntity, loadLinks } from "../data/links/links.repo";
+import { sessionsRepo } from "../data/sessions/sessions.repo";
+import { itemsRepo } from "../data/items/items.repo";
+import { loreRepo } from "../data/lore/lore.repo";
+import { createLink } from "../domain/links/link.service";
+import { addLink, getLinksForEntity, loadLinks, removeLink } from "../data/links/links.repo";
 
 const IMAGE_MAX_BYTES = 1024 * 1024;
 const LOCATION_CATEGORIES = [
@@ -207,6 +211,367 @@ function Card({ title, children }) {
   );
 }
 
+function formatLinkLabel(label) {
+  return String(label || "").replaceAll("_", " ");
+}
+
+function getOtherEndpoint(link, baseType, baseId) {
+  return link.entityA.type === baseType && String(link.entityA.id) === String(baseId)
+    ? link.entityB
+    : link.entityA;
+}
+
+function getLinkSignature(link) {
+  return [
+    `${link.entityA.type}:${link.entityA.id}`,
+    `${link.entityB.type}:${link.entityB.id}`,
+    link.label,
+    link.visibility,
+  ].join("|");
+}
+
+function getSessionLabel(session) {
+  const number = session?.sessionNumber ? `Session ${session.sessionNumber}: ` : "";
+  return `${number}${session?.name || session?.title || "Untitled session"}`;
+}
+
+function getItemLabel(item) {
+  return item?.name || "Untitled item";
+}
+
+function getLoreLabel(lore) {
+  return lore?.name || "Untitled lore";
+}
+
+function getNpcLabel(npc) {
+  return npc?.name || "Unnamed NPC";
+}
+
+function SelectInput({ value, onChange, disabled, children }) {
+  return (
+    <select
+      value={value}
+      disabled={disabled}
+      onChange={(event) => onChange(event.target.value)}
+      className="min-w-0 rounded-xl border border-white/10 bg-black/30 px-3 py-2 text-sm text-white outline-none focus:border-indigo-300 disabled:cursor-not-allowed disabled:opacity-50"
+    >
+      {children}
+    </select>
+  );
+}
+
+function MapLinkSection({
+  title,
+  emptyText,
+  mapId,
+  entityType,
+  addLabel,
+  entities,
+  links,
+  allowedLabels,
+  defaultLabel,
+  defaultVisibility = "GM",
+  isGM,
+  isEditing,
+  isSaving,
+  getEntityLabel,
+  getEntityMeta,
+  getEntityPath,
+  onLinksChanged,
+}) {
+  const navigate = useNavigate();
+  const [searchOpen, setSearchOpen] = useState(false);
+  const [query, setQuery] = useState("");
+  const [selectedLabel, setSelectedLabel] = useState(defaultLabel);
+  const [selectedVisibility, setSelectedVisibility] = useState(defaultVisibility);
+  const [error, setError] = useState("");
+  const canChangeLabel = allowedLabels.length > 1;
+  const isDisabled = Boolean(isSaving);
+
+  const entityList = useMemo(
+    () => (Array.isArray(entities) ? entities.filter((entity) => entity?.id) : []),
+    [entities]
+  );
+
+  const entitiesById = useMemo(
+    () => new Map(entityList.map((entity) => [String(entity.id), entity])),
+    [entityList]
+  );
+
+  const relevantLinks = useMemo(() => {
+    return links
+      .map((link) => {
+        const other = getOtherEndpoint(link, "Map", mapId);
+        const entity = other.type === entityType ? entitiesById.get(String(other.id)) : null;
+
+        if (!entity) return null;
+        if (!allowedLabels.includes(link.label)) return null;
+        if (!isGM && link.visibility !== "Player") return null;
+
+        return { link, entity };
+      })
+      .filter(Boolean);
+  }, [allowedLabels, entitiesById, entityType, isGM, links, mapId]);
+
+  const candidateEntities = useMemo(() => {
+    const normalizedQuery = query.trim().toLowerCase();
+
+    return entityList
+      .filter((entity) => {
+        const label = getEntityLabel(entity);
+        if (normalizedQuery && !String(label || "").toLowerCase().includes(normalizedQuery)) {
+          return false;
+        }
+
+        return !links.some((link) => {
+          const other = getOtherEndpoint(link, "Map", mapId);
+
+          return other.type === entityType && String(other.id) === String(entity.id);
+        });
+      })
+      .slice(0, 30);
+  }, [entityList, entityType, getEntityLabel, links, mapId, query]);
+
+  function handleAdd(entityId) {
+    if (isDisabled) return;
+    const normalizedEntityId = String(entityId);
+
+    const duplicate = links.some((link) => {
+      const other = getOtherEndpoint(link, "Map", mapId);
+      return other.type === entityType && String(other.id) === normalizedEntityId;
+    });
+
+    if (duplicate) {
+      setError("That entity is already linked.");
+      return;
+    }
+
+    try {
+      setError("");
+      const link = createLink({
+        entityA: { type: "Map", id: String(mapId) },
+        entityB: { type: entityType, id: normalizedEntityId },
+        label: selectedLabel,
+        visibility: selectedVisibility,
+      });
+
+      onLinksChanged([...links, link]);
+      setQuery("");
+      setSearchOpen(false);
+    } catch (linkError) {
+      console.error("[MapProfile] Failed to stage link", linkError);
+      setError("Unable to add this link right now.");
+    }
+  }
+
+  function handleRemove(linkId) {
+    if (isDisabled) return;
+
+    setError("");
+    onLinksChanged(links.filter((link) => link.id !== linkId));
+  }
+
+  function handleUpdateLink(link, entity, changes) {
+    if (isDisabled) return;
+
+    const nextLabel = changes.label ?? link.label;
+    const nextVisibility = changes.visibility ?? link.visibility;
+
+    if (nextLabel === link.label && nextVisibility === link.visibility) return;
+
+    const duplicate = links.some((candidate) => {
+      if (candidate.id === link.id) return false;
+
+      const other = getOtherEndpoint(candidate, "Map", mapId);
+      return other.type === entityType && String(other.id) === String(entity.id);
+    });
+
+    if (duplicate) {
+      setError("That entity is already linked.");
+      return;
+    }
+
+    setError("");
+    onLinksChanged(
+      links.map((candidate) =>
+        candidate.id === link.id
+          ? { ...candidate, label: nextLabel, visibility: nextVisibility }
+          : candidate
+      )
+    );
+  }
+
+  return (
+    <section className="rounded-2xl border border-white/10 bg-white/[0.04] p-5">
+      <div className="flex items-start justify-between gap-3">
+        <h2 className="text-xs font-semibold uppercase tracking-[0.22em] text-zinc-400">
+          {title}
+        </h2>
+        {isGM && isEditing ? (
+          <button
+            type="button"
+            disabled={isDisabled}
+            onClick={() => {
+              if (isDisabled) return;
+              setSearchOpen((current) => !current);
+              setError("");
+            }}
+            className="rounded-full border border-white/10 bg-white/5 px-3 py-1.5 text-xs text-zinc-200 hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            {searchOpen ? "Close" : `Add ${addLabel}`}
+          </button>
+        ) : null}
+      </div>
+
+      {isGM && isEditing && searchOpen ? (
+        <div className="mt-4 space-y-3 rounded-2xl border border-white/10 bg-black/10 p-4">
+          <div
+            className={`grid grid-cols-1 gap-3 ${
+              canChangeLabel
+                ? "sm:grid-cols-[minmax(0,1fr)_160px_140px]"
+                : "sm:grid-cols-[minmax(0,1fr)_140px]"
+            }`}
+          >
+            <input
+              value={query}
+              disabled={isDisabled}
+              onChange={(event) => {
+                if (!isDisabled) setQuery(event.target.value);
+              }}
+              placeholder={`Search ${title.toLowerCase()}...`}
+              className="min-w-0 rounded-xl border border-white/10 bg-black/30 px-3 py-2 text-sm text-white outline-none focus:border-indigo-300 disabled:cursor-not-allowed disabled:opacity-50"
+            />
+            {canChangeLabel ? (
+              <SelectInput
+                disabled={isDisabled}
+                value={selectedLabel}
+                onChange={setSelectedLabel}
+              >
+                {allowedLabels.map((label) => (
+                  <option key={label} value={label}>
+                    {formatLinkLabel(label)}
+                  </option>
+                ))}
+              </SelectInput>
+            ) : null}
+            <SelectInput
+              disabled={isDisabled}
+              value={selectedVisibility}
+              onChange={setSelectedVisibility}
+            >
+              <option value="GM">GM-only</option>
+              <option value="Player">Player-visible</option>
+            </SelectInput>
+          </div>
+
+          {error ? <p className="text-sm text-rose-300">{error}</p> : null}
+
+          <div className="max-h-48 overflow-auto rounded-xl border border-white/10">
+            {candidateEntities.length === 0 ? (
+              <p className="px-3 py-2 text-sm text-zinc-500">No results.</p>
+            ) : (
+              candidateEntities.map((entity) => (
+                <button
+                  key={entity.id}
+                  type="button"
+                  disabled={isDisabled}
+                  onClick={() => handleAdd(entity.id)}
+                  className="block w-full px-3 py-2 text-left text-sm text-zinc-200 hover:bg-white/5 disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  {getEntityLabel(entity)}
+                </button>
+              ))
+            )}
+          </div>
+        </div>
+      ) : null}
+
+      {relevantLinks.length === 0 ? (
+        <p className="mt-3 text-sm text-zinc-500">{emptyText}</p>
+      ) : (
+        <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2">
+          {relevantLinks.map(({ link, entity }) => (
+            <div
+              key={link.id}
+              className="group relative rounded-xl border border-white/10 bg-black/15 p-4"
+            >
+              {isGM && isEditing ? (
+                <button
+                  type="button"
+                  disabled={isDisabled}
+                  onClick={() => handleRemove(link.id)}
+                  className="absolute right-3 top-3 rounded-full border border-rose-400/30 bg-rose-500/10 p-1.5 text-rose-100 opacity-0 transition hover:bg-rose-500/20 group-hover:opacity-100 disabled:cursor-not-allowed disabled:opacity-50"
+                  aria-label="Remove link"
+                >
+                  <Trash2 className="h-3.5 w-3.5" />
+                </button>
+              ) : null}
+
+              <button
+                type="button"
+                onClick={() => navigate(getEntityPath(entity))}
+                className="block max-w-full text-left"
+              >
+                <p className="pr-8 text-sm font-semibold text-white">{getEntityLabel(entity)}</p>
+                {getEntityMeta ? (
+                  <p className="mt-1 text-xs text-zinc-500">{getEntityMeta(entity)}</p>
+                ) : null}
+              </button>
+
+              <div className="mt-3 flex flex-wrap items-center gap-2">
+                {isGM && isEditing ? (
+                  <div className="grid w-full grid-cols-1 gap-2 sm:grid-cols-2">
+                    {canChangeLabel ? (
+                      <SelectInput
+                        disabled={isDisabled}
+                        value={link.label}
+                        onChange={(label) => handleUpdateLink(link, entity, { label })}
+                      >
+                        {allowedLabels.map((label) => (
+                          <option key={label} value={label}>
+                            {formatLinkLabel(label)}
+                          </option>
+                        ))}
+                      </SelectInput>
+                    ) : (
+                      <span className="rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-xs text-zinc-300">
+                        {formatLinkLabel(link.label)}
+                      </span>
+                    )}
+                    <SelectInput
+                      disabled={isDisabled}
+                      value={link.visibility}
+                      onChange={(visibility) => handleUpdateLink(link, entity, { visibility })}
+                    >
+                      <option value="GM">GM-only</option>
+                      <option value="Player">Player-visible</option>
+                    </SelectInput>
+                  </div>
+                ) : (
+                  <span className="rounded-full border border-white/10 bg-white/5 px-2.5 py-1 text-[11px] text-zinc-300">
+                    {formatLinkLabel(link.label)}
+                  </span>
+                )}
+                {isGM && !isEditing ? (
+                  <span
+                    className={`rounded-full border px-2.5 py-1 text-[11px] font-semibold ${
+                      link.visibility === "Player"
+                        ? "border-emerald-500/30 bg-emerald-500/15 text-emerald-300"
+                        : "border-red-500/40 bg-red-500/20 text-red-300"
+                    }`}
+                  >
+                    {link.visibility === "Player" ? "Player-visible" : "GM-only"}
+                  </span>
+                ) : null}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </section>
+  );
+}
+
 function TextArea({ label, value, onChange, rows = 5, disabled }) {
   return (
     <label className="space-y-1 text-sm text-zinc-300">
@@ -237,7 +602,12 @@ export default function MapProfile() {
   const [isSaving, setIsSaving] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
   const [npcs, setNpcs] = useState([]);
+  const [sessions, setSessions] = useState([]);
+  const [items, setItems] = useState([]);
+  const [loreEntries, setLoreEntries] = useState([]);
   const [linksVersion, setLinksVersion] = useState(0);
+  const [draftLinks, setDraftLinks] = useState(null);
+  const [linkDraftKey, setLinkDraftKey] = useState(0);
   const [isImageOpen, setIsImageOpen] = useState(false);
   const [imageZoom, setImageZoom] = useState(1);
   const [imagePan, setImagePan] = useState({ x: 0, y: 0 });
@@ -252,6 +622,10 @@ export default function MapProfile() {
       if (!selectedCampaignId || !id) {
         setLocation(null);
         setNpcs([]);
+        setSessions([]);
+        setItems([]);
+        setLoreEntries([]);
+        setDraftLinks(null);
         setIsLoading(false);
         return;
       }
@@ -259,9 +633,12 @@ export default function MapProfile() {
       try {
         setIsLoading(true);
         setError("");
-        const [loadedLocation, npcData] = await Promise.all([
+        const [loadedLocation, npcData, sessionData, itemData, loreData] = await Promise.all([
           locationsRepo.getById(selectedCampaignId, id),
           npcsRepo.getAll(selectedCampaignId),
+          sessionsRepo.getAll(selectedCampaignId),
+          itemsRepo.getAll(selectedCampaignId),
+          loreRepo.getAll(selectedCampaignId),
           loadLinks(selectedCampaignId),
         ]);
         if (!cancelled) {
@@ -269,6 +646,9 @@ export default function MapProfile() {
           setLocation(normalized);
           setDraft(normalized);
           setNpcs(Array.isArray(npcData) ? npcData : []);
+          setSessions(Array.isArray(sessionData) ? sessionData : []);
+          setItems(Array.isArray(itemData) ? itemData : []);
+          setLoreEntries(Array.isArray(loreData) ? loreData : []);
           setLinksVersion((version) => version + 1);
         }
       } catch (loadError) {
@@ -276,6 +656,10 @@ export default function MapProfile() {
         if (!cancelled) {
           setLocation(null);
           setNpcs([]);
+          setSessions([]);
+          setItems([]);
+          setLoreEntries([]);
+          setDraftLinks(null);
           setError("Unable to load this Location.");
         }
       } finally {
@@ -331,30 +715,62 @@ export default function MapProfile() {
     if (isGM) return npcs;
     return npcs.filter((npc) => npc?.visibility !== "gm-only");
   }, [isGM, npcs]);
-  const npcsById = useMemo(
-    () => new Map(visibleNpcs.map((npc) => [String(npc.id), npc])),
-    [visibleNpcs]
-  );
-  const relatedNpcLinks = useMemo(() => {
+
+  const visibleSessions = useMemo(() => {
+    if (isGM) return sessions;
+    return sessions.filter((session) => session?.visibility !== "gm-only");
+  }, [isGM, sessions]);
+
+  const visibleItems = useMemo(() => {
+    if (isGM) return items;
+    return items.filter((item) => item?.visibility !== "gm-only");
+  }, [isGM, items]);
+
+  const visibleLoreEntries = useMemo(() => {
+    if (isGM) return loreEntries;
+    return loreEntries.filter((entry) => entry?.visibility === "public");
+  }, [isGM, loreEntries]);
+
+  const mapLinks = useMemo(() => {
     void linksVersion;
-    if (!location) return [];
+    return location ? getLinksForEntity("Map", String(location.id), isGM ? "GM" : "Player") : [];
+  }, [isGM, linksVersion, location]);
 
-    return getLinksForEntity("Map", String(location.id), isGM ? "GM" : "Player")
-      .map((link) => {
-        const other =
-          link.entityA.type === "Map" && String(link.entityA.id) === String(location.id)
-            ? link.entityB
-            : link.entityA;
-        const npc = other.type === "NPC" ? npcsById.get(String(other.id)) : null;
+  const visibleMapLinks = isEditing && draftLinks ? draftLinks : mapLinks;
 
-        if (!npc) return null;
-        if (link.label !== "connected") return null;
-        if (!isGM && link.visibility !== "Player") return null;
+  const handleLinksChanged = (nextLinks) => {
+    setDraftLinks(nextLinks);
+  };
 
-        return { link, npc };
-      })
-      .filter(Boolean);
-  }, [isGM, linksVersion, location, npcsById]);
+  async function applyDraftLinkChanges(originalLinks, nextLinks) {
+    if (!selectedCampaignId) return;
+
+    const originalById = new Map(originalLinks.map((link) => [link.id, link]));
+    const nextById = new Map(nextLinks.map((link) => [link.id, link]));
+
+    for (const originalLink of originalLinks) {
+      if (!nextById.has(originalLink.id)) {
+        await removeLink(originalLink.id, selectedCampaignId);
+      }
+    }
+
+    for (const nextLink of nextLinks) {
+      const originalLink = originalById.get(nextLink.id);
+
+      if (!originalLink) {
+        await addLink(nextLink, selectedCampaignId);
+        continue;
+      }
+
+      if (getLinkSignature(originalLink) !== getLinkSignature(nextLink)) {
+        await removeLink(originalLink.id, selectedCampaignId);
+        await addLink(nextLink, selectedCampaignId);
+      }
+    }
+
+    await loadLinks(selectedCampaignId);
+    setLinksVersion((version) => version + 1);
+  }
 
   function updateDraft(field, value) {
     setDraft((current) => ({ ...current, [field]: value }));
@@ -414,8 +830,13 @@ export default function MapProfile() {
       const savedLocation = normalizeLocation(
         await locationsRepo.upsert(selectedCampaignId, payload)
       );
+      if (draftLinks) {
+        await applyDraftLinkChanges(mapLinks, draftLinks);
+      }
       setLocation(savedLocation);
       setDraft(savedLocation);
+      setDraftLinks(null);
+      setLinkDraftKey((key) => key + 1);
       setIsEditing(false);
       setImageError("");
     } catch (saveError) {
@@ -612,6 +1033,8 @@ export default function MapProfile() {
                     disabled={isSaving}
                     onClick={() => {
                       setDraft(location);
+                      setDraftLinks(null);
+                      setLinkDraftKey((key) => key + 1);
                       setIsEditing(false);
                       setImageError("");
                     }}
@@ -635,6 +1058,8 @@ export default function MapProfile() {
                     disabled={isDeleting}
                     onClick={() => {
                       setDraft(location);
+                      setDraftLinks(mapLinks);
+                      setLinkDraftKey((key) => key + 1);
                       setImageError("");
                       setIsEditing(true);
                     }}
@@ -749,53 +1174,85 @@ export default function MapProfile() {
             )}
           </Card>
 
-          <Card title="Sessions">
-            <p className="text-sm text-zinc-500">Session links coming soon</p>
-          </Card>
+          <MapLinkSection
+            key={`map-sessions-${linkDraftKey}`}
+            title="Sessions"
+            emptyText="No linked sessions yet."
+            mapId={viewLocation.id}
+            entityType="Session"
+            addLabel="Session"
+            entities={visibleSessions}
+            links={visibleMapLinks}
+            allowedLabels={["visited", "revealed"]}
+            defaultLabel="visited"
+            isGM={isGM}
+            isEditing={isEditing}
+            isSaving={isSaving}
+            getEntityLabel={getSessionLabel}
+            getEntityMeta={(session) => session?.date || session?.status || ""}
+            getEntityPath={(session) => `/sessions/${session.id}`}
+            onLinksChanged={handleLinksChanged}
+          />
 
-          <Card title="NPCs">
-            {relatedNpcLinks.length === 0 ? (
-              <p className="text-sm text-zinc-500">No related NPCs yet.</p>
-            ) : (
-              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-                {relatedNpcLinks.map(({ link, npc }) => (
-                  <button
-                    key={link.id}
-                    type="button"
-                    onClick={() => navigate(`/npcs/${npc.id}`)}
-                    className="rounded-xl border border-white/10 bg-black/15 p-4 text-left hover:bg-white/5"
-                  >
-                    <p className="text-sm font-semibold text-white">{npc.name || "Unnamed NPC"}</p>
-                    {npc.title ? <p className="mt-1 text-xs text-zinc-500">{npc.title}</p> : null}
-                    <div className="mt-3 flex flex-wrap items-center gap-2">
-                      <span className="rounded-full border border-white/10 bg-white/5 px-2.5 py-1 text-[11px] text-zinc-300">
-                        connected
-                      </span>
-                      {isGM ? (
-                        <span
-                          className={`rounded-full border px-2.5 py-1 text-[11px] font-semibold ${
-                            link.visibility === "Player"
-                              ? "border-emerald-500/30 bg-emerald-500/15 text-emerald-300"
-                              : "border-red-500/40 bg-red-500/20 text-red-300"
-                          }`}
-                        >
-                          {link.visibility === "Player" ? "Player-visible" : "GM-only"}
-                        </span>
-                      ) : null}
-                    </div>
-                  </button>
-                ))}
-              </div>
-            )}
-          </Card>
+          <MapLinkSection
+            key={`map-npcs-${linkDraftKey}`}
+            title="NPCs"
+            emptyText="No related NPCs yet."
+            mapId={viewLocation.id}
+            entityType="NPC"
+            addLabel="NPC"
+            entities={visibleNpcs}
+            links={visibleMapLinks}
+            allowedLabels={["connected", "resides_in", "controls"]}
+            defaultLabel="connected"
+            isGM={isGM}
+            isEditing={isEditing}
+            isSaving={isSaving}
+            getEntityLabel={getNpcLabel}
+            getEntityMeta={(npc) => npc?.title || npc?.role || ""}
+            getEntityPath={(npc) => `/npcs/${npc.id}`}
+            onLinksChanged={handleLinksChanged}
+          />
 
-          <Card title="Lore">
-            <p className="text-sm text-zinc-500">Lore links coming soon</p>
-          </Card>
+          <MapLinkSection
+            key={`map-lore-${linkDraftKey}`}
+            title="Lore"
+            emptyText="No linked lore yet."
+            mapId={viewLocation.id}
+            entityType="Lore"
+            addLabel="Lore"
+            entities={visibleLoreEntries}
+            links={visibleMapLinks}
+            allowedLabels={["describes", "historical_site"]}
+            defaultLabel="describes"
+            isGM={isGM}
+            isEditing={isEditing}
+            isSaving={isSaving}
+            getEntityLabel={getLoreLabel}
+            getEntityMeta={(entry) => entry?.type || entry?.category || ""}
+            getEntityPath={(entry) => `/lore/${entry.id}`}
+            onLinksChanged={handleLinksChanged}
+          />
 
-          <Card title="Items">
-            <p className="text-sm text-zinc-500">Item links coming soon</p>
-          </Card>
+          <MapLinkSection
+            key={`map-items-${linkDraftKey}`}
+            title="Items"
+            emptyText="No linked items yet."
+            mapId={viewLocation.id}
+            entityType="Item"
+            addLabel="Item"
+            entities={visibleItems}
+            links={visibleMapLinks}
+            allowedLabels={["found_in", "hidden_in"]}
+            defaultLabel="found_in"
+            isGM={isGM}
+            isEditing={isEditing}
+            isSaving={isSaving}
+            getEntityLabel={getItemLabel}
+            getEntityMeta={(item) => item?.type || item?.rarity || ""}
+            getEntityPath={(item) => `/items/${item.id}`}
+            onLinksChanged={handleLinksChanged}
+          />
         </div>
 
         {isGM && (
