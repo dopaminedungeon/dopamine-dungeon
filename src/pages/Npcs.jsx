@@ -36,6 +36,46 @@ const VISIBILITY_LABELS = {
   "gm-only": "GM-only",
 };
 
+const NPC_CARD_ACCENTS = {
+  ally: {
+    card: "border-emerald-400/20 bg-emerald-500/[0.045] hover:border-emerald-400/35 hover:bg-emerald-500/[0.075]",
+    icon: "from-emerald-700/80 to-zinc-900",
+    role: "border-emerald-400/25 bg-emerald-500/15 text-emerald-200",
+  },
+  neutral: {
+    card: "border-sky-400/15 bg-sky-500/[0.035] hover:border-sky-400/30 hover:bg-sky-500/[0.06]",
+    icon: "from-sky-700/70 to-zinc-900",
+    role: "border-sky-400/20 bg-sky-500/10 text-sky-200",
+  },
+  antagonist: {
+    card: "border-red-400/20 bg-red-500/[0.045] hover:border-red-400/35 hover:bg-red-500/[0.075]",
+    icon: "from-red-800/75 to-zinc-950",
+    role: "border-red-400/25 bg-red-500/15 text-red-200",
+  },
+  merchant: {
+    card: "border-amber-400/20 bg-amber-500/[0.045] hover:border-amber-400/35 hover:bg-amber-500/[0.075]",
+    icon: "from-amber-700/75 to-zinc-950",
+    role: "border-amber-400/25 bg-amber-500/15 text-amber-200",
+  },
+  unknown: {
+    card: "border-white/10 bg-white/5 hover:border-purple-500/30 hover:bg-white/10",
+    icon: "from-zinc-600 to-zinc-800",
+    role: "border-white/10 bg-zinc-500/20 text-zinc-300",
+  },
+};
+
+function getNpcCardAccent(npc, npcRole, npcType) {
+  const rawType = String(npc?.type || npcType || "").toLowerCase();
+  const rawRole = String(npc?.role || npcRole || "").toLowerCase();
+  const typeLabel = String(NPC_TYPE_LABELS[npcType] || "").toLowerCase();
+
+  if ([rawType, rawRole, typeLabel].some((value) => value.includes("merchant"))) {
+    return NPC_CARD_ACCENTS.merchant;
+  }
+
+  return NPC_CARD_ACCENTS[npcRole] || NPC_CARD_ACCENTS.unknown;
+}
+
 function normalizeRole(value) {
   const role = String(value || "").trim().toLowerCase();
   return NPC_ROLES.includes(role) ? role : "unknown";
@@ -331,23 +371,24 @@ export default function Npcs() {
             const npcRole = normalizeRole(npc.role);
             const npcStatus = normalizeStatus(npc.status);
             const TypeIcon = getNpcTypeIcon(npcType);
+            const accent = getNpcCardAccent(npc, npcRole, npcType);
 
             return (
               <button
                 type="button"
                 key={npc.id}
-                className="group text-left bg-white/5 backdrop-blur-sm border border-white/10 rounded-2xl p-6 hover:border-purple-500/30 hover:bg-white/10 transition-all"
+                className={`group text-left backdrop-blur-sm border rounded-2xl p-6 transition-all ${accent.card}`}
                 onClick={() => navigate(`/npcs/${npc.id}`)}
               >
                 <div className="flex items-start justify-between mb-4">
-                  <div className="w-14 h-14 rounded-xl bg-linear-to-br from-zinc-600 to-zinc-800 flex items-center justify-center shadow-lg">
+                  <div className={`w-14 h-14 rounded-xl bg-linear-to-br ${accent.icon} flex items-center justify-center shadow-lg`}>
                     <TypeIcon className="w-7 h-7 text-white" />
                   </div>
                   <div className="flex flex-wrap items-center justify-end gap-2">
                     <span className="px-3 py-1 rounded-lg text-xs font-medium bg-white/5 text-zinc-300 border border-white/10">
                       {NPC_TYPE_LABELS[npcType]}
                     </span>
-                    <span className="px-3 py-1 rounded-lg text-xs font-medium bg-zinc-500/20 text-zinc-300">
+                    <span className={`px-3 py-1 rounded-lg text-xs font-medium border ${accent.role}`}>
                       {ROLE_LABELS[npcRole]}
                     </span>
                   </div>
@@ -363,7 +404,7 @@ export default function Npcs() {
                 </h3>
                 {npc.title ? <p className="text-zinc-500 text-sm mb-2">{npc.title}</p> : null}
                 <p className="text-zinc-400 text-sm mb-4 line-clamp-2">
-                  {npc.summary || npc.description || "No NPC details added yet."}
+                  {npc.description || "No NPC description added yet."}
                 </p>
 
                 <div className="flex flex-wrap items-center gap-2 pt-4 border-t border-white/10">
