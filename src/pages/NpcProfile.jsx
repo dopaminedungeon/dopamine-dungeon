@@ -1623,7 +1623,7 @@ export default function NpcProfile() {
   const TypeIcon = getNpcTypeIcon(viewNpc.type);
 
   return (
-    <main className="p-4 sm:p-8">
+    <main className="flex-1 overflow-auto p-4 sm:p-6 lg:p-8">
       <div className="mb-6 flex flex-col gap-4">
         <button
           type="button"
