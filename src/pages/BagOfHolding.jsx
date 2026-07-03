@@ -817,14 +817,14 @@ export default function BagOfHolding() {
                     </div>
 
                     {item ? (
-                      <div
-                        role="button"
+                      <button
+                        type="button"
                         onClick={() => navigate(`/items/${item.id}`)}
-                        className="mt-2 text-white font-semibold wrap-break-word leading-snug cursor-pointer hover:underline"
+                        className="mt-2 block max-w-full cursor-pointer text-left text-white font-semibold wrap-break-word leading-snug hover:underline"
                         title={displayName}
                       >
                         {displayName}
-                      </div>
+                      </button>
                     ) : (
                       <div
                         className="mt-2 text-white font-semibold wrap-break-word leading-snug"

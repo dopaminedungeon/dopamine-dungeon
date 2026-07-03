@@ -17,7 +17,7 @@ import {
 import { useMode } from "../context/ModeContext.jsx";
 import { features } from "../config/features";
 
-const NavItem = ({ to, icon: Icon, label, isCollapsed }) => (
+const NavItem = ({ to, icon, label, isCollapsed }) => (
   <NavLink
     to={to}
     end={to === "/"}
@@ -31,7 +31,7 @@ const NavItem = ({ to, icon: Icon, label, isCollapsed }) => (
       }`
     }
   >
-    <Icon size={18} className="shrink-0" />
+    {React.createElement(icon, { size: 18, className: "shrink-0" })}
     {!isCollapsed && <span className="text-sm font-medium">{label}</span>}
   </NavLink>
 );
@@ -140,7 +140,7 @@ export default function Sidebar() {
       >
         <div className="mx-auto max-w-screen-sm px-2">
           <div className="grid grid-cols-5 gap-1 py-2">
-            {mobileNavItems.map(({ to, icon: Icon, label }) => {
+            {mobileNavItems.map(({ to, icon, label }) => {
               const active = to === "/"
                 ? location.pathname === "/"
                 : location.pathname.startsWith(to);
@@ -156,7 +156,7 @@ export default function Sidebar() {
                       : "text-zinc-400 hover:text-white hover:bg-white/5"
                   }`}
                 >
-                  <Icon size={18} className="shrink-0" />
+                  {React.createElement(icon, { size: 18, className: "shrink-0" })}
                   <span className="text-[10px] leading-none">{label}</span>
                 </NavLink>
               );

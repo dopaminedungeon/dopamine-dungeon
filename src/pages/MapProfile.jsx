@@ -510,7 +510,7 @@ function MapLinkSection({
               <button
                 type="button"
                 onClick={() => navigate(getEntityPath(entity))}
-                className="block max-w-full text-left"
+                className="block max-w-full cursor-pointer text-left hover:text-purple-200"
               >
                 <p className="pr-8 text-sm font-semibold text-white">{getEntityLabel(entity)}</p>
                 {getEntityMeta ? (
