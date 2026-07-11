@@ -1,9 +1,15 @@
-import React, { useEffect, useRef, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { Link, useNavigate } from "react-router-dom";
 import { useMode } from "../context/ModeContext.jsx";
 import { useCampaign } from "../context/CampaignContext";
 import { itemsRepo } from "../data/items/items.repo";
+import {
+  compareCreatedAt,
+  compareEntityNames,
+  compareItemRarity,
+  stableSort,
+} from "../utils/entitySorting.js";
 
 import {
   Search,
@@ -155,7 +161,32 @@ export default function Items() {
   const [selectedType, setSelectedType] = useState('All');
   const [selectedRarity, setSelectedRarity] = useState('All');
   const [viewMode, setViewMode] = useState('grid');
+  const [sortMode, setSortMode] = useState("name-asc");
   const { isGM } = useMode();
+
+  const filteredItems = useMemo(() => {
+    return items.filter((item) => {
+      const matchesSearch = String(item.name || "").toLowerCase().includes(searchQuery.toLowerCase());
+      const matchesType = selectedType === 'All' || item.type === selectedType;
+      const matchesRarity = selectedRarity === 'All' || item.rarity === selectedRarity;
+      return matchesSearch && matchesType && matchesRarity;
+    });
+  }, [items, searchQuery, selectedRarity, selectedType]);
+
+  const visibleItems = useMemo(() => {
+    const filtered = isGM
+      ? filteredItems
+      : filteredItems.filter((item) => item.visibility === "public");
+
+    return stableSort(filtered, (a, b) => {
+      if (sortMode === "rarity-asc") return compareItemRarity(a, b, "asc");
+      if (sortMode === "rarity-desc") return compareItemRarity(a, b, "desc");
+      if (sortMode === "name-desc") return -compareEntityNames(a, b);
+      if (sortMode === "date-asc") return compareCreatedAt(a, b, "asc");
+      if (sortMode === "date-desc") return compareCreatedAt(a, b, "desc");
+      return compareEntityNames(a, b);
+    });
+  }, [filteredItems, isGM, sortMode]);
 
   if (!selectedCampaignId) {
     return (
@@ -172,17 +203,6 @@ export default function Items() {
       </main>
     );
   }
-
-  const filteredItems = items.filter((item) => {
-    const matchesSearch = String(item.name || "").toLowerCase().includes(searchQuery.toLowerCase());
-    const matchesType = selectedType === 'All' || item.type === selectedType;
-    const matchesRarity = selectedRarity === 'All' || item.rarity === selectedRarity;
-    return matchesSearch && matchesType && matchesRarity;
-  });
-
-  const visibleItems = isGM
-  ? filteredItems
-  : filteredItems.filter((item) => item.visibility === "public");
 
   return (
   <>
@@ -215,6 +235,20 @@ export default function Items() {
         <option value="Very Rare">Very Rare</option>
         <option value="Uncommon">Uncommon</option>
         <option value="Common">Common</option>
+      </select>
+
+      <select
+        value={sortMode}
+        onChange={(e) => setSortMode(e.target.value)}
+        className="px-4 py-3 bg-white/5 border border-white/10 rounded-xl text-white focus:outline-none focus:border-blue-500/50 min-w-[210px]"
+        aria-label="Sort items"
+      >
+        <option value="rarity-asc">Rarity: ascending</option>
+        <option value="rarity-desc">Rarity: descending</option>
+        <option value="name-asc">Name: A-Z</option>
+        <option value="name-desc">Name: Z-A</option>
+        <option value="date-asc">Date added: oldest first</option>
+        <option value="date-desc">Date added: newest first</option>
       </select>
 
       {/* View Toggle */}

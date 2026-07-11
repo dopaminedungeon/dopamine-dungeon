@@ -38,12 +38,25 @@ function stripGmOnlyItemFields(data: Record<string, unknown>) {
 }
 
 function toItemPayload(row: ItemRow, isGm: boolean) {
+  const payload = {
+    ...row.data,
+    id: row.id,
+    campaignId: row.campaignId,
+    name: row.name,
+    type: row.type,
+    rarity: row.rarity,
+    power: row.power,
+    visibility: row.visibility,
+    createdAt: row.createdAt,
+    updatedAt: row.updatedAt,
+  };
+
   if (isGm) {
-    return row.data;
+    return payload;
   }
 
   // Player visibility projection: public items never expose GM-only fields.
-  return stripGmOnlyItemFields(row.data);
+  return stripGmOnlyItemFields(payload);
 }
 
 function toItemValues(campaignId: string, rawItem: Record<string, unknown>) {

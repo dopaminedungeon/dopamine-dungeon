@@ -47,11 +47,30 @@ function stripGmOnlyNpcFields(data: Record<string, unknown>) {
 }
 
 function toNpcPayload(row: NpcRow, isGm: boolean) {
+  const payload = {
+    ...row.data,
+    id: row.id,
+    campaignId: row.campaignId,
+    name: row.name,
+    title: row.title,
+    type: row.type,
+    status: row.status,
+    visibility: row.visibility,
+    summary: row.summary,
+    description: row.description,
+    imageUrl: row.imageUrl,
+    createdAt: row.createdAt,
+    updatedAt: row.updatedAt,
+  };
+
   if (isGm) {
-    return row.data;
+    return {
+      ...payload,
+      gmNotes: row.gmNotes,
+    };
   }
 
-  return stripGmOnlyNpcFields(row.data);
+  return stripGmOnlyNpcFields(payload);
 }
 
 function toNpcValues(campaignId: string, rawNpc: Record<string, unknown>) {
