@@ -14,6 +14,12 @@ import {
 import { useMode } from "../context/ModeContext.jsx";
 import { useCampaign } from "../context/CampaignContext";
 import { locationsRepo } from "../data/maps/locations.repo";
+import {
+  compareCreatedAt,
+  compareEntityNames,
+  compareVisibility,
+  stableSort,
+} from "../utils/entitySorting.js";
 
 const IMAGE_MAX_BYTES = 1024 * 1024;
 const LOCATION_CATEGORIES = [
@@ -126,6 +132,7 @@ export default function Maps() {
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedCategory, setSelectedCategory] = useState("All");
   const [selectedVisibility, setSelectedVisibility] = useState("All");
+  const [sortMode, setSortMode] = useState("name-asc");
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [formData, setFormData] = useState(createDraft());
   const [isSaving, setIsSaving] = useState(false);
@@ -190,6 +197,17 @@ export default function Maps() {
       return matchesCategory && matchesVisibility && (!query || searchable.includes(query));
     });
   }, [isGM, locations, searchQuery, selectedCategory, selectedVisibility]);
+
+  const sortedLocations = useMemo(() => {
+    return stableSort(filteredLocations, (a, b) => {
+      if (sortMode === "name-desc") return -compareEntityNames(a, b);
+      if (sortMode === "date-asc") return compareCreatedAt(a, b, "asc");
+      if (sortMode === "date-desc") return compareCreatedAt(a, b, "desc");
+      if (sortMode === "visibility-public") return compareVisibility(a, b, "public-first");
+      if (sortMode === "visibility-gm") return compareVisibility(a, b, "gm-first");
+      return compareEntityNames(a, b);
+    });
+  }, [filteredLocations, sortMode]);
 
   const hasActiveFilters =
     searchQuery.trim() || selectedCategory !== "All" || selectedVisibility !== "All";
@@ -328,6 +346,22 @@ export default function Maps() {
               </select>
             </label>
           )}
+          <label className="flex items-center gap-2 text-zinc-400">
+            Sort
+            <select
+              value={sortMode}
+              onChange={(event) => setSortMode(event.target.value)}
+              className="rounded-lg border border-white/10 bg-black/30 px-2.5 py-1.5 text-xs text-zinc-200 outline-none focus:border-indigo-300"
+              aria-label="Sort Locations"
+            >
+              <option value="name-asc">Name: A-Z</option>
+              <option value="name-desc">Name: Z-A</option>
+              <option value="date-asc">Date added: oldest first</option>
+              <option value="date-desc">Date added: newest first</option>
+              <option value="visibility-public">Visibility: Player-visible first</option>
+              <option value="visibility-gm">Visibility: GM-only first</option>
+            </select>
+          </label>
           {hasActiveFilters && (
             <button
               type="button"
@@ -354,7 +388,7 @@ export default function Maps() {
         <div className="rounded-2xl border border-white/10 bg-white/5 p-6 text-sm text-zinc-300">
           Loading Locations...
         </div>
-      ) : filteredLocations.length === 0 ? (
+      ) : sortedLocations.length === 0 ? (
         <div className="rounded-2xl border border-white/10 bg-white/5 p-8 text-center">
           <Map className="mx-auto mb-3 h-8 w-8 text-zinc-500" />
           <h2 className="text-base font-semibold text-white">No Locations yet</h2>
@@ -366,7 +400,7 @@ export default function Maps() {
         </div>
       ) : (
         <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-          {filteredLocations.map((location) => {
+          {sortedLocations.map((location) => {
             const meta = getCategoryMeta(location.category);
             const Icon = meta.icon;
 

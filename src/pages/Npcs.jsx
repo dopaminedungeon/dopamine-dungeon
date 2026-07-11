@@ -13,6 +13,12 @@ import {
   NPC_TYPE_LABELS,
   NPC_TYPES,
 } from "../data/npcs/npcMeta.jsx";
+import {
+  compareCreatedAt,
+  compareEntityNames,
+  compareVisibility,
+  stableSort,
+} from "../utils/entitySorting.js";
 
 const NPC_ROLES = ["ally", "neutral", "antagonist", "unknown"];
 const NPC_STATUSES = ["active", "missing", "dead", "unknown"];
@@ -121,6 +127,7 @@ export default function Npcs() {
   const [selectedRole, setSelectedRole] = useState("All");
   const [selectedStatus, setSelectedStatus] = useState("All");
   const [selectedVisibility, setSelectedVisibility] = useState("All");
+  const [sortMode, setSortMode] = useState("name-asc");
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [formData, setFormData] = useState(createNpcDraft());
   const [isSaving, setIsSaving] = useState(false);
@@ -197,6 +204,17 @@ export default function Npcs() {
       return matchesSearch && matchesType && matchesRole && matchesStatus && matchesVisibility;
     });
   }, [isGM, npcs, searchQuery, selectedType, selectedRole, selectedStatus, selectedVisibility]);
+
+  const sortedNpcs = useMemo(() => {
+    return stableSort(filteredNpcs, (a, b) => {
+      if (sortMode === "name-desc") return -compareEntityNames(a, b);
+      if (sortMode === "date-asc") return compareCreatedAt(a, b, "asc");
+      if (sortMode === "date-desc") return compareCreatedAt(a, b, "desc");
+      if (sortMode === "visibility-public") return compareVisibility(a, b, "public-first");
+      if (sortMode === "visibility-gm") return compareVisibility(a, b, "gm-first");
+      return compareEntityNames(a, b);
+    });
+  }, [filteredNpcs, sortMode]);
 
   const handleCreate = async (e) => {
     e.preventDefault();
@@ -340,6 +358,23 @@ export default function Npcs() {
               </label>
             ) : null}
 
+            <label className="inline-flex items-center gap-2 text-zinc-500">
+              <span className="text-xs font-medium uppercase tracking-wide">Sort</span>
+              <select
+                value={sortMode}
+                onChange={(e) => setSortMode(e.target.value)}
+                className="h-9 rounded-lg border border-white/10 bg-zinc-950/70 px-2.5 text-sm text-zinc-200 focus:border-purple-500/50 focus:outline-none focus:ring-2 focus:ring-purple-500/20"
+                aria-label="Sort NPCs"
+              >
+                <option value="name-asc">Name: A-Z</option>
+                <option value="name-desc">Name: Z-A</option>
+                <option value="date-asc">Date added: oldest first</option>
+                <option value="date-desc">Date added: newest first</option>
+                <option value="visibility-public">Visibility: Player-visible first</option>
+                <option value="visibility-gm">Visibility: GM-only first</option>
+              </select>
+            </label>
+
             {hasActiveFilters ? (
               <button
                 type="button"
@@ -363,9 +398,9 @@ export default function Npcs() {
         <div className="rounded-2xl border border-white/10 bg-white/5 p-6 text-zinc-400">
           Loading NPCs...
         </div>
-      ) : filteredNpcs.length > 0 ? (
+      ) : sortedNpcs.length > 0 ? (
         <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
-          {filteredNpcs.map((npc) => {
+          {sortedNpcs.map((npc) => {
             const npcType = normalizeNpcType(npc.type);
             const npcRole = normalizeRole(npc.role);
             const npcStatus = normalizeStatus(npc.status);

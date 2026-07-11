@@ -14,8 +14,14 @@ import {
 import { useMode } from "../context/ModeContext.jsx";
 import { useCampaign } from "../context/CampaignContext";
 import { loreRepo } from "../data/lore/lore.repo";
+import {
+  compareCreatedAt,
+  compareEntityNames,
+  compareVisibility,
+  stableSort,
+} from "../utils/entitySorting.js";
 
-export const LORE_TYPES = [
+const LORE_TYPES = [
   "Religion",
   "Faction",
   "Country",
@@ -136,7 +142,7 @@ function visibilityPill(visibility) {
   );
 }
 
-export function getLoreTypeMeta(type) {
+function getLoreTypeMeta(type) {
   return TYPE_META[type] || TYPE_META.Lore;
 }
 
@@ -151,6 +157,7 @@ export default function Lore() {
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedType, setSelectedType] = useState("All");
   const [selectedVisibility, setSelectedVisibility] = useState("All");
+  const [sortMode, setSortMode] = useState("name-asc");
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [formData, setFormData] = useState(createLoreDraft());
   const [isSaving, setIsSaving] = useState(false);
@@ -219,9 +226,19 @@ export default function Lore() {
   const groupedEntries = useMemo(() => {
     return LORE_SECTION_ORDER.map((type) => ({
       type,
-      entries: filteredEntries.filter((entry) => entry.type === type),
+      entries: stableSort(
+        filteredEntries.filter((entry) => entry.type === type),
+        (a, b) => {
+          if (sortMode === "name-desc") return -compareEntityNames(a, b);
+          if (sortMode === "date-asc") return compareCreatedAt(a, b, "asc");
+          if (sortMode === "date-desc") return compareCreatedAt(a, b, "desc");
+          if (sortMode === "visibility-public") return compareVisibility(a, b, "public-first");
+          if (sortMode === "visibility-gm") return compareVisibility(a, b, "gm-first");
+          return compareEntityNames(a, b);
+        }
+      ),
     })).filter((section) => section.entries.length > 0);
-  }, [filteredEntries]);
+  }, [filteredEntries, sortMode]);
 
   const hasActiveFilters =
     searchQuery.trim() || selectedType !== "All" || selectedVisibility !== "All";
@@ -333,6 +350,22 @@ export default function Lore() {
               </select>
             </label>
           )}
+          <label className="flex items-center gap-2 text-zinc-400">
+            Sort
+            <select
+              value={sortMode}
+              onChange={(event) => setSortMode(event.target.value)}
+              className="rounded-lg border border-white/10 bg-black/30 px-2.5 py-1.5 text-xs text-zinc-200 outline-none focus:border-violet-300"
+              aria-label="Sort Lore"
+            >
+              <option value="name-asc">Name: A-Z</option>
+              <option value="name-desc">Name: Z-A</option>
+              <option value="date-asc">Date added: oldest first</option>
+              <option value="date-desc">Date added: newest first</option>
+              <option value="visibility-public">Visibility: Player-visible first</option>
+              <option value="visibility-gm">Visibility: GM-only first</option>
+            </select>
+          </label>
           {hasActiveFilters && (
             <button
               type="button"
