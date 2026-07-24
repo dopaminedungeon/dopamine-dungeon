@@ -119,7 +119,7 @@ documentation or agent instructions.
 
 ### What the agent misunderstood
 
-### Missing repository context
+### Missing repository context 
 
 ### Changes required in `AGENTS.md`
 
