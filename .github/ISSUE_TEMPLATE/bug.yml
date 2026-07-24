@@ -1,0 +1,141 @@
+name: Bug
+description: Report reproducible incorrect behaviour
+title: "[Bug]: "
+labels:
+  - bug
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Provide enough information to reproduce and verify the defect.
+        Do not include secrets, production credentials, or sensitive campaign data.
+
+  - type: textarea
+    id: summary
+    attributes:
+      label: Summary
+      description: What is broken?
+    validations:
+      required: true
+
+  - type: textarea
+    id: current-behaviour
+    attributes:
+      label: Current behaviour
+      description: What happens now?
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected-behaviour
+    attributes:
+      label: Expected behaviour
+      description: What should happen instead?
+    validations:
+      required: true
+
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Reproduction steps
+      placeholder: |
+        1. Open...
+        2. Select...
+        3. Click...
+        4. Observe...
+    validations:
+      required: true
+
+  - type: dropdown
+    id: environment
+    attributes:
+      label: Environment
+      options:
+        - Local development
+        - Feature preview
+        - Development deployment
+        - Production
+        - Unknown
+    validations:
+      required: true
+
+  - type: input
+    id: route
+    attributes:
+      label: Affected page or route
+      placeholder: /campaign/.../npcs
+    validations:
+      required: false
+
+  - type: dropdown
+    id: role
+    attributes:
+      label: User mode
+      options:
+        - GM
+        - Player
+        - Both
+        - Not applicable
+        - Unknown
+    validations:
+      required: true
+
+  - type: textarea
+    id: scope
+    attributes:
+      label: Affected scope
+      description: Is the problem limited to one campaign, workspace, browser, device, or record?
+    validations:
+      required: false
+
+  - type: textarea
+    id: evidence
+    attributes:
+      label: Evidence
+      description: Add screenshots, console errors, network errors, or logs with secrets removed.
+    validations:
+      required: false
+
+  - type: textarea
+    id: impact
+    attributes:
+      label: User impact
+      description: What can the user not do, and is data at risk?
+    validations:
+      required: true
+
+  - type: textarea
+    id: acceptance-criteria
+    attributes:
+      label: Fix acceptance criteria
+      placeholder: |
+        - [ ] The reproduction steps no longer produce the defect.
+        - [ ] The expected behaviour occurs.
+        - [ ] A neighbouring workflow remains unchanged.
+        - [ ] No tenant or campaign data is exposed.
+    validations:
+      required: true
+
+  - type: textarea
+    id: validation
+    attributes:
+      label: Validation
+      description: Automated and manual checks required for the fix.
+      placeholder: |
+        Automated:
+        - ...
+
+        Manual:
+        1. Reproduce the original issue.
+        2. Verify the fix.
+        3. Verify a neighbouring workflow.
+    validations:
+      required: true
+
+  - type: textarea
+    id: rollback
+    attributes:
+      label: Rollback
+      description: How can the fix be reverted safely?
+    validations:
+      required: true

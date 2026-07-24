@@ -427,10 +427,12 @@ export default function Npcs() {
                   </div>
                 </div>
 
-                <h3 className="text-xl font-bold text-white mb-1 group-hover:text-purple-300 transition-colors">
-                  {npc.name || "Unnamed NPC"}
+                <h3 className="mb-1 flex flex-wrap items-baseline gap-2 text-xl font-bold text-white group-hover:text-purple-300 transition-colors">
+                  <span className="min-w-0 break-words">
+                    {npc.name || "Unnamed NPC"}
+                  </span>
                   {isGM && npc.visibility === "gm-only" && (
-                    <span className="ml-2 px-2 py-0.5 text-[10px] rounded-full bg-red-500/20 text-red-300 border border-red-500/40">
+                    <span className="inline-flex shrink-0 items-center whitespace-nowrap px-2 py-0.5 text-[10px] rounded-full bg-red-500/20 text-red-300 border border-red-500/40">
                       GM ONLY
                     </span>
                   )}

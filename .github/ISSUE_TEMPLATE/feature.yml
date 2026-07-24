@@ -1,0 +1,139 @@
+name: Feature
+description: Propose a new capability or meaningful product improvement
+title: "[Feature]: "
+labels:
+  - feature
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Describe the user outcome, constraints, and acceptance criteria.
+        Do not use this template for broad ideas that have not yet been refined.
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem
+      description: What user problem or limitation does this feature address?
+      placeholder: Describe the current limitation and who experiences it.
+    validations:
+      required: true
+
+  - type: textarea
+    id: outcome
+    attributes:
+      label: User outcome
+      description: What becomes possible or better after this is implemented?
+    validations:
+      required: true
+
+  - type: textarea
+    id: current-behaviour
+    attributes:
+      label: Current behaviour
+      description: Describe the verified current behaviour.
+    validations:
+      required: true
+
+  - type: textarea
+    id: scope
+    attributes:
+      label: Scope
+      description: What should be included?
+      placeholder: |
+        - Add...
+        - Update...
+        - Preserve...
+    validations:
+      required: true
+
+  - type: textarea
+    id: acceptance-criteria
+    attributes:
+      label: Acceptance criteria
+      description: Use observable Given / When / Then outcomes where practical.
+      placeholder: |
+        - [ ] Given..., when..., then...
+        - [ ] Given..., when..., then...
+        - [ ] Existing neighbouring behaviour remains unchanged.
+    validations:
+      required: true
+
+  - type: textarea
+    id: permissions
+    attributes:
+      label: Permissions and visibility
+      description: Who may view or modify this, and what must remain GM-only?
+      placeholder: |
+        - GM:
+        - Player:
+        - Server-side authorization:
+    validations:
+      required: true
+
+  - type: textarea
+    id: data
+    attributes:
+      label: Data behaviour
+      description: Describe persistence, schema, migration, API, and existing-record impacts.
+      placeholder: |
+        - Persisted or local:
+        - Schema migration:
+        - API contract:
+        - Existing data:
+    validations:
+      required: true
+
+  - type: textarea
+    id: ux
+    attributes:
+      label: UX states
+      description: Describe relevant loading, empty, success, validation, error, and mobile states.
+    validations:
+      required: false
+
+  - type: textarea
+    id: constraints
+    attributes:
+      label: Technical constraints
+      description: Existing patterns to reuse and systems that must not change.
+    validations:
+      required: false
+
+  - type: textarea
+    id: out-of-scope
+    attributes:
+      label: Out of scope
+      description: List adjacent work that must not be included.
+    validations:
+      required: true
+
+  - type: textarea
+    id: validation
+    attributes:
+      label: Validation
+      description: Automated checks and manual scenarios required.
+      placeholder: |
+        Automated:
+        - ...
+
+        Manual:
+        1. ...
+    validations:
+      required: true
+
+  - type: textarea
+    id: rollback
+    attributes:
+      label: Rollback
+      description: How can this change be disabled or reverted safely?
+    validations:
+      required: true
+
+  - type: textarea
+    id: notes
+    attributes:
+      label: Additional context
+      description: Screenshots, references, related issues, or implementation notes.
+    validations:
+      required: false
