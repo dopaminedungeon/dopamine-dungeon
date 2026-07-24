@@ -1,5 +1,5 @@
 import { relations } from "drizzle-orm/relations";
-import { workspaces, invitations, campaigns, users, campaignMemberships, workspaceMemberships, sessions, characters, items, bagCurrency, bagEntries, entityLinks, lore, characterAssignments, npcs } from "./schema";
+import { workspaces, invitations, campaigns, users, campaignMemberships, workspaceMemberships, sessions, characters, items, bagCurrency, bagEntries, entityLinks, lore, characterAssignments, npcs, locations } from "./schema";
 
 export const invitationsRelations = relations(invitations, ({one}) => ({
 	workspace: one(workspaces, {
@@ -48,6 +48,7 @@ export const campaignsRelations = relations(campaigns, ({one, many}) => ({
 	lores: many(lore),
 	characterAssignments: many(characterAssignments),
 	npcs: many(npcs),
+	locations: many(locations),
 }));
 
 export const usersRelations = relations(users, ({many}) => ({
@@ -159,6 +160,13 @@ export const characterAssignmentsRelations = relations(characterAssignments, ({o
 export const npcsRelations = relations(npcs, ({one}) => ({
 	campaign: one(campaigns, {
 		fields: [npcs.campaignId],
+		references: [campaigns.id]
+	}),
+}));
+
+export const locationsRelations = relations(locations, ({one}) => ({
+	campaign: one(campaigns, {
+		fields: [locations.campaignId],
 		references: [campaigns.id]
 	}),
 }));

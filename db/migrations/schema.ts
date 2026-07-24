@@ -337,3 +337,27 @@ export const npcs = pgTable("npcs", {
 		}),
 	unique("npcs_campaign_id_id_unique").on(table.campaignId, table.id),
 ]);
+
+export const locations = pgTable("locations", {
+	rowId: uuid("row_id").defaultRandom().primaryKey().notNull(),
+	campaignId: uuid("campaign_id").notNull(),
+	id: text().notNull(),
+	name: text().default(').notNull(),
+	category: text().default('Other').notNull(),
+	visibility: text().default('gm-only').notNull(),
+	summary: text().default(').notNull(),
+	description: text().default(').notNull(),
+	gmNotes: text("gm_notes").default(').notNull(),
+	imageUrl: text("image_url").default(').notNull(),
+	aliases: jsonb().notNull(),
+	data: jsonb().notNull(),
+	createdAt: timestamp("created_at", { mode: 'string' }).defaultNow().notNull(),
+	updatedAt: timestamp("updated_at", { mode: 'string' }).defaultNow().notNull(),
+}, (table) => [
+	foreignKey({
+			columns: [table.campaignId],
+			foreignColumns: [campaigns.id],
+			name: "locations_campaign_id_campaigns_id_fk"
+		}),
+	unique("locations_campaign_id_id_unique").on(table.campaignId, table.id),
+]);

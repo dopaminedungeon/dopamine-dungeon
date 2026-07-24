@@ -1,0 +1,140 @@
+name: Sync Application Version to Sub-Issue
+
+on:
+  issues:
+    types:
+      - sub_issue_added
+
+permissions:
+  contents: read
+  issues: read
+  projects: write
+
+jobs:
+  sync-version:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/github-script@v8
+        env:
+          PROJECT_TOKEN: ${{ secrets.PROJECT_TOKEN }}
+        with:
+          github-token: ${{ env.PROJECT_TOKEN }}
+          script: |
+            const parent = context.payload.issue;
+            const child = context.payload.sub_issue;
+
+            //
+            // 1. Find the parent's project item
+            // 2. Read "Application version"
+            // 3. Find the child's project item
+            // 4. Copy the value
+            //
+            // TODO:
+            // Replace:
+            //   YOUR_PROJECT_ID
+            //   APPLICATION_VERSION_FIELD_ID
+            //
+            // with your real IDs.
+            //
+
+            const projectId = "YOUR_PROJECT_ID";
+            const fieldId = "APPLICATION_VERSION_FIELD_ID";
+
+            async function getProjectItem(issueNodeId) {
+              const query = `
+              query($id:ID!) {
+                node(id:$id) {
+                  ... on Issue {
+                    projectItems(first:20) {
+                      nodes {
+                        id
+                        project {
+                          id
+                        }
+                        fieldValues(first:50) {
+                          nodes {
+                            ... on ProjectV2ItemFieldTextValue {
+                              field { ... on ProjectV2FieldCommon { id name } }
+                              text
+                            }
+                            ... on ProjectV2ItemFieldSingleSelectValue {
+                              field { ... on ProjectV2FieldCommon { id name } }
+                              optionId
+                              name
+                            }
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }`;
+
+              const result = await github.graphql(query, {
+                id: issueNodeId
+              });
+
+              return result.node.projectItems.nodes.find(
+                p => p.project.id === projectId
+              );
+            }
+
+            const parentItem = await getProjectItem(parent.node_id);
+            const childItem = await getProjectItem(child.node_id);
+
+            if (!parentItem || !childItem) {
+              core.info("Parent or child is not in the project.");
+              return;
+            }
+
+            const value = parentItem.fieldValues.nodes.find(
+              f => f.field.id === fieldId
+            );
+
+            if (!value) {
+              core.info("Parent has no Application version.");
+              return;
+            }
+
+            if (value.optionId) {
+              await github.graphql(`
+                mutation($project:ID!, $item:ID!, $field:ID!, $option:String!) {
+                  updateProjectV2ItemFieldValue(input:{
+                    projectId:$project
+                    itemId:$item
+                    fieldId:$field
+                    value:{singleSelectOptionId:$option}
+                  }) {
+                    projectV2Item { id }
+                  }
+                }`,
+                {
+                  project: projectId,
+                  item: childItem.id,
+                  field: fieldId,
+                  option: value.optionId
+                }
+              );
+            } else if (value.text) {
+              await github.graphql(`
+                mutation($project:ID!, $item:ID!, $field:ID!, $text:String!) {
+                  updateProjectV2ItemFieldValue(input:{
+                    projectId:$project
+                    itemId:$item
+                    fieldId:$field
+                    value:{text:$text}
+                  }) {
+                    projectV2Item { id }
+                  }
+                }`,
+                {
+                  project: projectId,
+                  item: childItem.id,
+                  field: fieldId,
+                  text: value.text
+                }
+              );
+            }
+
+            core.info("Application version copied.");
