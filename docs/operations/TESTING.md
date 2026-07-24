@@ -28,8 +28,7 @@ Replace this section with the exact scripts from package.json.
 | Install dependencies | pnpm install --frozen-lockfile | Clean environments |
 | Development server | pnpm dev | Manual UI testing |
 | Lint | pnpm lint | Every code change, if configured |
-| Tests | pnpm test | Every relevant code change, if configured |
-| Type checking | pnpm typecheck | Every code change, if configured |
+| Type checking | pnpm typecheck:api | Every code change, if configured |
 | Production build | pnpm build | Every code change |
 
 Commands that do not exist in package.json must not be claimed as available.
