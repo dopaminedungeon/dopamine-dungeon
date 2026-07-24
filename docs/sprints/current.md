@@ -1,6 +1,6 @@
 # Iteration 0 — Agent Workflow Pilot
 
-Status: Planned
+Status: Completed
 Owner: Magda
 Start date: 2026-07-24
 
@@ -93,15 +93,33 @@ documentation or agent instructions.
 
 ## Retrospective
 
-Complete after the pilot.
-
 ### What worked
+
+- Codex understood the issue.
+- Codex stayed within scope.
+- Only one implementation file changed.
+- Build and API typecheck passed.
+- Existing lint failures were reported honestly.
 
 ### What failed or caused friction
 
+- Documentation was originally untracked.
+- GitHub CLI authentication was invalid.
+- GitHub integration could not create the PR.
+- Repository-wide lint currently fails.
+- No test script exists.
+
+### What must improve
+
+- Keep agent documentation committed to dev.
+- Fix GitHub authentication.
+- Document the Firestore/Postgres transition.
+- Fix or baseline existing lint errors.
+- Add automated tests later.
+
 ### What the agent misunderstood
 
-### Missing repository context
+### Missing repository context 
 
 ### Changes required in `AGENTS.md`
 
@@ -110,6 +128,6 @@ Complete after the pilot.
 ### Decision
 
 - [ ] Workflow accepted
-- [ ] Workflow accepted with changes
+- [x] Workflow accepted with changes
 - [ ] Pilot must be repeated
 - [ ] Workflow rejected
