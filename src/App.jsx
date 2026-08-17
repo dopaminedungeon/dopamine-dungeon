@@ -34,6 +34,8 @@ import AppProviders from "./context/AppProviders.jsx";
 import { features } from "./config/features";
 import React from "react";
 import Welcome from "./pages/Welcome";
+import AuthScreen from "./components/auth/AuthScreen.jsx";
+import VerificationScreen from "./components/auth/VerificationScreen.jsx";
 
 function App() {
   return (
@@ -46,7 +48,17 @@ function App() {
 }
 
 function AppGate() {
-  const { authStatus, user, signInWithGoogle } = useAuth();
+  const {
+    authStatus,
+    user,
+    verificationUser,
+    signInWithGoogle,
+    signInWithEmail,
+    registerWithEmail,
+    resendVerification,
+    checkEmailVerification,
+    logout,
+  } = useAuth();
   const tenantContext = useTenant();
   const campaignContext = useCampaign();
 
@@ -59,12 +71,23 @@ function AppGate() {
 
   if (authStatus === "loading") return <LoadingScreen label="Loading…" />;
 
-  // v0.2: real auth (Firebase)
+  if (verificationUser) {
+    return (
+      <VerificationScreen
+        email={verificationUser.email ?? "your email address"}
+        onCheckVerification={checkEmailVerification}
+        onResendVerification={resendVerification}
+        onLogout={logout}
+      />
+    );
+  }
+
   if (!user) {
     return (
-      <LoginScreen
-        onGoogle={() => signInWithGoogle?.()}
-        debug={{ authStatus, hasUser: false }}
+      <AuthScreen
+        onGoogle={signInWithGoogle}
+        onEmailSignIn={signInWithEmail}
+        onEmailRegistration={registerWithEmail}
       />
     );
   }
@@ -203,38 +226,6 @@ function LoadingScreen({ label }) {
         (Temporary gate screen — we’ll replace this with proper pages + styling.)
       </div>
     </div>
-  );
-}
-
-function LoginScreen({ debug, onGoogle }) {
-  return (
-    <main className="min-h-screen flex items-center justify-center p-6 bg-black text-white">
-      <div className="w-full max-w-md bg-white/5 border border-white/10 rounded-2xl p-6">
-        <h1 className="text-2xl font-bold mb-2">Login</h1>
-        <p className="text-zinc-400 text-sm mb-4">
-          Sign in to access your campaign. Your data will sync across devices.
-        </p>
-
-        <div className="text-xs font-mono text-zinc-400 mb-4">
-          debug: authStatus={String(debug?.authStatus)} hasUser={String(debug?.hasUser)}
-        </div>
-
-        <button
-          onClick={onGoogle}
-          disabled={!onGoogle}
-          className="w-full px-4 py-3 rounded-xl bg-white/10 hover:bg-white/20 disabled:opacity-50"
-          title={!onGoogle ? "signInWithGoogle not wired in AuthContext yet" : ""}
-        >
-          Continue with Google
-        </button>
-
-        {!onGoogle && (
-          <div className="opacity-70 mt-2 text-xs font-mono">
-            Missing: useAuth().signInWithGoogle
-          </div>
-        )}
-      </div>
-    </main>
   );
 }
 

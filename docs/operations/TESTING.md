@@ -26,12 +26,71 @@ Replace this section with the exact scripts from package.json.
 | Purpose | Command | Required |
 |-----|-----|-----|
 | Install dependencies | pnpm install --frozen-lockfile | Clean environments |
-| Development server | pnpm dev | Manual UI testing |
+| Full-stack development server | pnpm vercel dev | Authentication, API-dependent, persistence, and complete manual verification |
+| Frontend-only Vite server | pnpm dev | Isolated frontend work only; not full application verification |
+| Unit tests | pnpm test | Every code change with relevant unit coverage |
+| Auth E2E tests | pnpm test:e2e | Authentication and relevant UI changes |
+| Auth E2E tests (headed) | pnpm test:e2e:headed | Manual browser debugging |
+| Auth emulator | pnpm firebase:emulators:auth | Persistent local auth testing |
 | Lint | pnpm lint | Every code change, if configured |
 | Type checking | pnpm typecheck:api | Every code change, if configured |
+| E2E type checking | pnpm typecheck:e2e | Playwright and E2E infrastructure changes |
 | Production build | pnpm build | Every code change |
 
 Commands that do not exist in package.json must not be claimed as available.
+`pnpm vercel dev` invokes the repository's installed Vercel CLI directly and is
+therefore intentionally not a package script.
+
+## Validation environments
+
+### Unit and static checks
+
+Run `pnpm test` for unit tests, `pnpm lint` for linting,
+`pnpm typecheck:api` and `pnpm typecheck:e2e` for the applicable TypeScript
+surfaces, and `pnpm build` for the production build. These checks do not start
+the application and do not replace browser or API verification.
+
+### Isolated Firebase Emulator and Playwright tests
+
+The authentication E2E wrapper starts the Firebase Authentication Emulator on
+`127.0.0.1:9099`, uses the hard-coded `demo-dopamine-dungeon` project, starts
+Vite in explicit test mode on `127.0.0.1:4173`, and tears the emulator down.
+Do not run the auth Playwright specs with a plain `playwright test` command.
+Install the pinned Chromium build once with:
+
+```sh
+pnpm exec playwright install chromium
+```
+
+Firebase Local Emulator Suite requires Java 11 or newer.
+
+This environment is intentionally isolated from the full development stack.
+The browser and Firebase Admin SDK must both use the Auth emulator in explicit
+test mode. The runner must fail closed rather than fall back to development,
+preview, or production Firebase, and these tests must not create Neon records.
+
+### Full-stack manual verification
+
+Run the complete local application with:
+
+```sh
+pnpm vercel dev
+```
+
+This is the canonical command for manual verification. It uses the repository's
+local Vercel configuration to serve the Vite frontend and Vercel API functions.
+The configured Development Command is `pnpm dev --port $PORT`, so Vercel
+invokes the existing Vite script internally on its assigned port. Do not start a
+second `pnpm dev` process. Open the single URL printed by Vercel, normally
+`http://localhost:3000`.
+Use it for authentication, protected routes, `/api/*` behavior, persistence,
+and Neon-backed workflows. Verify that relevant API routes return their expected
+authentication or application response rather than a frontend fallback or 404,
+and inspect both the browser console and Vercel server output.
+
+`pnpm dev` runs Vite only. It may be used for isolated frontend rendering work,
+but it cannot validate Vercel API functions, server-side authentication, Neon
+persistence, protected API behavior, or the complete application.
 
 ## Minimum validation
 
@@ -42,8 +101,13 @@ Every coding task must:
 3. run linting where configured;
 4. run type checking where configured;
 5. run the production build;
-6. perform manual verification;
+6. perform applicable full-stack manual verification with `pnpm vercel dev`;
 7. inspect the final diff.
+
+UI behaviour changes require relevant Playwright coverage when the workflow is
+available locally. Authorization and visibility changes require both GM and
+player scenarios, including denied or hidden behaviour. Failing tests must be
+fixed rather than skipped, marked `fixme`, or weakened.
 
 ## Manual verification
 
