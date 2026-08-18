@@ -11,7 +11,10 @@ import {
   onAuthStateChanged,
 } from "firebase/auth";
 import { ensureUserProfile } from "../domain/users/userProfile.service";
-import { requiresEmailVerification } from "../auth/authState";
+import {
+  getApplicationUser,
+  requiresEmailVerification,
+} from "../auth/authState";
 import { isAuthTestMode } from "../config/firebase/firebase";
 
 const AuthContext = createContext(null);
@@ -20,15 +23,29 @@ export function AuthProvider({ children }) {
   const [user, setUser] = useState(null);
   const [verificationUser, setVerificationUser] = useState(null);
   const [authStatus, setAuthStatus] = useState("loading");
+  const [profileInitializationFailed, setProfileInitializationFailed] = useState(false);
+  const [profileInitializationUser, setProfileInitializationUser] = useState(null);
 
   useEffect(() => {
+    let authChangeSequence = 0;
+
     const unsub = onAuthStateChanged(auth, async (firebaseUser) => {
+      const sequence = ++authChangeSequence;
       const needsVerification = requiresEmailVerification(firebaseUser);
 
       setVerificationUser(needsVerification ? firebaseUser : null);
-      setUser(needsVerification ? null : firebaseUser ?? null);
+      setUser(null);
+      setProfileInitializationFailed(false);
+      setProfileInitializationUser(null);
 
-      if (firebaseUser && !needsVerification && !isAuthTestMode) {
+      if (!firebaseUser || needsVerification) {
+        setAuthStatus("ready");
+        return;
+      }
+
+      setAuthStatus("loading");
+
+      if (!isAuthTestMode) {
         try {
           await ensureUserProfile({
             userId: firebaseUser.uid,
@@ -38,14 +55,51 @@ export function AuthProvider({ children }) {
           });
         } catch (error) {
           console.error("[AuthContext] Failed to sync user profile", error);
+          if (sequence === authChangeSequence) {
+            setProfileInitializationFailed(true);
+            setProfileInitializationUser(firebaseUser);
+            setAuthStatus("ready");
+          }
+          return;
         }
       }
 
-      setAuthStatus("ready");
+      if (sequence === authChangeSequence) {
+        setUser(
+          getApplicationUser(firebaseUser, "ready", isAuthTestMode)
+        );
+        setAuthStatus("ready");
+      }
     });
 
     return () => unsub();
   }, []);
+
+  const retryProfileInitialization = async () => {
+    const currentUser = profileInitializationUser ?? auth.currentUser;
+    if (!currentUser || requiresEmailVerification(currentUser)) return false;
+
+    setAuthStatus("loading");
+    try {
+      await ensureUserProfile({
+        userId: currentUser.uid,
+        email: currentUser.email ?? "",
+        displayName: currentUser.displayName ?? "",
+        photoURL: currentUser.photoURL ?? "",
+      });
+      setProfileInitializationFailed(false);
+      setProfileInitializationUser(null);
+      setUser(getApplicationUser(currentUser, "ready", isAuthTestMode));
+      return true;
+    } catch (error) {
+      console.error("[AuthContext] Failed to retry user profile sync", error);
+      setProfileInitializationFailed(true);
+      setProfileInitializationUser(currentUser);
+      return false;
+    } finally {
+      setAuthStatus("ready");
+    }
+  };
 
   const signInWithGoogle = async () => {
     const provider = new GoogleAuthProvider();
@@ -77,16 +131,24 @@ export function AuthProvider({ children }) {
 
     await currentUser.getIdToken(true);
     if (!isAuthTestMode) {
-      await ensureUserProfile({
-        userId: currentUser.uid,
-        email: currentUser.email ?? "",
-        displayName: currentUser.displayName ?? "",
-        photoURL: currentUser.photoURL ?? "",
-      });
+      try {
+        await ensureUserProfile({
+          userId: currentUser.uid,
+          email: currentUser.email ?? "",
+          displayName: currentUser.displayName ?? "",
+          photoURL: currentUser.photoURL ?? "",
+        });
+      } catch (error) {
+        setVerificationUser(null);
+        setUser(null);
+        setProfileInitializationFailed(true);
+        setProfileInitializationUser(currentUser);
+        throw error;
+      }
     }
 
     setVerificationUser(null);
-    setUser(currentUser);
+    setUser(getApplicationUser(currentUser, "ready", isAuthTestMode));
     return true;
   };
 
@@ -100,11 +162,13 @@ export function AuthProvider({ children }) {
         user,
         verificationUser,
         authStatus,
+        profileInitializationFailed,
         signInWithGoogle,
         signInWithEmail,
         registerWithEmail,
         resendVerification,
         checkEmailVerification,
+        retryProfileInitialization,
         logout,
       }}
     >

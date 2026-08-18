@@ -7,3 +7,16 @@ export function requiresEmailVerification(firebaseUser) {
 
   return Boolean(hasPasswordCredential && !firebaseUser.emailVerified);
 }
+
+export function getApplicationUser(
+  firebaseUser,
+  profileInitializationStatus,
+  skipProfileInitialization = false
+) {
+  if (!firebaseUser || requiresEmailVerification(firebaseUser)) return null;
+  if (!skipProfileInitialization && profileInitializationStatus !== "ready") {
+    return null;
+  }
+
+  return firebaseUser;
+}

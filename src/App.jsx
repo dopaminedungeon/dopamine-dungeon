@@ -52,11 +52,13 @@ function AppGate() {
     authStatus,
     user,
     verificationUser,
+    profileInitializationFailed,
     signInWithGoogle,
     signInWithEmail,
     registerWithEmail,
     resendVerification,
     checkEmailVerification,
+    retryProfileInitialization,
     logout,
   } = useAuth();
   const tenantContext = useTenant();
@@ -77,6 +79,15 @@ function AppGate() {
         email={verificationUser.email ?? "your email address"}
         onCheckVerification={checkEmailVerification}
         onResendVerification={resendVerification}
+        onLogout={logout}
+      />
+    );
+  }
+
+  if (profileInitializationFailed) {
+    return (
+      <ProfileInitializationErrorScreen
+        onRetry={retryProfileInitialization}
         onLogout={logout}
       />
     );
@@ -243,6 +254,25 @@ function IdentityProvisioningErrorScreen({ onRetry }) {
       <button type="button" onClick={onRetry} style={{ marginTop: 16 }}>
         Try again
       </button>
+    </div>
+  );
+}
+
+function ProfileInitializationErrorScreen({ onRetry, onLogout }) {
+  return (
+    <div style={{ padding: 24 }}>
+      <div style={{ fontSize: 18, fontWeight: 600 }}>Account profile unavailable</div>
+      <div style={{ opacity: 0.7, marginTop: 8 }}>
+        We could not initialize your account profile. Try again before continuing.
+      </div>
+      <div style={{ display: "flex", gap: 12, marginTop: 16 }}>
+        <button type="button" onClick={onRetry}>
+          Try again
+        </button>
+        <button type="button" onClick={onLogout}>
+          Use a different account
+        </button>
+      </div>
     </div>
   );
 }
