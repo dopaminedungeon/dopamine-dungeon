@@ -482,6 +482,66 @@ test("signs in a verified email and password user", async ({ page, request }) =>
   await expect(page.getByRole("heading", { name: "E2E Campaign" })).toBeVisible();
 });
 
+test.describe("verified user identity provisioning", () => {
+  test.describe("without invitations", () => {
+    test.use({
+      apiMeResponse: {
+        ok: true,
+        user: { id: "e2e-user-without-invitations" },
+        workspaces: [],
+        workspaceMemberships: [],
+        campaigns: [],
+        campaignMemberships: [],
+      },
+    });
+
+    test("enters workspace onboarding after identity provisioning", async ({
+      page,
+      request,
+    }) => {
+      const email = generatedEmail();
+      await createVerifiedUser(request, email, password);
+
+      await openEmailSignIn(page);
+      await page.getByLabel("Email address").fill(email);
+      await page.getByLabel("Password", { exact: true }).fill(password);
+      await page.getByRole("button", { name: "Sign in", exact: true }).click();
+
+      await expect(
+        page.getByRole("heading", { name: "Create your workspace" })
+      ).toBeVisible();
+    });
+  });
+
+  test.describe("when provisioning fails", () => {
+    test.use({
+      apiMeStatus: 500,
+      expectedConsoleErrors: [
+        "Failed to load resource",
+        "[TenantContext] Failed to load tenants",
+      ],
+    });
+
+    test("blocks onboarding and offers a retry", async ({ page, request }) => {
+      const email = generatedEmail();
+      await createVerifiedUser(request, email, password);
+
+      await openEmailSignIn(page);
+      await page.getByLabel("Email address").fill(email);
+      await page.getByLabel("Password", { exact: true }).fill(password);
+      await page.getByRole("button", { name: "Sign in", exact: true }).click();
+
+      await expect(
+        page.getByText("Account setup unavailable", { exact: true })
+      ).toBeVisible();
+      await expect(page.getByRole("button", { name: "Try again" })).toBeVisible();
+      await expect(
+        page.getByRole("heading", { name: "Create your workspace" })
+      ).toHaveCount(0);
+    });
+  });
+});
+
 test("keeps authentication independent from player and GM mode", async ({ page, request }) => {
   const email = generatedEmail();
   await createVerifiedUser(request, email, password);

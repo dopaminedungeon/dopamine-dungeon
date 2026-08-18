@@ -5,7 +5,7 @@ import { clearAuthEmulator } from "./auth-emulator";
 const workspaceId = "00000000-0000-4000-8000-000000000001";
 const campaignId = "00000000-0000-4000-8000-000000000002";
 
-const apiMeResponse = {
+const defaultApiMeResponse = {
   ok: true,
   user: { id: "e2e-user" },
   workspaces: [
@@ -28,9 +28,19 @@ const apiMeResponse = {
   ],
 };
 
-export const test = base.extend<{ consoleGuard: void }>({
+type ApiMeResponse = typeof defaultApiMeResponse;
+
+export const test = base.extend<{
+  apiMeResponse: ApiMeResponse;
+  apiMeStatus: number;
+  consoleGuard: void;
+  expectedConsoleErrors: string[];
+}>({
+  apiMeResponse: [defaultApiMeResponse, { option: true }],
+  apiMeStatus: [200, { option: true }],
+  expectedConsoleErrors: [[], { option: true }],
   consoleGuard: [
-    async ({ page }, use) => {
+    async ({ page, expectedConsoleErrors }, use) => {
       const errors: string[] = [];
       page.on("console", (message) => {
         if (message.type() !== "error") return;
@@ -45,13 +55,26 @@ export const test = base.extend<{ consoleGuard: void }>({
 
       await use();
 
-      expect(errors, "browser console and page errors").toEqual([]);
+      for (const expectedError of expectedConsoleErrors) {
+        expect(
+          errors.some((error) => error.includes(expectedError)),
+          `expected browser console error containing: ${expectedError}`
+        ).toBe(true);
+      }
+
+      const unexpectedErrors = errors.filter(
+        (error) =>
+          !expectedConsoleErrors.some((expectedError) =>
+            error.includes(expectedError)
+          )
+      );
+      expect(unexpectedErrors, "unexpected browser console and page errors").toEqual([]);
     },
     { auto: true },
   ],
 });
 
-test.beforeEach(async ({ page, request }) => {
+test.beforeEach(async ({ apiMeResponse, apiMeStatus, page, request }) => {
   await clearAuthEmulator(request);
 
   await page.route("http://127.0.0.1:4173/api/**", async (route) => {
@@ -61,7 +84,13 @@ test.beforeEach(async ({ page, request }) => {
     expect(authorization).toMatch(/^Bearer /);
 
     if (requestUrl.pathname === "/api/me") {
-      await route.fulfill({ json: apiMeResponse });
+      await route.fulfill({
+        status: apiMeStatus,
+        json:
+          apiMeStatus === 200
+            ? apiMeResponse
+            : { ok: false, error: "Internal server error" },
+      });
       return;
     }
 

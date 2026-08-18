@@ -142,7 +142,7 @@ export default function AuthScreen({
         const validation = await validatePasswordForAuth(auth, password);
         setPasswordValidation(validation);
         if (!validation.isValid) {
-          setError("Your password does not meet the requirements below.");
+          setError("Your password does not meet the requirements.");
           return;
         }
         await onEmailRegistration(normalizedEmail, password);

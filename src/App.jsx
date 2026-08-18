@@ -66,7 +66,7 @@ function AppGate() {
     return <LoadingScreen label="Loading…" />;
   }
 
-  const { tenantStatus } = tenantContext;
+  const { tenantStatus, refreshTenants } = tenantContext;
   const { campaignStatus } = campaignContext;
 
   if (authStatus === "loading") return <LoadingScreen label="Loading…" />;
@@ -94,6 +94,10 @@ function AppGate() {
 
   if (tenantStatus === "loading" || tenantStatus === "unknown") {
     return <LoadingScreen label="Loading workspaces…" />;
+  }
+
+  if (tenantStatus === "error") {
+    return <IdentityProvisioningErrorScreen onRetry={refreshTenants} />;
   }
 
   if (tenantStatus === "empty") {
@@ -225,6 +229,20 @@ function LoadingScreen({ label }) {
       <div style={{ opacity: 0.7, marginTop: 8 }}>
         (Temporary gate screen — we’ll replace this with proper pages + styling.)
       </div>
+    </div>
+  );
+}
+
+function IdentityProvisioningErrorScreen({ onRetry }) {
+  return (
+    <div style={{ padding: 24 }}>
+      <div style={{ fontSize: 18, fontWeight: 600 }}>Account setup unavailable</div>
+      <div style={{ opacity: 0.7, marginTop: 8 }}>
+        We could not finish setting up your account. Try again before continuing.
+      </div>
+      <button type="button" onClick={onRetry} style={{ marginTop: 16 }}>
+        Try again
+      </button>
     </div>
   );
 }
