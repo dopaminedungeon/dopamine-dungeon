@@ -1,25 +1,51 @@
 import { createContext, useContext, useEffect, useState } from "react";
-import { auth, db } from "../firebase/firebase";
+import { auth } from "../firebase/firebase";
 import {
+  createUserWithEmailAndPassword,
   GoogleAuthProvider,
+  reload,
+  sendEmailVerification,
+  signInWithEmailAndPassword,
   signInWithPopup,
   signOut,
   onAuthStateChanged,
 } from "firebase/auth";
-import { doc, setDoc } from "firebase/firestore";
 import { ensureUserProfile } from "../domain/users/userProfile.service";
+import {
+  getApplicationUser,
+  requiresEmailVerification,
+} from "../auth/authState";
+import { isAuthTestMode } from "../config/firebase/firebase";
 
 const AuthContext = createContext(null);
 
 export function AuthProvider({ children }) {
   const [user, setUser] = useState(null);
+  const [verificationUser, setVerificationUser] = useState(null);
   const [authStatus, setAuthStatus] = useState("loading");
+  const [profileInitializationFailed, setProfileInitializationFailed] = useState(false);
+  const [profileInitializationUser, setProfileInitializationUser] = useState(null);
 
   useEffect(() => {
-    const unsub = onAuthStateChanged(auth, async (firebaseUser) => {
-      setUser(firebaseUser ?? null);
+    let authChangeSequence = 0;
 
-      if (firebaseUser) {
+    const unsub = onAuthStateChanged(auth, async (firebaseUser) => {
+      const sequence = ++authChangeSequence;
+      const needsVerification = requiresEmailVerification(firebaseUser);
+
+      setVerificationUser(needsVerification ? firebaseUser : null);
+      setUser(null);
+      setProfileInitializationFailed(false);
+      setProfileInitializationUser(null);
+
+      if (!firebaseUser || needsVerification) {
+        setAuthStatus("ready");
+        return;
+      }
+
+      setAuthStatus("loading");
+
+      if (!isAuthTestMode) {
         try {
           await ensureUserProfile({
             userId: firebaseUser.uid,
@@ -29,18 +55,101 @@ export function AuthProvider({ children }) {
           });
         } catch (error) {
           console.error("[AuthContext] Failed to sync user profile", error);
+          if (sequence === authChangeSequence) {
+            setProfileInitializationFailed(true);
+            setProfileInitializationUser(firebaseUser);
+            setAuthStatus("ready");
+          }
+          return;
         }
       }
 
-      setAuthStatus("ready");
+      if (sequence === authChangeSequence) {
+        setUser(
+          getApplicationUser(firebaseUser, "ready", isAuthTestMode)
+        );
+        setAuthStatus("ready");
+      }
     });
 
     return () => unsub();
   }, []);
 
+  const retryProfileInitialization = async () => {
+    const currentUser = profileInitializationUser ?? auth.currentUser;
+    if (!currentUser || requiresEmailVerification(currentUser)) return false;
+
+    setAuthStatus("loading");
+    try {
+      await ensureUserProfile({
+        userId: currentUser.uid,
+        email: currentUser.email ?? "",
+        displayName: currentUser.displayName ?? "",
+        photoURL: currentUser.photoURL ?? "",
+      });
+      setProfileInitializationFailed(false);
+      setProfileInitializationUser(null);
+      setUser(getApplicationUser(currentUser, "ready", isAuthTestMode));
+      return true;
+    } catch (error) {
+      console.error("[AuthContext] Failed to retry user profile sync", error);
+      setProfileInitializationFailed(true);
+      setProfileInitializationUser(currentUser);
+      return false;
+    } finally {
+      setAuthStatus("ready");
+    }
+  };
+
   const signInWithGoogle = async () => {
     const provider = new GoogleAuthProvider();
     await signInWithPopup(auth, provider);
+  };
+
+  const signInWithEmail = async (email, password) => {
+    return signInWithEmailAndPassword(auth, email, password);
+  };
+
+  const registerWithEmail = async (email, password) => {
+    const credential = await createUserWithEmailAndPassword(auth, email, password);
+    await sendEmailVerification(credential.user);
+    return credential;
+  };
+
+  const resendVerification = async () => {
+    const currentUser = verificationUser ?? auth.currentUser;
+    if (!currentUser) throw new Error("No account is waiting for verification.");
+    await sendEmailVerification(currentUser);
+  };
+
+  const checkEmailVerification = async () => {
+    const currentUser = verificationUser ?? auth.currentUser;
+    if (!currentUser) return false;
+
+    await reload(currentUser);
+    if (!currentUser.emailVerified) return false;
+
+    await currentUser.getIdToken(true);
+    if (!isAuthTestMode) {
+      try {
+        await ensureUserProfile({
+          userId: currentUser.uid,
+          email: currentUser.email ?? "",
+          displayName: currentUser.displayName ?? "",
+          photoURL: currentUser.photoURL ?? "",
+        });
+      } catch (error) {
+        setVerificationUser(null);
+        setUser(null);
+        setProfileInitializationFailed(true);
+        setProfileInitializationUser(currentUser);
+        throw error;
+      }
+    }
+
+    setVerificationUser(null);
+    setUser(getApplicationUser(currentUser, "ready", isAuthTestMode));
+    return true;
   };
 
   const logout = async () => {
@@ -49,11 +158,25 @@ export function AuthProvider({ children }) {
 
   return (
     <AuthContext.Provider
-      value={{ user, authStatus, signInWithGoogle, logout }}
+      value={{
+        user,
+        verificationUser,
+        authStatus,
+        profileInitializationFailed,
+        signInWithGoogle,
+        signInWithEmail,
+        registerWithEmail,
+        resendVerification,
+        checkEmailVerification,
+        retryProfileInitialization,
+        logout,
+      }}
     >
       {children}
     </AuthContext.Provider>
   );
 }
 
+// The provider and its hook intentionally share this module as the existing public API.
+// eslint-disable-next-line react-refresh/only-export-components
 export const useAuth = () => useContext(AuthContext);

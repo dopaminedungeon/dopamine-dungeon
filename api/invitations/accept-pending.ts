@@ -12,6 +12,10 @@ import {
 import { characterAssignments } from "../../db/schema/characterAssignments.js";
 import { campaigns } from "../../db/schema/campaigns.js";
 import { workspaces } from "../../db/schema/workspaces.js";
+import {
+  getApiErrorMessage,
+  getApiErrorStatus,
+} from "../../src/server/apiErrors.js";
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   setCorsHeaders(res, "POST, OPTIONS");
@@ -151,9 +155,15 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       }),
     });
   } catch (error) {
-    return res.status(401).json({
+    const status = getApiErrorStatus(error);
+
+    if (status === 500) {
+      console.error("[api/invitations/accept-pending] Request failed", error);
+    }
+
+    return res.status(status).json({
       ok: false,
-      error: error instanceof Error ? error.message : "Unauthorized",
+      error: getApiErrorMessage(error),
     });
   }
 }

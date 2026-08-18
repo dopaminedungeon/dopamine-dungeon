@@ -10,7 +10,7 @@ import { acceptPendingApiInvitations } from "../data/api/apiClient";
 
 function InvitationAcceptanceBridge({ children }) {
   const { user } = useAuth();
-  const { refreshTenants } = useTenant();
+  const { refreshTenants, tenantStatus } = useTenant();
   const { refreshCampaigns } = useCampaign();
   const processedKeyRef = useRef(null);
 
@@ -20,6 +20,14 @@ function InvitationAcceptanceBridge({ children }) {
     async function run() {
       if (!user?.uid || !user?.email) {
         processedKeyRef.current = null;
+        return;
+      }
+
+      if (
+        tenantStatus === "loading" ||
+        tenantStatus === "unknown" ||
+        tenantStatus === "error"
+      ) {
         return;
       }
 
@@ -54,7 +62,7 @@ function InvitationAcceptanceBridge({ children }) {
     return () => {
       isCancelled = true;
     };
-  }, [user, refreshTenants, refreshCampaigns]);
+  }, [user, tenantStatus, refreshTenants, refreshCampaigns]);
 
   return children;
 }

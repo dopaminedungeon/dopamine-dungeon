@@ -80,7 +80,18 @@ All system diagrams live in docs/ and are authored in Mermaid (designed in Merma
 
 ## Dev setup
 `pnpm install`
-`pnpm dev`
+
+Run the complete application, including Vercel API functions:
+
+`pnpm vercel dev`
+
+Vercel runs the existing Vite `dev` script internally with its assigned port and
+prints the single URL to open, normally `http://localhost:3000`. Do not run a
+separate `pnpm dev` process at the same time.
+
+`pnpm dev` starts only the Vite frontend. Do not use it to verify
+authentication, protected APIs, Neon-backed behavior, persistence, or complete
+application workflows.
 
 Build: 
 `pnpm build`
@@ -95,4 +106,3 @@ Build:
 - `[C]` – UI component
 - `[CTX]` – Context / state container (React Context)
 - `[G]` – Gate / Decision (auth, mode, permissions)# CI test
-

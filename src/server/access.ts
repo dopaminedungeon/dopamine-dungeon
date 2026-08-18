@@ -10,6 +10,7 @@ import {
   campaignMemberships,
   workspaceMemberships,
 } from "../../db/schema/memberships.js";
+import { provisionUserIdentity } from "./userIdentity.js";
 
 export type CurrentUser = typeof users.$inferSelect;
 export type Workspace = typeof workspaces.$inferSelect;
@@ -28,41 +29,7 @@ export async function getCurrentUser(req: VercelRequest): Promise<CurrentUser> {
       ? decodedToken.name.trim()
       : null;
 
-  const existingUser = await db
-    .select()
-    .from(users)
-    .where(eq(users.firebaseUid, firebaseUid))
-    .limit(1);
-
-  if (existingUser[0]) {
-    const user = existingUser[0];
-
-    if (user.email !== email || user.displayName !== displayName) {
-      const updatedUsers = await db
-        .update(users)
-        .set({
-          email,
-          displayName,
-        })
-        .where(eq(users.id, user.id))
-        .returning();
-
-      return updatedUsers[0] ?? user;
-    }
-
-    return user;
-  }
-
-  const insertedUsers = await db
-    .insert(users)
-    .values({
-      firebaseUid,
-      email,
-      displayName,
-    })
-    .returning();
-
-  return insertedUsers[0];
+  return provisionUserIdentity(db, { firebaseUid, email, displayName });
 }
 
 export async function resolveWorkspaceByAppId(

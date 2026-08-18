@@ -1,6 +1,10 @@
 {
+  "devCommand": "pnpm dev --port $PORT",
   "rewrites": [
     { "source": "/api/(.*)", "destination": "/api/$1" },
-    { "source": "/(.*)", "destination": "/" }
+    {
+      "source": "/((?!api/|@vite/|@react-refresh|@fs/|@id/|src/|node_modules/|logo/|email/|vite.svg).*)",
+      "destination": "/"
+    }
   ]
 }

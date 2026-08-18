@@ -1,10 +1,13 @@
 import type { VercelRequest, VercelResponse } from "@vercel/node";
 import { eq, inArray } from "drizzle-orm";
 
-import { verifyAuthHeader } from "../src/server/auth.js";
+import { getCurrentUser } from "../src/server/access.js";
+import {
+  getApiErrorMessage,
+  getApiErrorStatus,
+} from "../src/server/apiErrors.js";
 import { setCorsHeaders } from "../src/server/cors.js";
 import { db } from "../src/server/db.js";
-import { users } from "../db/schema/users.js";
 import { workspaces } from "../db/schema/workspaces.js";
 import { campaigns } from "../db/schema/campaigns.js";
 import {
@@ -20,46 +23,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   }
 
   try {
-    const decodedToken = await verifyAuthHeader(req.headers.authorization);
-
-    const firebaseUid = decodedToken.uid;
-    const email = decodedToken.email ?? null;
-    const displayName =
-      typeof decodedToken.name === "string" && decodedToken.name.trim()
-        ? decodedToken.name.trim()
-        : null;
-
-    const existingUser = await db
-      .select()
-      .from(users)
-      .where(eq(users.firebaseUid, firebaseUid))
-      .limit(1);
-
-    let user = existingUser[0];
-
-    if (!user) {
-      const insertedUsers = await db
-        .insert(users)
-        .values({
-          firebaseUid,
-          email,
-          displayName,
-        })
-        .returning();
-
-      user = insertedUsers[0];
-    } else if (user.email !== email || user.displayName !== displayName) {
-      const updatedUsers = await db
-        .update(users)
-        .set({
-          email,
-          displayName,
-        })
-        .where(eq(users.id, user.id))
-        .returning();
-
-      user = updatedUsers[0] ?? user;
-    }
+    const user = await getCurrentUser(req);
 
     const workspaceMembershipsData = await db
       .select()
@@ -96,9 +60,15 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       campaignMemberships: campaignMembershipsData,
     });
   } catch (error) {
-    return res.status(401).json({
+    const status = getApiErrorStatus(error);
+
+    if (status === 500) {
+      console.error("[api/me] Failed to provision authenticated user", error);
+    }
+
+    return res.status(status).json({
       ok: false,
-      error: error instanceof Error ? error.message : "Unauthorized",
+      error: getApiErrorMessage(error),
     });
   }
 }
