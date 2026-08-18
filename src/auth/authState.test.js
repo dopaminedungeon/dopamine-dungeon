@@ -13,7 +13,7 @@ test("unverified password users are held outside the application", () => {
   );
 });
 
-test("verified password and Google users may continue", () => {
+test("only Firebase-verified users may continue regardless of provider", () => {
   assert.equal(
     requiresEmailVerification({
       emailVerified: true,
@@ -26,7 +26,7 @@ test("verified password and Google users may continue", () => {
       emailVerified: false,
       providerData: [{ providerId: "google.com" }],
     }),
-    false
+    true
   );
 });
 

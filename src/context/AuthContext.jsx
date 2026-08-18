@@ -4,7 +4,6 @@ import {
   createUserWithEmailAndPassword,
   GoogleAuthProvider,
   reload,
-  sendEmailVerification,
   signInWithEmailAndPassword,
   signInWithPopup,
   signOut,
@@ -16,6 +15,11 @@ import {
   requiresEmailVerification,
 } from "../auth/authState";
 import { isAuthTestMode } from "../config/firebase/firebase";
+import { requestVerificationEmail } from "../data/api/apiClient";
+import {
+  hasPendingInvitationContext,
+  preserveInvitationContext,
+} from "../auth/invitationContext";
 
 const AuthContext = createContext(null);
 
@@ -25,6 +29,7 @@ export function AuthProvider({ children }) {
   const [authStatus, setAuthStatus] = useState("loading");
   const [profileInitializationFailed, setProfileInitializationFailed] = useState(false);
   const [profileInitializationUser, setProfileInitializationUser] = useState(null);
+  const [verificationEmailSentAt, setVerificationEmailSentAt] = useState(null);
 
   useEffect(() => {
     let authChangeSequence = 0;
@@ -102,33 +107,36 @@ export function AuthProvider({ children }) {
   };
 
   const signInWithGoogle = async () => {
+    preserveInvitationContext();
     const provider = new GoogleAuthProvider();
     await signInWithPopup(auth, provider);
   };
 
   const signInWithEmail = async (email, password) => {
+    preserveInvitationContext();
     return signInWithEmailAndPassword(auth, email, password);
   };
 
+  const sendBrandedVerificationEmail = async (firebaseUser) => {
+    if (!firebaseUser) throw new Error("No account is waiting for verification.");
+    await requestVerificationEmail(hasPendingInvitationContext());
+    setVerificationEmailSentAt(Date.now());
+  };
+
   const registerWithEmail = async (email, password) => {
+    preserveInvitationContext();
     const credential = await createUserWithEmailAndPassword(auth, email, password);
-    await sendEmailVerification(credential.user);
+    await sendBrandedVerificationEmail(credential.user);
     return credential;
   };
 
   const resendVerification = async () => {
     const currentUser = verificationUser ?? auth.currentUser;
-    if (!currentUser) throw new Error("No account is waiting for verification.");
-    await sendEmailVerification(currentUser);
+    await sendBrandedVerificationEmail(currentUser);
   };
 
-  const checkEmailVerification = async () => {
-    const currentUser = verificationUser ?? auth.currentUser;
+  const continueVerifiedSession = async (currentUser = verificationUser ?? auth.currentUser) => {
     if (!currentUser) return false;
-
-    await reload(currentUser);
-    if (!currentUser.emailVerified) return false;
-
     await currentUser.getIdToken(true);
     if (!isAuthTestMode) {
       try {
@@ -152,6 +160,15 @@ export function AuthProvider({ children }) {
     return true;
   };
 
+  const checkEmailVerification = async () => {
+    const currentUser = verificationUser ?? auth.currentUser;
+    if (!currentUser) return false;
+
+    await reload(currentUser);
+    if (!currentUser.emailVerified) return false;
+    return continueVerifiedSession(currentUser);
+  };
+
   const logout = async () => {
     await signOut(auth);
   };
@@ -163,11 +180,13 @@ export function AuthProvider({ children }) {
         verificationUser,
         authStatus,
         profileInitializationFailed,
+        verificationEmailSentAt,
         signInWithGoogle,
         signInWithEmail,
         registerWithEmail,
         resendVerification,
         checkEmailVerification,
+        continueVerifiedSession,
         retryProfileInitialization,
         logout,
       }}

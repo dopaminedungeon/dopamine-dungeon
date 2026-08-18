@@ -290,6 +290,9 @@ export default function Settings() {
                     <div>
                       <p className="text-white font-medium">Authentication email</p>
                       <p className="text-zinc-400">{user?.email || "No email available"}</p>
+                      <p className={user?.emailVerified ? "mt-1 text-emerald-300" : "mt-1 text-amber-300"}>
+                        {user?.emailVerified ? "Verified" : "Verification required"}
+                      </p>
                     </div>
                   </div>
                 </div>

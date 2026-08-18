@@ -7,6 +7,7 @@ import { useAuth } from "./AuthContext.jsx";
 import { useTenant } from "./TenantContext.jsx";
 import { useCampaign } from "./CampaignContext.jsx";
 import { acceptPendingApiInvitations } from "../data/api/apiClient";
+import { clearInvitationContext } from "../auth/invitationContext";
 
 function InvitationAcceptanceBridge({ children }) {
   const { user } = useAuth();
@@ -42,9 +43,13 @@ function InvitationAcceptanceBridge({ children }) {
       try {
         const { acceptedInvitations } = await acceptPendingApiInvitations();
 
-        if (isCancelled || acceptedInvitations.length === 0) {
+        if (isCancelled) {
           return;
         }
+
+        clearInvitationContext();
+
+        if (acceptedInvitations.length === 0) return;
 
         await refreshTenants();
         await refreshCampaigns();

@@ -81,6 +81,29 @@ export async function verifyEmailThroughEmulator(
   await expectOk(confirmationResponse);
 }
 
+export async function getVerificationCode(
+  request: APIRequestContext,
+  email: string
+) {
+  const deadline = Date.now() + 5_000;
+
+  while (Date.now() < deadline) {
+    const codesResponse = await request.get(
+      `${AUTH_EMULATOR_URL}/emulator/v1/projects/${FIREBASE_TEST_PROJECT_ID}/oobCodes`
+    );
+    const { oobCodes } = await expectOk(codesResponse);
+    const verification = oobCodes.find(
+      (code: { email: string; requestType: string }) =>
+        code.email === email && code.requestType === "VERIFY_EMAIL"
+    );
+
+    if (verification?.oobCode) return verification.oobCode as string;
+    await new Promise((resolve) => setTimeout(resolve, 100));
+  }
+
+  throw new Error(`No email verification code found for ${email}.`);
+}
+
 export async function createVerifiedUser(
   request: APIRequestContext,
   email: string,

@@ -12,6 +12,10 @@ export const GENERIC_SIGN_IN_ERROR =
 export function getAuthErrorMessage(error, operation) {
   const code = typeof error?.code === "string" ? error.code : "";
 
+  if (operation === "verification" && (code === "auth/too-many-requests" || error?.status === 429)) {
+    return "Please wait before requesting another verification email.";
+  }
+
   if (TEMPORARY_AUTH_ERROR_CODES.has(code)) {
     return "Authentication is temporarily unavailable. Please try again later.";
   }

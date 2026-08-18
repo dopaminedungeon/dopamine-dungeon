@@ -1,6 +1,7 @@
 import { test as base, expect } from "@playwright/test";
 
 import { clearAuthEmulator } from "./auth-emulator";
+import { sendVerificationEmail } from "./auth-emulator";
 
 const workspaceId = "00000000-0000-4000-8000-000000000001";
 const campaignId = "00000000-0000-4000-8000-000000000002";
@@ -35,10 +36,20 @@ export const test = base.extend<{
   apiMeStatus: number;
   consoleGuard: void;
   expectedConsoleErrors: string[];
+  acceptedInvitations: Array<{
+    id: string;
+    tenantId: string;
+    campaignId: string;
+    workspaceRole: string;
+    campaignRole: string;
+    status: string;
+    acceptedAt: string;
+  }>;
 }>({
   apiMeResponse: [defaultApiMeResponse, { option: true }],
   apiMeStatus: [200, { option: true }],
   expectedConsoleErrors: [[], { option: true }],
+  acceptedInvitations: [[], { option: true }],
   consoleGuard: [
     async ({ page, expectedConsoleErrors }, use) => {
       const errors: string[] = [];
@@ -74,7 +85,7 @@ export const test = base.extend<{
   ],
 });
 
-test.beforeEach(async ({ apiMeResponse, apiMeStatus, page, request }) => {
+test.beforeEach(async ({ acceptedInvitations, apiMeResponse, apiMeStatus, page, request }) => {
   await clearAuthEmulator(request);
 
   await page.route("http://127.0.0.1:4173/api/**", async (route) => {
@@ -96,8 +107,14 @@ test.beforeEach(async ({ apiMeResponse, apiMeStatus, page, request }) => {
       return;
     }
 
+    if (requestUrl.pathname === "/api/auth/send-verification-email") {
+      await sendVerificationEmail(request, authorization!.slice("Bearer ".length));
+      await route.fulfill({ status: 202, json: { ok: true } });
+      return;
+    }
+
     if (requestUrl.pathname === "/api/invitations/accept-pending") {
-      await route.fulfill({ json: { ok: true, acceptedInvitations: [] } });
+      await route.fulfill({ json: { ok: true, acceptedInvitations } });
       return;
     }
 

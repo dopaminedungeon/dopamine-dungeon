@@ -34,6 +34,7 @@ import React from "react";
 import Welcome from "./pages/Welcome";
 import AuthScreen from "./components/auth/AuthScreen.jsx";
 import VerificationScreen from "./components/auth/VerificationScreen.jsx";
+import VerificationActionScreen from "./components/auth/VerificationActionScreen.jsx";
 
 function App() {
   return (
@@ -51,16 +52,27 @@ function AppGate() {
     user,
     verificationUser,
     profileInitializationFailed,
+    verificationEmailSentAt,
     signInWithGoogle,
     signInWithEmail,
     registerWithEmail,
     resendVerification,
     checkEmailVerification,
+    continueVerifiedSession,
     retryProfileInitialization,
     logout,
   } = useAuth();
   const tenantContext = useTenant();
   const campaignContext = useCampaign();
+
+  if (window.location.pathname === "/auth/verify-email") {
+    return (
+      <VerificationActionScreen
+        onContinueVerifiedSession={continueVerifiedSession}
+        onSignOut={logout}
+      />
+    );
+  }
 
   if (!tenantContext || !campaignContext) {
     return <LoadingScreen label="Loading…" />;
@@ -78,6 +90,7 @@ function AppGate() {
         onCheckVerification={checkEmailVerification}
         onResendVerification={resendVerification}
         onLogout={logout}
+        verificationEmailSentAt={verificationEmailSentAt}
       />
     );
   }
