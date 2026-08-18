@@ -31,11 +31,24 @@ const defaultApiMeResponse = {
 
 type ApiMeResponse = typeof defaultApiMeResponse;
 
+async function wait(delayMs: number) {
+  if (delayMs > 0) {
+    await new Promise((resolve) => setTimeout(resolve, delayMs));
+  }
+}
+
 export const test = base.extend<{
   apiMeResponse: ApiMeResponse;
+  apiMeResponses: ApiMeResponse[] | null;
   apiMeStatus: number;
+  apiMeDelayMs: number;
+  apiMeDelaySequence: number[] | null;
   consoleGuard: void;
   expectedConsoleErrors: string[];
+  apiCallLog: {
+    apiMe: string[];
+    acceptPending: string[];
+  };
   acceptedInvitations: Array<{
     id: string;
     tenantId: string;
@@ -45,11 +58,21 @@ export const test = base.extend<{
     status: string;
     acceptedAt: string;
   }>;
+  acceptPendingDelayMs: number;
+  acceptPendingStatus: number;
 }>({
   apiMeResponse: [defaultApiMeResponse, { option: true }],
+  apiMeResponses: [null, { option: true }],
   apiMeStatus: [200, { option: true }],
+  apiMeDelayMs: [0, { option: true }],
+  apiMeDelaySequence: [null, { option: true }],
   expectedConsoleErrors: [[], { option: true }],
   acceptedInvitations: [[], { option: true }],
+  acceptPendingDelayMs: [0, { option: true }],
+  acceptPendingStatus: [200, { option: true }],
+  apiCallLog: async ({}, use) => {
+    await use({ apiMe: [], acceptPending: [] });
+  },
   consoleGuard: [
     async ({ page, expectedConsoleErrors }, use) => {
       const errors: string[] = [];
@@ -85,8 +108,21 @@ export const test = base.extend<{
   ],
 });
 
-test.beforeEach(async ({ acceptedInvitations, apiMeResponse, apiMeStatus, page, request }) => {
+test.beforeEach(async ({
+  acceptedInvitations,
+  acceptPendingDelayMs,
+  acceptPendingStatus,
+  apiCallLog,
+  apiMeDelayMs,
+  apiMeDelaySequence,
+  apiMeResponse,
+  apiMeResponses,
+  apiMeStatus,
+  page,
+  request,
+}) => {
   await clearAuthEmulator(request);
+  let apiMeCallCount = 0;
 
   await page.route("http://127.0.0.1:4173/api/**", async (route) => {
     const requestUrl = new URL(route.request().url());
@@ -97,11 +133,19 @@ test.beforeEach(async ({ acceptedInvitations, apiMeResponse, apiMeStatus, page, 
     expect(selectedMode).toMatch(/^(gm|player)$/);
 
     if (requestUrl.pathname === "/api/me") {
+      const callIndex = apiMeCallCount;
+      apiMeCallCount += 1;
+      apiCallLog.apiMe.push(requestUrl.pathname);
+      const delayMs = apiMeDelaySequence?.[callIndex] ?? apiMeDelayMs;
+      await wait(delayMs);
+      const response =
+        apiMeResponses?.[Math.min(callIndex, apiMeResponses.length - 1)] ??
+        apiMeResponse;
       await route.fulfill({
         status: apiMeStatus,
         json:
           apiMeStatus === 200
-            ? apiMeResponse
+            ? response
             : { ok: false, error: "Internal server error" },
       });
       return;
@@ -114,7 +158,15 @@ test.beforeEach(async ({ acceptedInvitations, apiMeResponse, apiMeStatus, page, 
     }
 
     if (requestUrl.pathname === "/api/invitations/accept-pending") {
-      await route.fulfill({ json: { ok: true, acceptedInvitations } });
+      apiCallLog.acceptPending.push(requestUrl.pathname);
+      await wait(acceptPendingDelayMs);
+      await route.fulfill({
+        status: acceptPendingStatus,
+        json:
+          acceptPendingStatus === 200
+            ? { ok: true, acceptedInvitations }
+            : { ok: false, error: "Invitation acceptance unavailable" },
+      });
       return;
     }
 

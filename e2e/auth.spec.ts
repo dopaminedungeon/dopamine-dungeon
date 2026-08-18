@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import type { Locator, Page } from "@playwright/test";
+import type { APIRequestContext, Locator, Page } from "@playwright/test";
 
 import { verifyAuthHeader } from "../src/server/auth";
 import { test, expect } from "./auth.fixture";
@@ -13,14 +13,142 @@ import {
 } from "./auth-emulator";
 
 const password = "DungeonTest42!";
+const invitedWorkspaceId = "00000000-0000-4000-8000-000000000011";
+const invitedCampaignId = "00000000-0000-4000-8000-000000000012";
 
 function generatedEmail() {
   return `auth-${randomUUID()}@example.test`;
 }
 
+function emptyApiMeResponse(userId = "e2e-user-without-membership") {
+  return {
+    ok: true,
+    user: { id: userId },
+    workspaces: [],
+    workspaceMemberships: [],
+    campaigns: [],
+    campaignMemberships: [],
+  };
+}
+
+function invitedApiMeResponse(userId = "e2e-invited-user") {
+  return {
+    ok: true,
+    user: { id: userId },
+    workspaces: [
+      {
+        id: invitedWorkspaceId,
+        slug: "invited-workspace",
+        name: "Invited Workspace",
+      },
+    ],
+    workspaceMemberships: [
+      { workspaceId: invitedWorkspaceId, userId, role: "member" },
+    ],
+    campaigns: [
+      {
+        id: invitedCampaignId,
+        workspaceId: invitedWorkspaceId,
+        slug: "invited-campaign",
+        name: "Invited Campaign",
+        description: "Invited player campaign",
+      },
+    ],
+    campaignMemberships: [
+      { campaignId: invitedCampaignId, userId, role: "player" },
+    ],
+  };
+}
+
 async function openEmailSignIn(page: Page) {
   await page.goto("/home");
   await page.getByRole("button", { name: "Continue with email" }).click();
+}
+
+async function signInVerifiedInvitedUser(
+  page: Page,
+  request: APIRequestContext,
+  email = generatedEmail()
+) {
+  await createVerifiedUser(request, email, password);
+  await page.goto("/?invited=true");
+  await page.getByRole("button", { name: "Continue with email" }).click();
+  await page.getByLabel("Email address").fill(email);
+  await page.getByLabel("Password", { exact: true }).fill(password);
+  await page.getByRole("button", { name: "Sign in", exact: true }).click();
+  return email;
+}
+
+async function startWorkspaceOnboardingObserver(page: Page) {
+  const installObserver = () => {
+    const trackedWindow = window as Window & {
+      __ddWorkspaceOnboardingSeen?: boolean;
+      __ddWorkspaceOnboardingObserver?: MutationObserver;
+    };
+
+    trackedWindow.__ddWorkspaceOnboardingSeen = false;
+    trackedWindow.__ddWorkspaceOnboardingObserver?.disconnect();
+
+    const check = () => {
+      if (document.body?.innerText.includes("Create your workspace")) {
+        trackedWindow.__ddWorkspaceOnboardingSeen = true;
+      }
+    };
+
+    check();
+    trackedWindow.__ddWorkspaceOnboardingObserver = new MutationObserver(check);
+    trackedWindow.__ddWorkspaceOnboardingObserver.observe(document.body, {
+      childList: true,
+      characterData: true,
+      subtree: true,
+    });
+  };
+
+  await page.addInitScript(() => {
+    const install = () => {
+      const trackedWindow = window as Window & {
+        __ddWorkspaceOnboardingSeen?: boolean;
+        __ddWorkspaceOnboardingObserver?: MutationObserver;
+      };
+
+      trackedWindow.__ddWorkspaceOnboardingSeen = false;
+      trackedWindow.__ddWorkspaceOnboardingObserver?.disconnect();
+
+      const check = () => {
+        if (document.body?.innerText.includes("Create your workspace")) {
+          trackedWindow.__ddWorkspaceOnboardingSeen = true;
+        }
+      };
+
+      check();
+      trackedWindow.__ddWorkspaceOnboardingObserver = new MutationObserver(check);
+      trackedWindow.__ddWorkspaceOnboardingObserver.observe(document.body, {
+        childList: true,
+        characterData: true,
+        subtree: true,
+      });
+    };
+
+    if (document.body) {
+      install();
+    } else {
+      document.addEventListener("DOMContentLoaded", install, { once: true });
+    }
+  });
+
+  await page.evaluate(installObserver);
+}
+
+async function expectWorkspaceOnboardingWasNeverRendered(page: Page) {
+  expect(
+    await page.evaluate(() => {
+      const trackedWindow = window as Window & {
+        __ddWorkspaceOnboardingSeen?: boolean;
+      };
+
+      return trackedWindow.__ddWorkspaceOnboardingSeen === true;
+    })
+  ).toBe(false);
 }
 
 async function getContrastRatio(page: Page, text: string) {
@@ -513,11 +641,15 @@ test("applies a valid action code and continues the same browser session", async
 test.describe("post-verification routing", () => {
   test.describe("with an accepted invitation", () => {
     test.use({
+      apiMeResponses: [
+        emptyApiMeResponse("e2e-invited-user"),
+        invitedApiMeResponse("e2e-invited-user"),
+      ],
       acceptedInvitations: [
         {
           id: "invitation-1",
-          tenantId: "e2e-workspace",
-          campaignId: "e2e-campaign",
+          tenantId: "invited-workspace",
+          campaignId: "invited-campaign",
           workspaceRole: "member",
           campaignRole: "player",
           status: "accepted",
@@ -526,7 +658,8 @@ test.describe("post-verification routing", () => {
       ],
     });
 
-    test("preserves the invitation hint and reaches invited welcome", async ({
+    test("preserves the invitation hint and reaches invited welcome without workspace onboarding", async ({
+      apiCallLog,
       page,
       request,
     }) => {
@@ -545,6 +678,7 @@ test.describe("post-verification routing", () => {
       await page.getByLabel("Confirm password", { exact: true }).fill(password);
       await page.getByRole("button", { name: "Create account" }).click();
       const oobCode = await getVerificationCode(request, email);
+      await startWorkspaceOnboardingObserver(page);
 
       expect(verificationRequestBody).toEqual({ invited: true });
       await page.goto(
@@ -554,6 +688,143 @@ test.describe("post-verification routing", () => {
         page.getByRole("heading", { name: "You have entered the dungeon" })
       ).toBeVisible({ timeout: 10_000 });
       await expect(page.getByText("Invitation accepted", { exact: true })).toBeVisible();
+      await expectWorkspaceOnboardingWasNeverRendered(page);
+      expect(apiCallLog.acceptPending).toHaveLength(1);
+      expect(apiCallLog.apiMe.length).toBeGreaterThanOrEqual(2);
+    });
+
+    test("does not duplicate pending invitation acceptance under Strict Mode", async ({
+      apiCallLog,
+      page,
+      request,
+    }) => {
+      await startWorkspaceOnboardingObserver(page);
+      await signInVerifiedInvitedUser(page, request);
+
+      await expect(
+        page.getByRole("heading", { name: "Create your workspace" })
+      ).toHaveCount(0);
+      await expect(page.getByRole("heading", { name: "You have entered the dungeon" }))
+        .toBeVisible({ timeout: 10_000 });
+      await expectWorkspaceOnboardingWasNeverRendered(page);
+      expect(apiCallLog.acceptPending).toHaveLength(1);
+    });
+  });
+
+  test.describe("when pending invitation acceptance is delayed", () => {
+    test.use({
+      apiMeResponses: [
+        emptyApiMeResponse("e2e-delayed-acceptance-user"),
+        invitedApiMeResponse("e2e-delayed-acceptance-user"),
+      ],
+      acceptPendingDelayMs: 600,
+      acceptedInvitations: [
+        {
+          id: "invitation-delayed-acceptance",
+          tenantId: "invited-workspace",
+          campaignId: "invited-campaign",
+          workspaceRole: "member",
+          campaignRole: "player",
+          status: "accepted",
+          acceptedAt: "2026-08-18T08:00:00.000Z",
+        },
+      ],
+    });
+
+    test("keeps delayed invitation acceptance behind the loading gate", async ({
+      apiCallLog,
+      page,
+      request,
+    }) => {
+      await startWorkspaceOnboardingObserver(page);
+      await signInVerifiedInvitedUser(page, request);
+
+      await expect(page.getByText("Loading access…", { exact: true })).toBeVisible();
+      await expect(
+        page.getByRole("heading", { name: "Create your workspace" })
+      ).toHaveCount(0);
+      await expect(page.getByRole("heading", { name: "You have entered the dungeon" }))
+        .toBeVisible({ timeout: 10_000 });
+      await expectWorkspaceOnboardingWasNeverRendered(page);
+      expect(apiCallLog.acceptPending).toHaveLength(1);
+    });
+  });
+
+  test.describe("when accepted invitation tenant refresh is delayed", () => {
+    test.use({
+      apiMeResponses: [
+        emptyApiMeResponse("e2e-delayed-refresh-user"),
+        invitedApiMeResponse("e2e-delayed-refresh-user"),
+      ],
+      apiMeDelaySequence: [0, 5_000, 0],
+      acceptedInvitations: [
+        {
+          id: "invitation-delayed-refresh",
+          tenantId: "invited-workspace",
+          campaignId: "invited-campaign",
+          workspaceRole: "member",
+          campaignRole: "player",
+          status: "accepted",
+          acceptedAt: "2026-08-18T08:00:00.000Z",
+        },
+      ],
+    });
+
+    test("keeps delayed membership refresh from rendering workspace onboarding", async ({
+      apiCallLog,
+      page,
+      request,
+    }) => {
+      const email = generatedEmail();
+      await createVerifiedUser(request, email, password);
+      await startWorkspaceOnboardingObserver(page);
+      await page.goto("/?invited=true");
+      await page.getByRole("button", { name: "Continue with email" }).click();
+      await page.getByLabel("Email address").fill(email);
+      await page.getByLabel("Password", { exact: true }).fill(password);
+
+      const signIn = page.getByRole("button", { name: "Sign in", exact: true }).click();
+      await expect(
+        page.getByRole("heading", { name: "Create your workspace" })
+      ).toHaveCount(0);
+      await signIn;
+      await expect(page.getByRole("heading", { name: "You have entered the dungeon" }))
+        .toBeVisible({ timeout: 10_000 });
+      await expectWorkspaceOnboardingWasNeverRendered(page);
+      expect(apiCallLog.acceptPending).toHaveLength(1);
+      expect(apiCallLog.apiMe.length).toBeGreaterThanOrEqual(2);
+    });
+  });
+
+  test.describe("when invitation acceptance fails", () => {
+    test.use({
+      apiMeResponse: emptyApiMeResponse("e2e-invitation-failure-user"),
+      acceptPendingStatus: 500,
+      expectedConsoleErrors: [
+        "Failed to load resource",
+        "[InvitationAcceptanceBridge] Failed to accept pending invitations",
+      ],
+    });
+
+    test("shows a recoverable access gate without protected data", async ({
+      page,
+      request,
+    }) => {
+      await signInVerifiedInvitedUser(page, request);
+
+      await expect(
+        page.getByText("Account setup unavailable", { exact: true })
+      ).toBeVisible();
+      await expect(page.getByRole("button", { name: "Try again" })).toBeVisible();
+      await expect(
+        page.getByRole("button", { name: "Use a different account" })
+      ).toBeVisible();
+      await expect(
+        page.getByRole("heading", { name: "Create your workspace" })
+      ).toHaveCount(0);
+      await expect(page.locator("body")).not.toContainText("Invited Workspace");
+      await expect(page.locator("body")).not.toContainText("Invited Campaign");
+      await expect(page.locator("body")).not.toContainText(/GM-only/i);
     });
   });
 

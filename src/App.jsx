@@ -28,7 +28,7 @@ import BootstrapCampaign from "./pages/BootstrapCampaign.jsx";
 import { useAuth } from "./context/AuthContext.jsx";
 import { useTenant } from "./context/TenantContext.jsx";
 import { useCampaign } from "./context/CampaignContext.jsx";
-import AppProviders from "./context/AppProviders.jsx";
+import AppProviders, { useAccessResolution } from "./context/AppProviders.jsx";
 import { features } from "./config/features";
 import React from "react";
 import Welcome from "./pages/Welcome";
@@ -64,6 +64,7 @@ function AppGate() {
   } = useAuth();
   const tenantContext = useTenant();
   const campaignContext = useCampaign();
+  const { accessResolutionStatus, retryAccessResolution } = useAccessResolution();
 
   if (window.location.pathname === "/auth/verify-email") {
     return (
@@ -119,7 +120,23 @@ function AppGate() {
   }
 
   if (tenantStatus === "error") {
-    return <IdentityProvisioningErrorScreen onRetry={refreshTenants} />;
+    return <IdentityProvisioningErrorScreen onRetry={refreshTenants} onLogout={logout} />;
+  }
+
+  if (accessResolutionStatus === "error") {
+    return (
+      <IdentityProvisioningErrorScreen
+        onRetry={retryAccessResolution}
+        onLogout={logout}
+      />
+    );
+  }
+
+  if (
+    accessResolutionStatus === "resolving" ||
+    accessResolutionStatus === "refreshingMemberships"
+  ) {
+    return <LoadingScreen label="Loading access…" />;
   }
 
   if (tenantStatus === "empty") {
@@ -248,16 +265,23 @@ function LoadingScreen({ label }) {
   );
 }
 
-function IdentityProvisioningErrorScreen({ onRetry }) {
+function IdentityProvisioningErrorScreen({ onRetry, onLogout }) {
   return (
     <div style={{ padding: 24 }}>
       <div style={{ fontSize: 18, fontWeight: 600 }}>Account setup unavailable</div>
       <div style={{ opacity: 0.7, marginTop: 8 }}>
         We could not finish setting up your account. Try again before continuing.
       </div>
-      <button type="button" onClick={onRetry} style={{ marginTop: 16 }}>
-        Try again
-      </button>
+      <div style={{ display: "flex", gap: 12, marginTop: 16 }}>
+        <button type="button" onClick={onRetry}>
+          Try again
+        </button>
+        {onLogout && (
+          <button type="button" onClick={onLogout}>
+            Use a different account
+          </button>
+        )}
+      </div>
     </div>
   );
 }
