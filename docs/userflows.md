@@ -3,6 +3,9 @@
 > Intended UX contract. Verify implemented routing, authentication, and
 > persistence against `docs/product/CURRENT_STATE.md` and
 > `docs/architecture/SYSTEM_OVERVIEW.md`.
+>
+> Arcs, Quests, and Conditions flows in this document are future intended-state
+> references. Their former mock-backed pages are not mounted or visible.
 
 This document describes **all user journeys** in Dopamine Dungeon — both happy and unhappy paths.
 Every flow begins with **App Open** and builds on shared system guarantees.
@@ -742,10 +745,9 @@ GM can:
 5. GM navigates freely between:
    - **Sessions** (upcoming / past)
    - **NPCs**
-   - **Arcs**
    - **Maps**
    - **Items**
-   - **Conditions**
+   - **Lore**
 
 6. GM opens relevant entities in **view mode by default**.
 7. GM selectively enters **edit mode** where needed.
@@ -763,7 +765,6 @@ GM can:
 11. GM may:
     - reference NPCs
     - check Maps
-    - inspect Conditions
     - review linked entities and cross-links
 
 12. GM switches between entities without losing session context.
@@ -774,7 +775,6 @@ GM can:
 
 13. GM updates:
     - session summary
-    - new conditions
     - item changes
     - cross-link changes
 14. GM saves changes.

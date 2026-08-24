@@ -1139,6 +1139,48 @@ test("@smoke keeps authentication independent from player and GM mode", async ({
   await expect(page.getByText("Player mode", { exact: true }).first()).toBeVisible();
 });
 
+test("keeps retired feature and placeholder controls out of authenticated navigation", async ({
+  page,
+  request,
+}) => {
+  const email = generatedEmail();
+  await createVerifiedUser(request, email, password);
+
+  await openEmailSignIn(page);
+  await page.getByLabel("Email address").fill(email);
+  await page.getByLabel("Password", { exact: true }).fill(password);
+  await page.getByRole("button", { name: "Sign in", exact: true }).click();
+  await expect(page.getByRole("heading", { name: "E2E Campaign" })).toBeVisible();
+
+  await expect(page.getByRole("link", { name: "Sessions", exact: true })).toBeVisible();
+  await expect(page.getByRole("link", { name: "Items", exact: true })).toBeVisible();
+  await expect(page.getByRole("link", { name: "NPCs", exact: true })).toBeVisible();
+  await expect(page.getByRole("link", { name: "PCs", exact: true })).toBeVisible();
+  await expect(page.getByRole("link", { name: "Locations", exact: true })).toBeVisible();
+  await expect(page.getByRole("link", { name: "Lore", exact: true })).toBeVisible();
+  await expect(
+    page.getByRole("link", { name: "Campaign Settings", exact: true })
+  ).toBeVisible();
+
+  await expect(page.getByRole("link", { name: "Arcs", exact: true })).toHaveCount(0);
+  await expect(page.getByRole("link", { name: "Quests", exact: true })).toHaveCount(0);
+  await expect(page.getByRole("link", { name: "Conditions", exact: true })).toHaveCount(0);
+  await expect(page.locator("header input")).toHaveCount(0);
+  await expect(page.locator("header button")).toHaveCount(3);
+
+  for (const retiredPath of [
+    "/arcs",
+    "/arcs/retired-arc",
+    "/quests",
+    "/quests/retired-quest",
+    "/conditions",
+    "/conditions/retired-condition",
+  ]) {
+    await page.goto(retiredPath);
+    await expect(page.getByText("Not Found", { exact: true })).toBeVisible();
+  }
+});
+
 test("shows a generic error for incorrect credentials", async ({ page }) => {
   const email = generatedEmail();
 

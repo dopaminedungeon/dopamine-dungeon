@@ -26,6 +26,7 @@ Maintainer: Magda
 - Campaign membership and invitations
 - Existing GM/player mode behaviour
 - Lore, Locations, NPCs
+- Typed entity links between active campaign entities
 
 Verify this list against the repository before relying on it.
 
@@ -33,14 +34,18 @@ Verify this list against the repository before relying on it.
 
 - Transitional upload of Location files
 - Non-persistent Campaign metadata
-- Placeholder links in multiple elements
-- Search engine
+- Dashboard status signals are static guidance rather than activity-derived data
+- Global search is not implemented and no global search control is exposed
 - Friendship Index concepts (future; not implemented)
 
 The former standalone Relationships page and profile are retired. Relationship-
 like behavior remains available through typed entity cross-links, while future
 Friendship Index work will cover intentional PC-NPC and NPC-NPC relationship
 behavior.
+
+The former mock-backed Arcs, Quests, and Conditions screens are also retired.
+Their typed entity-link endpoints and allowed labels remain infrastructure for
+future, separately approved work.
 
 ## Current architecture risks
 

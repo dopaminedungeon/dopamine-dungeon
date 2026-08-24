@@ -1,3 +1,6 @@
+> Intended-state reference only. The mock-backed Quests pages are retired and
+> not mounted; the Quest entity-link type remains reserved infrastructure.
+
 ```mermaid
 ---
 config:

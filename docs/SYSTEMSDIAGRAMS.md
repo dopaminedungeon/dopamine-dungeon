@@ -12,6 +12,11 @@ intended UI behavior for Dopamine Dungeon:
 
 > Diagrams are designed visually (MermaidChart) and committed as Markdown so GitHub can render them.
 
+> **Current-state boundary:** Arcs, Quests, and Conditions diagrams are retained
+> as intended-state references only. Their former mock-backed routes and pages
+> were retired by #319. Use `product/FEATURE_SURFACE_AUDIT.md`, Current State,
+> code, schema, and API handlers for the implemented surface.
+
 ---
 
 ## Folder structure (source of truth)

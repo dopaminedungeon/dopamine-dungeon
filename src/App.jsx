@@ -13,12 +13,6 @@ import MapProfile from "./pages/MapProfile";
 import Settings from "./pages/Settings";
 import Lore from "./pages/Lore";
 import LoreProfile from "./pages/LoreProfile";
-import Arcs from "./pages/Arcs";
-import ArcProfile from "./pages/ArcProfile";
-import Quests from "./pages/Quests.jsx";
-import QuestProfile from "./pages/QuestProfile.jsx";
-import Conditions from "./pages/Conditions";
-import ConditionProfile from "./pages/ConditionProfile";
 import PCs from "./pages/PCs";
 import PCProfile from "./pages/PCProfile";
 import BagOfHolding from "./pages/BagOfHolding";
@@ -195,7 +189,6 @@ function AppGate() {
           </>
         )}
 
-        {/* Future modules (kept for later toggles) */}
         {features.npcs && (
           <>
             <Route path="/npcs" element={<Npcs />} />
@@ -214,27 +207,6 @@ function AppGate() {
           <>
             <Route path="/lore" element={<Lore />} />
             <Route path="/lore/:id" element={<LoreProfile />} />
-          </>
-        )}
-
-        {features.arcs && (
-          <>
-            <Route path="/arcs" element={<Arcs />} />
-            <Route path="/arcs/:id" element={<ArcProfile />} />
-          </>
-        )}
-
-        {features.quests && (
-          <>
-            <Route path="/quests" element={<Quests />} />
-            <Route path="/quests/:id" element={<QuestProfile />} />
-          </>
-        )}
-
-        {features.conditions && (
-          <>
-            <Route path="/conditions" element={<Conditions />} />
-            <Route path="/conditions/:id" element={<ConditionProfile />} />
           </>
         )}
 
@@ -260,9 +232,6 @@ function LoadingScreen({ label }) {
   return (
     <div style={{ padding: 24 }}>
       <div style={{ fontSize: 18, fontWeight: 600 }}>{label}</div>
-      <div style={{ opacity: 0.7, marginTop: 8 }}>
-        (Temporary gate screen — we’ll replace this with proper pages + styling.)
-      </div>
     </div>
   );
 }

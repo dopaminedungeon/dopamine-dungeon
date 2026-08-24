@@ -1,3 +1,6 @@
+> Intended-state reference only. The mock-backed Conditions pages are retired
+> and not mounted; the Condition entity-link type remains reserved infrastructure.
+
 ```mermaid
 ---
 config:

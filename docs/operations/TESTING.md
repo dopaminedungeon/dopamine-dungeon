@@ -250,9 +250,13 @@ smoke failure is visible and must be reported, but does not make the quality
 gate job red. A failure in any blocking step makes the job red; later steps
 still run so one failure does not hide other useful results.
 
-The workflow writes one concise run summary to the GitHub step summary and
-does not create PR comments. The DD AI review workflow updates its existing
-marked comment instead of creating a new comment on every run.
+The workflow writes one concise run summary to the GitHub step summary. For
+pull-request runs, it also updates one marked DD Quality Gate comment with
+separate Blocking and Advisory sections and a link to the workflow run. Reruns
+update that comment instead of creating repeated comments. Comment publication
+is non-blocking and does not change the job's test-layer or required-check
+semantics. The DD AI review workflow follows the same one-comment update model
+for its separate advisory feedback.
 
 Branch and release policy, required-check configuration, lint cleanup, and
 build-signal decisions are maintained in
