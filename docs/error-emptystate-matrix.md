@@ -1,5 +1,9 @@
 # 🚨 Error & Empty State Matrix — Canonical UX Contract
 
+> Canonical for intended UX behavior, not proof that every state is
+> implemented. Current implementation gaps are recorded in
+> `docs/product/CURRENT_STATE.md`.
+
 > Purpose: define **every blocking, recoverable, and empty scenario** in the app  
 > so that errors are:
 > - predictable
@@ -213,7 +217,7 @@ This document is **authoritative** for:
 
 ### Network Failure During Entity Fetch
 **Scenario**
-- Firestore timeout
+- application data service timeout
 - Offline
 - Temporary backend issue
 

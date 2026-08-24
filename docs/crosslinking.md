@@ -262,7 +262,8 @@ If a link exists, it is meaningful.
 - Each allowed entity pair has a **restricted label set**
 - Labels describe **function**, not flavor
 - UI wording may adapt per entity (e.g. “Appears in” vs “Includes”)
-- Labels are stable identifiers (safe for Firebase + filtering)
+- Labels are stable identifiers (safe for persisted filtering independent of
+  storage implementation)
 
 ---
 

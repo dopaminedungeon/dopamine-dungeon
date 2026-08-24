@@ -10,8 +10,9 @@ Dopamine Dungeon is migrating application data from Firestore to Neon PostgreSQL
 
 Neon PostgreSQL is the intended primary application database.
 
-However, some existing application paths still use Firestore, including some
-workspace and campaign bootstrap logic and legacy repositories.
+However, some existing application paths still use Firestore, including
+workspace bootstrap, selected membership and invitation flows, settings, mail
+delivery, and legacy user or character-assignment repositories.
 
 This creates a transitional state where different parts of the application may
 persist data in different systems.
@@ -29,6 +30,15 @@ explicit architecture decision approves it.
 
 Before changing a feature, developers and agents must inspect its actual
 persistence path rather than assuming it already uses PostgreSQL.
+
+## Current implementation audit
+
+Core campaign entity repositories for sessions, items, inventory, NPCs,
+locations, lore, quests, PCs, and typed entity links use the API and Neon.
+Firebase Authentication remains the identity provider. Firestore is still
+used by the bootstrap and identity-adjacent paths listed above, and by
+migration tooling where it is an explicit source. This list is a current
+boundary, not permission to add new Firestore-backed features.
 
 ## Consequences
 
@@ -59,6 +69,8 @@ persistence path rather than assuming it already uses PostgreSQL.
 - Keep Firebase Authentication separate from application-data persistence.
 - Document migrated and non-migrated modules in CURRENT_STATE.md.
 - Treat cross-database behaviour as high risk.
+- Re-check `docs/architecture/SYSTEM_OVERVIEW.md` when a module is migrated so
+  the ownership boundary stays canonical.
 
 ## Revisit when
 

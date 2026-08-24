@@ -39,6 +39,30 @@ Each ADR must use one of these statuses:
 
 A superseded ADR should remain in the repository and link to the newer decision.
 
+Each ADR also has an audit classification describing its relationship to the
+current repository:
+
+- Current
+- Partially implemented
+- Proposed
+- Obsolete
+- Contradicted
+
+Status describes the decision lifecycle; classification describes whether the
+repository implements it today. Do not mark a decision superseded merely
+because its migration is incomplete.
+
+## Index
+
+| ADR | Status | Classification | Summary |
+|---|---|---|---|
+| [0001](0001-neon-as-primary-database.md) | Accepted | Partially implemented | Neon is primary for core relational campaign data; transitional Firestore paths remain. |
+| [0002](0002-dev-main-deployment-flow.md) | Accepted | Current | Feature -> `dev` -> `main`, with lightweight release and hotfix exceptions. |
+| [0003](0003-transitional-firestore-postgres-persistence.md) | Accepted | Current | Explicit Firestore/Neon ownership and migration constraints. |
+| [0004](0004-firebase-identity-and-email-verification.md) | Proposed | Proposed | Iteration 3/#256 direction for verification UX and identity reconciliation; not current behavior. |
+| [0005](0005-vercel-runtime-and-isolated-auth-testing.md) | Accepted | Current | Full-stack Vercel runtime and fail-closed emulator test boundary. |
+| [0006](0006-canonical-workspace-and-campaign-creation.md) | Proposed | Proposed | Resolve the split Firestore bootstrap and Neon read/write path. |
+
 ## Template
 
 ```

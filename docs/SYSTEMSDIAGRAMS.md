@@ -1,11 +1,12 @@
-# Dopamine Dungeon — System Diagrams (TO-BE)
+# Dopamine Dungeon - System Diagrams
 
-This folder contains **Mermaid diagrams** documenting the **intended (TO-BE) architecture** of Dopamine Dungeon:
+This folder contains **Mermaid diagrams** documenting current contracts and
+intended UI behavior for Dopamine Dungeon:
 - navigation & routing
 - guards (auth / tenant / campaign / role / mode)
 - page flows + profile flows
 - permissions
-- data ownership (Firestore)
+- context and persistence boundaries
 - error & empty state behaviour
 - multitenant / multirole foundational rules
 
@@ -66,8 +67,9 @@ Key entry points:
 ---
 
 ### Data layer
-- **Data Ownership Map (Firestore)** (scope, ownership, reads/writes, write paths, open decisions)  
-  `dataownership-map.md`
+- **System Overview** (current persistence ownership, identity, authorization,
+  environments, and repository boundaries)
+  `architecture/SYSTEM_OVERVIEW.md`
 
 ---
 
@@ -158,8 +160,10 @@ Key entry points:
 
 ## Diagram philosophy (why these exist)
 
-- Diagrams represent **TO-BE behavior** (how the system should work).
-- “AS-IS” is compared against these diagrams to derive refactors + user stories.
+- Diagrams represent current contracts or explicitly labeled intended behavior.
+- Runtime persistence ownership is defined by
+  `architecture/SYSTEM_OVERVIEW.md` and ADR 0003, not by an individual page
+  flow diagram.
 - Contexts (`[CTX]`) represent state + side effects, not UI.
 - Gates (`[G]`) represent explicit yes/no decisions enforced before render/fetch.
 - Master Flow embeds selected page/profile subgraphs so we can reason end-to-end.

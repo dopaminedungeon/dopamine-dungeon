@@ -1,5 +1,9 @@
 # User Flows
 
+> Intended UX contract. Verify implemented routing, authentication, and
+> persistence against `docs/product/CURRENT_STATE.md` and
+> `docs/architecture/SYSTEM_OVERVIEW.md`.
+
 This document describes **all user journeys** in Dopamine Dungeon — both happy and unhappy paths.
 Every flow begins with **App Open** and builds on shared system guarantees.
 
@@ -126,7 +130,7 @@ Recovery:
 ### Unhappy Path — Network / Backend Failure During Entry
 
 Examples:
-- Firestore unavailable
+- application data service unavailable
 - Network offline
 - Timeout during campaign fetch
 

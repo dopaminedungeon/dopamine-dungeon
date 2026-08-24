@@ -49,6 +49,13 @@ Production releases must:
 4. verify the production deployment;
 5. retain a rollback path.
 
+When stabilization is needed, a short-lived `release/vX.Y` branch may be cut
+from `dev` for release validation. Release-only fixes return to `dev` after
+promotion. An urgent production fix may branch from `main`, be reviewed and
+released there, and must then be backported to `dev`. These are lightweight
+exceptions, not a full GitFlow process; the operational settings and check
+matrix are maintained in `docs/operations/REPOSITORY_POLICY.md`.
+
 ## Alternatives considered
 
 ### Develop directly on `main`
@@ -105,6 +112,7 @@ overhead disproportionate to the size of the project.
 - Direct pushes to `main` should be prevented where repository settings allow.
 - Production secrets must not be exposed to coding agents.
 - Hotfixes must be reconciled back into `dev`.
+- Release branches must be short-lived and deleted after promotion.
 
 ## Revisit when
 
