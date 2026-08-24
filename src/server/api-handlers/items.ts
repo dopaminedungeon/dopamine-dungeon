@@ -9,6 +9,11 @@ import {
 } from "../access.js";
 import { setCorsHeaders } from "../cors.js";
 import { db } from "../db.js";
+import {
+  itemReadWhere,
+  stripGmOnlyItemFields,
+} from "../security-boundaries.js";
+import { canViewAsGm } from "../viewer-mode.js";
 import { items } from "../../../db/schema/items.js";
 
 type ItemRow = typeof items.$inferSelect;
@@ -24,17 +29,6 @@ function normalizeString(value: unknown, fallback = "") {
 function normalizeNumber(value: unknown, fallback = 0) {
   const parsed = Number(value);
   return Number.isFinite(parsed) ? parsed : fallback;
-}
-
-function stripGmOnlyItemFields(data: Record<string, unknown>) {
-  const { gmNotes, hiddenEffects, curse, upgradePath, storyHooks, ...safeData } =
-    data;
-  void gmNotes;
-  void hiddenEffects;
-  void curse;
-  void upgradePath;
-  void storyHooks;
-  return safeData;
 }
 
 function toItemPayload(row: ItemRow, isGm: boolean) {
@@ -112,14 +106,13 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         campaignId: campaign.id,
         userId: currentUser.id,
       });
-      const isGm = membership.role === "gm";
+      const isGm = canViewAsGm(req, membership.role);
 
-      const visibilityFilter = isGm
-        ? eq(items.campaignId, campaign.id)
-        : and(eq(items.campaignId, campaign.id), eq(items.visibility, "public"));
-      const whereClause = itemId
-        ? and(visibilityFilter, eq(items.id, itemId))
-        : visibilityFilter;
+      const whereClause = itemReadWhere(items, {
+        campaignId: campaign.id,
+        itemId,
+        isGm,
+      });
 
       const rows = await db.select().from(items).where(whereClause);
 

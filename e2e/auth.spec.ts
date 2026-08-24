@@ -439,7 +439,7 @@ test("keeps password visibility toggles independent and keyboard accessible", as
   await expectStableAuthLayout(page, { min: 357, max: 359 });
 });
 
-test("registers a password user, blocks access, and completes emulator verification", async ({
+test("@smoke registers a password user, blocks access, and completes emulator verification", async ({
   page,
   request,
 }) => {
@@ -542,7 +542,7 @@ test.describe("verified user identity provisioning", () => {
   });
 });
 
-test("keeps authentication independent from player and GM mode", async ({ page, request }) => {
+test("@smoke keeps authentication independent from player and GM mode", async ({ page, request }) => {
   const email = generatedEmail();
   await createVerifiedUser(request, email, password);
 
@@ -574,7 +574,7 @@ test("shows a generic error for incorrect credentials", async ({ page }) => {
   await expect(page.getByRole("alert")).not.toContainText(/not found|does not exist/i);
 });
 
-test("signs out and keeps protected routes behind authentication", async ({ page, request }) => {
+test("@smoke signs out and keeps protected routes behind authentication", async ({ page, request }) => {
   const email = generatedEmail();
   await createVerifiedUser(request, email, password);
 

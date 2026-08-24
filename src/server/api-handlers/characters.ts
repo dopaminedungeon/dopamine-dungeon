@@ -9,6 +9,7 @@ import {
 } from "../access.js";
 import { setCorsHeaders } from "../cors.js";
 import { db } from "../db.js";
+import { canViewAsGm } from "../viewer-mode.js";
 import { characters } from "../../../db/schema/characters.js";
 import { characterAssignments } from "../../../db/schema/characterAssignments.js";
 import { invitations } from "../../../db/schema/invitations.js";
@@ -144,7 +145,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         campaignId: campaign.id,
         userId: currentUser.id,
       });
-      const isGm = membership.role === "gm";
+      const isGm = canViewAsGm(req, membership.role);
 
       const visibilityFilter = isGm
         ? eq(characters.campaignId, campaign.id)
