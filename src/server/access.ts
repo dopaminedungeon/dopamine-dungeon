@@ -29,7 +29,12 @@ export async function getCurrentUser(req: VercelRequest): Promise<CurrentUser> {
       ? decodedToken.name.trim()
       : null;
 
-  return provisionUserIdentity(db, { firebaseUid, email, displayName });
+  return provisionUserIdentity(db, {
+    firebaseUid,
+    email,
+    displayName,
+    emailVerifiedAt: decodedToken.email_verified === true ? new Date() : null,
+  });
 }
 
 export async function resolveWorkspaceByAppId(

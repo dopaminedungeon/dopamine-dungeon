@@ -27,6 +27,16 @@ type ApiOptions = RequestInit & {
   skipAuth?: boolean;
 };
 
+export class ApiRequestError extends Error {
+  status: number;
+
+  constructor(message: string, status: number) {
+    super(message);
+    this.name = "ApiRequestError";
+    this.status = status;
+  }
+}
+
 async function waitForAuthUser() {
   if (auth.currentUser) {
     return auth.currentUser;
@@ -121,7 +131,7 @@ export async function apiFetch<T>(path: string, options: ApiOptions = {}): Promi
       errorMessage = responseBody.error;
     }
 
-    throw new Error(errorMessage);
+    throw new ApiRequestError(errorMessage, response.status);
   }
 
   return responseBody as T;
@@ -136,6 +146,13 @@ export async function getApiMe() {
     campaigns: unknown[];
     campaignMemberships: unknown[];
   }>("/api/me");
+}
+
+export async function requestVerificationEmail(invited: boolean) {
+  return apiFetch<{ ok: true }>("/api/auth/send-verification-email", {
+    method: "POST",
+    body: JSON.stringify({ invited }),
+  });
 }
 
 export async function createApiInvitation(input: {

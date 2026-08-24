@@ -29,7 +29,7 @@ const app = authRuntime.useAuthEmulator
 export const adminAuth = getAuth(app);
 export const adminDb = getFirestore(app);
 
-export async function verifyAuthHeader(authHeader?: string) {
+export async function verifyFirebaseToken(authHeader?: string) {
   if (!authHeader || !authHeader.startsWith("Bearer ")) {
     throw new AuthenticationError("Missing or invalid Authorization header");
   }
@@ -43,10 +43,13 @@ export async function verifyAuthHeader(authHeader?: string) {
     throw new AuthenticationError("Invalid authentication token");
   }
 
-  if (
-    decodedToken.firebase?.sign_in_provider === "password" &&
-    decodedToken.email_verified !== true
-  ) {
+  return decodedToken;
+}
+
+export async function verifyAuthHeader(authHeader?: string) {
+  const decodedToken = await verifyFirebaseToken(authHeader);
+
+  if (decodedToken.email_verified !== true) {
     throw new AuthenticationError("Email verification required");
   }
 

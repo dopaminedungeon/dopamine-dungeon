@@ -139,6 +139,22 @@ A release containing a migration must document:
 
 Do not apply destructive production migrations automatically.
 
+### Email verification migration
+
+`0014_brief_mac_gargan.sql` adds the nullable `users.email_verified_at`
+timestamp. It is additive and preserves existing users, memberships, campaigns,
+roles, modes, preferences, and profile data.
+
+Apply this migration to the target Neon environment before deploying code that
+reconciles verified Firebase users. Verify by authenticating a Firebase-verified
+development user and confirming `/api/me` returns successfully and the matching
+Firebase UID row receives one timestamp. Repeated requests must preserve that
+original timestamp.
+
+Rollback is not normally required because the nullable column is backward
+compatible. Prefer a forward fix. Drop the column only after reverting all code
+that reads or writes `email_verified_at`; never delete or reassign user rows.
+
 ## Agent restrictions
 
 Coding agents may:

@@ -29,6 +29,13 @@ test("temporary service errors have a distinct non-identifying message", () => {
   );
 });
 
+test("verification rate limits provide a cooldown message", () => {
+  assert.equal(
+    getAuthErrorMessage({ status: 429 }, "verification"),
+    "Please wait before requesting another verification email."
+  );
+});
+
 test("registration errors do not reveal that an email is already registered", () => {
   assert.equal(
     getAuthErrorMessage({ code: "auth/email-already-in-use" }, "register"),

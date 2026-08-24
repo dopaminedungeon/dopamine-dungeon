@@ -1,6 +1,7 @@
 import { test as base, expect } from "@playwright/test";
 
 import { clearAuthEmulator } from "./auth-emulator";
+import { sendVerificationEmail } from "./auth-emulator";
 
 const workspaceId = "00000000-0000-4000-8000-000000000001";
 const campaignId = "00000000-0000-4000-8000-000000000002";
@@ -30,15 +31,50 @@ const defaultApiMeResponse = {
 
 type ApiMeResponse = typeof defaultApiMeResponse;
 
+async function wait(delayMs: number) {
+  if (delayMs > 0) {
+    await new Promise((resolve) => setTimeout(resolve, delayMs));
+  }
+}
+
 export const test = base.extend<{
   apiMeResponse: ApiMeResponse;
+  apiMeResponseAfterAcceptPending: ApiMeResponse | null;
+  apiMeResponses: ApiMeResponse[] | null;
   apiMeStatus: number;
+  apiMeDelayMs: number;
+  apiMeDelaySequence: number[] | null;
   consoleGuard: void;
   expectedConsoleErrors: string[];
+  apiCallLog: {
+    apiMe: string[];
+    acceptPending: string[];
+  };
+  acceptedInvitations: Array<{
+    id: string;
+    tenantId: string;
+    campaignId: string;
+    workspaceRole: string;
+    campaignRole: string;
+    status: string;
+    acceptedAt: string;
+  }>;
+  acceptPendingDelayMs: number;
+  acceptPendingStatus: number;
 }>({
   apiMeResponse: [defaultApiMeResponse, { option: true }],
+  apiMeResponseAfterAcceptPending: [null, { option: true }],
+  apiMeResponses: [null, { option: true }],
   apiMeStatus: [200, { option: true }],
+  apiMeDelayMs: [0, { option: true }],
+  apiMeDelaySequence: [null, { option: true }],
   expectedConsoleErrors: [[], { option: true }],
+  acceptedInvitations: [[], { option: true }],
+  acceptPendingDelayMs: [0, { option: true }],
+  acceptPendingStatus: [200, { option: true }],
+  apiCallLog: async ({}, use) => {
+    await use({ apiMe: [], acceptPending: [] });
+  },
   consoleGuard: [
     async ({ page, expectedConsoleErrors }, use) => {
       const errors: string[] = [];
@@ -74,8 +110,23 @@ export const test = base.extend<{
   ],
 });
 
-test.beforeEach(async ({ apiMeResponse, apiMeStatus, page, request }) => {
+test.beforeEach(async ({
+  acceptedInvitations,
+  acceptPendingDelayMs,
+  acceptPendingStatus,
+  apiCallLog,
+  apiMeDelayMs,
+  apiMeDelaySequence,
+  apiMeResponse,
+  apiMeResponseAfterAcceptPending,
+  apiMeResponses,
+  apiMeStatus,
+  page,
+  request,
+}) => {
   await clearAuthEmulator(request);
+  let apiMeCallCount = 0;
+  let acceptPendingCompleted = false;
 
   await page.route("http://127.0.0.1:4173/api/**", async (route) => {
     const requestUrl = new URL(route.request().url());
@@ -86,18 +137,47 @@ test.beforeEach(async ({ apiMeResponse, apiMeStatus, page, request }) => {
     expect(selectedMode).toMatch(/^(gm|player)$/);
 
     if (requestUrl.pathname === "/api/me") {
+      const callIndex = apiMeCallCount;
+      apiMeCallCount += 1;
+      apiCallLog.apiMe.push(requestUrl.pathname);
+      const delayMs = apiMeDelaySequence?.[callIndex] ?? apiMeDelayMs;
+      await wait(delayMs);
+      const response =
+        (acceptPendingCompleted && apiMeResponseAfterAcceptPending) ||
+        apiMeResponses?.[Math.min(callIndex, apiMeResponses.length - 1)] ||
+        apiMeResponse;
       await route.fulfill({
         status: apiMeStatus,
         json:
           apiMeStatus === 200
-            ? apiMeResponse
+            ? response
             : { ok: false, error: "Internal server error" },
       });
       return;
     }
 
+    if (requestUrl.pathname === "/api/auth/send-verification-email") {
+      await sendVerificationEmail(request, authorization!.slice("Bearer ".length));
+      await route.fulfill({ status: 202, json: { ok: true } });
+      return;
+    }
+
     if (requestUrl.pathname === "/api/invitations/accept-pending") {
-      await route.fulfill({ json: { ok: true, acceptedInvitations: [] } });
+      apiCallLog.acceptPending.push(requestUrl.pathname);
+      await wait(acceptPendingDelayMs);
+      const invitationsForRequest = acceptPendingCompleted
+        ? []
+        : acceptedInvitations;
+      if (acceptPendingStatus === 200) {
+        acceptPendingCompleted = true;
+      }
+      await route.fulfill({
+        status: acceptPendingStatus,
+        json:
+          acceptPendingStatus === 200
+            ? { ok: true, acceptedInvitations: invitationsForRequest }
+            : { ok: false, error: "Invitation acceptance unavailable" },
+      });
       return;
     }
 

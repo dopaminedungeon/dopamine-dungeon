@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { CheckCircle2, LoaderCircle, Mail } from "lucide-react";
 
 import { getAuthErrorMessage } from "../../auth/authMessages";
@@ -9,10 +9,22 @@ export default function VerificationScreen({
   onCheckVerification,
   onResendVerification,
   onLogout,
+  verificationEmailSentAt,
 }) {
   const [action, setAction] = useState("");
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
+  const [now, setNow] = useState(Date.now());
+  const cooldownSeconds = Math.max(
+    0,
+    Math.ceil(((verificationEmailSentAt ?? 0) + 60_000 - now) / 1000)
+  );
+
+  useEffect(() => {
+    if (cooldownSeconds <= 0) return undefined;
+    const timer = window.setInterval(() => setNow(Date.now()), 1000);
+    return () => window.clearInterval(timer);
+  }, [cooldownSeconds]);
 
   async function runAction(nextAction, callback) {
     setAction(nextAction);
@@ -71,10 +83,12 @@ export default function VerificationScreen({
           <button
             type="button"
             onClick={() => runAction("resend", onResendVerification)}
-            disabled={Boolean(action)}
+            disabled={Boolean(action) || cooldownSeconds > 0}
             className="mt-[16px] min-h-[56px] w-full rounded-md border border-zinc-700 bg-zinc-800 px-[24px] py-[14px] text-[clamp(16px,1.0625rem,22px)] font-semibold whitespace-nowrap text-white transition hover:border-zinc-500 hover:bg-zinc-700 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-purple-300 disabled:cursor-not-allowed disabled:opacity-60"
           >
-            Resend verification email
+            {cooldownSeconds > 0
+              ? `Resend available in ${cooldownSeconds}s`
+              : "Resend verification email"}
           </button>
           <button
             type="button"

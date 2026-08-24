@@ -72,6 +72,26 @@ Email-verification sender variables, branded verification routes, and related
 provider configuration are Iteration 3/#256 scope and are not current
 configuration requirements for #317.
 
+## Proposed #256 transactional email variables
+
+Verification email is queued through the existing Firebase Trigger Email
+extension and its `mail` collection. Configure the extension separately for
+each Firebase environment when #256 is deployed. The proposed implementation
+accepts these optional server-only sender overrides:
+
+```VERIFICATION_EMAIL_FROM```
+```VERIFICATION_EMAIL_FROM_NAME```
+```VERIFICATION_EMAIL_REPLY_TO```
+```VERIFICATION_EMAIL_REPLY_TO_NAME```
+```APP_ORIGIN```
+
+`VERIFICATION_EMAIL_FROM` must be a sender accepted by the configured mail
+transport. `APP_ORIGIN` fixes the public application origin used in verification
+links; when omitted, the API derives the origin from its own request host.
+When verification-specific sender variables are omitted, the existing
+`INVITE_EMAIL_*` sender configuration is reused.
+None of these variables may use the `VITE_` prefix when they contain secrets.
+
 ## Rules
 
 - Use development values locally.
