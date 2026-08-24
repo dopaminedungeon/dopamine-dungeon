@@ -1,0 +1,193 @@
+name: Create Iteration Closeout Task
+
+on:
+  workflow_dispatch:
+    inputs:
+      iteration_number:
+        description: Numeric Project iteration number, for example 3
+        required: true
+        type: string
+      iteration_name:
+        description: Current Project iteration name
+        required: true
+        type: string
+      dependencies:
+        description: "Major completion issues, for example #315, #316"
+        required: true
+        type: string
+      intended_outcome:
+        description: Concise intended outcome for the iteration
+        required: true
+        type: string
+
+permissions:
+  issues: write
+
+jobs:
+  create-closeout-task:
+    name: Create closeout task
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Create task unless the iteration already has one
+        uses: actions/github-script@v7
+        env:
+          ITERATION_NUMBER: ${{ inputs.iteration_number }}
+          ITERATION_NAME: ${{ inputs.iteration_name }}
+          DEPENDENCIES: ${{ inputs.dependencies }}
+          INTENDED_OUTCOME: ${{ inputs.intended_outcome }}
+        with:
+          script: |
+            const iterationNumber = process.env.ITERATION_NUMBER.trim();
+            const iterationName = process.env.ITERATION_NAME.trim();
+            const dependencies = process.env.DEPENDENCIES.trim();
+            const intendedOutcome = process.env.INTENDED_OUTCOME.trim();
+
+            if (!/^[1-9]\d*$/.test(iterationNumber)) {
+              core.setFailed("Iteration number must be a positive integer.");
+              return;
+            }
+
+            if (!iterationName || !dependencies || !intendedOutcome) {
+              core.setFailed("Iteration name, dependencies, and intended outcome are required.");
+              return;
+            }
+
+            const title = `[Task]: Iteration ${iterationNumber} retrospective and documentation update`;
+            const marker = `<!-- dd-iteration-closeout:${iterationNumber} -->`;
+            const issues = await github.paginate(github.rest.issues.listForRepo, {
+              ...context.repo,
+              state: "all",
+              per_page: 100,
+            });
+            const duplicate = issues.find(
+              (issue) =>
+                !issue.pull_request &&
+                (issue.body?.includes(marker) || issue.title.toLowerCase() === title.toLowerCase())
+            );
+
+            if (duplicate) {
+              const duplicateUrl = duplicate.html_url;
+              core.notice(`Closeout task already exists: #${duplicate.number} ${duplicateUrl}`);
+              await core.summary
+                .addHeading(`Iteration ${iterationNumber} closeout already exists`)
+                .addLink(`#${duplicate.number}: ${duplicate.title}`, duplicateUrl)
+                .write();
+              return;
+            }
+
+            const dependencyLines = dependencies
+              .split(/\r?\n|,\s*/)
+              .map((entry) => entry.trim())
+              .filter(Boolean)
+              .map((entry) => (entry.startsWith("- ") ? entry : `- ${entry}`))
+              .join("\n");
+
+            const body = `${marker}
+            ## Purpose
+
+            Close Iteration ${iterationNumber} deliberately after its major work is complete,
+            capture actionable learning, and reconcile canonical documentation with the final
+            repository and Project state.
+
+            ## Iteration
+
+            - Number: ${iterationNumber}
+            - Name: ${iterationName}
+            - Intended outcome: ${intendedOutcome}
+
+            ## Project metadata handoff
+
+            This workflow creates a repository issue only. After creation:
+
+            - add the issue to organization Project 1;
+            - set native Type to Task;
+            - set the matching Iteration field;
+            - set the appropriate Application Version field.
+
+            ## Dependencies
+
+            This task is blocked until the major iteration work below is complete:
+
+            ${dependencyLines}
+
+            Do not begin closeout while these dependencies are still changing the iteration's
+            architecture, workflow, or delivered behavior.
+
+            ## 1. Retrospective
+
+            Capture:
+
+            - what was delivered and whether the intended outcome was met;
+            - what went well;
+            - what caused friction or rework;
+            - which assumptions proved wrong;
+            - which temporary decisions were removed, retained, or deferred.
+
+            Keep this actionable rather than producing a diary of merged pull requests.
+
+            ## 2. Documentation reconciliation
+
+            Audit canonical documentation against the final repository state, including where
+            relevant:
+
+            - Current State and Roadmap;
+            - architecture, persistence, identity, authorization, and ADRs;
+            - testing, CI, branch, release, deployment, and environment guidance;
+            - iteration ownership and Project handoff.
+
+            Update, supersede, remove, or link stale documentation. Do not document proposed or
+            future behavior as current behavior.
+
+            ## 3. Deferred work and follow-ups
+
+            - Link existing focused issues for work that carries forward.
+            - Create a new focused issue only when no suitable issue exists.
+            - Do not implement newly discovered product work in this closeout task.
+
+            ## 4. Final iteration state and handoff
+
+            Record:
+
+            - the final delivered and architectural state;
+            - known remaining risks;
+            - deferred work;
+            - next-iteration inputs and ownership.
+
+            ## Acceptance criteria
+
+            - [ ] Major iteration dependencies are complete before closeout begins.
+            - [ ] The retrospective captures actionable lessons rather than a PR diary.
+            - [ ] Canonical documentation is reconciled with the final repository state.
+            - [ ] Contradictory or obsolete documentation is resolved explicitly.
+            - [ ] Deferred work is linked to focused issues or explicitly declined.
+            - [ ] The final iteration state and next-iteration handoff are recorded.
+            - [ ] Future or proposed behavior is not documented as current behavior.
+            - [ ] No product behavior is changed as part of closeout administration.
+
+            ## Constraints
+
+            - Keep the closeout proportionate to a primarily solo-developed project.
+            - Prefer canonical documents and links over duplicate summaries.
+            - Do not alter production data, deployment settings, branch protections, secrets,
+              schemas, migrations, or application behavior.
+            `
+              .split("\n")
+              .map((line) => line.replace(/^            /, ""))
+              .join("\n")
+              .trim();
+
+            const created = await github.rest.issues.create({
+              ...context.repo,
+              title,
+              body,
+            });
+            const createdIssue = created.data;
+
+            await core.summary
+              .addHeading(`Created Iteration ${iterationNumber} closeout`)
+              .addLink(`#${createdIssue.number}: ${createdIssue.title}`, createdIssue.html_url)
+              .addRaw(
+                "\n\nAdd the issue to organization Project 1, then set Type, Iteration, and Application Version manually."
+              )
+              .write();
