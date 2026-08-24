@@ -26,7 +26,6 @@ P_BLOCKED --> P_B1["Arcs / ArcProfile"]
 P_BLOCKED --> P_B2["CampaignSettings"]
 P_BLOCKED --> P_B3["Conditions / ConditionProfile"]
 P_BLOCKED --> P_B4["Quests / QuestProfile"]
-P_BLOCKED --> P_B5["Relationships / RelationshipProfile"]
 
 P_PAGES --> P_EDGE["[S] Player-specific edge cases"]
 P_EDGE --> P_E1["PCs > Characters tab:</br>0 assigned → message</br>1 assigned → auto-load profile</br>>1 assigned → cards list"]
@@ -38,10 +37,10 @@ direction TB
 
 G_NAV["[N] Sidebar shows:</br>ALL Player pages + GM-only pages"] --> G_PAGES
 
-G_PAGES["[P] Allowed pages (GM)"] --> G_ALLOWED_LIST["Everything Player can access</br>+</br>Arcs / ArcProfile</br>CampaignSettings</br>Conditions / ConditionProfile</br>Quests / QuestProfile</br>Relationships / RelationshipProfile"]
+G_PAGES["[P] Allowed pages (GM)"] --> G_ALLOWED_LIST["Everything Player can access</br>+</br>Arcs / ArcProfile</br>CampaignSettings</br>Conditions / ConditionProfile</br>Quests / QuestProfile"]
 
 G_PAGES --> G_ACTIONS["[A] Allowed actions (GM)"]
-G_ACTIONS --> G_ACT1["Create / edit GM content (Arcs, Quests, Relationships, Conditions)"]
+G_ACTIONS --> G_ACT1["Create / edit GM content (Arcs, Quests, Conditions)"]
 G_ACTIONS --> G_ACT2["PC management:</br>Create PC, edit, assign PC to player"]
 G_ACTIONS --> G_ACT3["Assign items to PC/player</br>+ manage Bag of Holding"]
 G_ACTIONS --> G_ACT4["Mode toggle available:</br>GM ↔ Player preview"]

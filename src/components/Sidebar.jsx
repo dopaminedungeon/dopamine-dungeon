@@ -5,11 +5,9 @@ import {
   Users,
   Drama,
   Package,
-  ScrollText,
   BookOpen,
   Map,
   ListTodo,
-  Network,
   Sparkles,
   Settings,
 } from "lucide-react";
@@ -46,9 +44,6 @@ export default function Sidebar() {
     { to: "/", icon: LayoutDashboard, label: "Home", on: features.dashboard },
     { to: "/sessions", icon: BookOpen, label: "Sessions", on: features.sessions },
     { to: "/items", icon: Package, label: "Items", on: features.items },
-    // Bag is accessed via /pcs/bag today, but we expose it as a first-class nav item.
-    { to: "/bag", icon: ScrollText, label: "Bag of Holding", on: features.bagOfHolding },
-
     // Future modules (kept here for when you flip flags back on)
     { to: "/npcs", icon: Drama, label: "NPCs", on: features.npcs },
     { to: "/pcs", icon: Users, label: "PCs", on: features.pcs },
@@ -61,7 +56,6 @@ export default function Sidebar() {
     isGM
       ? [
           { to: "/quests", icon: ListTodo, label: "Quests", on: features.quests },
-          { to: "/relationships", icon: Network, label: "Relationships", on: features.relationships },
           { to: "/conditions", icon: Sparkles, label: "Conditions", on: features.conditions },
           { to: "/campaigns/settings", icon: Settings, label: "Campaign Settings", on: true },
         ].filter((x) => x.on)

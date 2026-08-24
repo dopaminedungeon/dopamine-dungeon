@@ -8,6 +8,9 @@ Owner: Magda
 
 Dopamine Dungeon is deployed through Vercel.
 
+Repository branch, CI gate, release-branch, and hotfix policy is maintained in
+[`REPOSITORY_POLICY.md`](./REPOSITORY_POLICY.md).
+
 ## Branch responsibilities
 
 ### Feature branches

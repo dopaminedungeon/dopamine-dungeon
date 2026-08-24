@@ -5,8 +5,6 @@ import { Shield, Eye } from "lucide-react";
 import { useCampaign } from "../context/CampaignContext.jsx";
 import { useTenant } from "../context/TenantContext.jsx";
 import { useAuth } from "../context/AuthContext.jsx";
-import DebugPanel from "./DebugPanel";
-import { features } from "../config/features";
 import { Link, useNavigate } from "react-router-dom";
 
 export default function TopBar({ title }) {
@@ -303,29 +301,6 @@ export default function TopBar({ title }) {
           </div>
         </div>
       </div>
-      {features.debugPanel && (
-        <div className="px-8 pb-4">
-          <DebugPanel
-            context={{
-              mode,
-              activeTenantId: selectedTenantId,
-              activeCampaignId: selectedCampaignId,
-              tenantsCount: tenants.length,
-              campaignsCount: campaigns.length,
-              tenantsSource: accessibleTenants
-                ? "accessibleTenants"
-                : legacyTenants
-                  ? "legacyTenants"
-                  : "none",
-              campaignsSource: accessibleCampaigns
-                ? "accessibleCampaigns"
-                : legacyCampaigns
-                  ? "legacyCampaigns"
-                  : "none",
-            }}
-          />
-        </div>
-      )}
     </header>
   );
 }

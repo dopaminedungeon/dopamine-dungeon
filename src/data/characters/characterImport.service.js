@@ -56,7 +56,7 @@ function extractClassLine(fields, rawText = "") {
     const fuzzy = findFieldByIncludes(fields, "class level");
     if (fuzzy) return fuzzy;
 
-    const rawMatch = String(rawText || "").match(/(?:CLASS\s*&\s*LEVEL|CLASS\s+LEVEL)\s+([A-Za-z][A-Za-z'\- ]+\d+)/i);
+    const rawMatch = String(rawText || "").match(/(?:CLASS\s*&\s*LEVEL|CLASS\s+LEVEL)\s+([A-Za-z][A-Za-z' -]+\d+)/i);
     if (rawMatch?.[1]) {
         return rawMatch[1].trim();
     }
@@ -71,9 +71,9 @@ function extractClassLineFromFieldsOrText(fields, rawText = "") {
     const normalizedText = String(rawText || "").replace(/\s+/g, " ").trim();
 
     const candidates = [
-        /CharacterName\s*[:\-]?\s*[^\n]+?\s+CLASS LEVEL\s*[:\-]?\s*([A-Za-z][A-Za-z'\- ]+\d+)/i,
-        /CLASS LEVEL\s*[:\-]?\s*([A-Za-z][A-Za-z'\- ]+\d+)/i,
-        /CLASS\s*&\s*LEVEL\s+PLAYER NAME\s+CHARACTER NAME\s+BACKGROUND.*?CharacterName\s*[:\-]?\s*[^\n]+?\s+CLASS LEVEL\s*[:\-]?\s*([A-Za-z][A-Za-z'\- ]+\d+)/i,
+        /CharacterName\s*[:-]?\s*[^\n]+?\s+CLASS LEVEL\s*[:-]?\s*([A-Za-z][A-Za-z' -]+\d+)/i,
+        /CLASS LEVEL\s*[:-]?\s*([A-Za-z][A-Za-z' -]+\d+)/i,
+        /CLASS\s*&\s*LEVEL\s+PLAYER NAME\s+CHARACTER NAME\s+BACKGROUND.*?CharacterName\s*[:-]?\s*[^\n]+?\s+CLASS LEVEL\s*[:-]?\s*([A-Za-z][A-Za-z' -]+\d+)/i,
     ];
 
     for (const pattern of candidates) {
@@ -131,7 +131,6 @@ export async function importCharacterFromDdbPdf(file) {
 
         // Extract only the reliable feature data needed for subclass detection
         const features = extractFeatures(fields);
-        const feats = [];
         const actions = {
             weapons: [],
             actions: [],
@@ -320,9 +319,9 @@ function looksLikeFeatureEntryStart(line = "") {
         /^XGtE\s*\d+/i.test(value) ||
         /^PHB[- ]?\d+/i.test(value) ||
         /^DMG\s*\d+/i.test(value) ||
-        /^Legacy\s*[:\-]/i.test(value) ||
-        /^[A-Z][A-Za-z'’()/:+\- ,]{2,60}\s*\|/i.test(value) ||
-        /^[A-Z][A-Za-z'’()/:+\- ,]{2,60}\s*\(.*\)$/i.test(value)
+        /^Legacy\s*[:-]/i.test(value) ||
+        /^[A-Z][A-Za-z'’()/:+ ,-]{2,60}\s*\|/i.test(value) ||
+        /^[A-Z][A-Za-z'’()/:+ ,-]{2,60}\s*\(.*\)$/i.test(value)
     );
 }
 

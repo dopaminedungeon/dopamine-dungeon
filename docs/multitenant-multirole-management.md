@@ -109,7 +109,7 @@ A **Campaign Role** defines what a user is allowed to do **within a specific cam
 
 Campaign roles answer questions like:
 - Can this user edit campaign content?
-- Can they see GM-only pages (Arcs, Quests, Relationships)?
+- Can they see GM-only pages (Arcs, Quests, Conditions)?
 - Can they assign PCs, items, or conditions?
 
 Campaign roles are:

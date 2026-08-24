@@ -31,8 +31,6 @@ Legend:
 | GM-only | ConditionProfile | 🚫 | ✅ | Same as Conditions |
 | GM-only | Quests | 🚫 | ✅ | NotAuthorized for Player |
 | GM-only | QuestProfile | 🚫 | ✅ | NotAuthorized for Player |
-| GM-only | Relationships | 🚫 | ✅ | NotAuthorized for Player |
-| GM-only | RelationshipProfile | 🚫 | ✅ | NotAuthorized for Player |
 
 ### Actions
 
@@ -41,7 +39,6 @@ Legend:
 | Assign item to self (ItemProfile) | ✍️ | ✅ | Always available for Player (future toggle possible) |
 | Create/edit Arcs | 🚫 | ✅ | GM-only |
 | Create/edit Quests | 🚫 | ✅ | GM-only |
-| Create/edit Relationships | 🚫 | ✅ | GM-only |
 | Create/edit Conditions | 🚫 | ✅ | GM-only |
 | Create new PC | 🚫 | ✅ | GM-only |
 | Assign PC to player | 🚫 | ✅ | GM-only (campaign membership assignment) |

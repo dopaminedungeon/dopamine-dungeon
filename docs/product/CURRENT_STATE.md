@@ -33,7 +33,12 @@ Verify this list against the repository before relying on it.
 - Non-persistent Campaign metadata
 - Placeholder links in multiple elements
 - Search engine
-- Quests & friendship meter (mocked)
+- Friendship Index concepts (future; not implemented)
+
+The former standalone Relationships page and profile are retired. Relationship-
+like behavior remains available through typed entity cross-links, while future
+Friendship Index work will cover intentional PC-NPC and NPC-NPC relationship
+behavior.
 
 ## Current architecture risks
 

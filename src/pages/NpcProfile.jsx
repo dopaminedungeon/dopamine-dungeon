@@ -1967,7 +1967,7 @@ export default function NpcProfile() {
             onLinksChanged={setDraftLinks}
           />
 
-          <PlaceholderCard title="Relationships">Relationship links coming soon</PlaceholderCard>
+          <PlaceholderCard title="Friendship Index">Friendship Index links coming soon</PlaceholderCard>
           <PlaceholderCard title="Quests">Quest links coming soon</PlaceholderCard>
         </div>
 

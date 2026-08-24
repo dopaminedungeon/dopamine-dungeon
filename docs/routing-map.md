@@ -107,7 +107,6 @@ BAG["Bag of Holding"]:::page
 ARCS["Arcs"]:::page
 ARCP["ArcProfile"]:::page
 QUESTS["Quests"]:::page
-REL["Relationships"]:::page
 CSET["Campaign Settings</br>(/campaigns/settings)"]:::page
 
 MISS_CAMP["MissingCampaign"]:::error

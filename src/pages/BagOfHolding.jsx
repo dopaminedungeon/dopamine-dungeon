@@ -98,9 +98,15 @@ export default function BagOfHolding() {
   const [linkingItemId, setLinkingItemId] = useState(null);
   const isBagSavingRef = useRef(false);
   const linkingItemIdRef = useRef(null);
-  const currency = bagState?.currency || {};
-  const looseItems = Array.isArray(bagState?.looseItems) ? bagState.looseItems : [];
-  const linkedEntries = Array.isArray(bagState?.linkedEntries) ? bagState.linkedEntries : [];
+  const currency = useMemo(() => bagState?.currency || {}, [bagState?.currency]);
+  const looseItems = useMemo(
+    () => (Array.isArray(bagState?.looseItems) ? bagState.looseItems : []),
+    [bagState?.looseItems]
+  );
+  const linkedEntries = useMemo(
+    () => (Array.isArray(bagState?.linkedEntries) ? bagState.linkedEntries : []),
+    [bagState?.linkedEntries]
+  );
   const [pendingCurrency, setPendingCurrency] = useState(() => ({ gp: "", sp: "", cp: "", ep: "", pp: "" }));
 
   const pendingDelta = useMemo(() => {

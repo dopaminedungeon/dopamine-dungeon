@@ -149,7 +149,7 @@ requests.
 | API typecheck | `pnpm typecheck:api` | Every code change |
 | E2E typecheck | `pnpm typecheck:e2e` | Every code change |
 | Production build | `pnpm build` | Every code change |
-| Lint | `pnpm lint` | Run and report; advisory until #316 cleanup |
+| Lint | `pnpm lint` | Every code change; blocking in CI |
 | Trusted local quality gate | `pnpm quality` | Before opening or updating a PR |
 | Full-stack manual server | `pnpm vercel dev` | API, auth, and persistence manual verification |
 | Frontend-only server | `pnpm dev` | Isolated frontend work only |
@@ -221,15 +221,16 @@ Every coding task must:
 `pnpm quality` is the trusted local blocking aggregate for PR readiness. It
 runs, in order:
 
-1. `pnpm test:unit`;
-2. `pnpm test:api`;
-3. `pnpm test:boundary`;
-4. `pnpm typecheck:api`;
-5. `pnpm typecheck:e2e`;
-6. `pnpm build`.
+1. `pnpm lint`;
+2. `pnpm test:unit`;
+3. `pnpm test:api`;
+4. `pnpm test:boundary`;
+5. `pnpm typecheck:api`;
+6. `pnpm typecheck:e2e`;
+7. `pnpm build`.
 
-Run `pnpm test:e2e:smoke` and `pnpm lint` separately and report their results.
-They are not hidden inside `pnpm quality` while they remain advisory.
+Run `pnpm test:e2e:smoke` separately. It remains advisory until the self-hosted
+runner has demonstrated a stable signal across repeated PR runs.
 
 ## GitHub quality gate
 
@@ -237,38 +238,31 @@ The `PR Checks` workflow exposes one stable job check named
 `DD Quality Gate`. Its blocking steps mirror `pnpm quality`:
 
 - `Unit and domain tests`;
+- `Lint`;
 - `API integration tests`;
 - `Boundary and security regression tests`;
 - `API typecheck`;
 - `E2E infrastructure typecheck`;
 - `Production build`.
 
-The job also runs `Playwright PR smoke (advisory)` and
-`Lint (advisory; cleanup tracked by #316)` with `continue-on-error`. A failure
-in either advisory step is visible and must be reported, but does not make the
-quality-gate job red. A failure in any blocking step makes the job red; later
-steps still run so one failure does not hide other useful results.
+The job also runs `Playwright PR smoke (advisory)` with `continue-on-error`. A
+smoke failure is visible and must be reported, but does not make the quality
+gate job red. A failure in any blocking step makes the job red; later steps
+still run so one failure does not hide other useful results.
 
 The workflow writes one concise run summary to the GitHub step summary and
 does not create PR comments. The DD AI review workflow updates its existing
 marked comment instead of creating a new comment on every run.
 
-Branch rules are not configured by workflow YAML. `DD Quality Gate` is the
-only #315 check suitable to become required now because its blocking steps pass
-on the healthy repository baseline. Enabling or auditing branch rules remains
-#316 work. Do not make the advisory lint or smoke steps separately required.
+Branch and release policy, required-check configuration, lint cleanup, and
+build-signal decisions are maintained in
+[`REPOSITORY_POLICY.md`](./REPOSITORY_POLICY.md). The larger E2E suite remains
+release/manual until its cost and stability justify a CI role.
 
-Promote lint to blocking only after #316 resolves or intentionally configures
-the existing baseline. Promote Playwright smoke only after Java and pinned
-Chromium are managed on the self-hosted runner and repeated PR runs establish a
-stable signal. The larger E2E suite remains release/manual until its cost and
-stability justify a CI role.
-
-#316 owns the complete workflow audit, branch/release rules, lint cleanup, and
-investigation of Vite chunk warnings. #315 owns the automated test layers,
-commands, smoke selection, and test-result contribution to the quality gate.
-The production build remains blocking because it exits successfully today;
-#315 does not silence or resolve its chunk warnings.
+#315 owns the automated test layers, commands, smoke selection, and test-result
+contribution to the quality gate. #316 owns the repository policy around those
+inputs, makes the clean lint result blocking, and records the inspected build
+threshold without hiding an unresolved warning.
 
 UI behaviour changes require relevant Playwright coverage when the workflow is
 available locally. Authorization and visibility changes require both GM and

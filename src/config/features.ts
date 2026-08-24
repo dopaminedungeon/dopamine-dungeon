@@ -8,7 +8,5 @@ export const features = {
     npcs: true,
     pcs: true,
     quests: false,
-    relationships: false,
     sessions: true,
-    debugPanel: false,
 } as const;

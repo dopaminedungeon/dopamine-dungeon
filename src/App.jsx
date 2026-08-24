@@ -17,8 +17,6 @@ import Arcs from "./pages/Arcs";
 import ArcProfile from "./pages/ArcProfile";
 import Quests from "./pages/Quests.jsx";
 import QuestProfile from "./pages/QuestProfile.jsx";
-import Relationships from "./pages/Relationships";
-import RelationshipProfile from "./pages/RelationshipProfile";
 import Conditions from "./pages/Conditions";
 import ConditionProfile from "./pages/ConditionProfile";
 import PCs from "./pages/PCs";
@@ -198,13 +196,6 @@ function AppGate() {
           <>
             <Route path="/quests" element={<Quests />} />
             <Route path="/quests/:id" element={<QuestProfile />} />
-          </>
-        )}
-
-        {features.relationships && (
-          <>
-            <Route path="/relationships" element={<Relationships />} />
-            <Route path="/relationships/:id" element={<RelationshipProfile />} />
           </>
         )}
 

@@ -155,6 +155,8 @@ export function CampaignProvider({ children }) {
       setCampaignRole(null);
       setCampaignStatus("error");
     }
+  // membershipVersion intentionally retriggers this loader after membership changes.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [membershipVersion, selectedCampaignId, selectedTenantId, tenantStatus, user]);
 
   useEffect(() => {
