@@ -94,8 +94,9 @@ configuration documented in `docs/operations/REPOSITORY_POLICY.md`.
 
 Deferred: React Testing Library until a useful component/provider behavior
 exists; full E2E as a required PR check; completion of the Firestore-to-Neon
-retirement tracked by #298; and Friendship Index behavior built on stable
-typed cross-links and entity persistence.
+  retirement tracked by [#298](https://github.com/dopaminedungeon/dopamine-dungeon/issues/298);
+  and Friendship Index behavior built on stable typed cross-links and entity
+  persistence.
 
 ## Outcome and next-iteration inputs
 
@@ -106,8 +107,9 @@ authentication feature work remains assigned to Iteration 3. The persistence
 migration and product relationship model are also explicit follow-up work
 rather than hidden assumptions.
 
-Iteration 3 should retain ownership of the authentication feature backlog,
-prioritize the #298 persistence retirement with a module-by-module cutover and
+Iteration 3 should retain ownership of the [#256 authentication feature
+backlog](https://github.com/dopaminedungeon/dopamine-dungeon/issues/256),
+prioritize the [#298 persistence retirement](https://github.com/dopaminedungeon/dopamine-dungeon/issues/298) with a module-by-module cutover and
 rollback plan, and complete the active feature-surface and narrative-value
 audit in [#319](https://github.com/dopaminedungeon/dopamine-dungeon/issues/319).
 It should also verify the documented GitHub branch rules in repository settings
