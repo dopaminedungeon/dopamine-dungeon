@@ -1,5 +1,9 @@
 ## Permission Matrix (Campaign-scoped)
 
+> Intended permission contract. Server code and tests must enforce these rules;
+> the table does not prove every legacy route currently complies. Record known
+> implementation gaps in `docs/product/CURRENT_STATE.md`.
+
 Legend:
 - ✅ Allowed
 - 🚫 Blocked → NotAuthorized

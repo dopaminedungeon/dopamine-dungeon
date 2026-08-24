@@ -1,6 +1,6 @@
 # Current State
 
-Last updated: 2026-07-24
+Last updated: 2026-08-24
 Maintainer: Magda
 
 ## Current release
@@ -18,7 +18,9 @@ Production version: v0.5
 
 - Multi-workspace and multi-campaign foundation
 - Firebase authentication
-- Neon-backed core data
+- Neon-backed core campaign entities; transitional Firebase/Firestore paths
+  remain for documented bootstrap, membership, invitation, settings, mail, and
+  legacy assignment flows
 - Sessions
 - Items and inventory
 - Campaign membership and invitations
@@ -58,7 +60,8 @@ behavior.
 
 ## Active iteration
 
-See `docs/sprints/current.md`.
+Iteration 2 is closed. The final retrospective and next-iteration handoff are
+in `docs/sprints/current.md`; roadmap priorities remain in `ROADMAP.md`.
 
 ## Do not change without an explicit decision
 

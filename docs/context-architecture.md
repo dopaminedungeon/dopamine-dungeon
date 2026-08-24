@@ -1,4 +1,10 @@
-# Flowchart
+# Context and Persistence Architecture
+
+This diagram describes the current context composition. Core campaign data is
+served through the Vercel API and Neon repositories; a limited set of
+bootstrap, membership, invitation, settings, mail, and legacy assignment paths
+remain transitional Firestore integrations. See
+`docs/architecture/SYSTEM_OVERVIEW.md` and ADR 0003 for ownership details.
 
 ```mermaid
 ---
@@ -30,7 +36,7 @@ flowchart TB
     CTX_MODE_P --> SHELL["[L] AppShell"]
     CTX_MODE_GM --> SHELL
     SHELL --> SIDEBAR["[N] Sidebar</br>(mode-filtered navigation)"] & ROUTES["[L] Routes</br>(guarded)"]
-    ROUTES --> DATA["[DATA] Firestore queries</br>(scoped: workspaceId + campaignId)"]
+    ROUTES --> DATA["[DATA] API + persistence adapters</br>(Neon core; transitional Firestore)"]
 
      A1:::guard
      A2:::page
@@ -196,10 +202,9 @@ class RouteGuard {
 %% Data layer / access contract
 %% =========================
 
-class FirestoreClient {
-  +queryCollection(path, filters)
-  +getDoc(path)
-  +setDoc(path, data)
+class PersistenceAdapters {
+  +Neon API repositories
+  +transitional Firestore adapters
 }
 
 class DataScope {
@@ -237,7 +242,7 @@ RouteGuard --> WorkspacePermissionContext : reads
 RouteGuard --> CampaignRoleContext : reads
 RouteGuard --> ModeContext : reads
 
-FirestoreClient --> DataScope : scopes queries to
+PersistenceAdapters --> DataScope : scopes access to
 DataScope --> WorkspaceContext : from activeWorkspaceId
 DataScope --> CampaignContext : from activeCampaignId
 
