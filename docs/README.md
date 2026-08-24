@@ -24,6 +24,8 @@ truth.
   CI roles.
 - [Repository and CI Policy](operations/REPOSITORY_POLICY.md): branches,
   required checks, workflows, and runner use.
+- [Iteration Closeout Administration](operations/ITERATION_CLOSEOUT.md): create
+  one duplicate-safe retrospective and documentation task per Project iteration.
 - [Environment Configuration](operations/ENVIRONMENT.md): variable names and
   environment separation; never secret values.
 - [Deployment](operations/DEPLOYMENT.md): Vercel and production responsibilities.

@@ -100,11 +100,17 @@ suite separate required checks.
 |---|---|---|---|
 | `PR Checks` | Required and healthy after #316 cleanup | Pushes to `dev`, `main`, and `release/*`; pull requests targeting those branches; runs the DD Quality Gate and advisory smoke; PR runs update one marked summary comment | Self-hosted `macOS`, `X64`; `contents: read`, `pull-requests: write`; no secrets |
 | `DD AI Review` | Experimental/manual advisory | Opened, synchronized, or reopened pull requests targeting `main`, `dev`, or `release/*`; produces one concise review comment | Self-hosted `macOS`, `X64`; `contents: read`, `pull-requests: write`; `GITHUB_TOKEN` and local Ollama model |
+| `Create Iteration Closeout Task` | Manual repository administration | `workflow_dispatch`; creates one retrospective and documentation-reconciliation issue for a supplied iteration, stops when its marker or canonical title already exists, and leaves Project, Type, Iteration, and Application Version assignment manual | GitHub-hosted `ubuntu-latest`; `issues: write`; no checkout or secrets |
 | `Sync Application Version to Sub-Issue` | Obsolete and removed | Placeholder project automation with literal project and field IDs | Removed because it could not perform useful work safely |
 
 The repository has no GitHub Actions deployment workflow. Vercel remains the
 deployment system, with `main` as the production source and feature/`dev`
 branches eligible for preview validation.
+
+Iteration closeout issue creation and the manual organization Project boundary
+are documented in [`ITERATION_CLOSEOUT.md`](./ITERATION_CLOSEOUT.md). The
+repository workflow intentionally does not mutate Project V2 Iteration or
+Application Version fields.
 
 ## Build signal
 
