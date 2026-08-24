@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from "react";
-import { Bell, Search, User, ChevronDown } from "lucide-react";
+import { User, ChevronDown } from "lucide-react";
 import { useMode } from "../context/ModeContext.jsx";
 import { Shield, Eye } from "lucide-react";
 import { useCampaign } from "../context/CampaignContext.jsx";
@@ -10,7 +10,6 @@ import { Link, useNavigate } from "react-router-dom";
 export default function TopBar({ title }) {
   const { mode, setMode } = useMode();
   const { user, logout } = useAuth();
-  const [showNotifications, setShowNotifications] = useState(false);
   const [showProfileMenu, setShowProfileMenu] = useState(false);
   const {
     campaigns: legacyCampaigns,
@@ -57,7 +56,6 @@ export default function TopBar({ title }) {
     ? {
       shell: "border-fuchsia-400/15 bg-black/25",
       glow: "bg-[radial-gradient(circle_at_20%_20%,rgba(217,70,239,0.18),transparent_28%),radial-gradient(circle_at_80%_20%,rgba(168,85,247,0.14),transparent_24%)]",
-      searchRing: "focus:border-fuchsia-400/50 focus:ring-fuchsia-500/20",
       selectRing: "focus:ring-fuchsia-500/40",
       activePlayer: "bg-white/10 border-white/10 text-zinc-400 hover:text-white",
       activeGm: "bg-fuchsia-500/80 border-fuchsia-400 text-white shadow-[0_0_18px_rgba(217,70,239,0.28)]",
@@ -67,7 +65,6 @@ export default function TopBar({ title }) {
     : {
       shell: "border-cyan-400/10 bg-black/20",
       glow: "bg-[radial-gradient(circle_at_20%_20%,rgba(139,92,246,0.14),transparent_28%),radial-gradient(circle_at_80%_20%,rgba(34,211,238,0.12),transparent_24%)]",
-      searchRing: "focus:border-purple-500/50 focus:ring-purple-500/20",
       selectRing: "focus:ring-indigo-500/40",
       activePlayer: "bg-white/10 border-indigo-500 text-indigo-300 shadow-[0_0_16px_rgba(99,102,241,0.2)]",
       activeGm: "bg-transparent border-white/10 text-zinc-400 hover:text-white",
@@ -78,12 +75,6 @@ export default function TopBar({ title }) {
   // Close popovers on outside click
   useEffect(() => {
     function handleClickOutside(e) {
-      if (
-        notificationsRef.current &&
-        !notificationsRef.current.contains(e.target)
-      ) {
-        setShowNotifications(false);
-      }
       if (profileRef.current && !profileRef.current.contains(e.target)) {
         setShowProfileMenu(false);
       }
@@ -92,7 +83,6 @@ export default function TopBar({ title }) {
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
-  const notificationsRef = useRef(null);
   const profileRef = useRef(null);
 
   const navigate = useNavigate();
@@ -115,44 +105,6 @@ export default function TopBar({ title }) {
 
         {/* Actions */}
         <div className="flex flex-wrap items-center justify-end gap-2 sm:gap-3">
-          {/* Search */}
-          <div className="relative hidden lg:block">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-500" />
-            <input
-              type="text"
-              placeholder="Quick search..."
-              className={`w-64 pl-10 pr-4 py-2.5 bg-white/5 border border-white/10 rounded-xl text-white text-sm placeholder-zinc-500 focus:outline-none focus:ring-2 transition-all shadow-inner shadow-black/20 ${topBarTheme.searchRing}`}
-              onKeyDown={(e) => {
-                if (e.key === "Enter") {
-                  // later we can hook this into real search
-                  console.log("Search:", e.target.value);
-                }
-              }}
-            />
-            <kbd className="absolute right-3 top-1/2 -translate-y-1/2 px-2 py-0.5 bg-white/10 rounded text-zinc-500 text-xs">
-              ⌘K
-            </kbd>
-          </div>
-
-          {/* Notifications */}
-          <div className="relative" ref={notificationsRef}>
-            <button
-              className="relative p-2 bg-white/5 border border-white/10 rounded-xl text-zinc-400 hover:text-white hover:bg-white/10 hover:shadow-[0_0_18px_rgba(139,92,246,0.18)] transition-all"
-              onClick={() => setShowNotifications((v) => !v)}
-            >
-              <Bell className="w-5 h-5" />
-              <span className="absolute top-1.5 right-1.5 w-2 h-2 bg-purple-500 rounded-full" />
-            </button>
-
-            {showNotifications && (
-              <div className="absolute right-0 mt-2 z-50 w-64 bg-black/90 backdrop-blur-xl border border-white/10 rounded-xl shadow-xl shadow-violet-950/20 p-3 text-sm">
-                <p className="text-zinc-400">
-                  No notifications yet. Go cause some chaos in your campaign ✨
-                </p>
-              </div>
-            )}
-          </div>
-
           {/* Workspace + Campaign selectors */}
           <div className="hidden lg:flex items-center gap-3">
             {/* Workspace selector */}

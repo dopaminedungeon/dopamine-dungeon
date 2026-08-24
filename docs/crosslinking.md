@@ -4,6 +4,13 @@ This document defines the **canonical, locked set of allowed entity link combina
 
 The goal of this system is to represent **narrative memory and mechanical state** across the campaign without introducing graph noise, ambiguity, or premature complexity.
 
+> **Implementation status:** Sessions, Lore, Maps/Locations, NPCs, Items, and
+> Bag of Holding currently use persisted typed links. PC remains a supported
+> endpoint with incomplete profile UI. Arc, Quest, and Condition remain
+> reserved endpoint and label contracts; their former mock-backed product
+> screens were retired by #319. Later UI sections in this document are
+> intended-state contracts, not claims that every page exists today.
+
 ---
 
 ## Entity Types

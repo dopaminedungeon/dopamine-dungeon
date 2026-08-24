@@ -1,3 +1,6 @@
+> Intended-state reference only. The mock-backed Arc profile is retired and not
+> mounted; the Arc entity-link type remains reserved infrastructure.
+
 ```mermaid
 ---
 config:

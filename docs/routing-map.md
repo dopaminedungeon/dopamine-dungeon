@@ -104,9 +104,6 @@ PCS["PCs (Characters)"]:::page
 PCP["PcProfile"]:::page
 BAG["Bag of Holding"]:::page
 
-ARCS["Arcs"]:::page
-ARCP["ArcProfile"]:::page
-QUESTS["Quests"]:::page
 CSET["Campaign Settings</br>(/campaigns/settings)"]:::page
 
 MISS_CAMP["MissingCampaign"]:::error
@@ -178,10 +175,6 @@ GM_ROUTES --> LOREP
 GM_ROUTES --> PCS
 GM_ROUTES --> PCP
 GM_ROUTES --> BAG
-GM_ROUTES --> ARCS
-GM_ROUTES --> ARCP
-GM_ROUTES --> QUESTS
-GM_ROUTES --> REL
 GM_ROUTES --> CSET
 
 ERROR_ROUTES --> MISS_CAMP
@@ -197,7 +190,7 @@ classDef bucket fill:#f4f4ff,stroke:#8a7bd1,stroke-width:1.5px,color:#222;
 classDef junction fill:#ddd,stroke:#999,stroke-width:1px,color:#666;
 
 class MODE_ROUTE,REQ_AUTH,REQ_TEN,REQ_CAMP,REQ_ROLE,REQ_MODE,REQ_GM gate;
-class DASH,ITEMS,ITEMP,SESS,SESSP,NPCS,NPCP,MAPS,MAPP,LORE,LOREP,PCS,PCP,BAG,ARCS,ARCP,QUESTS,REL,CSET page;
+class DASH,ITEMS,ITEMP,SESS,SESSP,NPCS,NPCP,MAPS,MAPP,LORE,LOREP,PCS,PCP,BAG,CSET page;
 class MISS_CAMP,NOTAUTH,NOTFOUND,NETERR,NO_TENANT,NO_CAMP error;
 class TOP,SIDE ui;
 class PUBLIC_ROUTES,PLAYER_ROUTES,GM_ROUTES,ERROR_ROUTES bucket;

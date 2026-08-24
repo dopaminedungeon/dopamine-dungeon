@@ -98,7 +98,7 @@ suite separate required checks.
 
 | Workflow | Classification | Trigger and purpose | Runner and access |
 |---|---|---|---|
-| `PR Checks` | Required and healthy after #316 cleanup | Pushes to `dev`, `main`, and `release/*`; pull requests targeting those branches; runs the DD Quality Gate and advisory smoke | Self-hosted `macOS`, `X64`; `contents: read`; no secrets |
+| `PR Checks` | Required and healthy after #316 cleanup | Pushes to `dev`, `main`, and `release/*`; pull requests targeting those branches; runs the DD Quality Gate and advisory smoke; PR runs update one marked summary comment | Self-hosted `macOS`, `X64`; `contents: read`, `pull-requests: write`; no secrets |
 | `DD AI Review` | Experimental/manual advisory | Opened, synchronized, or reopened pull requests targeting `main`, `dev`, or `release/*`; produces one concise review comment | Self-hosted `macOS`, `X64`; `contents: read`, `pull-requests: write`; `GITHUB_TOKEN` and local Ollama model |
 | `Sync Application Version to Sub-Issue` | Obsolete and removed | Placeholder project automation with literal project and field IDs | Removed because it could not perform useful work safely |
 

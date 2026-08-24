@@ -1,3 +1,6 @@
+> Intended-state reference. Arcs, Quests, and Conditions nodes are future
+> contracts; their former mock-backed pages are not mounted or visible.
+
 ```mermaid
 ---
 config:

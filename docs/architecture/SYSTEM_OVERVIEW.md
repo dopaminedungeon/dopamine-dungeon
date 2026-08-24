@@ -18,13 +18,14 @@ Workspace
     |-- NPCs
     |-- Locations
     |-- Lore
-    |-- Quests
     `-- PCs
         `-- Bag of Holding
 
 Typed entity links connect active campaign entities. The retired standalone
 Relationships page is not part of the product. Future PC-NPC and NPC-NPC
 relationship behavior belongs to cross-linking and Friendship Index work.
+`Arc`, `Quest`, and `Condition` remain reserved typed link endpoints, but their
+former mock-backed pages are not active persisted product modules.
 
 ## Runtime layers
 
@@ -78,7 +79,7 @@ and is not evidence that protected API or persistence workflows work.
 
 Neon PostgreSQL, accessed through the Vercel API and Drizzle-backed
 repositories, is the primary store for core relational campaign entities:
-sessions, items, inventory, NPCs, locations, lore, quests, PCs, and typed
+sessions, items, inventory, NPCs, locations, lore, PCs, and typed
 entity links. Campaign and workspace scoping is enforced at the API/data-access
 boundary.
 

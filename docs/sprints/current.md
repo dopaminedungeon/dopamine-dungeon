@@ -88,9 +88,11 @@ workflows, obsolete mocks, and the static PDF import that caused avoidable
 initial-load pressure.
 
 Retained: Firebase's transitional persistence paths until their replacements
-are verified; the Arcs, Conditions, and Quests dev/demo seeds; advisory PR
-smoke tests; full E2E as release/manual evidence; and manual branch-ruleset
-configuration documented in `docs/operations/REPOSITORY_POLICY.md`.
+are verified; advisory PR smoke tests; full E2E as release/manual evidence; and
+manual branch-ruleset configuration documented in
+`docs/operations/REPOSITORY_POLICY.md`. The Arcs, Conditions, and Quests
+dev/demo seeds retained at Iteration 2 close were subsequently audited and
+retired by #319; their typed link infrastructure remains.
 
 Deferred: React Testing Library until a useful component/provider behavior
 exists; full E2E as a required PR check; completion of the Firestore-to-Neon

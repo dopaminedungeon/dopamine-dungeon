@@ -7,6 +7,8 @@ truth.
 
 - [Current State](product/CURRENT_STATE.md): what exists and what remains
   incomplete.
+- [Active Feature Surface Audit](product/FEATURE_SURFACE_AUDIT.md): current
+  keep, retire, and infrastructure-only decisions from #319.
 - [Roadmap](product/ROADMAP.md): product direction and dependency-aware
   priorities.
 - [Current Iteration](sprints/current.md): final Iteration 2 record and the
@@ -38,6 +40,9 @@ truth.
 Page and profile diagrams are primarily intended-state UX contracts. Check
 Current State, the System Overview, ADRs, code, schema, and API behavior before
 treating a diagram as implemented behavior.
+
+The former Arcs, Quests, and Conditions mock screens are retained in some
+intended-state diagrams only. Their routes and product pages are not active.
 
 ## Source-of-truth boundaries
 

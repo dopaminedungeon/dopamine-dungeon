@@ -34,7 +34,8 @@ persistence path rather than assuming it already uses PostgreSQL.
 ## Current implementation audit
 
 Core campaign entity repositories for sessions, items, inventory, NPCs,
-locations, lore, quests, PCs, and typed entity links use the API and Neon.
+locations, lore, PCs, and typed entity links use the API and Neon. Arc, Quest,
+and Condition are reserved typed-link concepts without active standalone pages.
 Firebase Authentication remains the identity provider. Firestore is still
 used by the bootstrap and identity-adjacent paths listed above, and by
 migration tooling where it is an explicit source. This list is a current

@@ -710,14 +710,6 @@ export default function CampaignSettings() {
                   />
                 </div>
 
-                <div className="rounded-2xl border border-white/10 bg-white/[0.035] p-4 shadow-[0_0_24px_rgba(168,85,247,0.05)]">
-                  <p className="text-sm text-zinc-300 font-medium mb-1">
-                    Visibility defaults (placeholder)
-                  </p>
-                  <p className="text-sm text-zinc-300/75">
-                    Later: default visibility rules for new Sessions / Lore / Items, etc.
-                  </p>
-                </div>
               </div>
             </div>
 	          </section>
@@ -734,7 +726,7 @@ export default function CampaignSettings() {
               <div className="rounded-xl border border-white/10 bg-white/[0.025] p-3.5 mb-4 shadow-[0_0_20px_rgba(168,85,247,0.04)]">
                 <p className="text-sm text-zinc-200 font-medium mb-2">Invite player</p>
                 <p className="mb-3 text-xs text-zinc-300/70">
-                  Create a pending invitation for the active campaign. Character assignment support will live here.
+                  Create a pending invitation for the active campaign and optionally reserve an available character.
                 </p>
                 <InvitePlayerForm
                   availabilityVersion={campaignPeopleVersion}
@@ -936,7 +928,7 @@ export default function CampaignSettings() {
                   placeholder="comma-separated (e.g. feywild, intrigue, horror)"
                   className="w-full rounded-xl border border-white/10 bg-white/[0.03] px-3.5 py-2.5 text-sm text-white placeholder:text-zinc-400/80 shadow-inner shadow-black/10 focus:outline-none focus:ring-2 focus:ring-fuchsia-400/20"
                 />
-                <p className="mt-1 text-sm text-zinc-300/75">Placeholder: we’ll switch to chips later.</p>
+                <p className="mt-1 text-sm text-zinc-300/75">Use commas to separate tags.</p>
               </div>
 
               <div>
@@ -960,12 +952,6 @@ export default function CampaignSettings() {
               </div>
             </div>
 
-            <div className="mt-3 rounded-xl border border-white/10 bg-white/[0.025] p-3.5 shadow-[0_0_20px_rgba(168,85,247,0.04)]">
-              <p className="text-sm text-zinc-300 font-medium mb-1">Cross-links (placeholder)</p>
-              <p className="text-sm text-zinc-300/75">
-                Later: Sessions / NPCs / Items / Maps / Lore / Arcs / Quests counts and links for this campaign.
-              </p>
-            </div>
           </div>
         </section>
 
