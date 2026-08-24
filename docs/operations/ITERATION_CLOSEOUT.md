@@ -26,16 +26,22 @@ Use the manual [Create Iteration Closeout Task workflow](../../.github/workflows
 
 1. Open **Actions → Create Iteration Closeout Task → Run workflow**.
 2. Enter the numeric iteration number exactly as it appears in the Project.
-3. Enter the iteration name, major dependency issues, and intended outcome.
+3. Enter the exact Project iteration title (or its descriptive suffix), major
+   dependency issues, and intended outcome.
 4. Run the workflow.
-5. Open the created issue, add it to organization Project 1, set its native
-   Type to Task, and assign the matching Iteration and Application Version
-   fields in the Project UI.
-6. Start closeout only after the listed dependencies are complete.
+5. Review the workflow summary. When Project automation is configured, confirm
+   that it reports Project 1, Type: Task, Priority: Low, Effort: Low,
+   Application version: n/a, and the selected Iteration.
+6. If Project automation was skipped, complete the summary's manual metadata
+   checklist.
+7. Start closeout only after the listed dependencies are complete.
 
-The workflow creates repository issues only. It uses `issues: write`, does not
-checkout code, does not use secrets, and does not change application or
-deployment state.
+The workflow uses the standard repository `GITHUB_TOKEN` with `issues: write`
+to search all open and closed issues and create the issue when needed. It does
+not checkout code and does not change application or deployment state. Native
+Type is set during fresh issue creation where the repository token supports
+it. Optional Project-ready metadata completion uses `DD_PROJECTS_TOKEN` as
+documented below.
 
 GitHub exposes issue forms and dispatchable workflows from the repository's
 default branch. Until these files reach that branch through the normal
@@ -54,8 +60,14 @@ when Actions is unavailable:
 3. Keep the generated retrospective, documentation, deferred-work, handoff,
    and acceptance-criteria sections.
 4. The form sets native Type to Task and adds Project 1 when the person opening
-   it has Project write access. Set the matching Iteration and Application
-   Version fields manually.
+   it has Project write access. Complete or verify the remaining metadata
+   manually:
+   - Project: `dopamine dungeon development` (Project 1);
+   - Type: `Task`;
+   - Priority: `Low`;
+   - Effort: `Low`;
+   - Application version: `n/a`;
+   - Iteration: the iteration being summarized.
 
 The required duplicate-check boxes make the manual limitation explicit. Do not
 create a second task because the first task is closed; a completed closeout is
@@ -70,28 +82,65 @@ The workflow derives a stable marker from the numeric iteration:
 ```
 
 Before creating an issue it searches all open and closed repository issues. It
-stops successfully when either the stable marker or the canonical title already
+reuses an issue when either the stable marker or the canonical title already
 exists. The title check also recognizes Iteration 2 issue #317, which predates
-the marker.
+the marker. A rerun continues from the reused issue and repairs missing or stale
+metadata rather than exiting or creating another issue.
 
 Use only the numeric Project iteration number in the number input. The name may
 change without changing the duplicate key.
 
-## Project automation boundary
+## Optional Project-ready automation
 
-The organization Project owns Iteration and Application Version assignment,
-but this repository does not own the Project field configuration. GitHub's
-standard repository `GITHUB_TOKEN` can create issues with `issues: write`; it
-does not provide the organization Project V2 permission needed to discover and
-update those field IDs.
+GitHub's standard repository `GITHUB_TOKEN` cannot access the organization
+Project. To enable Project-ready completion, create a fine-grained personal
+access token named `DD_PROJECTS_TOKEN` in the repository's Actions secrets.
+Limit it to the `dopaminedungeon` organization and the
+`dopamine-dungeon` repository with these permissions:
 
-Automating that assignment would require a separately maintained GitHub App or
-PAT with organization Project permission, stored as a secret, plus GraphQL code
-coupled to Project and field IDs. That is disproportionate for this solo
-workflow. Workflow-created issues therefore receive their Project, native Type,
-Iteration, and Application Version metadata manually after creation. Form-
-created issues can receive Project 1 and native Type from the form, but still
-require manual Iteration and Application Version assignment.
+- repository **Issues: read and write**;
+- organization **Projects: read and write**;
+- organization **Issue Fields: read**;
+- organization **Issue Types: read**.
+
+The token owner must also have access to Project 1, and organization policy may
+require approval of the fine-grained token. If personal-token rotation becomes
+burdensome, a future GitHub App integration can generate a short-lived
+installation token per run using equivalent permissions; that would require App
+credentials and a deliberate workflow update rather than storing an installation
+token in `DD_PROJECTS_TOKEN`.
+
+When the token is available, the workflow discovers rather than hard-codes:
+
+- enabled native issue type `Task`;
+- native `Priority` and `Effort` fields and their `Low` options;
+- Project 1 titled `dopamine dungeon development`;
+- Project fields `Application version` and `Iteration`;
+- the current or completed Project iteration matching the supplied number and
+  exact title or descriptive suffix.
+
+Application version uses the Project convention `n/a`. The workflow queries
+existing Project items for the issue, including archived items, reuses the
+Project 1 item when present, and adds an item only when none exists. It reapplies
+Type, Priority, Effort, Application version, and Iteration on every run, so a
+rerun can repair a partial earlier run safely.
+
+If `DD_PROJECTS_TOKEN` is absent, issue creation or reuse still succeeds. The
+workflow emits an Actions warning and writes this manual checklist to the job
+summary:
+
+- add the issue to Project 1, `dopamine dungeon development`;
+- set Type to `Task`;
+- set Priority to `Low`;
+- set Effort to `Low`;
+- set Application version to `n/a`;
+- set Iteration to the iteration being summarized.
+
+If the token is configured but invalid, under-permissioned, or cannot uniquely
+resolve the requested iteration, metadata completion fails visibly and lists
+the discovered iteration titles when applicable. The repository issue remains
+intact. Correct the token or inputs and rerun the workflow; duplicate detection
+will reuse that issue and repair its metadata.
 
 ## Existing iteration coverage
 
