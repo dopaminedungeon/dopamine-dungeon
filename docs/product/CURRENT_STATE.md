@@ -5,8 +5,8 @@ Maintainer: Magda
 
 ## Current release
 
-Development version: v0.6
-Production version: v0.5
+- Development version: v0.6
+- Production version: v0.5
 
 ## Current product focus
 
