@@ -69,10 +69,18 @@ const CONTENT = {
     body: "Firebase confirmed your email, but this browser could not refresh your session. Sign in once to continue.",
     tone: "text-amber-300",
   },
+  "access-failed": {
+    icon: AlertTriangle,
+    title: "Account access unavailable",
+    body: "Your email is verified, but we could not finish resolving your account access. Try again before continuing.",
+    tone: "text-amber-300",
+  },
 };
 
 export default function VerificationActionScreen({
+  accessResolutionStatus,
   onContinueVerifiedSession,
+  onRetryAccessResolution,
   onSignOut,
 }) {
   const visualTestState = new URLSearchParams(window.location.search).get("testState");
@@ -80,6 +88,7 @@ export default function VerificationActionScreen({
     ? visualTestState
     : "checking";
   const [state, setState] = useState(initialState);
+  const [continuationPath, setContinuationPath] = useState(null);
   const started = useRef(false);
 
   useEffect(() => {
@@ -110,8 +119,7 @@ export default function VerificationActionScreen({
           return;
         }
         setState(nextState);
-        const destination = getPostVerificationPath();
-        window.setTimeout(() => window.location.replace(destination), 900);
+        setContinuationPath(getPostVerificationPath());
       } catch {
         setState("refresh-failed");
       }
@@ -152,9 +160,22 @@ export default function VerificationActionScreen({
     processAction();
   }, [onContinueVerifiedSession, visualTestState]);
 
-  const content = CONTENT[state] ?? CONTENT.failure;
+  useEffect(() => {
+    if (!continuationPath) return;
+
+    if (accessResolutionStatus === "resolved") {
+      window.location.replace(continuationPath);
+    }
+  }, [accessResolutionStatus, continuationPath]);
+
+  const displayedState =
+    continuationPath && accessResolutionStatus === "error"
+      ? "access-failed"
+      : state;
+  const content = CONTENT[displayedState] ?? CONTENT.failure;
   const Icon = content.icon;
-  const isBusy = state === "checking" || state === "success";
+  const isBusy = displayedState === "checking" || displayedState === "success";
+  const isAccessFailure = displayedState === "access-failed";
   const canReturnToVerification = Boolean(auth.currentUser && !auth.currentUser.emailVerified);
 
   async function goToSignIn() {
@@ -168,7 +189,7 @@ export default function VerificationActionScreen({
         <div className="relative mx-auto flex min-h-screen w-full items-center justify-center px-[16px] py-[32px] sm:py-[48px]">
           <section className="w-[calc(100vw-32px)] max-w-[480px] rounded-lg border border-zinc-800 bg-zinc-900 p-[24px] text-center shadow-2xl shadow-black/30 sm:p-[36px]" aria-labelledby="verification-result-title" data-testid="verification-result-card">
             <div className={`mx-auto flex h-[64px] w-[64px] items-center justify-center rounded-full bg-white/5 ${content.tone}`}>
-              <Icon className={`h-[32px] w-[32px] ${state === "checking" ? "animate-spin" : ""}`} aria-hidden="true" />
+              <Icon className={`h-[32px] w-[32px] ${displayedState === "checking" ? "animate-spin" : ""}`} aria-hidden="true" />
             </div>
             <h1 id="verification-result-title" className="mt-[28px] text-[clamp(28px,1.875rem,38px)] leading-[1.2] font-semibold text-white">
               {content.title}
@@ -180,11 +201,24 @@ export default function VerificationActionScreen({
             {!isBusy && (
               <button
                 type="button"
-                onClick={canReturnToVerification ? () => window.location.replace(getPostVerificationPath()) : goToSignIn}
+                onClick={
+                  isAccessFailure
+                    ? () => {
+                        setState("success");
+                        onRetryAccessResolution();
+                      }
+                    : canReturnToVerification
+                      ? () => window.location.replace(getPostVerificationPath())
+                      : goToSignIn
+                }
                 className="mt-[32px] flex min-h-[56px] w-full items-center justify-center gap-[8px] rounded-md bg-purple-600 px-[24px] py-[14px] text-[clamp(16px,1.0625rem,22px)] font-bold text-white transition hover:bg-purple-700 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-purple-300"
               >
                 <LogIn className="h-[22px] w-[22px]" aria-hidden="true" />
-                {canReturnToVerification ? "Return to verification" : "Continue to sign in"}
+                {isAccessFailure
+                  ? "Try again"
+                  : canReturnToVerification
+                    ? "Return to verification"
+                    : "Continue to sign in"}
               </button>
             )}
           </section>

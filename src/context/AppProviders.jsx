@@ -14,7 +14,10 @@ import { useAuth } from "./AuthContext.jsx";
 import { useTenant } from "./TenantContext.jsx";
 import { useCampaign } from "./CampaignContext.jsx";
 import { acceptPendingApiInvitations } from "../data/api/apiClient";
-import { clearInvitationContext } from "../auth/invitationContext";
+import {
+  clearInvitationContext,
+  hasPendingInvitationContext,
+} from "../auth/invitationContext";
 
 const AccessResolutionContext = createContext({
   accessResolutionStatus: "idle",
@@ -37,6 +40,14 @@ function storeInvitationResolution(key) {
     window.sessionStorage.setItem(`${INVITATION_RESOLUTION_STORAGE_PREFIX}${key}`, "done");
   } catch {
     // Session storage can be unavailable; the in-memory guard still protects the current page.
+  }
+}
+
+function clearStoredInvitationResolution(key) {
+  try {
+    window.sessionStorage.removeItem(`${INVITATION_RESOLUTION_STORAGE_PREFIX}${key}`);
+  } catch {
+    // Session storage can be unavailable; the in-memory record is cleared separately.
   }
 }
 
@@ -86,6 +97,7 @@ function InvitationAcceptanceBridge({ children }) {
   const retryAccessResolution = () => {
     if (activeKeyRef.current) {
       invitationResolutionRecords.delete(activeKeyRef.current);
+      clearStoredInvitationResolution(activeKeyRef.current);
     }
 
     setAccessResolution({
@@ -121,28 +133,16 @@ function InvitationAcceptanceBridge({ children }) {
 
       const processingKey = user.uid;
       activeKeyRef.current = processingKey;
-
-      if (tenantStatus === "error") {
-        updateAccessResolution({
-          status: "idle",
-          key: processingKey,
-          acceptedInvitations: 0,
-          tenantRefreshStatus: null,
-        });
-        return;
-      }
+      const hasInvitationContinuation = hasPendingInvitationContext();
 
       const isCurrentResolutionInProgress =
         accessResolution.key === processingKey &&
         (accessResolution.status === "resolving" ||
           accessResolution.status === "refreshingMemberships");
 
-      if (
-        hasStoredInvitationResolution(processingKey) &&
-        !isCurrentResolutionInProgress
-      ) {
+      if (tenantStatus === "error") {
         updateAccessResolution({
-          status: "resolved",
+          status: "error",
           key: processingKey,
           acceptedInvitations: 0,
           tenantRefreshStatus: null,
@@ -155,6 +155,12 @@ function InvitationAcceptanceBridge({ children }) {
         accessResolution.status === "refreshingMemberships"
       ) {
         if (tenantStatus !== "ready") {
+          updateAccessResolution({
+            status: "error",
+            key: processingKey,
+            acceptedInvitations: accessResolution.acceptedInvitations,
+            tenantRefreshStatus: accessResolution.tenantRefreshStatus,
+          });
           return;
         }
 
@@ -162,8 +168,21 @@ function InvitationAcceptanceBridge({ children }) {
           return;
         }
 
+        if (campaignStatus !== "ready") {
+          updateAccessResolution({
+            status: "error",
+            key: processingKey,
+            acceptedInvitations: accessResolution.acceptedInvitations,
+            tenantRefreshStatus: accessResolution.tenantRefreshStatus,
+          });
+          return;
+        }
+
+        clearInvitationContext();
+        storeInvitationResolution(processingKey);
+        invitationResolutionRecords.delete(processingKey);
         updateAccessResolution({
-          status: campaignStatus === "ready" ? "resolved" : "error",
+          status: "resolved",
           key: processingKey,
           acceptedInvitations: accessResolution.acceptedInvitations,
           tenantRefreshStatus: accessResolution.tenantRefreshStatus,
@@ -172,8 +191,29 @@ function InvitationAcceptanceBridge({ children }) {
       }
 
       if (
+        hasStoredInvitationResolution(processingKey) &&
+        !isCurrentResolutionInProgress &&
+        !hasInvitationContinuation
+      ) {
+        updateAccessResolution({
+          status: "resolved",
+          key: processingKey,
+          acceptedInvitations: 0,
+          tenantRefreshStatus: null,
+        });
+        return;
+      }
+
+      if (
         accessResolution.key === processingKey &&
         accessResolution.status === "resolved"
+      ) {
+        return;
+      }
+
+      if (
+        accessResolution.key === processingKey &&
+        accessResolution.status === "error"
       ) {
         return;
       }
@@ -190,13 +230,12 @@ function InvitationAcceptanceBridge({ children }) {
           await resolvePendingInvitationsOnce(processingKey, async () => {
             const result = await acceptPendingApiInvitations();
 
-            clearInvitationContext();
-
-            if (result.acceptedInvitations.length > 0) {
+            if (
+              result.acceptedInvitations.length > 0 ||
+              hasInvitationContinuation
+            ) {
               await refreshTenants();
             }
-
-            storeInvitationResolution(processingKey);
 
             return result;
           });
@@ -205,7 +244,7 @@ function InvitationAcceptanceBridge({ children }) {
           return;
         }
 
-        if (acceptedInvitations.length > 0) {
+        if (acceptedInvitations.length > 0 || hasInvitationContinuation) {
           updateAccessResolution({
             status: "refreshingMemberships",
             key: processingKey,
@@ -215,6 +254,8 @@ function InvitationAcceptanceBridge({ children }) {
           return;
         }
 
+        storeInvitationResolution(processingKey);
+        invitationResolutionRecords.delete(processingKey);
         updateAccessResolution({
           status: "resolved",
           key: processingKey,
@@ -253,7 +294,12 @@ function InvitationAcceptanceBridge({ children }) {
   return (
     <AccessResolutionContext.Provider
       value={{
-        accessResolutionStatus: accessResolution.status,
+        accessResolutionStatus:
+          user?.uid &&
+          tenantStatus === "empty" &&
+          accessResolution.status === "idle"
+            ? "resolving"
+            : accessResolution.status,
         retryAccessResolution,
       }}
     >

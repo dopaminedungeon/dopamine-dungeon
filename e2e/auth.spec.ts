@@ -631,14 +631,71 @@ test("applies a valid action code and continues the same browser session", async
   const oobCode = await getVerificationCode(request, email);
 
   await page.goto(`/auth/verify-email?mode=verifyEmail&oobCode=${encodeURIComponent(oobCode)}`);
-  await expect(page.getByRole("heading", { name: "Email verified" })).toBeVisible();
-  await expect(page.getByText("E2E Campaign", { exact: true })).toHaveCount(0);
   await expect(page.getByRole("heading", { name: "E2E Campaign" })).toBeVisible({
     timeout: 10_000,
   });
+  await expect(page).not.toHaveURL(/\/auth\/verify-email/);
+  await expect(
+    page.getByRole("heading", { name: "Sign in to your account" })
+  ).toHaveCount(0);
 });
 
 test.describe("post-verification routing", () => {
+  test.describe("after the Firebase verification continuation returns", () => {
+    test.use({
+      apiMeResponse: emptyApiMeResponse("e2e-verification-return-user"),
+      apiMeResponseAfterAcceptPending: invitedApiMeResponse(
+        "e2e-verification-return-user"
+      ),
+      acceptPendingDelayMs: 1_500,
+      acceptedInvitations: [
+        {
+          id: "invitation-verification-return",
+          tenantId: "invited-workspace",
+          campaignId: "invited-campaign",
+          workspaceRole: "member",
+          campaignRole: "player",
+          status: "accepted",
+          acceptedAt: "2026-08-24T11:00:00.000Z",
+        },
+      ],
+    });
+
+    test("waits for acceptance and authoritative membership refresh without workspace onboarding or a corrective reload", async ({
+      apiCallLog,
+      page,
+      request,
+    }) => {
+      const email = generatedEmail();
+
+      await page.goto("/?invited=true");
+      await page.getByRole("button", { name: "Create an account" }).click();
+      await page.getByLabel("Email address").fill(email);
+      await page.getByLabel("Password", { exact: true }).fill(password);
+      await page.getByLabel("Confirm password", { exact: true }).fill(password);
+      await page.getByRole("button", { name: "Create account" }).click();
+      const oobCode = await getVerificationCode(request, email);
+      await startWorkspaceOnboardingObserver(page);
+
+      await page.goto(
+        `/auth/verify-email?mode=verifyEmail&oobCode=${encodeURIComponent(oobCode)}&invited=true`
+      );
+
+      await expect(page.getByRole("heading", { name: "Email verified" })).toBeVisible();
+      await expect(
+        page.getByRole("heading", { name: "Create your workspace" })
+      ).toHaveCount(0);
+      await expect(
+        page.getByRole("heading", { name: "You have entered the dungeon" })
+      ).toBeVisible({ timeout: 15_000 });
+      await expect(page).toHaveURL(/\/welcome\?invited=true$/);
+      await expect(page.getByText("Invitation accepted", { exact: true })).toBeVisible();
+      await expectWorkspaceOnboardingWasNeverRendered(page);
+      expect(apiCallLog.acceptPending).toHaveLength(1);
+      expect(apiCallLog.apiMe.length).toBeGreaterThanOrEqual(2);
+    });
+  });
+
   test.describe("with an accepted invitation", () => {
     test.use({
       apiMeResponses: [
@@ -706,6 +763,48 @@ test.describe("post-verification routing", () => {
       ).toHaveCount(0);
       await expect(page.getByRole("heading", { name: "You have entered the dungeon" }))
         .toBeVisible({ timeout: 10_000 });
+      await expectWorkspaceOnboardingWasNeverRendered(page);
+      expect(apiCallLog.acceptPending).toHaveLength(1);
+    });
+  });
+
+  test.describe("when verification continuation invitation acceptance fails", () => {
+    test.use({
+      apiMeResponse: emptyApiMeResponse("e2e-verification-access-failure-user"),
+      acceptPendingStatus: 500,
+      expectedConsoleErrors: [
+        "Failed to load resource",
+        "[InvitationAcceptanceBridge] Failed to accept pending invitations",
+      ],
+    });
+
+    test("keeps workspace onboarding blocked behind a recoverable verification result", async ({
+      apiCallLog,
+      page,
+      request,
+    }) => {
+      const email = generatedEmail();
+
+      await page.goto("/?invited=true");
+      await page.getByRole("button", { name: "Create an account" }).click();
+      await page.getByLabel("Email address").fill(email);
+      await page.getByLabel("Password", { exact: true }).fill(password);
+      await page.getByLabel("Confirm password", { exact: true }).fill(password);
+      await page.getByRole("button", { name: "Create account" }).click();
+      const oobCode = await getVerificationCode(request, email);
+      await startWorkspaceOnboardingObserver(page);
+
+      await page.goto(
+        `/auth/verify-email?mode=verifyEmail&oobCode=${encodeURIComponent(oobCode)}&invited=true`
+      );
+
+      await expect(
+        page.getByRole("heading", { name: "Account access unavailable" })
+      ).toBeVisible();
+      await expect(page.getByRole("button", { name: "Try again" })).toBeVisible();
+      await expect(
+        page.getByRole("heading", { name: "Create your workspace" })
+      ).toHaveCount(0);
       await expectWorkspaceOnboardingWasNeverRendered(page);
       expect(apiCallLog.acceptPending).toHaveLength(1);
     });
@@ -914,7 +1013,13 @@ test("renders every recoverable result state responsively and accessibly", async
     { name: "desktop", width: 1440, height: 900 },
     { name: "mobile", width: 390, height: 844 },
   ];
-  const states = ["expired", "failure", "refresh-failed", "already-verified"];
+  const states = [
+    "expired",
+    "failure",
+    "refresh-failed",
+    "access-failed",
+    "already-verified",
+  ];
 
   for (const viewport of viewports) {
     await page.setViewportSize(viewport);

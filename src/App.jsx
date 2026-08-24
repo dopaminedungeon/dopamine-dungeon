@@ -69,7 +69,9 @@ function AppGate() {
   if (window.location.pathname === "/auth/verify-email") {
     return (
       <VerificationActionScreen
+        accessResolutionStatus={accessResolutionStatus}
         onContinueVerifiedSession={continueVerifiedSession}
+        onRetryAccessResolution={retryAccessResolution}
         onSignOut={logout}
       />
     );

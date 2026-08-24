@@ -39,6 +39,7 @@ async function wait(delayMs: number) {
 
 export const test = base.extend<{
   apiMeResponse: ApiMeResponse;
+  apiMeResponseAfterAcceptPending: ApiMeResponse | null;
   apiMeResponses: ApiMeResponse[] | null;
   apiMeStatus: number;
   apiMeDelayMs: number;
@@ -62,6 +63,7 @@ export const test = base.extend<{
   acceptPendingStatus: number;
 }>({
   apiMeResponse: [defaultApiMeResponse, { option: true }],
+  apiMeResponseAfterAcceptPending: [null, { option: true }],
   apiMeResponses: [null, { option: true }],
   apiMeStatus: [200, { option: true }],
   apiMeDelayMs: [0, { option: true }],
@@ -116,6 +118,7 @@ test.beforeEach(async ({
   apiMeDelayMs,
   apiMeDelaySequence,
   apiMeResponse,
+  apiMeResponseAfterAcceptPending,
   apiMeResponses,
   apiMeStatus,
   page,
@@ -123,6 +126,7 @@ test.beforeEach(async ({
 }) => {
   await clearAuthEmulator(request);
   let apiMeCallCount = 0;
+  let acceptPendingCompleted = false;
 
   await page.route("http://127.0.0.1:4173/api/**", async (route) => {
     const requestUrl = new URL(route.request().url());
@@ -139,7 +143,8 @@ test.beforeEach(async ({
       const delayMs = apiMeDelaySequence?.[callIndex] ?? apiMeDelayMs;
       await wait(delayMs);
       const response =
-        apiMeResponses?.[Math.min(callIndex, apiMeResponses.length - 1)] ??
+        (acceptPendingCompleted && apiMeResponseAfterAcceptPending) ||
+        apiMeResponses?.[Math.min(callIndex, apiMeResponses.length - 1)] ||
         apiMeResponse;
       await route.fulfill({
         status: apiMeStatus,
@@ -160,11 +165,17 @@ test.beforeEach(async ({
     if (requestUrl.pathname === "/api/invitations/accept-pending") {
       apiCallLog.acceptPending.push(requestUrl.pathname);
       await wait(acceptPendingDelayMs);
+      const invitationsForRequest = acceptPendingCompleted
+        ? []
+        : acceptedInvitations;
+      if (acceptPendingStatus === 200) {
+        acceptPendingCompleted = true;
+      }
       await route.fulfill({
         status: acceptPendingStatus,
         json:
           acceptPendingStatus === 200
-            ? { ok: true, acceptedInvitations }
+            ? { ok: true, acceptedInvitations: invitationsForRequest }
             : { ok: false, error: "Invitation acceptance unavailable" },
       });
       return;
