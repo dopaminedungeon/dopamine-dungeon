@@ -9,6 +9,11 @@ import {
 } from "../access.js";
 import { setCorsHeaders } from "../cors.js";
 import { db } from "../db.js";
+import {
+  locationReadWhere,
+  stripNestedGmNotes,
+} from "../security-boundaries.js";
+import { canViewAsGm } from "../viewer-mode.js";
 import { locations } from "../../../db/schema/locations.js";
 
 type LocationRow = typeof locations.$inferSelect;
@@ -55,20 +60,6 @@ function normalizeData(value: unknown) {
     : {};
 }
 
-function stripGmOnlyLocationFields(data: Record<string, unknown>): Record<string, unknown> {
-  const { gmNotes, data: nestedData, ...safeData } = data;
-  void gmNotes;
-  const safeNestedData: unknown =
-    nestedData && typeof nestedData === "object" && !Array.isArray(nestedData)
-      ? stripGmOnlyLocationFields(nestedData as Record<string, unknown>)
-      : nestedData;
-
-  return {
-    ...safeData,
-    ...(safeNestedData ? { data: safeNestedData } : {}),
-  };
-}
-
 function toLocationPayload(row: LocationRow, isGm: boolean) {
   const payload = {
     ...row.data,
@@ -93,7 +84,7 @@ function toLocationPayload(row: LocationRow, isGm: boolean) {
     };
   }
 
-  return stripGmOnlyLocationFields(payload);
+  return stripNestedGmNotes(payload);
 }
 
 function toLocationValues(campaignId: string, rawLocation: Record<string, unknown>) {
@@ -162,14 +153,13 @@ async function handleLocations(req: VercelRequest, res: VercelResponse) {
       campaignId: campaign.id,
       userId: currentUser.id,
     });
-    const isGm = membership.role === "gm";
+    const isGm = canViewAsGm(req, membership.role);
 
-    const visibilityFilter = isGm
-      ? eq(locations.campaignId, campaign.id)
-      : and(eq(locations.campaignId, campaign.id), eq(locations.visibility, "public"));
-    const whereClause = locationId
-      ? and(visibilityFilter, eq(locations.id, locationId))
-      : visibilityFilter;
+    const whereClause = locationReadWhere(locations, {
+      campaignId: campaign.id,
+      locationId,
+      isGm,
+    });
 
     const rows = await db.select().from(locations).where(whereClause);
 

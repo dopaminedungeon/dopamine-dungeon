@@ -1,5 +1,9 @@
 import { auth } from "../../firebase/firebase";
 import { onAuthStateChanged } from "firebase/auth";
+import {
+  SELECTED_MODE_HEADER,
+  getStoredSelectedMode,
+} from "./selectedMode.js";
 
 function getApiBaseUrl() {
   const configuredUrl = import.meta.env.VITE_API_BASE_URL;
@@ -67,6 +71,9 @@ export async function apiFetch<T>(path: string, options: ApiOptions = {}): Promi
   const { skipAuth, headers, ...requestOptions } = options;
 
   const authHeaders = await getAuthHeaders(skipAuth);
+  const selectedModeHeaders = skipAuth
+    ? {}
+    : { [SELECTED_MODE_HEADER]: getStoredSelectedMode() };
   const url = `${API_BASE_URL}${path}`;
   const method = String(requestOptions.method || "GET").toUpperCase();
 
@@ -82,6 +89,7 @@ export async function apiFetch<T>(path: string, options: ApiOptions = {}): Promi
           }
         : {}),
       ...authHeaders,
+      ...selectedModeHeaders,
       ...headers,
     },
   });

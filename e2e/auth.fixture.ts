@@ -80,8 +80,10 @@ test.beforeEach(async ({ apiMeResponse, apiMeStatus, page, request }) => {
   await page.route("http://127.0.0.1:4173/api/**", async (route) => {
     const requestUrl = new URL(route.request().url());
     const authorization = route.request().headers().authorization;
+    const selectedMode = route.request().headers()["x-dd-mode"];
 
     expect(authorization).toMatch(/^Bearer /);
+    expect(selectedMode).toMatch(/^(gm|player)$/);
 
     if (requestUrl.pathname === "/api/me") {
       await route.fulfill({

@@ -9,6 +9,8 @@ import {
 } from "../access.js";
 import { setCorsHeaders } from "../cors.js";
 import { db } from "../db.js";
+import { loreReadWhere, stripNestedGmNotes } from "../security-boundaries.js";
+import { canViewAsGm } from "../viewer-mode.js";
 import { lore } from "../../../db/schema/lore.js";
 
 type LoreRow = typeof lore.$inferSelect;
@@ -54,20 +56,6 @@ function normalizeData(value: unknown) {
     : {};
 }
 
-function stripGmOnlyLoreFields(data: Record<string, unknown>): Record<string, unknown> {
-  const { gmNotes, data: nestedData, ...safeData } = data;
-  void gmNotes;
-  const safeNestedData: unknown =
-    nestedData && typeof nestedData === "object" && !Array.isArray(nestedData)
-      ? stripGmOnlyLoreFields(nestedData as Record<string, unknown>)
-      : nestedData;
-
-  return {
-    ...safeData,
-    ...(safeNestedData ? { data: safeNestedData } : {}),
-  };
-}
-
 function toLorePayload(row: LoreRow, isGm: boolean) {
   const payload = {
     ...row.data,
@@ -91,7 +79,7 @@ function toLorePayload(row: LoreRow, isGm: boolean) {
     };
   }
 
-  return stripGmOnlyLoreFields(payload);
+  return stripNestedGmNotes(payload);
 }
 
 function toLoreValues(campaignId: string, rawLore: Record<string, unknown>) {
@@ -156,14 +144,13 @@ async function handleLore(req: VercelRequest, res: VercelResponse) {
       campaignId: campaign.id,
       userId: currentUser.id,
     });
-    const isGm = membership.role === "gm";
+    const isGm = canViewAsGm(req, membership.role);
 
-    const visibilityFilter = isGm
-      ? eq(lore.campaignId, campaign.id)
-      : and(eq(lore.campaignId, campaign.id), eq(lore.visibility, "public"));
-    const whereClause = loreId
-      ? and(visibilityFilter, eq(lore.id, loreId))
-      : visibilityFilter;
+    const whereClause = loreReadWhere(lore, {
+      campaignId: campaign.id,
+      loreId,
+      isGm,
+    });
 
     const rows = await db.select().from(lore).where(whereClause);
 

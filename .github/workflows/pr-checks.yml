@@ -11,7 +11,8 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  checks:
+  trusted-quality-gate:
+    name: DD Quality Gate
     runs-on: [self-hosted, macOS, X64]
 
     steps:
@@ -27,7 +28,7 @@ jobs:
         run: corepack enable
 
       - name: Setup pnpm
-        run: corepack prepare pnpm@10.28.1 --activate
+        run: corepack prepare pnpm@11.9.0 --activate
 
       - name: Show versions
         run: |
@@ -46,8 +47,61 @@ jobs:
           pnpm install --frozen-lockfile
           pnpm approve-builds
 
-      - name: Lint
-        run: pnpm lint || true
+      - name: Unit and domain tests
+        id: unit
+        run: pnpm test:unit
 
-      - name: Build
+      - name: API integration tests
+        id: api
+        if: always()
+        run: pnpm test:api
+
+      - name: Boundary and security regression tests
+        id: boundary
+        if: always()
+        run: pnpm test:boundary
+
+      - name: API typecheck
+        id: api_typecheck
+        if: always()
+        run: pnpm typecheck:api
+
+      - name: E2E infrastructure typecheck
+        id: e2e_typecheck
+        if: always()
+        run: pnpm typecheck:e2e
+
+      - name: Production build
+        id: build
+        if: always()
         run: pnpm build
+
+      - name: Playwright PR smoke (advisory)
+        id: e2e_smoke
+        if: always()
+        continue-on-error: true
+        run: pnpm test:e2e:smoke
+
+      - name: Lint (advisory; cleanup tracked by #316)
+        id: lint
+        if: always()
+        continue-on-error: true
+        run: pnpm lint
+
+      - name: Quality gate summary
+        if: always()
+        run: |
+          {
+            echo "## Dopamine Dungeon Quality Gate"
+            echo ""
+            echo "| Check | Result | Role |"
+            echo "|---|---|---|"
+            echo "| Unit/domain tests | ${{ steps.unit.outcome }} | Blocking |"
+            echo "| API integration tests | ${{ steps.api.outcome }} | Blocking |"
+            echo "| Boundary/security tests | ${{ steps.boundary.outcome }} | Blocking |"
+            echo "| API typecheck | ${{ steps.api_typecheck.outcome }} | Blocking |"
+            echo "| E2E typecheck | ${{ steps.e2e_typecheck.outcome }} | Blocking |"
+            echo "| Production build | ${{ steps.build.outcome }} | Blocking |"
+            echo "| Playwright PR smoke | ${{ steps.e2e_smoke.outcome }} | Advisory |"
+            echo "| Lint | ${{ steps.lint.outcome }} | Advisory; cleanup tracked by #316 |"
+          } >> "$GITHUB_STEP_SUMMARY"

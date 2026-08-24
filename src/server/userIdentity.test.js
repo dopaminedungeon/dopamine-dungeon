@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
-import test from "node:test";
 import { drizzle } from "drizzle-orm/postgres-js";
+import { test } from "vitest";
 
 import { users } from "../../db/schema/users.ts";
 import { buildUserIdentityUpsert } from "./userIdentityQuery.js";

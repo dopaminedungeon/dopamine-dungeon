@@ -8,9 +8,14 @@
     "dev:auth-test": "vite --mode test --host 127.0.0.1 --port 4173",
     "build": "tsc -p tsconfig.api.json && vite build",
     "preview": "vite preview",
-    "test": "node --test src/**/*.test.js",
+    "test": "vitest run",
+    "test:unit": "vitest run src/auth src/data/api/selectedMode.test.js src/server/apiErrors.test.js src/server/userIdentity.test.js",
+    "test:api": "vitest run src/server/api-handlers.integration.test.ts",
+    "test:boundary": "vitest run src/server/security-boundaries.test.js src/server/access-boundaries.test.ts src/server/viewer-mode.test.ts",
     "test:e2e": "node scripts/auth-test-runner.mjs test",
+    "test:e2e:smoke": "node scripts/auth-test-runner.mjs test --grep @smoke",
     "test:e2e:headed": "node scripts/auth-test-runner.mjs test --headed",
+    "quality": "pnpm test:unit && pnpm test:api && pnpm test:boundary && pnpm typecheck:api && pnpm typecheck:e2e && pnpm build",
     "firebase:emulators:auth": "node scripts/auth-test-runner.mjs emulator",
     "lint": "eslint .",
     "typecheck:api": "tsc -p tsconfig.api.json",
@@ -51,7 +56,8 @@
     "tailwindcss": "4.1.18",
     "typescript": "^6.0.3",
     "vercel": "^50.42.0",
-    "vite": "^7.2.4"
+    "vite": "^7.2.4",
+    "vitest": "^4.1.11"
   },
   "packageManager": "pnpm@11.9.0"
 }
