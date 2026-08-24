@@ -1,7 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { Link, NavLink, useNavigate } from "react-router-dom";
 import { getAllCharacters, upsertCharacter } from "../data/characters/characters.repo";
-import { importCharacterFromDdbPdf } from "../data/characters/characterImport.service";
 import { useCampaign } from "../context/CampaignContext";
 import { useMode } from "../context/ModeContext";
 import { useAuth } from "../context/AuthContext";
@@ -361,6 +360,9 @@ const PCs = () => {
       setIsImporting(true);
       setImportMessage("");
 
+      const { importCharacterFromDdbPdf } = await import(
+        "../data/characters/characterImport.service"
+      );
       const result = await importCharacterFromDdbPdf(file);
 
       if (!result?.ok || !result?.draft) {

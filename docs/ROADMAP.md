@@ -38,7 +38,9 @@ Micro‑polish across all profile pages:
 - Hero layout refinements
 
 ### 🔸 7. Lore System Expansion & Dashboard (#6)
-More lore types, relationships, metadata, and UI polish.
+More lore types, typed cross-links, metadata, and UI polish. Future Friendship
+Index work will provide intentional relationship behavior without restoring a
+standalone Relationships page.
 
 ### 🔸 8. Bulk Import for NPCs/Items (#19)
 Quality‑of‑life upgrade for rapid worldbuilding and wholesale migrations.

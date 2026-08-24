@@ -451,7 +451,6 @@ export default function WorkspaceSettings() {
                                             {members.map((member) => {
                                                 const isCurrentUser = member.firebaseUid === user?.uid;
                                                 const isOnlyOwner = member.role === "owner" && ownerCount <= 1;
-	                                                const isBusy = savingMemberId === member.id;
 	                                                const anyMemberBusy = Boolean(savingMemberId);
 
                                                 return (

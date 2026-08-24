@@ -2,13 +2,16 @@ name: PR Checks
 
 on:
   push:
-    branches: [dev]
+    branches: [main, dev, 'release/**']
   pull_request:
-    branches: [main, dev]
+    branches: [main, dev, 'release/**']
 
 concurrency:
   group: pr-checks-${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
+
+permissions:
+  contents: read
 
 jobs:
   trusted-quality-gate:
@@ -43,12 +46,15 @@ jobs:
           pnpm config get onlyBuiltDependencies
 
       - name: Install dependencies
-        run: |
-          pnpm install --frozen-lockfile
-          pnpm approve-builds
+        run: pnpm install --frozen-lockfile
+
+      - name: Lint
+        id: lint
+        run: pnpm lint
 
       - name: Unit and domain tests
         id: unit
+        if: always()
         run: pnpm test:unit
 
       - name: API integration tests
@@ -82,12 +88,6 @@ jobs:
         continue-on-error: true
         run: pnpm test:e2e:smoke
 
-      - name: Lint (advisory; cleanup tracked by #316)
-        id: lint
-        if: always()
-        continue-on-error: true
-        run: pnpm lint
-
       - name: Quality gate summary
         if: always()
         run: |
@@ -96,6 +96,7 @@ jobs:
             echo ""
             echo "| Check | Result | Role |"
             echo "|---|---|---|"
+            echo "| Lint | ${{ steps.lint.outcome }} | Blocking |"
             echo "| Unit/domain tests | ${{ steps.unit.outcome }} | Blocking |"
             echo "| API integration tests | ${{ steps.api.outcome }} | Blocking |"
             echo "| Boundary/security tests | ${{ steps.boundary.outcome }} | Blocking |"
@@ -103,5 +104,4 @@ jobs:
             echo "| E2E typecheck | ${{ steps.e2e_typecheck.outcome }} | Blocking |"
             echo "| Production build | ${{ steps.build.outcome }} | Blocking |"
             echo "| Playwright PR smoke | ${{ steps.e2e_smoke.outcome }} | Advisory |"
-            echo "| Lint | ${{ steps.lint.outcome }} | Advisory; cleanup tracked by #316 |"
           } >> "$GITHUB_STEP_SUMMARY"

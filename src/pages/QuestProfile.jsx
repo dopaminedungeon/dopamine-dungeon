@@ -50,8 +50,6 @@ export default function QuestProfile() {
   const [quest, setQuest] = useState(initialQuest);
   const [tagInput, setTagInput] = useState(initialQuest.tags.join(", "));
 
-  const currentStatus = statusOptions.find((s) => s.value === quest.status) || statusOptions[0];
-
   const handleFieldChange = (field, value) => {
     setQuest((prev) => ({
       ...prev,

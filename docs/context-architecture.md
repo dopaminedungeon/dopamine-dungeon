@@ -207,10 +207,6 @@ class DataScope {
   +string campaignId
 }
 
-%% =========================
-%% Relationships
-%% =========================
-
 User "1" --> "0..*" WorkspaceMembership : has
 Workspace "1" --> "0..*" WorkspaceMembership : contains
 Workspace "1" --> "0..*" Campaign : owns

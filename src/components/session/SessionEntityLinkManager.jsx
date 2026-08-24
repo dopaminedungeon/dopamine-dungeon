@@ -124,9 +124,12 @@ export default function SessionEntityLinkManager({
       .filter(Boolean);
   }, [relevantLinks, sessionId]);
 
-  const labelFn =
-    getEntityLabel ||
-    ((e) => (e?.name ? String(e.name) : e?.title ? String(e.title) : e?.id));
+  const labelFn = useMemo(
+    () =>
+      getEntityLabel ||
+      ((e) => (e?.name ? String(e.name) : e?.title ? String(e.title) : e?.id)),
+    [getEntityLabel]
+  );
 
   const filteredResults = useMemo(() => {
     const q = query.trim().toLowerCase();

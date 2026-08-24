@@ -150,7 +150,7 @@ Player characters are actors with mechanical state.
 
 ### Not Allowed (v1)
 - 🚫 PC ↔ PC  
-  *(PC-to-PC social bonds may be handled by a dedicated Relationships module later.)*
+  *(PC-to-PC social bonds belong to future Friendship Index work, not a standalone page.)*
 
 ---
 

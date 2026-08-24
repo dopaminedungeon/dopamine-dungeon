@@ -26,4 +26,17 @@ export default defineConfig([
       'no-unused-vars': ['error', { varsIgnorePattern: '^[A-Z_]' }],
     },
   },
+  {
+    files: [
+      'src/context/CampaignContext.jsx',
+      'src/context/ModeContext.jsx',
+      'src/context/TenantContext.jsx',
+    ],
+    rules: {
+      // These providers intentionally synchronize auth/storage state in effects.
+      'react-hooks/set-state-in-effect': 'off',
+      // Context modules intentionally export both a provider and its public hook.
+      'react-refresh/only-export-components': 'off',
+    },
+  },
 ])

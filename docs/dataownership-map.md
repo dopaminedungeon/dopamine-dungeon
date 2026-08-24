@@ -53,7 +53,6 @@ S["session (sessionId)"]:::ent
 I["item (itemId)"]:::ent
 COND["condition (conditionId)"]:::ent
 ARC["arc (arcId)"]:::ent
-REL["relationship (relId)"]:::ent
 Q["quest (questId)"]:::ent
 MAP["map (mapId)"]:::ent
 LORE["lore (loreId)"]:::ent
@@ -121,7 +120,6 @@ FS_MAPS[".../maps/{mapId}"]:::fs
 FS_LORE[".../lore/{loreId}"]:::fs
 FS_ARCS[".../arcs/{arcId}"]:::fs
 FS_QUESTS[".../quests/{questId}"]:::fs
-FS_RELS[".../relationships/{relId}"]:::fs
 FS_COND[".../conditions/{condId}"]:::fs
 
 FS_BOH[".../bagOfHolding"]:::fs
@@ -170,7 +168,6 @@ If something is unclear in code, **this table wins**.
 | Sessions | `.../sessions/{sessionId}` | Campaign | GM | read | ❌ | ✅ | Read-only |
 | Arcs | `.../arcs/{arcId}` | Campaign | GM | ❌ | ❌ | ✅ | GM-only |
 | Quests | `.../quests/{questId}` | Campaign | GM | ❌ | ❌ | ✅ | GM-only |
-| Relationships | `.../relationships/{relId}` | Campaign | GM | ❌ | ❌ | ✅ | GM-only |
 | Conditions | `.../conditions/{condId}` | Campaign | GM | ⚠️ special | ❌ | ✅ | UX-restricted |
 
 **Legend:**  
@@ -223,7 +220,6 @@ GMs are the sole creators and editors of campaign content.
   - Campaign Settings
   - Arcs
   - Quests
-  - Relationships
   - Conditions
 
 #### World Content
@@ -249,7 +245,7 @@ GMs are the sole creators and editors of campaign content.
 
 The following are **never writable** by players:
 - Campaign Settings
-- Narrative structures (Arcs, Quests, Relationships)
+  - Narrative structures (Arcs, Quests)
 - NPCs
 - Maps
 - Lore

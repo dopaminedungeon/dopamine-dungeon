@@ -110,9 +110,6 @@ Key entry points:
 - **Quests** (GM-only; cards → profile)  
   `quests.md`
 
-- **Relationships** (GM-only; cards → profile)  
-  `relationships.md`
-
 - **Sessions** (read-only; cards → profile)  
   `sessions.md`
 
@@ -147,9 +144,6 @@ Key entry points:
 
 - **Quest Profile**  
   `questprofile.md`
-
-- **Relationship Profile**  
-  `relationshipprofile.md`
 
 - **Session Profile**  
   `sessionprofile.md`

@@ -61,19 +61,20 @@ Expected outcome:
 
 Campaign information becomes an interconnected knowledge system.
 
-### 3. Relationship foundations
+### 3. Friendship Index foundations
 
-Potential scope:
+Potential future scope:
 
 - relationship scores;
 - relationship direction;
-- NPC-to-party and NPC-to-character relationships;
+- PC-NPC and NPC-NPC relationships;
 - relationship history;
 - faction relationships;
 - GM-controlled visibility.
 
 This work must not begin until the underlying NPC and persistence foundations
-are reliable.
+are reliable. It is not a standalone Relationships page; it builds on typed
+cross-links and their existing visibility boundaries.
 
 ### 4. Product consistency and quality
 

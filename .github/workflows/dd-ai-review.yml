@@ -2,7 +2,7 @@ name: DD AI Review
 
 on:
   pull_request:
-    branches: [main, dev]
+    branches: [main, dev, 'release/**']
     types: [opened, synchronize, reopened]
 
 concurrency:
