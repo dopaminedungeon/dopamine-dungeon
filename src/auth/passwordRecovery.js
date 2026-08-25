@@ -15,6 +15,7 @@ const NON_IDENTIFYING_REQUEST_ERROR_CODES = new Set([
 
 const INVALID_RESET_CODE_ERRORS = new Set([
   "auth/invalid-action-code",
+  "auth/invalid-credential",
   "auth/invalid-continue-uri",
   "auth/missing-action-code",
   "auth/unauthorized-continue-uri",

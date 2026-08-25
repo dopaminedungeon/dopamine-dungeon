@@ -64,3 +64,13 @@ test("expired, invalid, malformed, used, and missing-user codes fail safely", ()
     "failure"
   );
 });
+
+test("production Firebase invalid-credential response for a used reset code is recoverable", () => {
+  assert.equal(
+    getPasswordResetFailureState({
+      code: "auth/invalid-credential",
+      message: "Firebase: Error (auth/invalid-credential).",
+    }),
+    "invalid"
+  );
+});
