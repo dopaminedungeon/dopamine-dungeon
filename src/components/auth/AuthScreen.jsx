@@ -1,68 +1,23 @@
 import { useEffect, useState } from "react";
 import {
   ArrowLeft,
-  Check,
-  Eye,
-  EyeOff,
   LoaderCircle,
-  LockKeyhole,
   Mail,
 } from "lucide-react";
 
 import { auth } from "../../firebase/firebase";
+import {
+  isValidEmailAddress,
+  normalizeEmailAddress,
+} from "../../auth/formValidation";
 import { validatePasswordForAuth } from "../../auth/passwordValidation";
 import {
   getAuthErrorMessage,
   getPasswordRequirements,
 } from "../../auth/authMessages";
 import GradientBackground from "../GradientBackground";
-
-const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-
-function PasswordField({
-  id,
-  label,
-  name,
-  autoComplete,
-  value,
-  onChange,
-  visible,
-  onToggleVisibility,
-  visibilityLabel,
-}) {
-  const toggleLabel = `${visible ? "Hide" : "Show"} ${visibilityLabel}`;
-
-  return (
-    <div>
-      <label htmlFor={id} className="block text-[clamp(16px,1.0625rem,22px)] leading-[1.4] font-medium text-zinc-200">
-        {label}
-      </label>
-      <div className="relative mt-[10px]">
-        <LockKeyhole className="pointer-events-none absolute left-[16px] top-1/2 h-[22px] w-[22px] -translate-y-1/2 text-zinc-500" aria-hidden="true" />
-        <input
-          id={id}
-          type={visible ? "text" : "password"}
-          name={name}
-          autoComplete={autoComplete}
-          required
-          value={value}
-          onChange={onChange}
-          className="h-[56px] w-full rounded-md border border-zinc-700 bg-zinc-950 pl-[52px] pr-[60px] text-[clamp(16px,1rem,20px)] text-white outline-none transition focus:border-purple-400 focus:ring-1 focus:ring-purple-400"
-        />
-        <button
-          type="button"
-          onClick={onToggleVisibility}
-          className="absolute right-[6px] top-1/2 flex h-[44px] w-[44px] -translate-y-1/2 items-center justify-center rounded-md text-zinc-500 hover:text-white focus-visible:outline-2 focus-visible:outline-purple-300"
-          aria-label={toggleLabel}
-          aria-pressed={visible}
-          title={toggleLabel}
-        >
-          {visible ? <EyeOff className="h-[22px] w-[22px]" aria-hidden="true" /> : <Eye className="h-[22px] w-[22px]" aria-hidden="true" />}
-        </button>
-      </div>
-    </div>
-  );
-}
+import PasswordField from "./PasswordField";
+import PasswordRequirements from "./PasswordRequirements";
 
 export default function AuthScreen({
   onGoogle,
@@ -125,8 +80,8 @@ export default function AuthScreen({
     event.preventDefault();
     setError("");
 
-    const normalizedEmail = email.trim();
-    if (!EMAIL_PATTERN.test(normalizedEmail)) {
+    const normalizedEmail = normalizeEmailAddress(email);
+    if (!isValidEmailAddress(normalizedEmail)) {
       setError("Enter a valid email address.");
       return;
     }
@@ -276,18 +231,20 @@ export default function AuthScreen({
                     visibilityLabel="password"
                   />
 
+                  {!isRegistering && (
+                    <div className="-mt-[12px] flex justify-end">
+                      <a
+                        href="/auth/recover"
+                        className="inline-flex min-h-[44px] items-center px-[4px] font-semibold text-purple-300 underline decoration-purple-400/70 underline-offset-4 hover:text-purple-100 hover:decoration-current focus-visible:rounded-sm focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-purple-300"
+                      >
+                        Forgot password?
+                      </a>
+                    </div>
+                  )}
+
                   {isRegistering && (
                     <>
-                      {passwordRequirements.length > 0 && (
-                        <ul className="grid gap-[8px] text-[clamp(14px,0.875rem,18px)] leading-[1.4] text-zinc-400" aria-label="Password requirements">
-                          {passwordRequirements.map((requirement) => (
-                            <li key={requirement.key} className="flex items-center gap-2">
-                              <Check className={`h-[16px] w-[16px] shrink-0 ${requirement.met ? "text-emerald-400" : "text-zinc-600"}`} aria-hidden="true" />
-                              {requirement.label}
-                            </li>
-                          ))}
-                        </ul>
-                      )}
+                      <PasswordRequirements requirements={passwordRequirements} />
 
                       <PasswordField
                         id="password-confirmation"

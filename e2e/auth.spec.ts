@@ -5,7 +5,12 @@ import { verifyAuthHeader } from "../src/server/auth";
 import { test, expect } from "./auth.fixture";
 import {
   createVerifiedUser,
+  getAuthEmulatorAccount,
+  getPasswordResetCode,
   getVerificationCode,
+  hasPasswordResetCode,
+  lookupAuthEmulatorAccount,
+  requestPasswordResetThroughEmulator,
   sendVerificationEmail,
   signUpWithPassword,
   signInWithPassword,
@@ -13,6 +18,9 @@ import {
 } from "./auth-emulator";
 
 const password = "DungeonTest42!";
+const replacementPassword = "RecoveredDungeon84!";
+const resetConfirmation =
+  "If an account can use password authentication with that email address, we've sent instructions to reset its password.";
 const invitedWorkspaceId = "00000000-0000-4000-8000-000000000011";
 const invitedCampaignId = "00000000-0000-4000-8000-000000000012";
 
@@ -568,6 +576,244 @@ test("keeps password visibility toggles independent and keyboard accessible", as
   await expect(page.getByRole("alert")).toHaveText("Passwords do not match.");
   await expect(page.getByRole("heading", { name: "Create your account" })).toBeVisible();
   await expectStableAuthLayout(page, { min: 357, max: 359 });
+});
+
+test("offers non-identifying password recovery for existing and nonexistent addresses", async ({
+  page,
+  request,
+}) => {
+  const existingEmail = generatedEmail();
+  const nonexistentEmail = generatedEmail();
+  await createVerifiedUser(request, existingEmail, password);
+
+  let delayedRequest = false;
+  await page.route("**/api/auth/send-password-reset-email", async (route) => {
+    if (!delayedRequest) {
+      delayedRequest = true;
+      await new Promise((resolve) => setTimeout(resolve, 500));
+    }
+    await route.fallback();
+  });
+
+  await openEmailSignIn(page);
+  await page.getByRole("link", { name: "Forgot password?" }).click();
+  await expect(page).toHaveURL(/\/auth\/recover$/);
+  await expect(page.getByRole("heading", { name: "Reset your password" })).toBeVisible();
+
+  await page.getByLabel("Email address").fill("not-an-email");
+  await page.getByRole("button", { name: "Send reset instructions" }).click();
+  await expect(page.getByRole("alert")).toHaveText("Enter a valid email address.");
+
+  await page.getByLabel("Email address").fill(existingEmail);
+  await page.getByRole("button", { name: "Send reset instructions" }).click();
+  await expect(
+    page.getByRole("button", { name: "Sending instructions..." })
+  ).toBeDisabled();
+  await expect(page.getByRole("heading", { name: "Check your email" })).toBeVisible();
+  await expect(page.getByText(resetConfirmation, { exact: true })).toBeVisible();
+  await expect(page.locator("main")).not.toContainText(existingEmail);
+  expect(await getPasswordResetCode(request, existingEmail)).toBeTruthy();
+
+  await page.getByRole("button", { name: "Request another reset" }).click();
+  await page.getByLabel("Email address").fill(nonexistentEmail);
+  await page.getByRole("button", { name: "Send reset instructions" }).click();
+  await expect(page.getByRole("heading", { name: "Check your email" })).toBeVisible();
+  await expect(page.getByText(resetConfirmation, { exact: true })).toBeVisible();
+  await expect(page.locator("main")).not.toContainText(nonexistentEmail);
+  await expect(page.getByText("E2E Campaign", { exact: true })).toHaveCount(0);
+  await expect(page.getByRole("heading", { name: "Create your workspace" })).toHaveCount(0);
+});
+
+test.describe("password recovery service failures", () => {
+  test.use({ expectedConsoleErrors: ["503 (Service Unavailable)"] });
+
+  test("remain retryable without identifying an account", async ({ page }) => {
+    await page.route("**/api/auth/send-password-reset-email", async (route) => {
+      await route.fulfill({
+        status: 503,
+        json: {
+          ok: false,
+          error: "Password recovery is temporarily unavailable. Please try again.",
+        },
+      });
+    });
+
+    await page.goto("/auth/recover");
+    await page.getByLabel("Email address").fill(generatedEmail());
+    await page.getByRole("button", { name: "Send reset instructions" }).click();
+
+    await expect(page.getByRole("alert")).toHaveText(
+      "Password recovery is temporarily unavailable. Please try again."
+    );
+    await expect(
+      page.getByRole("button", { name: "Send reset instructions" })
+    ).toBeEnabled();
+    await expect(page.getByRole("heading", { name: "Check your email" })).toHaveCount(0);
+  });
+});
+
+test("forces password recovery into a signed-out route without application context", async ({
+  page,
+  request,
+}) => {
+  const email = generatedEmail();
+  await createVerifiedUser(request, email, password);
+
+  await openEmailSignIn(page);
+  await page.getByLabel("Email address").fill(email);
+  await page.getByLabel("Password", { exact: true }).fill(password);
+  await page.getByRole("button", { name: "Sign in", exact: true }).click();
+  await expect(page.getByRole("heading", { name: "E2E Campaign" })).toBeVisible();
+
+  await page.goto("/auth/recover");
+  await expect(page.getByRole("heading", { name: "Reset your password" })).toBeVisible();
+  await expect(page.getByText("E2E Campaign", { exact: true })).toHaveCount(0);
+  await expect(page.getByRole("heading", { name: "Create your workspace" })).toHaveCount(0);
+
+  await page.getByRole("link", { name: "Return to sign in" }).click();
+  await expect(page.getByRole("heading", { name: "Sign in to your account" })).toBeVisible();
+});
+
+test("verifies a reset link, enforces shared password policy, and replaces the credential", async ({
+  page,
+  request,
+}) => {
+  const email = generatedEmail();
+  const account = await createVerifiedUser(request, email, password);
+  await requestPasswordResetThroughEmulator(request, email);
+  const oobCode = await getPasswordResetCode(request, email);
+
+  await page.route("http://127.0.0.1:9099/**", async (route) => {
+    if (new URL(route.request().url()).pathname.endsWith("/accounts:resetPassword")) {
+      await new Promise((resolve) => setTimeout(resolve, 400));
+    }
+    await route.continue();
+  });
+
+  const resetPath = `/auth/reset-password?mode=resetPassword&oobCode=${encodeURIComponent(oobCode)}`;
+  await page.goto(resetPath);
+  await expect(page.getByRole("heading", { name: "Checking your reset link" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Choose a new password" })).toBeVisible();
+  await expect(page).toHaveURL(/\/auth\/reset-password$/);
+
+  const newPassword = page.getByLabel("New password", { exact: true });
+  const confirmation = page.getByLabel("Confirm new password", { exact: true });
+  await newPassword.fill(replacementPassword);
+  await confirmation.fill("DifferentDungeon84!");
+  await page.getByRole("button", { name: "Update password" }).click();
+  await expect(page.getByRole("alert")).toHaveText("Passwords do not match.");
+
+  await newPassword.fill("short");
+  await confirmation.fill("short");
+  await page.getByRole("button", { name: "Update password" }).click();
+  await expect(page.getByRole("alert")).toHaveText(
+    "Your password does not meet the requirements."
+  );
+  await expect(page.getByText("At least 6 characters", { exact: true })).toBeVisible();
+
+  await newPassword.fill(replacementPassword);
+  await confirmation.fill(replacementPassword);
+  await page.getByRole("button", { name: "Update password" }).click();
+  await expect(page.getByRole("button", { name: "Updating password..." })).toBeDisabled();
+  await expect(page.getByRole("heading", { name: "Password updated" })).toBeVisible();
+  await expect(page.getByRole("status")).toHaveText(
+    "Your password has been changed successfully. You can now sign in with your new password."
+  );
+  await expect(page.getByText("Your reset code has been used securely.")).toHaveCount(0);
+  await expect(page.getByRole("link", { name: "Return to sign in" })).toBeVisible();
+
+  await expect(signInWithPassword(request, email, password)).rejects.toThrow();
+  const replacementSession = await signInWithPassword(
+    request,
+    email,
+    replacementPassword
+  );
+  expect(replacementSession.localId).toBe(account.localId);
+
+  await page.getByRole("link", { name: "Return to sign in" }).click();
+  await expect(page.getByRole("heading", { name: "Sign in to your account" })).toBeVisible();
+
+  let expectedFirebaseRequestErrors = 0;
+  let unexpectedConsoleErrors = 0;
+  let uncaughtPageErrors = 0;
+  page.on("console", (message) => {
+    if (message.type() !== "error") return;
+
+    const isExpectedFirebaseRequestError =
+      message.location().url.includes("/accounts:resetPassword") &&
+      message.text().includes("400 (Bad Request)");
+    if (isExpectedFirebaseRequestError) {
+      expectedFirebaseRequestErrors += 1;
+    } else {
+      unexpectedConsoleErrors += 1;
+    }
+  });
+  page.on("pageerror", () => {
+    uncaughtPageErrors += 1;
+  });
+
+  const consumedCodeResponse = page.waitForResponse(
+    (response) =>
+      new URL(response.url()).pathname.endsWith("/accounts:resetPassword") &&
+      response.status() === 400
+  );
+  await page.goto(resetPath);
+  const response = await consumedCodeResponse;
+  const responseBody = (await response.json()) as {
+    error?: { message?: string };
+  };
+  expect(responseBody.error?.message).toBe("INVALID_OOB_CODE");
+  await expect(page.getByRole("heading", { name: "Reset link unavailable" })).toBeVisible();
+  await expect(page.getByText("This password-reset link is invalid or has already been used.")).toBeVisible();
+  await expect(page.getByRole("link", { name: "Request another reset" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Password reset unavailable" })).toHaveCount(0);
+  expect(expectedFirebaseRequestErrors).toBeGreaterThanOrEqual(1);
+  expect(unexpectedConsoleErrors).toBe(0);
+  expect(uncaughtPageErrors).toBe(0);
+  await expect(page.locator("main")).not.toContainText(email);
+
+  await page.goto("/");
+  await page.getByRole("button", { name: "Continue with email" }).click();
+  await page.getByLabel("Email address").fill(email);
+  await page.getByLabel("Password", { exact: true }).fill(replacementPassword);
+  await page.getByRole("button", { name: "Sign in", exact: true }).click();
+  await expect(page.getByRole("heading", { name: "E2E Campaign" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Create your workspace" })).toHaveCount(0);
+});
+
+test("does not issue reset actions or verify an unverified account", async ({
+  page,
+  request,
+}) => {
+  const email = generatedEmail();
+  const account = await signUpWithPassword(request, email, password);
+
+  await page.goto("/auth/recover");
+  await page.getByLabel("Email address").fill(email);
+  await page.getByRole("button", { name: "Send reset instructions" }).click();
+  await expect(page.getByRole("heading", { name: "Check your email" })).toBeVisible();
+  await expect(page.getByText(resetConfirmation, { exact: true })).toBeVisible();
+  await expect(page.getByText("E2E Campaign", { exact: true })).toHaveCount(0);
+  await expect(page.getByRole("heading", { name: "Create your workspace" })).toHaveCount(0);
+  expect(await hasPasswordResetCode(request, email)).toBe(false);
+
+  const storedAccount = await lookupAuthEmulatorAccount(request, account.idToken);
+  expect(storedAccount.localId).toBe(account.localId);
+  expect(storedAccount.emailVerified).toBe(false);
+});
+
+test("handles malformed and expired reset links with a recovery action", async ({ page }) => {
+  await page.goto("/auth/reset-password?mode=resetPassword");
+  await expect(page.getByRole("heading", { name: "Reset link unavailable" })).toBeVisible();
+  await page.getByRole("link", { name: "Request another reset" }).click();
+  await expect(page).toHaveURL(/\/auth\/recover$/);
+  await expect(page.getByRole("heading", { name: "Reset your password" })).toBeVisible();
+
+  await page.goto("/auth/reset-password?testState=expired");
+  await expect(page.getByRole("heading", { name: "Reset link expired" })).toBeVisible();
+  await expect(page.getByRole("link", { name: "Request another reset" })).toBeVisible();
+  await expect(page.getByText("E2E Campaign", { exact: true })).toHaveCount(0);
+  await expect(page.getByRole("heading", { name: "Create your workspace" })).toHaveCount(0);
 });
 
 test("@smoke registers a password user, blocks access, and completes emulator verification", async ({
