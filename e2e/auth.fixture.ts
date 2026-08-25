@@ -53,7 +53,11 @@ export const test = base.extend<{
   apiCallLog: {
     apiMe: string[];
     acceptPending: string[];
+    identityContinuity: string[];
   };
+  identityContinuityStatus: number;
+  identityContinuityUserId: string;
+  identityContinuityUserIds: string[] | null;
   acceptedInvitations: Array<{
     id: string;
     tenantId: string;
@@ -76,8 +80,11 @@ export const test = base.extend<{
   acceptedInvitations: [[], { option: true }],
   acceptPendingDelayMs: [0, { option: true }],
   acceptPendingStatus: [200, { option: true }],
+  identityContinuityStatus: [200, { option: true }],
+  identityContinuityUserId: ["e2e-user", { option: true }],
+  identityContinuityUserIds: [null, { option: true }],
   apiCallLog: async ({}, use) => {
-    await use({ apiMe: [], acceptPending: [] });
+    await use({ apiMe: [], acceptPending: [], identityContinuity: [] });
   },
   consoleGuard: [
     async ({ page, expectedConsoleErrors }, use) => {
@@ -125,11 +132,15 @@ test.beforeEach(async ({
   apiMeResponseAfterAcceptPending,
   apiMeResponses,
   apiMeStatus,
+  identityContinuityStatus,
+  identityContinuityUserId,
+  identityContinuityUserIds,
   page,
   request,
 }) => {
   await clearAuthEmulator(request);
   let apiMeCallCount = 0;
+  let identityContinuityCallCount = 0;
   let acceptPendingCompleted = false;
 
   await page.route("http://127.0.0.1:4173/api/**", async (route) => {
@@ -149,9 +160,30 @@ test.beforeEach(async ({
     }
 
     const authorization = route.request().headers().authorization;
-    const selectedMode = route.request().headers()["x-dd-mode"];
-
     expect(authorization).toMatch(/^Bearer /);
+
+    if (requestUrl.pathname === "/api/auth/identity-continuity") {
+      expect(route.request().headers()["x-dd-mode"]).toBeUndefined();
+      apiCallLog.identityContinuity.push(requestUrl.pathname);
+      const continuityUserId =
+        identityContinuityUserIds?.[
+          Math.min(
+            identityContinuityCallCount,
+            identityContinuityUserIds.length - 1
+          )
+        ] || identityContinuityUserId;
+      identityContinuityCallCount += 1;
+      await route.fulfill({
+        status: identityContinuityStatus,
+        json:
+          identityContinuityStatus === 200
+            ? { ok: true, neonUserId: continuityUserId }
+            : { ok: false, error: "Account setup unavailable" },
+      });
+      return;
+    }
+
+    const selectedMode = route.request().headers()["x-dd-mode"];
     expect(selectedMode).toMatch(/^(gm|player)$/);
 
     if (requestUrl.pathname === "/api/me") {

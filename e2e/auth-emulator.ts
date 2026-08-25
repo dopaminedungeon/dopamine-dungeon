@@ -40,6 +40,20 @@ export async function getAuthEmulatorAccount(
   return emulatorAccounts.get(email.toLowerCase());
 }
 
+export async function findAuthEmulatorAccountByEmail(
+  request: APIRequestContext,
+  email: string
+) {
+  const response = await request.get(
+    `${AUTH_EMULATOR_URL}/identitytoolkit.googleapis.com/v1/projects/${FIREBASE_TEST_PROJECT_ID}/accounts:batchGet?key=${apiKey}`,
+    { headers: { Authorization: "Bearer owner" } }
+  );
+  const body = await expectOk(response);
+  return (body.users || []).find(
+    (account: { email?: string }) => account.email?.toLowerCase() === email.toLowerCase()
+  );
+}
+
 export async function lookupAuthEmulatorAccount(
   request: APIRequestContext,
   idToken: string
@@ -80,6 +94,84 @@ export async function signInWithPassword(
   const response = await request.post(
     `${AUTH_EMULATOR_URL}/identitytoolkit.googleapis.com/v1/accounts:signInWithPassword?key=${apiKey}`,
     { data: { email, password, returnSecureToken: true } }
+  );
+  return expectOk(response);
+}
+
+export async function createGoogleOnlyUser(
+  request: APIRequestContext,
+  email: string,
+  subject = `google-${Date.now()}`
+) {
+  const fakeIdToken = JSON.stringify({
+    sub: subject,
+    email,
+    email_verified: true,
+  });
+  const postBody = new URLSearchParams({
+    id_token: fakeIdToken,
+    providerId: "google.com",
+  }).toString();
+  const response = await request.post(
+    `${AUTH_EMULATOR_URL}/identitytoolkit.googleapis.com/v1/accounts:signInWithIdp?key=${apiKey}`,
+    {
+      data: {
+        postBody,
+        requestUri: "http://127.0.0.1:4173",
+        returnIdpCredential: true,
+        returnSecureToken: true,
+      },
+    }
+  );
+  const account = await expectOk(response);
+  emulatorAccounts.set(email.toLowerCase(), {
+    disabled: false,
+    email,
+    emailVerified: true,
+    localId: account.localId,
+    providerUserInfo: [{ providerId: "google.com" }],
+  });
+  return { ...account, subject };
+}
+
+export async function addPasswordProvider(
+  request: APIRequestContext,
+  idToken: string,
+  email: string,
+  password: string
+) {
+  const response = await request.post(
+    `${AUTH_EMULATOR_URL}/identitytoolkit.googleapis.com/v1/accounts:update?key=${apiKey}`,
+    { data: { idToken, email, password, returnSecureToken: true } }
+  );
+  const account = await expectOk(response);
+  const cached = emulatorAccounts.get(email.toLowerCase());
+  if (cached) {
+    cached.providerUserInfo = [
+      { providerId: "google.com" },
+      { providerId: "password" },
+    ];
+  }
+  return account;
+}
+
+export async function addPasswordProviderByLocalId(
+  request: APIRequestContext,
+  localId: string,
+  email: string,
+  password: string
+) {
+  const response = await request.post(
+    `${AUTH_EMULATOR_URL}/identitytoolkit.googleapis.com/v1/projects/${FIREBASE_TEST_PROJECT_ID}/accounts:update?key=${apiKey}`,
+    {
+      headers: { Authorization: "Bearer owner" },
+      data: {
+        localId,
+        email,
+        emailVerified: true,
+        password,
+      },
+    }
   );
   return expectOk(response);
 }

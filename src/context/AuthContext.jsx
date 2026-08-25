@@ -1,4 +1,4 @@
-import { createContext, useContext, useEffect, useState } from "react";
+import { createContext, useContext, useEffect, useRef, useState } from "react";
 import { auth } from "../firebase/firebase";
 import {
   createUserWithEmailAndPassword,
@@ -20,16 +20,23 @@ import {
   hasPendingInvitationContext,
   preserveInvitationContext,
 } from "../auth/invitationContext";
+import {
+  clearPendingCredentialMigration,
+  readPendingCredentialMigration,
+  requiresCredentialMigration,
+} from "../auth/credentialMigration";
 
 const AuthContext = createContext(null);
 
 export function AuthProvider({ children }) {
   const [user, setUser] = useState(null);
+  const [credentialMigrationUser, setCredentialMigrationUser] = useState(null);
   const [verificationUser, setVerificationUser] = useState(null);
   const [authStatus, setAuthStatus] = useState("loading");
   const [profileInitializationFailed, setProfileInitializationFailed] = useState(false);
   const [profileInitializationUser, setProfileInitializationUser] = useState(null);
   const [verificationEmailSentAt, setVerificationEmailSentAt] = useState(null);
+  const credentialMigrationUidRef = useRef(null);
 
   useEffect(() => {
     let authChangeSequence = 0;
@@ -40,10 +47,24 @@ export function AuthProvider({ children }) {
 
       setVerificationUser(needsVerification ? firebaseUser : null);
       setUser(null);
+      setCredentialMigrationUser(null);
       setProfileInitializationFailed(false);
       setProfileInitializationUser(null);
 
       if (!firebaseUser || needsVerification) {
+        credentialMigrationUidRef.current = null;
+        if (!firebaseUser) clearPendingCredentialMigration();
+        setAuthStatus("ready");
+        return;
+      }
+
+      if (
+        credentialMigrationUidRef.current === firebaseUser.uid ||
+        readPendingCredentialMigration(firebaseUser.uid) ||
+        requiresCredentialMigration(firebaseUser)
+      ) {
+        credentialMigrationUidRef.current = firebaseUser.uid;
+        setCredentialMigrationUser(firebaseUser);
         setAuthStatus("ready");
         return;
       }
@@ -138,6 +159,14 @@ export function AuthProvider({ children }) {
   const continueVerifiedSession = async (currentUser = verificationUser ?? auth.currentUser) => {
     if (!currentUser) return false;
     await currentUser.getIdToken(true);
+    if (requiresCredentialMigration(currentUser)) {
+      credentialMigrationUidRef.current = currentUser.uid;
+      setVerificationUser(null);
+      setCredentialMigrationUser(currentUser);
+      setUser(null);
+      setAuthStatus("ready");
+      return true;
+    }
     if (!isAuthTestMode) {
       try {
         await ensureUserProfile({
@@ -173,10 +202,47 @@ export function AuthProvider({ children }) {
     await signOut(auth);
   };
 
+  const completeCredentialMigration = async (currentUser) => {
+    if (
+      !currentUser ||
+      currentUser.uid !== credentialMigrationUidRef.current ||
+      requiresCredentialMigration(currentUser)
+    ) {
+      return false;
+    }
+
+    setAuthStatus("loading");
+    if (!isAuthTestMode) {
+      try {
+        await ensureUserProfile({
+          userId: currentUser.uid,
+          email: currentUser.email ?? "",
+          displayName: currentUser.displayName ?? "",
+          photoURL: currentUser.photoURL ?? "",
+        });
+      } catch {
+        credentialMigrationUidRef.current = null;
+        setCredentialMigrationUser(null);
+        setProfileInitializationFailed(true);
+        setProfileInitializationUser(currentUser);
+        setAuthStatus("ready");
+        return false;
+      }
+    }
+
+    credentialMigrationUidRef.current = null;
+    clearPendingCredentialMigration();
+    setCredentialMigrationUser(null);
+    setUser(getApplicationUser(currentUser, "ready", isAuthTestMode));
+    setAuthStatus("ready");
+    return true;
+  };
+
   return (
     <AuthContext.Provider
       value={{
         user,
+        credentialMigrationUser,
         verificationUser,
         authStatus,
         profileInitializationFailed,
@@ -188,6 +254,7 @@ export function AuthProvider({ children }) {
         checkEmailVerification,
         continueVerifiedSession,
         retryProfileInitialization,
+        completeCredentialMigration,
         logout,
       }}
     >

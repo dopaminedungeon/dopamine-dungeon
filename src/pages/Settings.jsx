@@ -17,22 +17,20 @@ import { useTenant } from "../context/TenantContext.jsx";
 import { useCampaign } from "../context/CampaignContext.jsx";
 import { auth, db } from "../firebase/firebase";
 import WorkspaceSettings from "./WorkspaceSettings.jsx";
+import CredentialMigration from "../components/auth/CredentialMigration.jsx";
+import {
+  getConnectedProviderIds,
+  getConnectedProviderLabel,
+  requiresCredentialMigration,
+} from "../auth/credentialMigration";
 
 const EMPTY_PROFILE = {
   displayName: "",
   reducedMotion: false,
 };
 
-function getProviderLabel(user) {
-  const providerId = user?.providerData?.[0]?.providerId;
-  if (providerId === "google.com") return "Google";
-  if (providerId === "password") return "Email / Password";
-  if (providerId === "emailLink") return "Email Link";
-  return providerId || "Unknown";
-}
-
 export default function Settings() {
-  const { user, logout } = useAuth();
+  const { user, logout, completeCredentialMigration } = useAuth();
   const { mode } = useMode();
   const { tenants, selectedTenantId, workspaceRole } = useTenant();
   const { accessibleCampaigns, selectedCampaignId, campaignRole } = useCampaign();
@@ -42,6 +40,7 @@ export default function Settings() {
   const [saving, setSaving] = useState(false);
   const [saveState, setSaveState] = useState({ type: null, message: "" });
   const [activeTab, setActiveTab] = useState("profile");
+  const connectedProviderIds = getConnectedProviderIds(user);
 
   const selectedTenant = useMemo(
     () =>
@@ -272,7 +271,7 @@ export default function Settings() {
                 <div>
                   <h2 className="text-lg font-semibold text-white">Authentication</h2>
                   <p className="text-zinc-500 text-sm mt-1">
-                    Your connected sign-in method and account status.
+                    Your connected sign-in methods and account status.
                   </p>
                 </div>
 
@@ -280,8 +279,16 @@ export default function Settings() {
                   <div className="flex items-start gap-3">
                     <Shield className="w-5 h-5 text-zinc-400 mt-0.5" />
                     <div>
-                      <p className="text-white font-medium">Connected provider</p>
-                      <p className="text-zinc-400">{getProviderLabel(user)}</p>
+                      <p className="text-white font-medium">Connected providers</p>
+                      {connectedProviderIds.length > 0 ? (
+                        <ul className="mt-1 space-y-1 text-zinc-400">
+                          {connectedProviderIds.map((providerId) => (
+                            <li key={providerId}>{getConnectedProviderLabel(providerId)}</li>
+                          ))}
+                        </ul>
+                      ) : (
+                        <p className="text-zinc-400">Unknown</p>
+                      )}
                     </div>
                   </div>
 
@@ -296,6 +303,14 @@ export default function Settings() {
                     </div>
                   </div>
                 </div>
+
+                {requiresCredentialMigration(user) && (
+                  <CredentialMigration
+                    firebaseUser={user}
+                    onComplete={completeCredentialMigration}
+                    onLogout={logout}
+                  />
+                )}
               </section>
 
               <section className="bg-white/5 border border-white/10 rounded-xl sm:rounded-2xl p-4 sm:p-6 space-y-4">

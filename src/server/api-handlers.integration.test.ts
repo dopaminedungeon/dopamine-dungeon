@@ -79,6 +79,7 @@ const mocks = vi.hoisted(() => {
     requireCampaignGm: vi.fn(),
     requireCampaignMember: vi.fn(),
     resolveCampaignBySlug: vi.fn(),
+    verifyAuthHeader: vi.fn(),
   };
 });
 
@@ -89,6 +90,7 @@ vi.mock("./access.js", () => ({
   requireCampaignMember: mocks.requireCampaignMember,
   resolveCampaignBySlug: mocks.resolveCampaignBySlug,
 }));
+vi.mock("./auth.js", () => ({ verifyAuthHeader: mocks.verifyAuthHeader }));
 
 import characterAssignmentsHandler from "./api-handlers/character-assignments.js";
 import charactersHandler from "./api-handlers/characters.js";
@@ -98,6 +100,8 @@ import locationsHandler from "./api-handlers/locations.js";
 import loreHandler from "./api-handlers/lore.js";
 import npcsHandler from "./api-handlers/npcs.js";
 import sessionsHandler from "./api-handlers/sessions.js";
+import identityContinuityHandler from "../../api/auth/identity-continuity.js";
+import { users } from "../../db/schema/users.js";
 
 const sqlDatabase = drizzle.mock();
 const campaign = {
@@ -196,6 +200,58 @@ beforeEach(() => {
   mocks.resolveCampaignBySlug.mockResolvedValue(campaign);
   mocks.requireCampaignMember.mockResolvedValue({ role: "gm" });
   mocks.requireCampaignGm.mockResolvedValue(undefined);
+  mocks.verifyAuthHeader.mockResolvedValue({
+    uid: "firebase-uid-existing",
+    email_verified: true,
+  });
+});
+
+test("identity continuity API returns only the existing Neon ID without provisioning", async () => {
+  const neonUserId = "00000000-0000-4000-8000-000000000099";
+  mocks.state.selectRows.push([{ id: neonUserId }]);
+  const { res, result } = response();
+
+  await identityContinuityHandler(request("GET"), res);
+
+  assert.equal(result.status, 200);
+  assert.deepEqual(result.body, { ok: true, neonUserId });
+  const query = sqlDatabase
+    .select({ id: users.id })
+    .from(users)
+    .where(mocks.state.whereClauses[0] as never)
+    .toSQL();
+  assert.deepEqual(query.params, ["firebase-uid-existing"]);
+  assert.equal(mocks.db.insert.mock.calls.length, 0);
+  assert.equal(mocks.db.update.mock.calls.length, 0);
+});
+
+test("identity continuity API fails safely for missing, duplicate, or unverified mappings", async () => {
+  for (const rows of [
+    [],
+    [
+      { id: "00000000-0000-4000-8000-000000000099" },
+      { id: "00000000-0000-4000-8000-000000000100" },
+    ],
+  ]) {
+    mocks.state.selectRows.push(rows);
+    const { res, result } = response();
+    await identityContinuityHandler(request("GET"), res);
+    assert.equal(result.status, 409);
+    assert.deepEqual(result.body, {
+      ok: false,
+      error: "Account setup unavailable",
+    });
+  }
+
+  mocks.verifyAuthHeader.mockResolvedValueOnce({
+    uid: "firebase-uid-existing",
+    email_verified: false,
+  });
+  const { res, result } = response();
+  await identityContinuityHandler(request("GET"), res);
+  assert.equal(result.status, 409);
+  assert.equal(mocks.db.insert.mock.calls.length, 0);
+  assert.equal(mocks.db.update.mock.calls.length, 0);
 });
 
 test("API integration: unauthenticated requests stop before campaign or database access", async () => {
