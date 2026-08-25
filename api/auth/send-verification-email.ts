@@ -1,4 +1,5 @@
 import type { VercelRequest, VercelResponse } from "@vercel/node";
+import type { Transaction } from "firebase-admin/firestore";
 
 import { setCorsHeaders } from "../../src/server/cors.js";
 import { adminAuth, adminDb, verifyFirebaseToken } from "../../src/server/auth.js";
@@ -40,7 +41,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const cooldownRef = adminDb
       .collection("_authVerificationCooldowns")
       .doc(decodedToken.uid);
-    await adminDb.runTransaction(async (transaction) => {
+    await adminDb.runTransaction(async (transaction: Transaction) => {
       const snapshot = await transaction.get(cooldownRef);
       const lastSentAt = snapshot.get("lastSentAt")?.toMillis?.() ?? 0;
 
