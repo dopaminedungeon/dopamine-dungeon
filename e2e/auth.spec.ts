@@ -23,6 +23,7 @@ const resetConfirmation =
   "If an account can use password authentication with that email address, we've sent instructions to reset its password.";
 const invitedWorkspaceId = "00000000-0000-4000-8000-000000000011";
 const invitedCampaignId = "00000000-0000-4000-8000-000000000012";
+const bootstrapWorkspaceId = "00000000-0000-4000-8000-000000000013";
 
 function generatedEmail() {
   return `auth-${randomUUID()}@example.test`;
@@ -68,9 +69,61 @@ function invitedApiMeResponse(userId = "e2e-invited-user") {
   };
 }
 
+function campaignBootstrapApiMeResponse(userId = "e2e-campaign-bootstrap-user") {
+  return {
+    ok: true,
+    user: { id: userId },
+    workspaces: [
+      {
+        id: bootstrapWorkspaceId,
+        slug: "bootstrap-workspace",
+        name: "Bootstrap Workspace",
+      },
+    ],
+    workspaceMemberships: [
+      { workspaceId: bootstrapWorkspaceId, userId, role: "owner" },
+    ],
+    campaigns: [],
+    campaignMemberships: [],
+  };
+}
+
 async function openEmailSignIn(page: Page) {
   await page.goto("/home");
   await page.getByRole("button", { name: "Continue with email" }).click();
+}
+
+async function signInVerifiedUser(page: Page, request: APIRequestContext) {
+  const email = generatedEmail();
+  await createVerifiedUser(request, email, password);
+  await openEmailSignIn(page);
+  await page.getByLabel("Email address").fill(email);
+  await page.getByLabel("Password", { exact: true }).fill(password);
+  await page.getByRole("button", { name: "Sign in", exact: true }).click();
+}
+
+async function observeBootstrapFormSubmissions(page: Page) {
+  await page.locator("form").evaluate((form) => {
+    const trackedWindow = window as Window & {
+      __ddBootstrapFormSubmissions?: number;
+    };
+    trackedWindow.__ddBootstrapFormSubmissions = 0;
+    form.addEventListener("submit", () => {
+      trackedWindow.__ddBootstrapFormSubmissions =
+        (trackedWindow.__ddBootstrapFormSubmissions ?? 0) + 1;
+    });
+  });
+}
+
+async function expectNoBootstrapFormSubmission(page: Page) {
+  await expect
+    .poll(() => page.evaluate(() => {
+      const trackedWindow = window as Window & {
+        __ddBootstrapFormSubmissions?: number;
+      };
+      return trackedWindow.__ddBootstrapFormSubmissions ?? 0;
+    }))
+    .toBe(0);
 }
 
 async function signInVerifiedInvitedUser(
@@ -1364,6 +1417,130 @@ test.describe("verified user identity provisioning", () => {
       await expect(
         page.getByRole("heading", { name: "Create your workspace" })
       ).toHaveCount(0);
+    });
+  });
+});
+
+test.describe("bootstrap sign out", () => {
+  test.describe("without a workspace", () => {
+    test.use({
+      apiMeResponse: emptyApiMeResponse("e2e-workspace-bootstrap-sign-out-user"),
+    });
+
+    test("signs out from workspace bootstrap without submitting the creation form", async ({
+      page,
+      request,
+    }) => {
+      await page.setViewportSize({ width: 390, height: 844 });
+      await signInVerifiedUser(page, request);
+
+      await expect(
+        page.getByRole("heading", { name: "Create your workspace" })
+      ).toBeVisible();
+      await observeBootstrapFormSubmissions(page);
+
+      const signOut = page.getByRole("button", { name: "Sign out" });
+      await expect(signOut).toBeVisible();
+      await expect(signOut).toHaveAttribute("type", "button");
+      expect(await signOut.evaluate((button) => button.closest("form") === null)).toBe(true);
+
+      await signOut.focus();
+      await expect(signOut).toBeFocused();
+      await signOut.press("Enter");
+
+      await expect(
+        page.getByRole("heading", { name: "Sign in to your account" })
+      ).toBeVisible();
+      await expectNoBootstrapFormSubmission(page);
+    });
+
+    test("shows a generic retryable error when workspace-bootstrap sign out fails", async ({
+      page,
+      request,
+    }) => {
+      await signInVerifiedUser(page, request);
+      await expect(
+        page.getByRole("heading", { name: "Create your workspace" })
+      ).toBeVisible();
+
+      await page.evaluate(() => {
+        const trackedWindow = window as Window & {
+          __ddRestoreIndexedDbDelete?: () => void;
+          __ddRejectedSignOutDeletes?: number;
+        };
+        const originalDelete = IDBObjectStore.prototype.delete;
+        trackedWindow.__ddRejectedSignOutDeletes = 0;
+        IDBObjectStore.prototype.delete = function rejectAuthUserDelete(key) {
+          if (String(key).startsWith("firebase:authUser:")) {
+            trackedWindow.__ddRejectedSignOutDeletes =
+              (trackedWindow.__ddRejectedSignOutDeletes ?? 0) + 1;
+            throw new DOMException("Persistence unavailable", "UnknownError");
+          }
+          return originalDelete.call(this, key);
+        };
+        trackedWindow.__ddRestoreIndexedDbDelete = () => {
+          IDBObjectStore.prototype.delete = originalDelete;
+        };
+      });
+
+      await page.getByRole("button", { name: "Sign out" }).click();
+
+      await expect(page.getByRole("alert")).toHaveText(
+        "Could not sign out. Please try again."
+      );
+      await expect(
+        page.getByRole("heading", { name: "Create your workspace" })
+      ).toBeVisible();
+      await expect(page.getByRole("button", { name: "Sign out" })).toBeEnabled();
+      await expect
+        .poll(() => page.evaluate(() => {
+          const trackedWindow = window as Window & {
+            __ddRejectedSignOutDeletes?: number;
+          };
+          return trackedWindow.__ddRejectedSignOutDeletes ?? 0;
+        }))
+        .toBeGreaterThan(0);
+
+      await page.evaluate(() => {
+        const trackedWindow = window as Window & {
+          __ddRestoreIndexedDbDelete?: () => void;
+        };
+        trackedWindow.__ddRestoreIndexedDbDelete?.();
+      });
+      await page.getByRole("button", { name: "Sign out" }).click();
+      await expect(
+        page.getByRole("heading", { name: "Sign in to your account" })
+      ).toBeVisible();
+    });
+  });
+
+  test.describe("with a workspace and no campaign", () => {
+    test.use({
+      apiMeResponse: campaignBootstrapApiMeResponse(),
+    });
+
+    test("signs out from campaign bootstrap without submitting the creation form", async ({
+      page,
+      request,
+    }) => {
+      await page.setViewportSize({ width: 1440, height: 900 });
+      await signInVerifiedUser(page, request);
+
+      await expect(
+        page.getByRole("heading", { name: "Create your first campaign" })
+      ).toBeVisible();
+      await observeBootstrapFormSubmissions(page);
+
+      const signOut = page.getByRole("button", { name: "Sign out" });
+      await expect(signOut).toBeVisible();
+      await expect(signOut).toHaveAttribute("type", "button");
+      expect(await signOut.evaluate((button) => button.closest("form") === null)).toBe(true);
+      await signOut.click();
+
+      await expect(
+        page.getByRole("heading", { name: "Sign in to your account" })
+      ).toBeVisible();
+      await expectNoBootstrapFormSubmission(page);
     });
   });
 });

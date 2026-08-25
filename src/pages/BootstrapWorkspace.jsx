@@ -1,7 +1,8 @@
 import Card from "../components/Card";
 import CreateWorkspaceForm from "../components/bootstrap/CreateWorkspaceForm";
+import BootstrapSignOutControl from "../components/bootstrap/BootstrapSignOutControl";
 
-export default function BootstrapWorkspace() {
+export default function BootstrapWorkspace({ onLogout }) {
   return (
     <div className="mx-auto flex w-full max-w-3xl flex-col gap-6 px-6 py-10">
       <Card>
@@ -16,6 +17,8 @@ export default function BootstrapWorkspace() {
       <Card>
         <CreateWorkspaceForm />
       </Card>
+
+      <BootstrapSignOutControl onLogout={onLogout} />
     </div>
   );
 }

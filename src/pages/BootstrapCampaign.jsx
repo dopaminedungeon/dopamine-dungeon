@@ -2,8 +2,9 @@
 
 import Card from "../components/Card";
 import CreateCampaignForm from "../components/bootstrap/CreateCampaignForm";
+import BootstrapSignOutControl from "../components/bootstrap/BootstrapSignOutControl";
 
-export default function BootstrapCampaign() {
+export default function BootstrapCampaign({ onLogout }) {
   return (
     <div className="mx-auto flex w-full max-w-3xl flex-col gap-6 px-6 py-10">
       <Card>
@@ -18,6 +19,8 @@ export default function BootstrapCampaign() {
       <Card>
         <CreateCampaignForm />
       </Card>
+
+      <BootstrapSignOutControl onLogout={onLogout} />
     </div>
   );
 }
