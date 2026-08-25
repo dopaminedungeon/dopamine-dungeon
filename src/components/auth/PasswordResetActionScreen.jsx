@@ -31,7 +31,6 @@ const RESULT_CONTENT = {
   },
   success: {
     title: "Password updated",
-    description: "Your password has been reset. Return to sign in with your new password.",
   },
 };
 
@@ -170,7 +169,9 @@ export default function PasswordResetActionScreen() {
       <AuthRecoveryShell title={content.title} description={content.description}>
         <div className={`mt-[28px] flex items-center gap-[10px] rounded-md border px-[16px] py-[14px] ${isSuccess ? "border-emerald-900/80 bg-emerald-950/40 text-emerald-200" : "border-amber-900/80 bg-amber-950/40 text-amber-200"}`} role={isSuccess ? "status" : "alert"}>
           {isSuccess ? <CheckCircle2 className="h-[20px] w-[20px] shrink-0" aria-hidden="true" /> : <AlertTriangle className="h-[20px] w-[20px] shrink-0" aria-hidden="true" />}
-          {isSuccess ? "Your reset code has been used securely." : "No application data was loaded."}
+          {isSuccess
+            ? "Your password has been changed successfully. You can now sign in with your new password."
+            : "No application data was loaded."}
         </div>
 
         {state === "failure" && (

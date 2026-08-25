@@ -716,6 +716,11 @@ test("verifies a reset link, enforces shared password policy, and replaces the c
   await page.getByRole("button", { name: "Update password" }).click();
   await expect(page.getByRole("button", { name: "Updating password..." })).toBeDisabled();
   await expect(page.getByRole("heading", { name: "Password updated" })).toBeVisible();
+  await expect(page.getByRole("status")).toHaveText(
+    "Your password has been changed successfully. You can now sign in with your new password."
+  );
+  await expect(page.getByText("Your reset code has been used securely.")).toHaveCount(0);
+  await expect(page.getByRole("link", { name: "Return to sign in" })).toBeVisible();
 
   await expect(signInWithPassword(request, email, password)).rejects.toThrow();
   const replacementSession = await signInWithPassword(
@@ -728,9 +733,43 @@ test("verifies a reset link, enforces shared password policy, and replaces the c
   await page.getByRole("link", { name: "Return to sign in" }).click();
   await expect(page.getByRole("heading", { name: "Sign in to your account" })).toBeVisible();
 
+  let expectedFirebaseRequestErrors = 0;
+  let unexpectedConsoleErrors = 0;
+  let uncaughtPageErrors = 0;
+  page.on("console", (message) => {
+    if (message.type() !== "error") return;
+
+    const isExpectedFirebaseRequestError =
+      message.location().url.includes("/accounts:resetPassword") &&
+      message.text().includes("400 (Bad Request)");
+    if (isExpectedFirebaseRequestError) {
+      expectedFirebaseRequestErrors += 1;
+    } else {
+      unexpectedConsoleErrors += 1;
+    }
+  });
+  page.on("pageerror", () => {
+    uncaughtPageErrors += 1;
+  });
+
+  const consumedCodeResponse = page.waitForResponse(
+    (response) =>
+      new URL(response.url()).pathname.endsWith("/accounts:resetPassword") &&
+      response.status() === 400
+  );
   await page.goto(resetPath);
+  const response = await consumedCodeResponse;
+  const responseBody = (await response.json()) as {
+    error?: { message?: string };
+  };
+  expect(responseBody.error?.message).toBe("INVALID_OOB_CODE");
   await expect(page.getByRole("heading", { name: "Reset link unavailable" })).toBeVisible();
+  await expect(page.getByText("This password-reset link is invalid or has already been used.")).toBeVisible();
   await expect(page.getByRole("link", { name: "Request another reset" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Password reset unavailable" })).toHaveCount(0);
+  expect(expectedFirebaseRequestErrors).toBeGreaterThanOrEqual(1);
+  expect(unexpectedConsoleErrors).toBe(0);
+  expect(uncaughtPageErrors).toBe(0);
   await expect(page.locator("main")).not.toContainText(email);
 
   await page.goto("/");
