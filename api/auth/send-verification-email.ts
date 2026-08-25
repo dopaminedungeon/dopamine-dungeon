@@ -15,27 +15,7 @@ import {
   getApiErrorMessage,
   getApiErrorStatus,
 } from "../../src/server/apiErrors.js";
-
-function mailbox(name: string, email: string) {
-  return `${name.trim()} <${email.trim()}>`;
-}
-
-const from = mailbox(
-  process.env.VERIFICATION_EMAIL_FROM_NAME ||
-    process.env.INVITE_EMAIL_FROM_NAME ||
-    "Dopamine Dungeon",
-  process.env.VERIFICATION_EMAIL_FROM ||
-    process.env.INVITE_EMAIL_FROM ||
-    "invite@dopamine-dungeon.com"
-);
-const replyTo = mailbox(
-  process.env.VERIFICATION_EMAIL_REPLY_TO_NAME ||
-    process.env.INVITE_EMAIL_REPLY_TO_NAME ||
-    "Dopamine Dungeon",
-  process.env.VERIFICATION_EMAIL_REPLY_TO ||
-    process.env.INVITE_EMAIL_REPLY_TO ||
-    "dopamine.dungeon.info@gmail.com"
-);
+import { getAuthEmailDelivery } from "../../src/server/authEmail.js";
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   setCorsHeaders(res, "POST, OPTIONS");
@@ -82,6 +62,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       applicationOrigin,
       invited: req.body?.invited === true,
     });
+    const { from, replyTo } = getAuthEmailDelivery();
 
     await adminDb.collection("mail").add({
       to: [email],

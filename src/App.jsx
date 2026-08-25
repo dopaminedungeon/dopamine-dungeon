@@ -29,8 +29,18 @@ import Welcome from "./pages/Welcome";
 import AuthScreen from "./components/auth/AuthScreen.jsx";
 import VerificationScreen from "./components/auth/VerificationScreen.jsx";
 import VerificationActionScreen from "./components/auth/VerificationActionScreen.jsx";
+import PasswordRecoveryRequestScreen from "./components/auth/PasswordRecoveryRequestScreen.jsx";
+import PasswordResetActionScreen from "./components/auth/PasswordResetActionScreen.jsx";
 
 function App() {
+  if (window.location.pathname === "/auth/recover") {
+    return <PasswordRecoveryRequestScreen />;
+  }
+
+  if (window.location.pathname === "/auth/reset-password") {
+    return <PasswordResetActionScreen />;
+  }
+
   return (
     <AppProviders>
       <BrowserRouter>

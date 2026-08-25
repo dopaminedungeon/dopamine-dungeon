@@ -68,29 +68,60 @@ create Neon records.
 | Feature Preview | Development resources configured for Preview | Development database/branch | Protected non-production deployment |
 | Production | Production project | Production database | `main` production deployment |
 
-Email-verification sender variables, branded verification routes, and related
-provider configuration are Iteration 3/#256 scope and are not current
-configuration requirements for #317.
+## Authentication transactional email
 
-## Proposed #256 transactional email variables
+Email verification and password recovery both use Firebase Admin to generate
+Firebase-managed action links, Dopamine Dungeon HTML templates, and the existing
+Firebase Trigger Email `mail` collection. Firebase still owns each one-time
+code, expiry, validation, and account action. The application does not create or
+persist custom verification or reset tokens.
 
-Verification email is queued through the existing Firebase Trigger Email
-extension and its `mail` collection. Configure the extension separately for
-each Firebase environment when #256 is deployed. The proposed implementation
-accepts these optional server-only sender overrides:
+Configure these server-only variables separately for each environment:
 
-```VERIFICATION_EMAIL_FROM```
-```VERIFICATION_EMAIL_FROM_NAME```
-```VERIFICATION_EMAIL_REPLY_TO```
-```VERIFICATION_EMAIL_REPLY_TO_NAME```
-```APP_ORIGIN```
+```text
+AUTH_EMAIL_FROM=no-reply@dopamine-dungeon.com
+AUTH_EMAIL_FROM_NAME=Dopamine Dungeon
+AUTH_EMAIL_REPLY_TO=dopamine.dungeon.info@gmail.com
+AUTH_EMAIL_REPLY_TO_NAME=Dopamine Dungeon
+PASSWORD_RECOVERY_FINGERPRINT_SECRET=<high-entropy-server-only-secret>
+APP_ORIGIN=https://<application-origin>
+```
 
-`VERIFICATION_EMAIL_FROM` must be a sender accepted by the configured mail
-transport. `APP_ORIGIN` fixes the public application origin used in verification
-links; when omitted, the API derives the origin from its own request host.
-When verification-specific sender variables are omitted, the existing
-`INVITE_EMAIL_*` sender configuration is reused.
-None of these variables may use the `VITE_` prefix when they contain secrets.
+The `AUTH_EMAIL_*` variables are shared only by authentication messages.
+Invitation messages retain their separate `INVITE_EMAIL_*` sender configuration.
+Do not use the old verification-specific sender variables, and do not fall back
+from authentication mail to invitation sender values.
+
+`PASSWORD_RECOVERY_FINGERPRINT_SECRET` is required by the unauthenticated
+recovery endpoint to HMAC normalized email addresses used as cooldown document
+IDs. Use a high-entropy value unique to the environment. There is intentionally
+no plain SHA-256 or hard-coded fallback because email-address hashes are
+dictionary-guessable. Rotating the secret invalidates existing cooldown keys
+but does not affect Firebase users, reset actions, or DD application data.
+Accepted recovery outcomes also share a short minimum response window to reduce
+practical timing differences; the server still performs extra Firebase and mail
+work only for eligible verified password accounts.
+
+`APP_ORIGIN` fixes the public origin used for the app-owned verification and
+password-reset routes; when omitted, the API derives the origin from its own
+request host. Keep development, Preview, and production origins aligned with
+their corresponding Firebase projects. The origin must be present in Firebase
+Authentication authorized domains when required by that project.
+
+The Firebase Trigger Email extension and its SMTP provider must permit the
+exact sender `Dopamine Dungeon <no-reply@dopamine-dungeon.com>`.
+`dopamine-dungeon.com` must be verified with that email transport. Required DNS
+authentication, including SPF and DKIM, is configured outside this repository.
+Setting `AUTH_EMAIL_FROM` in application code does not prove that production
+delivery is authorized.
+
+Do not change live Firebase, Trigger Email, SMTP, DNS, or production environment
+configuration without explicit authorization. None of these variables may use
+the `VITE_` prefix when they contain secrets.
+
+The Auth emulator exposes generated password-reset codes directly to the
+guarded Playwright test runner, so local automated tests do not require Firebase
+Console changes or real email delivery.
 
 ## Rules
 

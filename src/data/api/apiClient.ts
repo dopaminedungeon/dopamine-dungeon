@@ -155,6 +155,14 @@ export async function requestVerificationEmail(invited: boolean) {
   });
 }
 
+export async function requestPasswordResetEmail(email: string) {
+  return apiFetch<{ ok: true }>("/api/auth/send-password-reset-email", {
+    method: "POST",
+    body: JSON.stringify({ email }),
+    skipAuth: true,
+  });
+}
+
 export async function createApiInvitation(input: {
   email: string;
   tenantId: string;

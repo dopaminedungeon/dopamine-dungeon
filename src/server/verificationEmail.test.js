@@ -10,6 +10,7 @@ import {
   buildVerificationEmailHtml,
   VERIFICATION_EMAIL_SUBJECT,
 } from "../domain/mail/verificationEmail.template.ts";
+import { getAuthEmailDelivery } from "./authEmail.ts";
 
 test("verification links keep Firebase codes on the app-owned result page", () => {
   const link = buildAppVerificationLink({
@@ -53,4 +54,11 @@ test("branded verification email is transactional and contains no protected data
   assert.match(html, /If the button does not work/);
   assert.match(html, /max-width:600px/);
   assert.doesNotMatch(html, /workspace|campaign|invitation|GM-only|project number/i);
+});
+
+test("verification email uses the shared authentication sender", () => {
+  assert.deepEqual(getAuthEmailDelivery({}), {
+    from: "Dopamine Dungeon <no-reply@dopamine-dungeon.com>",
+    replyTo: "Dopamine Dungeon <dopamine.dungeon.info@gmail.com>",
+  });
 });

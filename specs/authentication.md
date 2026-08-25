@@ -18,6 +18,29 @@
 3. Submit incorrect credentials and confirm the generic message does not reveal
    whether the email exists.
 
+## Password Recovery
+
+1. Open password recovery from email/password sign-in and reject malformed
+   email addresses locally.
+2. Submit existing and nonexistent addresses and confirm both receive the same
+   status, response shape, and non-identifying confirmation state.
+3. Confirm a verified password user queues the branded Trigger Email template,
+   while disabled, provider-only, unverified, and nonexistent accounts remain
+   indistinguishable and do not receive a reset action.
+4. Verify a Firebase password-reset code and keep all DD workspace and campaign
+   providers out of the recovery route.
+5. Enforce the shared Firebase password policy and matching confirmation before
+   calling `confirmPasswordReset`.
+6. Confirm invalid, expired, malformed, and already-used codes lead to a
+   recoverable request-another-reset action.
+7. Confirm a successful reset does not sign the browser in automatically, the
+   old password stops working, the new password works, and the Firebase UID is
+   unchanged.
+8. Confirm an unverified Firebase account remains unverified and receives no
+   password-reset action, preventing reset completion from bypassing verification.
+9. Confirm service failures remain retryable without revealing account or
+   provider existence.
+
 ## Sign-Out And Protection
 
 1. Sign in a verified generated user.

@@ -59,6 +59,31 @@ including:
 
 Production secrets must not be copied into routine local or agent environments.
 
+## Authentication email delivery
+
+Before enabling branded verification or password-recovery email in an
+environment, confirm all of the following:
+
+- `AUTH_EMAIL_FROM=no-reply@dopamine-dungeon.com` and
+  `AUTH_EMAIL_FROM_NAME=Dopamine Dungeon` are configured server-side;
+- `AUTH_EMAIL_REPLY_TO=dopamine.dungeon.info@gmail.com` and
+  `AUTH_EMAIL_REPLY_TO_NAME=Dopamine Dungeon` preserve a monitored reply path;
+- `PASSWORD_RECOVERY_FINGERPRINT_SECRET` is configured with a high-entropy,
+  environment-specific server-only value and is not exposed with a `VITE_`
+  prefix;
+- the Firebase Trigger Email extension and SMTP provider accept
+  `Dopamine Dungeon <no-reply@dopamine-dungeon.com>`;
+- `dopamine-dungeon.com` is verified with the configured transport;
+- required SPF and DKIM DNS records are valid;
+- `APP_ORIGIN` points to the matching deployed application and its Firebase
+  authorized-domain configuration is correct;
+- invitation delivery still uses the independent `INVITE_EMAIL_*` settings.
+
+Repository code and environment variable names do not prove sender
+authorization or successful production delivery. DNS, SMTP, Trigger Email, and
+live production configuration changes require explicit authorization and must
+be verified outside the repository.
+
 ## Feature deployment workflow
 
 1. Create a branch from `dev`.

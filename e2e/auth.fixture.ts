@@ -1,7 +1,11 @@
 import { test as base, expect } from "@playwright/test";
 
-import { clearAuthEmulator } from "./auth-emulator";
-import { sendVerificationEmail } from "./auth-emulator";
+import {
+  clearAuthEmulator,
+  getAuthEmulatorAccount,
+  requestPasswordResetThroughEmulator,
+  sendVerificationEmail,
+} from "./auth-emulator";
 
 const workspaceId = "00000000-0000-4000-8000-000000000001";
 const campaignId = "00000000-0000-4000-8000-000000000002";
@@ -130,6 +134,20 @@ test.beforeEach(async ({
 
   await page.route("http://127.0.0.1:4173/api/**", async (route) => {
     const requestUrl = new URL(route.request().url());
+
+    if (requestUrl.pathname === "/api/auth/send-password-reset-email") {
+      const email = String(route.request().postDataJSON()?.email || "").toLowerCase();
+      const account = await getAuthEmulatorAccount(request, email);
+      const hasPasswordProvider = account?.providerUserInfo?.some(
+        (provider: { providerId?: string }) => provider.providerId === "password"
+      );
+      if (account?.emailVerified && !account?.disabled && hasPasswordProvider) {
+        await requestPasswordResetThroughEmulator(request, email);
+      }
+      await route.fulfill({ status: 202, json: { ok: true } });
+      return;
+    }
+
     const authorization = route.request().headers().authorization;
     const selectedMode = route.request().headers()["x-dd-mode"];
 
