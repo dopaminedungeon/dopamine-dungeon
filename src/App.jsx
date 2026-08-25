@@ -146,7 +146,7 @@ function AppGate() {
   }
 
   if (tenantStatus === "empty") {
-    return <BootstrapWorkspace />;
+    return <BootstrapWorkspace onLogout={logout} />;
   }
 
   const hasTenant = tenantStatus === "ready";
@@ -160,7 +160,7 @@ function AppGate() {
   }
 
   if (campaignStatus === "empty") {
-    return <BootstrapCampaign />;
+    return <BootstrapCampaign onLogout={logout} />;
   }
 
   const hasCampaign = campaignStatus === "ready";
