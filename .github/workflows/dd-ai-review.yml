@@ -15,7 +15,7 @@ permissions:
 
 jobs:
   review:
-    runs-on: [self-hosted, macOS, X64]
+    runs-on: ubuntu-latest
 
     steps:
       - name: Checkout repository
@@ -31,5 +31,6 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GITHUB_REPOSITORY: ${{ github.repository }}
           PR_NUMBER: ${{ github.event.pull_request.number }}
-          OLLAMA_MODEL: qwen2.5-coder:7b
+          MISTRAL_API_KEY: ${{ secrets.MISTRAL_API_KEY }}
+          AI_MODEL: mistral-small-latest
         run: node scripts/dd-ai-review.mjs

@@ -3,9 +3,10 @@ import fs from "node:fs/promises";
 const GITHUB_TOKEN = process.env.GITHUB_TOKEN;
 const REPO = process.env.GITHUB_REPOSITORY;
 const PR_NUMBER = process.env.PR_NUMBER;
-const OLLAMA_MODEL = process.env.OLLAMA_MODEL || "qwen2.5-coder:7b";
+const MISTRAL_API_KEY = process.env.MISTRAL_API_KEY;
+const AI_MODEL = process.env.AI_MODEL || "mistral-small-latest";
 
-if (!GITHUB_TOKEN || !REPO || !PR_NUMBER) {
+if (!GITHUB_TOKEN || !REPO || !PR_NUMBER || !MISTRAL_API_KEY) {
   console.error("Missing required environment variables.");
   process.exit(1);
 }
@@ -87,15 +88,15 @@ function truncate(text, maxLength) {
   return `${text.slice(0, maxLength)}\n\n[truncated]`;
 }
 
-async function askOllama(prompt) {
-  const response = await fetch("http://127.0.0.1:11434/api/chat", {
+async function askAI(prompt) {
+  const response = await fetch("https://api.mistral.ai/v1/chat/completions", {
     method: "POST",
     headers: {
+      Authorization: `Bearer ${MISTRAL_API_KEY}`,
       "Content-Type": "application/json",
     },
     body: JSON.stringify({
-      model: OLLAMA_MODEL,
-      stream: false,
+      model: AI_MODEL,
       messages: [
         {
           role: "system",
@@ -111,11 +112,15 @@ async function askOllama(prompt) {
 
   if (!response.ok) {
     const text = await response.text();
-    throw new Error(`Ollama API error ${response.status}: ${text}`);
+    throw new Error(`AI API error ${response.status}: ${text}`);
   }
 
   const data = await response.json();
-  return data.message?.content || "No review produced.";
+
+  return (
+    data.choices?.[0]?.message?.content ||
+    "No review produced."
+  );
 }
 
 async function main() {
@@ -146,19 +151,39 @@ Diff:
 ${diff}
 
 Instructions:
-- Focus on real product and architecture risks.
-- Prioritize GM/Player visibility boundaries.
-- Call out uncertainty when the diff is incomplete.
-- Give one concise PR-level review summary.
+- Determine whether this pull request is safe to merge.
+- Report every material issue you identify.
+- Prioritize GM/Player visibility leaks, access-control failures,
+  security issues, data integrity risks, persistence/state bugs,
+  architectural regressions, and significant product regressions.
+- Do not omit serious findings for brevity.
+- Keep each finding concise.
+- Group related findings where appropriate.
+- Do not report stylistic preferences or trivial nitpicks unless they
+  meaningfully affect correctness or maintainability.
+- Call out uncertainty when the diff does not provide enough information.
+- If no material issues are found, say so clearly.
+
+Output format:
+
+Verdict: SAFE / REVIEW / UNSAFE
+
+Findings:
+- Include every material finding.
+- Prefix each finding with CRITICAL, HIGH, or MEDIUM severity.
+- If there are no material findings, write: "No material issues identified."
+
+Summary:
+- Give a brief overall assessment.
 `;
 
-  const review = await askOllama(prompt);
+  const review = await askAI(prompt);
 
   const marker = "<!-- dd-ai-review -->";
   const body = `${marker}
 ## Dopamine Dungeon AI Review
 
-_Model: \`${OLLAMA_MODEL}\`_
+ _Model:\`${AI_MODEL}\`_
 
 ${review}
 `;
