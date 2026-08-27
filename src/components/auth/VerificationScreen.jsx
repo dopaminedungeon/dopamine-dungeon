@@ -10,6 +10,7 @@ export default function VerificationScreen({
   onResendVerification,
   onLogout,
   verificationEmailSentAt,
+  initialError = "",
 }) {
   const [action, setAction] = useState("");
   const [message, setMessage] = useState("");
@@ -19,6 +20,10 @@ export default function VerificationScreen({
     0,
     Math.ceil(((verificationEmailSentAt ?? 0) + 60_000 - now) / 1000)
   );
+
+  useEffect(() => {
+    setError(initialError);
+  }, [initialError]);
 
   useEffect(() => {
     if (cooldownSeconds <= 0) return undefined;

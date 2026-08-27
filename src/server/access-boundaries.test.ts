@@ -5,6 +5,7 @@ import { beforeEach, test, vi } from "vitest";
 import { campaigns } from "../../db/schema/campaigns.js";
 import { campaignMemberships } from "../../db/schema/memberships.js";
 import { workspaces } from "../../db/schema/workspaces.js";
+import { users } from "../../db/schema/users.js";
 
 const mocks = vi.hoisted(() => {
   const state = {
@@ -43,6 +44,7 @@ import {
   resolveCampaignByAppId,
   resolveWorkspaceByAppId,
 } from "./access.js";
+import { findExactIdentityContinuity } from "./identityContinuity.js";
 
 const sqlDatabase = drizzle.mock();
 const workspaceId = "00000000-0000-4000-8000-000000000001";
@@ -122,5 +124,36 @@ test("DD access boundary: a Player campaign role cannot use GM authorization", a
   await assert.rejects(
     requireCampaignGm({ campaignId, userId }),
     /Campaign GM permission required/
+  );
+});
+
+test("identity continuity boundary selects by exact Firebase UID and never by email", async () => {
+  mocks.state.rows.push([{ id: userId }]);
+
+  const result = await findExactIdentityContinuity(
+    mocks.db as never,
+    "firebase-uid-existing"
+  );
+
+  assert.deepEqual(result, { neonUserId: userId });
+  const query = sqlDatabase
+    .select({ id: users.id })
+    .from(users)
+    .where(mocks.state.whereClauses[0] as never)
+    .toSQL();
+  assert.deepEqual(query.params, ["firebase-uid-existing"]);
+});
+
+test("identity continuity boundary rejects missing or inconsistent mappings", async () => {
+  mocks.state.rows.push([]);
+  assert.equal(
+    await findExactIdentityContinuity(mocks.db as never, "firebase-uid-missing"),
+    null
+  );
+
+  mocks.state.rows.push([{ id: userId }, { id: `${userId}-duplicate` }]);
+  assert.equal(
+    await findExactIdentityContinuity(mocks.db as never, "firebase-uid-duplicate"),
+    null
   );
 });

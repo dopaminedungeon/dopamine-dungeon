@@ -25,6 +25,7 @@ const API_BASE_URL = getApiBaseUrl();
 
 type ApiOptions = RequestInit & {
   skipAuth?: boolean;
+  skipSelectedMode?: boolean;
 };
 
 export class ApiRequestError extends Error {
@@ -78,10 +79,10 @@ async function getAuthHeaders(skipAuth?: boolean): Promise<HeadersInit> {
 }
 
 export async function apiFetch<T>(path: string, options: ApiOptions = {}): Promise<T> {
-  const { skipAuth, headers, ...requestOptions } = options;
+  const { skipAuth, skipSelectedMode, headers, ...requestOptions } = options;
 
   const authHeaders = await getAuthHeaders(skipAuth);
-  const selectedModeHeaders = skipAuth
+  const selectedModeHeaders = skipAuth || skipSelectedMode
     ? {}
     : { [SELECTED_MODE_HEADER]: getStoredSelectedMode() };
   const url = `${API_BASE_URL}${path}`;
@@ -135,6 +136,13 @@ export async function apiFetch<T>(path: string, options: ApiOptions = {}): Promi
   }
 
   return responseBody as T;
+}
+
+export async function getIdentityContinuity() {
+  return apiFetch<{ ok: true; neonUserId: string }>(
+    "/api/auth/identity-continuity",
+    { skipSelectedMode: true }
+  );
 }
 
 export async function getApiMe() {

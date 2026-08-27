@@ -57,6 +57,7 @@ function AppGate() {
     verificationUser,
     profileInitializationFailed,
     verificationEmailSentAt,
+    verificationEmailAutoError,
     signInWithGoogle,
     signInWithEmail,
     registerWithEmail,
@@ -98,6 +99,7 @@ function AppGate() {
         onResendVerification={resendVerification}
         onLogout={logout}
         verificationEmailSentAt={verificationEmailSentAt}
+        initialError={verificationEmailAutoError}
       />
     );
   }

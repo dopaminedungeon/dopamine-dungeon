@@ -16,23 +16,28 @@ import { useMode } from "../context/ModeContext.jsx";
 import { useTenant } from "../context/TenantContext.jsx";
 import { useCampaign } from "../context/CampaignContext.jsx";
 import { auth, db } from "../firebase/firebase";
+import { isAuthTestMode } from "../config/firebase/firebase";
 import WorkspaceSettings from "./WorkspaceSettings.jsx";
+import CredentialMigration from "../components/auth/CredentialMigration.jsx";
+import {
+  getConnectedProviderIds,
+  getConnectedProviderLabel,
+  shouldShowOptionalCredentialSetup,
+} from "../auth/credentialMigration";
 
 const EMPTY_PROFILE = {
   displayName: "",
   reducedMotion: false,
 };
 
-function getProviderLabel(user) {
-  const providerId = user?.providerData?.[0]?.providerId;
-  if (providerId === "google.com") return "Google";
-  if (providerId === "password") return "Email / Password";
-  if (providerId === "emailLink") return "Email Link";
-  return providerId || "Unknown";
-}
-
 export default function Settings() {
-  const { user, logout } = useAuth();
+  const {
+    user,
+    logout,
+    beginCredentialSetupVerification,
+    completeCredentialSetup,
+    credentialSetupRevision,
+  } = useAuth();
   const { mode } = useMode();
   const { tenants, selectedTenantId, workspaceRole } = useTenant();
   const { accessibleCampaigns, selectedCampaignId, campaignRole } = useCampaign();
@@ -42,6 +47,9 @@ export default function Settings() {
   const [saving, setSaving] = useState(false);
   const [saveState, setSaveState] = useState({ type: null, message: "" });
   const [activeTab, setActiveTab] = useState("profile");
+  const [credentialSetupCompleted, setCredentialSetupCompleted] = useState(false);
+  const connectedProviderIds = getConnectedProviderIds(user);
+  const showCredentialSetup = shouldShowOptionalCredentialSetup(user);
 
   const selectedTenant = useMemo(
     () =>
@@ -77,6 +85,15 @@ export default function Settings() {
   useEffect(() => {
     if (!user) {
       setProfile(EMPTY_PROFILE);
+      setLoading(false);
+      return;
+    }
+
+    if (isAuthTestMode) {
+      setProfile({
+        displayName: user.displayName || "",
+        reducedMotion: false,
+      });
       setLoading(false);
       return;
     }
@@ -152,6 +169,12 @@ export default function Settings() {
     } catch (error) {
       console.error("[Settings] Logout failed", error);
     }
+  }
+
+  async function handleCredentialSetupComplete(currentUser) {
+    const completed = await completeCredentialSetup(currentUser);
+    if (completed) setCredentialSetupCompleted(true);
+    return completed;
   }
 
   if (loading) {
@@ -272,7 +295,7 @@ export default function Settings() {
                 <div>
                   <h2 className="text-lg font-semibold text-white">Authentication</h2>
                   <p className="text-zinc-500 text-sm mt-1">
-                    Your connected sign-in method and account status.
+                    Your connected sign-in methods and account status.
                   </p>
                 </div>
 
@@ -280,8 +303,16 @@ export default function Settings() {
                   <div className="flex items-start gap-3">
                     <Shield className="w-5 h-5 text-zinc-400 mt-0.5" />
                     <div>
-                      <p className="text-white font-medium">Connected provider</p>
-                      <p className="text-zinc-400">{getProviderLabel(user)}</p>
+                      <p className="text-white font-medium">Connected providers</p>
+                      {connectedProviderIds.length > 0 ? (
+                        <ul className="mt-1 space-y-1 text-zinc-400">
+                          {connectedProviderIds.map((providerId) => (
+                            <li key={providerId}>{getConnectedProviderLabel(providerId)}</li>
+                          ))}
+                        </ul>
+                      ) : (
+                        <p className="text-zinc-400">Unknown</p>
+                      )}
                     </div>
                   </div>
 
@@ -296,6 +327,25 @@ export default function Settings() {
                     </div>
                   </div>
                 </div>
+
+                {credentialSetupCompleted && !showCredentialSetup && (
+                  <div className="flex gap-3 rounded-md border border-emerald-900/80 bg-emerald-950/40 p-4 text-emerald-100" role="status">
+                    <CheckCircle2 className="h-5 w-5 shrink-0" aria-hidden="true" />
+                    <div>
+                      <p className="font-semibold">Password sign-in is ready</p>
+                      <p className="mt-1 text-sm">Google and Email / Password remain connected to the same account.</p>
+                    </div>
+                  </div>
+                )}
+
+                {showCredentialSetup && (
+                  <CredentialMigration
+                    key={`${user.uid}:${credentialSetupRevision}`}
+                    firebaseUser={user}
+                    onComplete={handleCredentialSetupComplete}
+                    onVerificationRequired={beginCredentialSetupVerification}
+                  />
+                )}
               </section>
 
               <section className="bg-white/5 border border-white/10 rounded-xl sm:rounded-2xl p-4 sm:p-6 space-y-4">

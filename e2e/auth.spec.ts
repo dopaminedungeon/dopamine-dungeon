@@ -4,7 +4,11 @@ import type { APIRequestContext, Locator, Page } from "@playwright/test";
 import { verifyAuthHeader } from "../src/server/auth";
 import { test, expect } from "./auth.fixture";
 import {
+  addPasswordProvider,
+  addPasswordProviderByLocalId,
+  createGoogleOnlyUser,
   createVerifiedUser,
+  findAuthEmulatorAccountByEmail,
   getAuthEmulatorAccount,
   getPasswordResetCode,
   getVerificationCode,
@@ -100,6 +104,81 @@ async function signInVerifiedUser(page: Page, request: APIRequestContext) {
   await page.getByLabel("Email address").fill(email);
   await page.getByLabel("Password", { exact: true }).fill(password);
   await page.getByRole("button", { name: "Sign in", exact: true }).click();
+}
+
+async function signInWithEmulatedGoogle(page: Page, email: string) {
+  await page.goto("/home");
+  const popupPromise = page.waitForEvent("popup");
+  await page.getByRole("button", { name: "Continue with Google" }).click();
+  const popup = await popupPromise;
+  await popup.waitForFunction(
+    () =>
+      typeof (window as Window & { finishWithUser?: unknown }).finishWithUser ===
+      "function"
+  );
+  await popup
+    .locator("li.js-reuse-account", { hasText: email })
+    .evaluate((account) => (account as HTMLElement).click());
+  await popup.waitForEvent("close");
+}
+
+async function signInWithNewEmulatedGoogle(page: Page, email: string) {
+  await page.goto("/home");
+  const popupPromise = page.waitForEvent("popup");
+  await page.getByRole("button", { name: "Continue with Google" }).click();
+  const popup = await popupPromise;
+  await popup.waitForFunction(
+    () =>
+      typeof (window as Window & { finishWithUser?: unknown }).finishWithUser ===
+      "function"
+  );
+  await popup.getByRole("button", { name: "Add new account" }).click();
+  await popup.locator("#email-input").fill(email);
+  await popup.locator("#sign-in").click();
+  await popup.waitForEvent("close");
+}
+
+async function seedPendingCredentialSetup(
+  page: Page,
+  firebaseUid: string,
+  neonUserId = "e2e-user"
+) {
+  await page.goto("/home");
+  await page.evaluate(
+    ({ uid, expectedNeonUserId }) => {
+      window.sessionStorage.setItem(
+        "dd_credentialMigrationContinuity",
+        JSON.stringify({ firebaseUid: uid, neonUserId: expectedNeonUserId })
+      );
+    },
+    { uid: firebaseUid, expectedNeonUserId: neonUserId }
+  );
+}
+
+async function expirePendingVerificationCooldown(page: Page) {
+  await page.evaluate(() => {
+    const storageKey = "dd_credentialMigrationContinuity";
+    const pending = JSON.parse(window.sessionStorage.getItem(storageKey) || "null");
+    if (!pending) throw new Error("Pending credential setup is missing.");
+    const expiredAt = Date.now() - 61_000;
+    window.sessionStorage.setItem(
+      storageKey,
+      JSON.stringify({
+        ...pending,
+        verificationEmailRequestedAt: pending.verificationEmailRequestedAt ?? expiredAt,
+        verificationEmailSentAt: expiredAt,
+      })
+    );
+  });
+}
+
+async function waitForPendingVerificationDelivery(page: Page) {
+  await expect.poll(() => page.evaluate(() => {
+    const pending = JSON.parse(
+      window.sessionStorage.getItem("dd_credentialMigrationContinuity") || "null"
+    );
+    return Number.isFinite(pending?.verificationEmailSentAt);
+  })).toBe(true);
 }
 
 async function observeBootstrapFormSubmissions(page: Page) {
@@ -1636,4 +1715,327 @@ test("@smoke signs out and keeps protected routes behind authentication", async 
   await page.goto("/home");
   await expect(page.getByRole("heading", { name: "Sign in to your account" })).toBeVisible();
   await expect(page.getByText("E2E Campaign", { exact: true })).toHaveCount(0);
+});
+
+test("@credential-migration keeps normal access available and optional setup locally validated", async ({
+  apiCallLog,
+  page,
+  request,
+}) => {
+  const email = generatedEmail();
+  await signInWithNewEmulatedGoogle(page, email);
+  let linkingRequests = 0;
+  page.on("request", (browserRequest) => {
+    if (browserRequest.url().includes("accounts:update")) linkingRequests += 1;
+  });
+
+  await expect(page.getByRole("heading", { name: "E2E Campaign" })).toBeVisible();
+  expect(apiCallLog.apiMe.length).toBeGreaterThan(0);
+  expect(apiCallLog.acceptPending.length).toBeGreaterThan(0);
+  expect(apiCallLog.identityContinuity).toEqual([]);
+
+  await page.goto("/settings/profile");
+  await expect(page.getByRole("heading", { name: "Profile Settings" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Add another way to sign in" })).toBeVisible();
+  await expect(page.getByLabel("Email", { exact: true })).toHaveValue(email);
+  expect(apiCallLog.identityContinuity).toEqual(["/api/auth/identity-continuity"]);
+
+  await page.goto("/home");
+  await expect(page.getByRole("heading", { name: "E2E Campaign" })).toBeVisible();
+  await page.goto("/settings/profile");
+  await expect(page.getByRole("heading", { name: "Add another way to sign in" })).toBeVisible();
+  await expect.poll(() => apiCallLog.identityContinuity.length).toBe(2);
+
+  await page.getByLabel("New password", { exact: true }).fill("short");
+  await page.getByLabel("Confirm password", { exact: true }).fill("different");
+  await page.getByRole("button", { name: "Set password" }).click();
+  await expect(page.getByRole("alert")).toHaveText("Passwords do not match.");
+  expect(linkingRequests).toBe(0);
+
+  await page.getByLabel("New password", { exact: true }).fill("short");
+  await page.getByLabel("Confirm password", { exact: true }).fill("short");
+  await page.getByRole("button", { name: "Set password" }).click();
+  await expect(page.getByRole("alert")).toHaveText(
+    "Your password does not meet the requirements."
+  );
+  expect(linkingRequests).toBe(0);
+  await page.goto("/home");
+  await expect(page.getByRole("heading", { name: "E2E Campaign" })).toBeVisible();
+});
+
+test("@credential-migration resumes an already-linked setup without relinking and preserves both sign-ins", async ({
+  apiCallLog,
+  page,
+  request,
+}) => {
+  const email = generatedEmail();
+  const googleAccount = await createGoogleOnlyUser(request, email);
+  await addPasswordProvider(
+    request,
+    googleAccount.idToken,
+    email,
+    replacementPassword
+  );
+  await seedPendingCredentialSetup(page, googleAccount.localId);
+  let linkingRequests = 0;
+  page.on("request", (browserRequest) => {
+    if (browserRequest.url().includes("accounts:update")) linkingRequests += 1;
+  });
+
+  await signInWithEmulatedGoogle(page, email);
+  await expect(page.getByRole("heading", { name: "E2E Campaign" })).toBeVisible();
+  expect(apiCallLog.identityContinuity).toEqual([]);
+  await page.goto("/settings/profile");
+
+  await expect(page.getByText("Password sign-in is ready", { exact: true })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Add another way to sign in" })).toHaveCount(0);
+  await expect(page.getByText("Google", { exact: true })).toBeVisible();
+  await expect(page.getByText("Email / Password", { exact: true })).toBeVisible();
+  expect(apiCallLog.identityContinuity).toHaveLength(2);
+  expect(linkingRequests).toBe(0);
+
+  const passwordAccount = await signInWithPassword(request, email, replacementPassword);
+  expect(passwordAccount.localId).toBe(googleAccount.localId);
+  const authoritativeAccount = await lookupAuthEmulatorAccount(
+    request,
+    passwordAccount.idToken
+  );
+  expect(authoritativeAccount.localId).toBe(googleAccount.localId);
+  expect(
+    authoritativeAccount.providerUserInfo.map(
+      (provider: { providerId: string }) => provider.providerId
+    )
+  ).toEqual(expect.arrayContaining(["google.com", "password"]));
+});
+
+test("@credential-migration automatically verifies email before resuming pending continuity", async ({
+  apiCallLog,
+  page,
+  request,
+}) => {
+  const email = generatedEmail();
+  const googleAccount = await createGoogleOnlyUser(request, email);
+  await addPasswordProviderByLocalId(
+    request,
+    googleAccount.localId,
+    email,
+    replacementPassword,
+    false
+  );
+  await seedPendingCredentialSetup(page, googleAccount.localId);
+  await openEmailSignIn(page);
+  await page.getByLabel("Email address").fill(email);
+  await page.getByLabel("Password", { exact: true }).fill(replacementPassword);
+  await page.getByRole("button", { name: "Sign in", exact: true }).click();
+
+  await expect(page.getByRole("heading", { name: "Verify your email" })).toBeVisible();
+  await expect.poll(() => apiCallLog.verificationEmail.length).toBe(1);
+  await waitForPendingVerificationDelivery(page);
+  expect(apiCallLog.identityContinuity).toHaveLength(0);
+
+  await page.reload();
+  await expect(page.getByRole("heading", { name: "Verify your email" })).toBeVisible();
+  await expect.poll(() => apiCallLog.verificationEmail.length).toBe(1);
+  expect(apiCallLog.identityContinuity).toHaveLength(0);
+
+  await expirePendingVerificationCooldown(page);
+  await page.reload();
+  const resend = page.getByRole("button", { name: "Resend verification email" });
+  await expect(resend).toBeEnabled();
+  await resend.click();
+  await expect(page.getByText("A new verification email has been sent.")).toBeVisible();
+  await expect.poll(() => apiCallLog.verificationEmail.length).toBe(2);
+  const pendingAfterResend = await page.evaluate(() =>
+    JSON.parse(
+      window.sessionStorage.getItem("dd_credentialMigrationContinuity") || "null"
+    )
+  );
+  expect(pendingAfterResend).toMatchObject({
+    firebaseUid: googleAccount.localId,
+    neonUserId: "e2e-user",
+  });
+  expect(typeof pendingAfterResend.verificationEmailSentAt).toBe("number");
+
+  await verifyEmailThroughEmulator(request, email);
+  await page.getByRole("button", { name: "I've verified my email" }).click();
+  await expect(page.getByRole("heading", { name: "E2E Campaign" })).toBeVisible();
+  await expect.poll(() => apiCallLog.identityContinuity.length).toBe(1);
+  await page.goto("/settings/profile");
+  await expect(page.getByRole("heading", { name: "Add another way to sign in" })).toHaveCount(0);
+  await expect(page.getByText("Google", { exact: true })).toBeVisible();
+  await expect(page.getByText("Email / Password", { exact: true })).toBeVisible();
+
+  const linkedAccount = await findAuthEmulatorAccountByEmail(request, email);
+  expect(linkedAccount.localId).toBe(googleAccount.localId);
+  expect(
+    linkedAccount.providerUserInfo.map(
+      (provider: { providerId: string }) => provider.providerId
+    )
+  ).toEqual(expect.arrayContaining(["google.com", "password"]));
+});
+
+test.describe("pending credential verification cooldown", () => {
+  test.use({
+    expectedConsoleErrors: [
+      "Failed to load resource: the server responded with a status of 429",
+    ],
+  });
+
+  test("@credential-migration manual verification resend surfaces the server cooldown", async ({
+    apiCallLog,
+    page,
+    request,
+  }) => {
+    const email = generatedEmail();
+    const googleAccount = await createGoogleOnlyUser(request, email);
+    await addPasswordProviderByLocalId(
+      request,
+      googleAccount.localId,
+      email,
+      replacementPassword,
+      false
+    );
+    await seedPendingCredentialSetup(page, googleAccount.localId);
+    await openEmailSignIn(page);
+    await page.getByLabel("Email address").fill(email);
+    await page.getByLabel("Password", { exact: true }).fill(replacementPassword);
+    await page.getByRole("button", { name: "Sign in", exact: true }).click();
+
+    await expect(page.getByRole("heading", { name: "Verify your email" })).toBeVisible();
+    await expect.poll(() => apiCallLog.verificationEmail.length).toBe(1);
+    await waitForPendingVerificationDelivery(page);
+    await expirePendingVerificationCooldown(page);
+    await page.reload();
+    await expect(
+      page.getByRole("button", { name: "Resend verification email" })
+    ).toBeEnabled();
+
+    let manualRequests = 0;
+    await page.route("**/api/auth/send-verification-email", async (route) => {
+      manualRequests += 1;
+      await route.fulfill({
+        status: 429,
+        json: { error: "Too many verification requests" },
+      });
+    });
+    await page.getByRole("button", { name: "Resend verification email" }).click();
+
+    await expect(
+      page.getByText("Please wait before requesting another verification email.")
+    ).toBeVisible();
+    await expect(page.getByText("A new verification email has been sent.")).toHaveCount(0);
+    await expect(
+      page.getByRole("button", { name: "Resend verification email" })
+    ).toBeEnabled();
+    expect(manualRequests).toBe(1);
+    const pendingAfterRateLimit = await page.evaluate(() =>
+      JSON.parse(
+        window.sessionStorage.getItem("dd_credentialMigrationContinuity") || "null"
+      )
+    );
+    expect(pendingAfterRateLimit).toMatchObject({
+      firebaseUid: googleAccount.localId,
+      neonUserId: "e2e-user",
+    });
+  });
+});
+
+test("@credential-migration already-linked and password-only users do not receive the optional card", async ({
+  apiCallLog,
+  page,
+  request,
+}) => {
+  const email = generatedEmail();
+  const googleAccount = await createGoogleOnlyUser(request, email);
+  await addPasswordProvider(
+    request,
+    googleAccount.idToken,
+    email,
+    replacementPassword
+  );
+
+  await signInWithEmulatedGoogle(page, email);
+
+  await expect(page.getByRole("heading", { name: "E2E Campaign" })).toBeVisible();
+  await page.goto("/settings/profile");
+  await expect(page.getByRole("heading", { name: "Add another way to sign in" })).toHaveCount(0);
+  expect(apiCallLog.identityContinuity).toEqual([]);
+  expect(apiCallLog.apiMe.length).toBeGreaterThan(0);
+
+  await page.getByRole("button").filter({ hasText: email }).click();
+  await page.getByRole("banner").getByRole("button", { name: "Sign out" }).click();
+  await expect(page.getByRole("heading", { name: "Sign in to your account" })).toBeVisible();
+  const passwordOnlyEmail = generatedEmail();
+  await createVerifiedUser(request, passwordOnlyEmail, password);
+  await openEmailSignIn(page);
+  await page.getByLabel("Email address").fill(passwordOnlyEmail);
+  await page.getByLabel("Password", { exact: true }).fill(password);
+  await page.getByRole("button", { name: "Sign in", exact: true }).click();
+  await page.goto("/settings/profile");
+  await expect(page.getByRole("heading", { name: "Add another way to sign in" })).toHaveCount(0);
+});
+
+test.describe("missing identity continuity", () => {
+  test.use({
+    identityContinuityStatus: 409,
+    expectedConsoleErrors: [
+      "Failed to load resource: the server responded with a status of 409",
+    ],
+  });
+
+  test("@credential-migration unavailable setup remains retryable without blocking normal access", async ({
+    apiCallLog,
+    page,
+    request,
+  }) => {
+    const email = generatedEmail();
+    await signInWithNewEmulatedGoogle(page, email);
+
+    await expect(page.getByRole("heading", { name: "E2E Campaign" })).toBeVisible();
+    expect(apiCallLog.apiMe.length).toBeGreaterThan(0);
+    await page.goto("/settings/profile");
+    await expect(page.getByText("Account setup unavailable", { exact: true })).toBeVisible();
+    await page.getByRole("button", { name: "Try again" }).click();
+    await expect.poll(() => apiCallLog.identityContinuity.length).toBe(2);
+    await page.goto("/home");
+    await expect(page.getByRole("heading", { name: "E2E Campaign" })).toBeVisible();
+  });
+});
+
+test.describe("changed post-link identity continuity", () => {
+  test.use({
+    identityContinuityUserIds: ["e2e-user", "different-neon-user"],
+  });
+
+  test("@credential-migration keeps continuity failure recoverable without blocking application providers", async ({
+    apiCallLog,
+    page,
+    request,
+  }) => {
+    const email = generatedEmail();
+    const googleAccount = await createGoogleOnlyUser(request, email);
+    await addPasswordProvider(
+      request,
+      googleAccount.idToken,
+      email,
+      replacementPassword
+    );
+    await seedPendingCredentialSetup(page, googleAccount.localId);
+    await signInWithEmulatedGoogle(page, email);
+    await expect(page.getByRole("heading", { name: "E2E Campaign" })).toBeVisible();
+    await page.goto("/settings/profile");
+
+    await expect(page.getByText(/could not verify account continuity/i)).toBeVisible();
+    expect(apiCallLog.apiMe.length).toBeGreaterThan(0);
+    await page.goto("/home");
+    await expect(page.getByRole("heading", { name: "E2E Campaign" })).toBeVisible();
+    await page.goto("/settings/profile");
+    await expect(page.getByText("Account setup unavailable", { exact: true })).toBeVisible();
+    const account = await findAuthEmulatorAccountByEmail(request, email);
+    expect(
+      account.providerUserInfo.map(
+        (provider: { providerId: string }) => provider.providerId
+      )
+    ).toEqual(expect.arrayContaining(["google.com", "password"]));
+  });
 });

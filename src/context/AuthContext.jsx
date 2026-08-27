@@ -15,13 +15,25 @@ import {
   requiresEmailVerification,
 } from "../auth/authState";
 import { isAuthTestMode } from "../config/firebase/firebase";
-import { requestVerificationEmail } from "../data/api/apiClient";
+import {
+  getIdentityContinuity,
+  requestVerificationEmail,
+} from "../data/api/apiClient";
 import {
   hasPendingInvitationContext,
   preserveInvitationContext,
 } from "../auth/invitationContext";
+import {
+  clearPendingCredentialMigration,
+  hasConnectedProvider,
+  PASSWORD_PROVIDER_ID,
+  readPendingCredentialMigration,
+} from "../auth/credentialMigration";
+import { createPendingCredentialVerificationRequests } from "../auth/pendingCredentialVerification";
 
 const AuthContext = createContext(null);
+const pendingCredentialVerificationRequests =
+  createPendingCredentialVerificationRequests(requestVerificationEmail);
 
 export function AuthProvider({ children }) {
   const [user, setUser] = useState(null);
@@ -30,6 +42,8 @@ export function AuthProvider({ children }) {
   const [profileInitializationFailed, setProfileInitializationFailed] = useState(false);
   const [profileInitializationUser, setProfileInitializationUser] = useState(null);
   const [verificationEmailSentAt, setVerificationEmailSentAt] = useState(null);
+  const [verificationEmailAutoError, setVerificationEmailAutoError] = useState("");
+  const [credentialSetupRevision, setCredentialSetupRevision] = useState(0);
 
   useEffect(() => {
     let authChangeSequence = 0;
@@ -42,9 +56,28 @@ export function AuthProvider({ children }) {
       setUser(null);
       setProfileInitializationFailed(false);
       setProfileInitializationUser(null);
+      setVerificationEmailAutoError("");
 
       if (!firebaseUser || needsVerification) {
         setAuthStatus("ready");
+        if (firebaseUser && readPendingCredentialMigration(firebaseUser.uid)) {
+          pendingCredentialVerificationRequests.requestAutomatic(
+            firebaseUser,
+            hasPendingInvitationContext()
+          )
+            .then((sentAt) => {
+              if (sequence === authChangeSequence && sentAt) {
+                setVerificationEmailSentAt(sentAt);
+              }
+            })
+            .catch(() => {
+              if (sequence === authChangeSequence) {
+                setVerificationEmailAutoError(
+                  "Could not send the verification email automatically. Please try again."
+                );
+              }
+            });
+        }
         return;
       }
 
@@ -117,27 +150,50 @@ export function AuthProvider({ children }) {
     return signInWithEmailAndPassword(auth, email, password);
   };
 
-  const sendBrandedVerificationEmail = async (firebaseUser) => {
+  const sendInitialBrandedVerificationEmail = async (firebaseUser) => {
     if (!firebaseUser) throw new Error("No account is waiting for verification.");
     await requestVerificationEmail(hasPendingInvitationContext());
-    setVerificationEmailSentAt(Date.now());
+    const sentAt = Date.now();
+    setVerificationEmailSentAt(sentAt);
+    setVerificationEmailAutoError("");
   };
 
   const registerWithEmail = async (email, password) => {
     preserveInvitationContext();
     const credential = await createUserWithEmailAndPassword(auth, email, password);
-    await sendBrandedVerificationEmail(credential.user);
+    await sendInitialBrandedVerificationEmail(credential.user);
     return credential;
   };
 
   const resendVerification = async () => {
     const currentUser = verificationUser ?? auth.currentUser;
-    await sendBrandedVerificationEmail(currentUser);
+    if (!currentUser) throw new Error("No account is waiting for verification.");
+    const sentAt = readPendingCredentialMigration(currentUser.uid)
+      ? await pendingCredentialVerificationRequests.requestManual(
+          currentUser,
+          hasPendingInvitationContext()
+        )
+      : await requestVerificationEmail(hasPendingInvitationContext()).then(() => Date.now());
+    setVerificationEmailSentAt(sentAt);
+    setVerificationEmailAutoError("");
   };
 
   const continueVerifiedSession = async (currentUser = verificationUser ?? auth.currentUser) => {
     if (!currentUser) return false;
     await currentUser.getIdToken(true);
+
+    const pending = readPendingCredentialMigration(currentUser.uid);
+    if (pending && hasConnectedProvider(currentUser, PASSWORD_PROVIDER_ID)) {
+      try {
+        const continuity = await getIdentityContinuity();
+        if (continuity?.neonUserId === pending.neonUserId) {
+          clearPendingCredentialMigration();
+          setCredentialSetupRevision((revision) => revision + 1);
+        }
+      } catch {
+        // Optional setup remains recoverable in Profile Settings and never blocks the app.
+      }
+    }
     if (!isAuthTestMode) {
       try {
         await ensureUserProfile({
@@ -173,6 +229,53 @@ export function AuthProvider({ children }) {
     await signOut(auth);
   };
 
+  const beginCredentialSetupVerification = async (currentUser) => {
+    if (
+      !currentUser ||
+      currentUser.uid !== auth.currentUser?.uid ||
+      currentUser.emailVerified ||
+      !hasConnectedProvider(currentUser, PASSWORD_PROVIDER_ID) ||
+      !readPendingCredentialMigration(currentUser.uid)
+    ) {
+      return false;
+    }
+
+    setUser(null);
+    setVerificationUser(currentUser);
+    setVerificationEmailAutoError("");
+    setAuthStatus("ready");
+    try {
+      const sentAt = await pendingCredentialVerificationRequests.requestAutomatic(
+        currentUser,
+        hasPendingInvitationContext()
+      );
+      if (sentAt) setVerificationEmailSentAt(sentAt);
+      return true;
+    } catch {
+      setVerificationEmailAutoError(
+        "Could not send the verification email automatically. Please try again."
+      );
+      return false;
+    }
+  };
+
+  const completeCredentialSetup = async (currentUser) => {
+    if (
+      !currentUser ||
+      currentUser.uid !== auth.currentUser?.uid ||
+      !currentUser.emailVerified ||
+      !hasConnectedProvider(currentUser, PASSWORD_PROVIDER_ID) ||
+      !readPendingCredentialMigration(currentUser.uid)
+    ) {
+      return false;
+    }
+
+    clearPendingCredentialMigration();
+    setCredentialSetupRevision((revision) => revision + 1);
+    setUser(getApplicationUser(currentUser, "ready", isAuthTestMode));
+    return true;
+  };
+
   return (
     <AuthContext.Provider
       value={{
@@ -181,6 +284,8 @@ export function AuthProvider({ children }) {
         authStatus,
         profileInitializationFailed,
         verificationEmailSentAt,
+        verificationEmailAutoError,
+        credentialSetupRevision,
         signInWithGoogle,
         signInWithEmail,
         registerWithEmail,
@@ -188,6 +293,8 @@ export function AuthProvider({ children }) {
         checkEmailVerification,
         continueVerifiedSession,
         retryProfileInitialization,
+        beginCredentialSetupVerification,
+        completeCredentialSetup,
         logout,
       }}
     >
