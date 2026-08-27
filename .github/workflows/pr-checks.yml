@@ -17,7 +17,7 @@ permissions:
 jobs:
   trusted-quality-gate:
     name: DD Quality Gate
-    runs-on: [self-hosted, macOS, X64]
+    runs-on: ubuntu-latest
 
     steps:
       - name: Checkout repository
