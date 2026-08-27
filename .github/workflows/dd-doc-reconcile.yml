@@ -1,0 +1,46 @@
+name: DD Documentation Reconciliation
+
+on:
+  workflow_dispatch:
+  # GitHub Actions has no supported projects_v2_item trigger. Configure the
+  # Project workflow once to add this label when a closeout item enters
+  # In Progress; the issues:labeled event is the repository-visible bridge.
+  issues:
+    types: [labeled]
+
+permissions:
+  contents: read
+
+jobs:
+  reconcile:
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      (
+        github.event_name == 'issues' &&
+        github.event.action == 'labeled' &&
+        github.event.label.name == 'iteration-closeout-in-progress' &&
+        startsWith(github.event.issue.title, '[Task]: Iteration ') &&
+        contains(github.event.issue.body, '<!-- dd-iteration-closeout:')
+      )
+    concurrency:
+      group: dd-doc-reconcile-${{ github.event.issue.number || github.run_id }}
+      cancel-in-progress: false
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Run documentation reconciliation
+        env:
+          MISTRAL_API_KEY: ${{ secrets.MISTRAL_API_KEY }}
+          AI_MODEL: mistral-small-latest
+          AI_REASONING_EFFORT: high
+          CLOSEOUT_ISSUE_NUMBER: ${{ github.event.issue.number || '' }}
+          CLOSEOUT_ISSUE_TITLE: ${{ github.event.issue.title || '' }}
+        run: node scripts/dd-doc-reconcile.mjs

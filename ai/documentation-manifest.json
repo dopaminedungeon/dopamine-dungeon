@@ -1,0 +1,158 @@
+{
+  "canonical": [
+    "README.md",
+    "docs/README.md",
+    "docs/SYSTEMSDIAGRAMS.md",
+
+    "docs/architecture/SYSTEM_OVERVIEW.md",
+    "docs/architecture/adr/README.md",
+    "docs/architecture/adr/0001-neon-as-primary-database.md",
+    "docs/architecture/adr/0002-dev-main-deployment-flow.md",
+    "docs/architecture/adr/0003-transitional-firestore-postgres-persistence.md",
+    "docs/architecture/adr/0004-firebase-identity-and-email-verification.md",
+    "docs/architecture/adr/0005-vercel-runtime-and-isolated-auth-testing.md",
+    "docs/architecture/adr/0006-canonical-workspace-and-campaign-creation.md",
+
+    "docs/context-architecture.md",
+    "docs/multitenant-multirole-management.md",
+    "docs/permissions-graph.md",
+    "docs/permissions-table.md",
+    "docs/routing-map.md",
+    "docs/masterflow.md",
+    "docs/userflows.md",
+    "docs/crosslinking.md",
+
+    "docs/product/CURRENT_STATE.md",
+    "docs/product/PRODUCT_PRINCIPLES.md",
+    "docs/product/ROADMAP.md",
+    "docs/product/FEATURE_SURFACE_AUDIT.md",
+
+    "docs/operations/DEPLOYMENT.md",
+    "docs/operations/ENVIRONMENT.md",
+    "docs/operations/REPOSITORY_POLICY.md",
+    "docs/operations/ROLLBACK.md",
+    "docs/operations/TESTING.md",
+    "docs/operations/ITERATION_CLOSEOUT.md"
+  ],
+  "evidence": [
+    "package.json",
+    "pnpm-workspace.yaml",
+    "vercel.json",
+    "firebase.json",
+    "drizzle.config.ts",
+
+    ".github/workflows/create-iteration-closeout.yml",
+    ".github/workflows/dd-ai-review.yml",
+    ".github/workflows/dd-doc-reconcile.yml",
+    ".github/workflows/pr-checks.yml",
+
+    "src/App.jsx",
+    "src/context/AppProviders.jsx",
+    "src/context/AuthContext.jsx",
+    "src/context/CampaignContext.jsx",
+    "src/context/ModeContext.jsx",
+    "src/context/TenantContext.jsx",
+
+    "src/server/access.ts",
+    "src/server/auth.ts",
+    "src/server/security-boundaries.ts",
+    "src/server/viewer-mode.ts",
+
+    "api/me.ts",
+    "api/workspace.ts",
+    "api/campaign-content.ts",
+    "api/worldbuilding.ts",
+    "api/invitations/index.ts",
+    "api/invitations/accept-pending.ts",
+
+    "db/schema/index.ts",
+    "db/schema/workspaces.ts",
+    "db/schema/campaigns.ts",
+    "db/schema/memberships.ts",
+    "db/schema/users.ts",
+    "db/schema/invitations.ts",
+    "db/schema/entityLinks.ts",
+
+    "src/components/auth/VerificationActionScreen.jsx",
+    "src/components/auth/VerificationScreen.jsx",
+    "src/components/auth/PasswordRecoveryRequestScreen.jsx",
+    "src/components/auth/PasswordResetActionScreen.jsx",
+
+    "src/domain/mail/inviteEmail.template.ts",
+    "src/domain/mail/verificationEmail.template.ts",
+
+    "src/server/db.ts",
+    "src/server/api-handlers/entity-links.ts",
+
+    "src/pages/CampaignSettings.jsx"
+  ],
+  "passes": {
+    "security-auth": {
+      "scope": [
+        "authentication",
+        "email verification",
+        "password recovery/reset",
+        "invitation creation/acceptance",
+        "invitation continuation after authentication",
+        "authentication-related current-state documentation"
+      ],
+      "outOfScope": [
+        "tenant or campaign authorization",
+        "GM/player mode or permissions",
+        "tenant or campaign isolation",
+        "GM-only route access"
+      ],
+      "canonical": [
+        "docs/architecture/adr/0004-firebase-identity-and-email-verification.md",
+        "docs/product/CURRENT_STATE.md",
+        "docs/userflows.md"
+      ],
+      "evidence": [
+        "src/context/AuthContext.jsx",
+        "src/context/AppProviders.jsx",
+        "src/context/TenantContext.jsx",
+        "src/context/CampaignContext.jsx",
+        "src/auth/invitationContext.js",
+        "src/server/auth.ts",
+        "api/invitations/index.ts",
+        "api/invitations/accept-pending.ts",
+        "src/components/invitations/InvitePlayerForm.jsx",
+        "src/components/auth/VerificationActionScreen.jsx",
+        "src/components/auth/VerificationScreen.jsx",
+        "src/components/auth/PasswordRecoveryRequestScreen.jsx",
+        "src/components/auth/PasswordResetActionScreen.jsx"
+      ]
+    },
+    "security-access": {
+      "scope": [
+        "tenant/workspace isolation",
+        "campaign isolation",
+        "authorization",
+        "campaign/workspace roles",
+        "GM/player selected mode versus actual permissions",
+        "route/access boundaries",
+        "server-side security boundaries"
+      ],
+      "outOfScope": [
+        "authentication and email verification",
+        "password recovery/reset",
+        "invitation creation/acceptance"
+      ],
+      "canonical": [
+        "docs/multitenant-multirole-management.md",
+        "docs/permissions-table.md",
+        "docs/permissions-graph.md",
+        "docs/routing-map.md",
+        "docs/product/CURRENT_STATE.md"
+      ],
+      "evidence": [
+        "src/context/ModeContext.jsx",
+        "src/server/access.ts",
+        "src/server/security-boundaries.ts",
+        "src/server/viewer-mode.ts",
+        "api/me.ts",
+        "src/pages/CampaignSettings.jsx"
+      ]
+    }
+  }
+}
