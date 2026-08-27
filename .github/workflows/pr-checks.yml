@@ -17,7 +17,7 @@ permissions:
 jobs:
   trusted-quality-gate:
     name: DD Quality Gate
-    runs-on: [self-hosted, macOS, X64]
+    runs-on: ubuntu-latest
 
     steps:
       - name: Checkout repository
@@ -48,6 +48,9 @@ jobs:
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
+
+      - name: Install Playwright Chromium
+        run: pnpm exec playwright install --with-deps chromium
 
       - name: Lint
         id: lint
