@@ -28,6 +28,10 @@ const resetConfirmation =
 const invitedWorkspaceId = "00000000-0000-4000-8000-000000000011";
 const invitedCampaignId = "00000000-0000-4000-8000-000000000012";
 const bootstrapWorkspaceId = "00000000-0000-4000-8000-000000000013";
+const readyWorkspaceId = "00000000-0000-4000-8000-000000000014";
+const readyCampaignId = "00000000-0000-4000-8000-000000000015";
+const inaccessibleWorkspaceId = "00000000-0000-4000-8000-000000000016";
+const inaccessibleCampaignId = "00000000-0000-4000-8000-000000000017";
 
 function generatedEmail() {
   return `auth-${randomUUID()}@example.test`;
@@ -89,6 +93,69 @@ function campaignBootstrapApiMeResponse(userId = "e2e-campaign-bootstrap-user") 
     ],
     campaigns: [],
     campaignMemberships: [],
+  };
+}
+
+function multiWorkspaceCampaignBootstrapApiMeResponse(
+  userId = "e2e-multi-workspace-bootstrap-user"
+) {
+  return {
+    ok: true,
+    user: { id: userId },
+    workspaces: [
+      {
+        id: bootstrapWorkspaceId,
+        slug: "bootstrap-workspace",
+        name: "Bootstrap Workspace",
+      },
+      {
+        id: readyWorkspaceId,
+        slug: "ready-workspace",
+        name: "Ready Workspace",
+      },
+    ],
+    workspaceMemberships: [
+      { workspaceId: bootstrapWorkspaceId, userId, role: "owner" },
+      { workspaceId: readyWorkspaceId, userId, role: "member" },
+    ],
+    campaigns: [
+      {
+        id: readyCampaignId,
+        workspaceId: readyWorkspaceId,
+        slug: "ready-campaign",
+        name: "Ready Campaign",
+        description: "Accessible player campaign",
+      },
+    ],
+    campaignMemberships: [
+      { campaignId: readyCampaignId, userId, role: "player" },
+    ],
+  };
+}
+
+function mixedVisibilityCampaignBootstrapApiMeResponse(
+  userId = "e2e-bootstrap-visibility-user"
+) {
+  return {
+    ...multiWorkspaceCampaignBootstrapApiMeResponse(userId),
+    workspaces: [
+      ...multiWorkspaceCampaignBootstrapApiMeResponse(userId).workspaces,
+      {
+        id: inaccessibleWorkspaceId,
+        slug: "unauthorized-workspace",
+        name: "Unauthorized Workspace",
+      },
+    ],
+    campaigns: [
+      ...multiWorkspaceCampaignBootstrapApiMeResponse(userId).campaigns,
+      {
+        id: inaccessibleCampaignId,
+        workspaceId: readyWorkspaceId,
+        slug: "gm-secret-campaign",
+        name: "GM Secret Campaign",
+        description: "Hidden prep",
+      },
+    ],
   };
 }
 
@@ -1598,6 +1665,19 @@ test.describe("bootstrap sign out", () => {
       apiMeResponse: campaignBootstrapApiMeResponse(),
     });
 
+    test("keeps a single incomplete workspace on the campaign creation flow", async ({
+      page,
+      request,
+    }) => {
+      await signInVerifiedUser(page, request);
+
+      await expect(
+        page.getByRole("heading", { name: "Create your first campaign" })
+      ).toBeVisible();
+      await expect(page.getByLabel("Workspace")).toHaveCount(0);
+      await expect(page.getByRole("button", { name: "Sign out" })).toBeVisible();
+    });
+
     test("signs out from campaign bootstrap without submitting the creation form", async ({
       page,
       request,
@@ -1620,6 +1700,59 @@ test.describe("bootstrap sign out", () => {
         page.getByRole("heading", { name: "Sign in to your account" })
       ).toBeVisible();
       await expectNoBootstrapFormSubmission(page);
+    });
+  });
+
+  test.describe("with multiple workspaces and one incomplete workspace", () => {
+    test.use({
+      apiMeResponse: multiWorkspaceCampaignBootstrapApiMeResponse(),
+    });
+
+    test("switches away from campaign bootstrap to an accessible workspace with a campaign", async ({
+      page,
+      request,
+    }) => {
+      await signInVerifiedUser(page, request);
+
+      await expect(
+        page.getByRole("heading", { name: "Create your first campaign" })
+      ).toBeVisible();
+      await expect(page.getByText("Current workspace: Bootstrap Workspace")).toBeVisible();
+      await expect(page.getByRole("button", { name: "Sign out" })).toBeVisible();
+
+      await page.getByLabel("Workspace").selectOption("ready-workspace");
+
+      await expect(
+        page.getByRole("heading", { name: "Create your first campaign" })
+      ).toHaveCount(0);
+      await expect(page.getByRole("heading", { name: "Ready Campaign" })).toBeVisible();
+      await expect(page.getByText("Workspace: Ready Workspace")).toBeVisible();
+    });
+  });
+
+  test.describe("with inaccessible workspace and campaign rows in membership data", () => {
+    test.use({
+      apiMeResponse: mixedVisibilityCampaignBootstrapApiMeResponse(),
+    });
+
+    test("does not expose unjoined workspaces or campaigns from bootstrap switching", async ({
+      page,
+      request,
+    }) => {
+      await signInVerifiedUser(page, request);
+
+      await expect(
+        page.getByRole("heading", { name: "Create your first campaign" })
+      ).toBeVisible();
+      await expect(page.getByLabel("Workspace")).toBeVisible();
+      await expect(page.locator("body")).not.toContainText("Unauthorized Workspace");
+      await expect(page.locator("body")).not.toContainText("GM Secret Campaign");
+
+      await page.getByLabel("Workspace").selectOption("ready-workspace");
+
+      await expect(page.getByRole("heading", { name: "Ready Campaign" })).toBeVisible();
+      await expect(page.locator("body")).not.toContainText("Unauthorized Workspace");
+      await expect(page.locator("body")).not.toContainText("GM Secret Campaign");
     });
   });
 });
