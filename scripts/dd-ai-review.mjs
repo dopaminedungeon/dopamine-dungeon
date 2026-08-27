@@ -134,7 +134,7 @@ async function main() {
   const changedFiles = files
     .map((file) => `- ${file.filename} (+${file.additions}/-${file.deletions})`)
     .join("\n");
-
+// instructions //
   const prompt = `
 ${rubric}
 
