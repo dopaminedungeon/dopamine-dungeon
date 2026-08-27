@@ -2,7 +2,6 @@ import { useEffect, useRef, useState } from "react";
 import {
   CheckCircle2,
   LoaderCircle,
-  LogOut,
   ShieldAlert,
 } from "lucide-react";
 import { reload } from "firebase/auth";
@@ -22,41 +21,22 @@ import {
   reauthenticateFirebaseUserWithGoogle,
 } from "../../auth/firebaseCredentialMigration";
 import { getIdentityContinuity } from "../../data/api/apiClient";
-import AuthRecoveryShell from "./AuthRecoveryShell";
 import PasswordField from "./PasswordField";
 import PasswordRequirements from "./PasswordRequirements";
 
 const GENERIC_FAILURE = "Could not add this sign-in method. Please try again.";
 const GENERIC_REAUTH_FAILURE = "Could not confirm your Google sign-in. Please try again.";
 
-function Frame({ standalone, children }) {
-  if (standalone) {
-    return (
-      <AuthRecoveryShell
-        title="Add another way to sign in"
-        description="Dopamine Dungeon now supports email and password authentication. Set a password for your existing account to continue."
-      >
-        {children}
-      </AuthRecoveryShell>
-    );
-  }
-
-  return <div className="rounded-xl border border-purple-500/30 bg-purple-950/20 p-4">{children}</div>;
-}
-
 export default function CredentialMigration({
   firebaseUser,
   onComplete,
-  onLogout,
-  standalone = false,
+  onVerificationRequired,
 }) {
   const originalUidRef = useRef(firebaseUser?.uid || "");
   const originalEmailRef = useRef(firebaseUser?.email || "");
   const neonUserIdRef = useRef("");
   const linkingRef = useRef(false);
-  const signingOutRef = useRef(false);
   const initialPreflightPromiseRef = useRef(null);
-  const completingRef = useRef(false);
   const [stage, setStage] = useState("checking");
   const [password, setPassword] = useState("");
   const [confirmation, setConfirmation] = useState("");
@@ -65,8 +45,6 @@ export default function CredentialMigration({
   const [passwordValidation, setPasswordValidation] = useState(null);
   const [error, setError] = useState("");
   const [submitting, setSubmitting] = useState(false);
-  const [signingOut, setSigningOut] = useState(false);
-  const [completing, setCompleting] = useState(false);
 
   async function verifyContinuity({ initial = false } = {}) {
     const currentUser = auth.currentUser;
@@ -112,7 +90,7 @@ export default function CredentialMigration({
         setStage("unavailable");
       } else if (hasConnectedProvider(auth.currentUser, PASSWORD_PROVIDER_ID)) {
         try {
-          setStage((await finishLinkedMigration()) ? "success" : "verification");
+          await finishLinkedSetup();
         } catch {
           setStage("verification");
         }
@@ -149,9 +127,12 @@ export default function CredentialMigration({
     };
   }, [password, stage]);
 
-  async function finishLinkedMigration() {
+  async function finishLinkedSetup() {
     const currentUser = auth.currentUser;
-    if (!currentUser || currentUser.uid !== originalUidRef.current) return false;
+    if (!currentUser || currentUser.uid !== originalUidRef.current) {
+      setStage("verification");
+      return false;
+    }
 
     await reload(currentUser);
     await currentUser.getIdToken(true);
@@ -160,10 +141,25 @@ export default function CredentialMigration({
       currentUser.email !== originalEmailRef.current ||
       !hasConnectedProvider(currentUser, PASSWORD_PROVIDER_ID)
     ) {
+      setStage("verification");
       return false;
     }
 
-    return verifyContinuity();
+    if (!currentUser.emailVerified) {
+      setStage("email-verification");
+      await onVerificationRequired(currentUser);
+      return true;
+    }
+
+    if (!(await verifyContinuity())) {
+      setStage("verification");
+      return false;
+    }
+
+    setStage("success");
+    const completed = await onComplete(currentUser);
+    if (!completed) setStage("verification");
+    return completed;
   }
 
   async function handleSubmit(event) {
@@ -207,11 +203,7 @@ export default function CredentialMigration({
 
       setPassword("");
       setConfirmation("");
-      if (await finishLinkedMigration()) {
-        setStage("success");
-      } else {
-        setStage("verification");
-      }
+      await finishLinkedSetup();
     } catch (migrationError) {
       setPassword("");
       setConfirmation("");
@@ -220,7 +212,7 @@ export default function CredentialMigration({
         setStage("reauthentication");
       } else if (failure === "already-linked") {
         try {
-          setStage((await finishLinkedMigration()) ? "success" : "verification");
+          await finishLinkedSetup();
         } catch {
           setStage("verification");
         }
@@ -280,7 +272,7 @@ export default function CredentialMigration({
     setSubmitting(true);
     setError("");
     try {
-      setStage((await finishLinkedMigration()) ? "success" : "verification");
+      await finishLinkedSetup();
     } catch {
       setStage("verification");
     } finally {
@@ -288,46 +280,17 @@ export default function CredentialMigration({
     }
   }
 
-  async function handleLogout() {
-    if (signingOutRef.current) return;
-    signingOutRef.current = true;
-    setSigningOut(true);
-    setError("");
-    try {
-      await onLogout();
-    } catch {
-      setError("Could not sign out. Please try again.");
-    } finally {
-      signingOutRef.current = false;
-      setSigningOut(false);
-    }
-  }
-
-  async function handleComplete() {
-    if (completingRef.current) return;
-    completingRef.current = true;
-    setCompleting(true);
-    try {
-      await onComplete(auth.currentUser);
-    } finally {
-      completingRef.current = false;
-      setCompleting(false);
-    }
-  }
-
   const passwordRequirements = getPasswordRequirements(passwordValidation);
   const isForm = stage === "form";
 
   return (
-    <Frame standalone={standalone}>
-      {!standalone && (
-        <div className="mb-4">
-          <h3 className="font-semibold text-white">Add another way to sign in</h3>
-          <p className="mt-1 text-sm text-zinc-300">
-            Dopamine Dungeon now supports email and password authentication. Set a password for your existing account to continue.
-          </p>
-        </div>
-      )}
+    <div className="rounded-xl border border-purple-500/30 bg-purple-950/20 p-4">
+      <div className="mb-4">
+        <h3 className="font-semibold text-white">Add another way to sign in</h3>
+        <p className="mt-1 text-sm text-zinc-300">
+          Dopamine Dungeon now supports email and password authentication. Set a password to add another way to access your account.
+        </p>
+      </div>
 
       {stage === "checking" && (
         <div className="mt-6 flex items-center gap-2 text-zinc-300" role="status">
@@ -402,7 +365,7 @@ export default function CredentialMigration({
                   ? "Your sign-in method was added, but we could not verify account continuity. Try the check again."
                   : stage === "conflict"
                     ? "This credential belongs to a different account. No accounts or application data were merged."
-                    : "We could not verify the existing application account. Try again or sign out."}
+                    : "We could not verify the existing application account. Try again later."}
               </p>
             </div>
           </div>
@@ -416,7 +379,7 @@ export default function CredentialMigration({
       )}
 
       {stage === "success" && (
-        <div className="mt-6 space-y-4">
+        <div className="mt-6">
           <div className="flex gap-3 rounded-md border border-emerald-900/80 bg-emerald-950/40 p-4 text-emerald-100" role="status">
             <CheckCircle2 className="h-5 w-5 shrink-0" aria-hidden="true" />
             <div>
@@ -424,18 +387,15 @@ export default function CredentialMigration({
               <p className="mt-1 text-sm">Your Google sign-in remains connected to the same Dopamine Dungeon account.</p>
             </div>
           </div>
-          <button type="button" disabled={completing} onClick={handleComplete} className="min-h-14 w-full rounded-md bg-purple-600 px-6 py-3 font-bold text-white disabled:opacity-60">
-            {completing ? "Continuing…" : "Continue to Dopamine Dungeon"}
-          </button>
         </div>
       )}
 
-      {stage !== "success" && (
-        <button type="button" disabled={signingOut} onClick={handleLogout} className="mt-4 flex min-h-12 w-full items-center justify-center gap-2 rounded-md border border-zinc-700 bg-zinc-800 px-4 py-3 font-semibold text-white hover:bg-zinc-700 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-purple-300 disabled:opacity-60">
-          <LogOut className="h-4 w-4" aria-hidden="true" />
-          {signingOut ? "Signing out…" : "Sign out"}
-        </button>
+      {stage === "email-verification" && (
+        <div className="mt-6 flex items-center gap-2 text-zinc-300" role="status">
+          <LoaderCircle className="h-5 w-5 animate-spin text-purple-300" aria-hidden="true" />
+          Preparing email verification…
+        </div>
       )}
-    </Frame>
+    </div>
   );
 }

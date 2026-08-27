@@ -16,12 +16,13 @@ import { useMode } from "../context/ModeContext.jsx";
 import { useTenant } from "../context/TenantContext.jsx";
 import { useCampaign } from "../context/CampaignContext.jsx";
 import { auth, db } from "../firebase/firebase";
+import { isAuthTestMode } from "../config/firebase/firebase";
 import WorkspaceSettings from "./WorkspaceSettings.jsx";
 import CredentialMigration from "../components/auth/CredentialMigration.jsx";
 import {
   getConnectedProviderIds,
   getConnectedProviderLabel,
-  requiresCredentialMigration,
+  shouldShowOptionalCredentialSetup,
 } from "../auth/credentialMigration";
 
 const EMPTY_PROFILE = {
@@ -30,7 +31,13 @@ const EMPTY_PROFILE = {
 };
 
 export default function Settings() {
-  const { user, logout, completeCredentialMigration } = useAuth();
+  const {
+    user,
+    logout,
+    beginCredentialSetupVerification,
+    completeCredentialSetup,
+    credentialSetupRevision,
+  } = useAuth();
   const { mode } = useMode();
   const { tenants, selectedTenantId, workspaceRole } = useTenant();
   const { accessibleCampaigns, selectedCampaignId, campaignRole } = useCampaign();
@@ -40,7 +47,9 @@ export default function Settings() {
   const [saving, setSaving] = useState(false);
   const [saveState, setSaveState] = useState({ type: null, message: "" });
   const [activeTab, setActiveTab] = useState("profile");
+  const [credentialSetupCompleted, setCredentialSetupCompleted] = useState(false);
   const connectedProviderIds = getConnectedProviderIds(user);
+  const showCredentialSetup = shouldShowOptionalCredentialSetup(user);
 
   const selectedTenant = useMemo(
     () =>
@@ -76,6 +85,15 @@ export default function Settings() {
   useEffect(() => {
     if (!user) {
       setProfile(EMPTY_PROFILE);
+      setLoading(false);
+      return;
+    }
+
+    if (isAuthTestMode) {
+      setProfile({
+        displayName: user.displayName || "",
+        reducedMotion: false,
+      });
       setLoading(false);
       return;
     }
@@ -151,6 +169,12 @@ export default function Settings() {
     } catch (error) {
       console.error("[Settings] Logout failed", error);
     }
+  }
+
+  async function handleCredentialSetupComplete(currentUser) {
+    const completed = await completeCredentialSetup(currentUser);
+    if (completed) setCredentialSetupCompleted(true);
+    return completed;
   }
 
   if (loading) {
@@ -304,11 +328,22 @@ export default function Settings() {
                   </div>
                 </div>
 
-                {requiresCredentialMigration(user) && (
+                {credentialSetupCompleted && !showCredentialSetup && (
+                  <div className="flex gap-3 rounded-md border border-emerald-900/80 bg-emerald-950/40 p-4 text-emerald-100" role="status">
+                    <CheckCircle2 className="h-5 w-5 shrink-0" aria-hidden="true" />
+                    <div>
+                      <p className="font-semibold">Password sign-in is ready</p>
+                      <p className="mt-1 text-sm">Google and Email / Password remain connected to the same account.</p>
+                    </div>
+                  </div>
+                )}
+
+                {showCredentialSetup && (
                   <CredentialMigration
+                    key={`${user.uid}:${credentialSetupRevision}`}
                     firebaseUser={user}
-                    onComplete={completeCredentialMigration}
-                    onLogout={logout}
+                    onComplete={handleCredentialSetupComplete}
+                    onVerificationRequired={beginCredentialSetupVerification}
                   />
                 )}
               </section>

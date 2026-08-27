@@ -47,6 +47,36 @@ test("password migration links an email credential to the existing Firebase user
   ]);
 });
 
+test("duplicate password-link activation shares one Firebase linking attempt", async () => {
+  const firebaseUser = { uid: "unchanged-firebase-uid" };
+  const credential = { providerId: "password" };
+  let finishLink;
+  mocks.credential.mockReturnValue(credential);
+  mocks.linkWithCredential.mockReturnValue(
+    new Promise((resolve) => {
+      finishLink = resolve;
+    })
+  );
+
+  const first = linkPasswordToFirebaseUser(
+    firebaseUser,
+    "existing-google-user@example.test",
+    "not-stored"
+  );
+  const duplicate = linkPasswordToFirebaseUser(
+    firebaseUser,
+    "existing-google-user@example.test",
+    "not-stored"
+  );
+  await Promise.resolve();
+
+  assert.equal(first, duplicate);
+  assert.equal(mocks.credential.mock.calls.length, 1);
+  assert.equal(mocks.linkWithCredential.mock.calls.length, 1);
+  finishLink({ user: firebaseUser });
+  await first;
+});
+
 test("reauthentication uses Google on the same Firebase user", async () => {
   const firebaseUser = { uid: "unchanged-firebase-uid" };
   await reauthenticateFirebaseUserWithGoogle(firebaseUser);

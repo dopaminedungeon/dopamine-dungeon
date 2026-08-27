@@ -18,7 +18,6 @@ import {
   clearInvitationContext,
   hasPendingInvitationContext,
 } from "../auth/invitationContext";
-import CredentialMigration from "../components/auth/CredentialMigration.jsx";
 
 const AccessResolutionContext = createContext({
   accessResolutionStatus: "idle",
@@ -27,36 +26,6 @@ const AccessResolutionContext = createContext({
 
 const invitationResolutionRecords = new Map();
 const INVITATION_RESOLUTION_STORAGE_PREFIX = "dd_invitationResolution:";
-
-function CredentialMigrationBoundary({ children }) {
-  const {
-    authStatus,
-    credentialMigrationUser,
-    completeCredentialMigration,
-    logout,
-  } = useAuth();
-
-  if (authStatus === "loading") {
-    return (
-      <main className="min-h-screen bg-zinc-950 flex items-center justify-center p-6 text-zinc-300" role="status">
-        Checking authentication…
-      </main>
-    );
-  }
-
-  if (credentialMigrationUser) {
-    return (
-      <CredentialMigration
-        firebaseUser={credentialMigrationUser}
-        onComplete={completeCredentialMigration}
-        onLogout={logout}
-        standalone
-      />
-    );
-  }
-
-  return children;
-}
 
 function hasStoredInvitationResolution(key) {
   try {
@@ -342,15 +311,13 @@ function InvitationAcceptanceBridge({ children }) {
 export default function AppProviders({ children }) {
   return (
     <AuthProvider>
-      <CredentialMigrationBoundary>
-        <TenantProvider>
-          <CampaignProvider>
-            <InvitationAcceptanceBridge>
-              <ModeProvider>{children}</ModeProvider>
-            </InvitationAcceptanceBridge>
-          </CampaignProvider>
-        </TenantProvider>
-      </CredentialMigrationBoundary>
+      <TenantProvider>
+        <CampaignProvider>
+          <InvitationAcceptanceBridge>
+            <ModeProvider>{children}</ModeProvider>
+          </InvitationAcceptanceBridge>
+        </CampaignProvider>
+      </TenantProvider>
     </AuthProvider>
   );
 }

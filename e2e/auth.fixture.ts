@@ -3,6 +3,7 @@ import { test as base, expect } from "@playwright/test";
 import {
   clearAuthEmulator,
   getAuthEmulatorAccount,
+  lookupAuthEmulatorAccount,
   requestPasswordResetThroughEmulator,
   sendVerificationEmail,
 } from "./auth-emulator";
@@ -54,6 +55,7 @@ export const test = base.extend<{
     apiMe: string[];
     acceptPending: string[];
     identityContinuity: string[];
+    verificationEmail: string[];
   };
   identityContinuityStatus: number;
   identityContinuityUserId: string;
@@ -84,7 +86,12 @@ export const test = base.extend<{
   identityContinuityUserId: ["e2e-user", { option: true }],
   identityContinuityUserIds: [null, { option: true }],
   apiCallLog: async ({}, use) => {
-    await use({ apiMe: [], acceptPending: [], identityContinuity: [] });
+    await use({
+      apiMe: [],
+      acceptPending: [],
+      identityContinuity: [],
+      verificationEmail: [],
+    });
   },
   consoleGuard: [
     async ({ page, expectedConsoleErrors }, use) => {
@@ -164,6 +171,11 @@ test.beforeEach(async ({
 
     if (requestUrl.pathname === "/api/auth/identity-continuity") {
       expect(route.request().headers()["x-dd-mode"]).toBeUndefined();
+      const account = await lookupAuthEmulatorAccount(
+        request,
+        authorization!.slice("Bearer ".length)
+      );
+      expect(account.emailVerified).toBe(true);
       apiCallLog.identityContinuity.push(requestUrl.pathname);
       const continuityUserId =
         identityContinuityUserIds?.[
@@ -207,6 +219,7 @@ test.beforeEach(async ({
     }
 
     if (requestUrl.pathname === "/api/auth/send-verification-email") {
+      apiCallLog.verificationEmail.push(requestUrl.pathname);
       await sendVerificationEmail(request, authorization!.slice("Bearer ".length));
       await route.fulfill({ status: 202, json: { ok: true } });
       return;

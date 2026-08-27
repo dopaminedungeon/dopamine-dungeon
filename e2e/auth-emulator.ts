@@ -142,7 +142,14 @@ export async function addPasswordProvider(
 ) {
   const response = await request.post(
     `${AUTH_EMULATOR_URL}/identitytoolkit.googleapis.com/v1/accounts:update?key=${apiKey}`,
-    { data: { idToken, email, password, returnSecureToken: true } }
+    {
+      data: {
+        idToken,
+        email,
+        password,
+        returnSecureToken: true,
+      },
+    }
   );
   const account = await expectOk(response);
   const cached = emulatorAccounts.get(email.toLowerCase());
@@ -159,7 +166,8 @@ export async function addPasswordProviderByLocalId(
   request: APIRequestContext,
   localId: string,
   email: string,
-  password: string
+  password: string,
+  emailVerified = true
 ) {
   const response = await request.post(
     `${AUTH_EMULATOR_URL}/identitytoolkit.googleapis.com/v1/projects/${FIREBASE_TEST_PROJECT_ID}/accounts:update?key=${apiKey}`,
@@ -168,7 +176,7 @@ export async function addPasswordProviderByLocalId(
       data: {
         localId,
         email,
-        emailVerified: true,
+        emailVerified,
         password,
       },
     }

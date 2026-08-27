@@ -16,13 +16,24 @@ export function hasConnectedProvider(user, providerId) {
   return getConnectedProviderIds(user).includes(providerId);
 }
 
-export function requiresCredentialMigration(user) {
+export function isOptionalCredentialSetupCandidate(user) {
   if (!user?.emailVerified) return false;
 
   const providerIds = getConnectedProviderIds(user);
   return (
     providerIds.includes(GOOGLE_PROVIDER_ID) &&
     !providerIds.includes(PASSWORD_PROVIDER_ID)
+  );
+}
+
+export function shouldShowOptionalCredentialSetup(user) {
+  if (!user?.emailVerified || !hasConnectedProvider(user, GOOGLE_PROVIDER_ID)) {
+    return false;
+  }
+
+  return (
+    !hasConnectedProvider(user, PASSWORD_PROVIDER_ID) ||
+    Boolean(readPendingCredentialMigration(user.uid))
   );
 }
 
@@ -69,15 +80,57 @@ export function readPendingCredentialMigration(firebaseUid) {
   return null;
 }
 
-export function storePendingCredentialMigration(firebaseUid, neonUserId) {
+export function storePendingCredentialMigration(
+  firebaseUid,
+  neonUserId,
+  verificationEmailRequestedAt = null,
+  verificationEmailSentAt = null
+) {
   try {
     window.sessionStorage.setItem(
       CREDENTIAL_MIGRATION_STORAGE_KEY,
-      JSON.stringify({ firebaseUid, neonUserId })
+      JSON.stringify({
+        firebaseUid,
+        neonUserId,
+        ...(Number.isFinite(verificationEmailRequestedAt)
+          ? { verificationEmailRequestedAt }
+          : {}),
+        ...(Number.isFinite(verificationEmailSentAt)
+          ? { verificationEmailSentAt }
+          : {}),
+      })
     );
   } catch {
     // A missing session store falls back to the current in-memory migration latch.
   }
+}
+
+export function markPendingCredentialVerificationRequested(firebaseUid) {
+  const pending = readPendingCredentialMigration(firebaseUid);
+  if (!pending) return null;
+
+  const verificationEmailRequestedAt = Date.now();
+  storePendingCredentialMigration(
+    pending.firebaseUid,
+    pending.neonUserId,
+    verificationEmailRequestedAt,
+    pending.verificationEmailSentAt
+  );
+  return verificationEmailRequestedAt;
+}
+
+export function markPendingCredentialVerificationSent(firebaseUid) {
+  const pending = readPendingCredentialMigration(firebaseUid);
+  if (!pending) return null;
+
+  const verificationEmailSentAt = Date.now();
+  storePendingCredentialMigration(
+    pending.firebaseUid,
+    pending.neonUserId,
+    pending.verificationEmailRequestedAt,
+    verificationEmailSentAt
+  );
+  return verificationEmailSentAt;
 }
 
 export function clearPendingCredentialMigration() {
