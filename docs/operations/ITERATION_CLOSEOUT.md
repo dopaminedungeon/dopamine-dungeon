@@ -73,6 +73,27 @@ The required duplicate-check boxes make the manual limitation explicit. Do not
 create a second task because the first task is closed; a completed closeout is
 still the closeout for that iteration.
 
+## Documentation reconciliation start signal
+
+Configure the organization Project workflow once so that when an Iteration
+Closeout item changes Status to **In Progress**, it adds the exact repository
+issue label `iteration-closeout-in-progress`. That supported `issues:labeled`
+event starts the read-only documentation reconciliation; the repository
+workflow additionally verifies the label, the `[Task]: Iteration` title
+prefix, and the existing `<!-- dd-iteration-closeout:N -->` body marker.
+
+`workflow_dispatch` remains available for manual debugging. Removing and
+re-adding the start label may trigger another run because historical run state
+is intentionally not persisted.
+
+The reconciliation is read-only: it reads the configured canonical documents
+and pass-scoped repository evidence, calls Mistral, and does not edit issues,
+labels, Project status, documentation, code, or commits. The generated report
+is written to the GitHub Actions **Step Summary**, with one section per pass
+and a final count of retained documentation drift, implementation risks, and
+human-verification findings. Dropped-finding diagnostics remain in the job
+logs for debugging and are not included in the clean summary.
+
 ## Duplicate prevention
 
 The workflow derives a stable marker from the numeric iteration:
