@@ -1,8 +1,7 @@
-
-
 import Card from "../components/Card";
 import CreateCampaignForm from "../components/bootstrap/CreateCampaignForm";
 import BootstrapSignOutControl from "../components/bootstrap/BootstrapSignOutControl";
+import BootstrapWorkspaceSwitcher from "../components/bootstrap/BootstrapWorkspaceSwitcher";
 
 export default function BootstrapCampaign({ onLogout }) {
   return (
@@ -15,6 +14,8 @@ export default function BootstrapCampaign({ onLogout }) {
           </p>
         </div>
       </Card>
+
+      <BootstrapWorkspaceSwitcher />
 
       <Card>
         <CreateCampaignForm />

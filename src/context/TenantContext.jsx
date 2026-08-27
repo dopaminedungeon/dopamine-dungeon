@@ -90,6 +90,10 @@ export function TenantProvider({ children }) {
           (m) => m.workspaceId === workspace.id
         );
 
+        if (!membership) {
+          return null;
+        }
+
         // Keep app state/localStorage on the legacy-safe slug, while retaining the PG UUID for joins.
         return {
           ...workspace,
@@ -97,7 +101,7 @@ export function TenantProvider({ children }) {
           postgresWorkspaceId: workspace.id,
           role: membership?.role ?? null,
         };
-      }).filter((workspace) => Boolean(workspace.tenantId));
+      }).filter((workspace) => Boolean(workspace?.tenantId));
 
       setTenants(loaded);
 
