@@ -2073,7 +2073,7 @@ test.describe("pending credential verification cooldown", () => {
   });
 });
 
-test("@credential-migration already-linked and password-only users do not receive the optional card", async ({
+test("@credential-migration already-linked users do not receive optional cards", async ({
   apiCallLog,
   page,
   request,
@@ -2104,8 +2104,63 @@ test("@credential-migration already-linked and password-only users do not receiv
   await page.getByLabel("Email address").fill(passwordOnlyEmail);
   await page.getByLabel("Password", { exact: true }).fill(password);
   await page.getByRole("button", { name: "Sign in", exact: true }).click();
+  await expect(page.getByRole("heading", { name: "E2E Campaign" })).toBeVisible();
   await page.goto("/settings/profile");
   await expect(page.getByRole("heading", { name: "Add another way to sign in" })).toHaveCount(0);
+  await expect(page.getByRole("heading", { name: "Connect Google sign-in" })).toBeVisible();
+});
+
+test("@google-linking password account can connect Google without changing Firebase UID or Neon continuity", async ({
+  apiCallLog,
+  page,
+  request,
+}) => {
+  const email = generatedEmail();
+  const passwordAccount = await createVerifiedUser(request, email, password);
+  await openEmailSignIn(page);
+  await page.getByLabel("Email address").fill(email);
+  await page.getByLabel("Password", { exact: true }).fill(password);
+  await page.getByRole("button", { name: "Sign in", exact: true }).click();
+  await expect(page.getByRole("heading", { name: "E2E Campaign" })).toBeVisible();
+
+  await page.goto("/settings/profile");
+  await expect(page.getByRole("heading", { name: "Connect Google sign-in" })).toBeVisible();
+  await expect(page.getByText("Email / Password", { exact: true })).toBeVisible();
+  await expect(page.getByText("Google", { exact: true })).toHaveCount(0);
+  expect(apiCallLog.identityContinuity).toEqual(["/api/auth/identity-continuity"]);
+
+  const popupPromise = page.waitForEvent("popup");
+  await page.getByRole("button", { name: "Connect Google" }).click();
+  const popup = await popupPromise;
+  await popup.waitForFunction(
+    () =>
+      typeof (window as Window & { finishWithUser?: unknown }).finishWithUser ===
+      "function"
+  );
+  await popup.getByRole("button", { name: "Add new account" }).click();
+  await popup.locator("#email-input").fill(email);
+  await popup.locator("#sign-in").click();
+  await popup.waitForEvent("close");
+
+  await expect(page.getByText("Google sign-in is connected", { exact: true })).toBeVisible();
+  await expect.poll(() => apiCallLog.identityContinuity.length).toBe(2);
+  await expect(page.getByText("Google", { exact: true })).toBeVisible();
+  await expect(page.getByText("Email / Password", { exact: true })).toBeVisible();
+
+  const googleLinkedAccount = await findAuthEmulatorAccountByEmail(request, email);
+  expect(googleLinkedAccount.localId).toBe(passwordAccount.localId);
+  expect(
+    googleLinkedAccount.providerUserInfo.map(
+      (provider: { providerId: string }) => provider.providerId
+    )
+  ).toEqual(expect.arrayContaining(["google.com", "password"]));
+
+  await page.getByRole("button", { name: "Sign out" }).click();
+  await expect(page.getByRole("heading", { name: "Sign in to your account" })).toBeVisible();
+  await signInWithEmulatedGoogle(page, email);
+  await expect(page.getByRole("heading", { name: "E2E Campaign" })).toBeVisible();
+  const authoritativeAccount = await findAuthEmulatorAccountByEmail(request, email);
+  expect(authoritativeAccount.localId).toBe(passwordAccount.localId);
 });
 
 test.describe("missing identity continuity", () => {

@@ -3,12 +3,16 @@ import { afterEach, test, vi } from "vitest";
 
 import {
   classifyCredentialMigrationError,
+  classifyGoogleLinkingError,
   getConnectedProviderIds,
   getConnectedProviderLabel,
   clearPendingCredentialMigration,
+  isIdentityContinuityResponseValid,
+  isOptionalGoogleLinkingCandidate,
   isOptionalCredentialSetupCandidate,
   markPendingCredentialVerificationRequested,
   readPendingCredentialMigration,
+  shouldShowOptionalGoogleLinking,
   shouldShowOptionalCredentialSetup,
   storePendingCredentialMigration,
 } from "./credentialMigration";
@@ -37,6 +41,21 @@ test("optional credential setup candidacy inspects the complete provider list", 
     false
   );
   assert.equal(isOptionalCredentialSetupCandidate(null), false);
+});
+
+test("optional Google linking candidacy is only for verified password accounts without Google", () => {
+  assert.equal(isOptionalGoogleLinkingCandidate(user(["password"])), true);
+  assert.equal(isOptionalGoogleLinkingCandidate(user(["password", "google.com"])), false);
+  assert.equal(isOptionalGoogleLinkingCandidate(user(["google.com", "password"])), false);
+  assert.equal(isOptionalGoogleLinkingCandidate(user(["google.com"])), false);
+  assert.equal(isOptionalGoogleLinkingCandidate(user(["github.com"])), false);
+  assert.equal(
+    isOptionalGoogleLinkingCandidate(user(["password"], { emailVerified: false })),
+    false
+  );
+  assert.equal(isOptionalGoogleLinkingCandidate(null), false);
+  assert.equal(shouldShowOptionalGoogleLinking(user(["password"])), true);
+  assert.equal(shouldShowOptionalGoogleLinking(user(["password", "google.com"])), false);
 });
 
 test("connected provider display de-duplicates and labels every provider", () => {
@@ -70,6 +89,86 @@ test("credential migration errors are classified without exposing Firebase messa
   assert.equal(
     classifyCredentialMigrationError(new Error("protected detail")),
     "retryable"
+  );
+});
+
+test("Google linking errors are classified without exposing Firebase details", () => {
+  assert.equal(
+    classifyGoogleLinkingError({ code: "auth/requires-recent-login" }),
+    "password-reauthentication-required"
+  );
+  assert.equal(
+    classifyGoogleLinkingError({ code: "auth/popup-closed-by-user" }),
+    "cancelled"
+  );
+  assert.equal(
+    classifyGoogleLinkingError(
+      { code: "auth/account-exists-with-different-credential" },
+      { hasPendingCredential: true }
+    ),
+    "password-reauthentication-required"
+  );
+  assert.equal(
+    classifyGoogleLinkingError({ code: "auth/account-exists-with-different-credential" }),
+    "identity-conflict"
+  );
+  assert.equal(
+    classifyGoogleLinkingError({ code: "auth/credential-already-in-use" }),
+    "identity-conflict"
+  );
+  assert.equal(
+    classifyGoogleLinkingError({ code: "auth/provider-already-linked" }),
+    "already-linked"
+  );
+  assert.equal(
+    classifyGoogleLinkingError({ code: "auth/wrong-password" }),
+    "password-reauthentication-failed"
+  );
+  assert.equal(
+    classifyGoogleLinkingError(new Error("protected detail")),
+    "retryable"
+  );
+});
+
+test("identity continuity responses fail closed on malformed or changed identity", () => {
+  assert.equal(
+    isIdentityContinuityResponseValid(
+      { neonUserId: "neon-user-id" },
+      "firebase-uid"
+    ),
+    true
+  );
+  assert.equal(
+    isIdentityContinuityResponseValid(
+      { firebaseUid: "firebase-uid", neonUserId: "neon-user-id" },
+      "firebase-uid",
+      "neon-user-id"
+    ),
+    true
+  );
+  assert.equal(isIdentityContinuityResponseValid(null, "firebase-uid"), false);
+  assert.equal(
+    isIdentityContinuityResponseValid(
+      { firebaseUid: "different-firebase-uid", neonUserId: "neon-user-id" },
+      "firebase-uid",
+      "neon-user-id"
+    ),
+    false
+  );
+  assert.equal(
+    isIdentityContinuityResponseValid(
+      { firebaseUid: "firebase-uid", neonUserId: "different-neon-user-id" },
+      "firebase-uid",
+      "neon-user-id"
+    ),
+    false
+  );
+  assert.equal(
+    isIdentityContinuityResponseValid(
+      { firebaseUid: "firebase-uid", neonUserId: "" },
+      "firebase-uid"
+    ),
+    false
   );
 });
 

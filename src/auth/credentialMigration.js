@@ -26,6 +26,16 @@ export function isOptionalCredentialSetupCandidate(user) {
   );
 }
 
+export function isOptionalGoogleLinkingCandidate(user) {
+  if (!user?.emailVerified) return false;
+
+  const providerIds = getConnectedProviderIds(user);
+  return (
+    providerIds.includes(PASSWORD_PROVIDER_ID) &&
+    !providerIds.includes(GOOGLE_PROVIDER_ID)
+  );
+}
+
 export function shouldShowOptionalCredentialSetup(user) {
   if (!user?.emailVerified || !hasConnectedProvider(user, GOOGLE_PROVIDER_ID)) {
     return false;
@@ -35,6 +45,10 @@ export function shouldShowOptionalCredentialSetup(user) {
     !hasConnectedProvider(user, PASSWORD_PROVIDER_ID) ||
     Boolean(readPendingCredentialMigration(user.uid))
   );
+}
+
+export function shouldShowOptionalGoogleLinking(user) {
+  return isOptionalGoogleLinkingCandidate(user);
 }
 
 export function getConnectedProviderLabel(providerId) {
@@ -60,6 +74,48 @@ export function classifyCredentialMigrationError(error) {
   }
   if (code === "auth/provider-already-linked") return "already-linked";
   return "retryable";
+}
+
+export function classifyGoogleLinkingError(error, { hasPendingCredential = false } = {}) {
+  const code = typeof error?.code === "string" ? error.code : "";
+
+  if (code === "auth/requires-recent-login") return "password-reauthentication-required";
+  if (code === "auth/popup-closed-by-user" || code === "auth/cancelled-popup-request") {
+    return "cancelled";
+  }
+  if (code === "auth/account-exists-with-different-credential") {
+    return hasPendingCredential ? "password-reauthentication-required" : "identity-conflict";
+  }
+  if (code === "auth/provider-already-linked") return "already-linked";
+  if (
+    code === "auth/credential-already-in-use" ||
+    code === "auth/email-already-in-use" ||
+    code === "auth/invalid-credential" ||
+    code === "auth/user-mismatch"
+  ) {
+    return "identity-conflict";
+  }
+  if (code === "auth/wrong-password" || code === "auth/invalid-login-credentials") {
+    return "password-reauthentication-failed";
+  }
+  return "retryable";
+}
+
+export function isIdentityContinuityResponseValid(
+  result,
+  originalFirebaseUid,
+  expectedNeonUserId = ""
+) {
+  if (!result || typeof result.neonUserId !== "string" || !result.neonUserId) {
+    return false;
+  }
+  if (
+    typeof result.firebaseUid === "string" &&
+    result.firebaseUid !== originalFirebaseUid
+  ) {
+    return false;
+  }
+  return !expectedNeonUserId || result.neonUserId === expectedNeonUserId;
 }
 
 export function readPendingCredentialMigration(firebaseUid) {

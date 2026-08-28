@@ -47,3 +47,42 @@
 2. Sign out through the application UI.
 3. Navigate directly to a protected URL and confirm the authentication screen is
    shown without protected campaign content.
+
+## Optional Provider Linking
+
+Profile Settings offers optional provider linking without gating bootstrap,
+workspace access, campaign access, invitations, or GM/Player mode selection.
+Provider detection uses the complete Firebase `providerData` list:
+
+- Google-only verified users may add Email / Password.
+- Email / Password verified users may connect Google.
+- Users with both providers are shown both connected methods and are not asked
+  to link again.
+
+For password-first Google linking, the application calls Firebase provider
+linking on the currently authenticated Firebase user and verifies the same
+Firebase UID plus exact Neon user ID before showing completion. The flow never
+looks up, provisions, merges, or mutates a Dopamine Dungeon user by matching an
+email address.
+
+Firebase's web account-linking documentation states that linked provider
+credentials keep the same Firebase user ID, and that linking fails when the
+credential is already attached to another account. Its Google sign-in
+documentation states that Gmail and Google Workspace addresses are treated as
+authoritative Google-hosted emails, while non-Gmail addresses attached to Google
+accounts can produce `auth/account-exists-with-different-credential` depending
+on the project sign-in method and account settings. Dopamine Dungeon handles
+that conflict by keeping the pending Google credential in component memory only
+for the immediate recovery flow, requiring password reauthentication on the
+current Firebase user, and then linking the pending credential to that same
+user. Credentials are not placed in URLs, persistent storage, logs, analytics,
+or telemetry.
+
+The Auth Emulator can exercise local password accounts, popup provider linking,
+provider-list UI, exact-UID preservation, and continuity API calls. It cannot
+prove native Google-hosted versus non-Gmail Google-account behavior with the
+same fidelity as production Firebase and real Google accounts. Mocked unit
+coverage owns popup cancellation, the
+`auth/account-exists-with-different-credential` recovery state, and collision
+classifications. Native Preview QA remains required when a suitable disposable
+Google account is available.
