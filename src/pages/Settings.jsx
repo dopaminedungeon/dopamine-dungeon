@@ -19,9 +19,11 @@ import { auth, db } from "../firebase/firebase";
 import { isAuthTestMode } from "../config/firebase/firebase";
 import WorkspaceSettings from "./WorkspaceSettings.jsx";
 import CredentialMigration from "../components/auth/CredentialMigration.jsx";
+import GoogleProviderLinking from "../components/auth/GoogleProviderLinking.jsx";
 import {
   getConnectedProviderIds,
   getConnectedProviderLabel,
+  shouldShowOptionalGoogleLinking,
   shouldShowOptionalCredentialSetup,
 } from "../auth/credentialMigration";
 
@@ -48,8 +50,10 @@ export default function Settings() {
   const [saveState, setSaveState] = useState({ type: null, message: "" });
   const [activeTab, setActiveTab] = useState("profile");
   const [credentialSetupCompleted, setCredentialSetupCompleted] = useState(false);
+  const [googleLinkingCompleted, setGoogleLinkingCompleted] = useState(false);
   const connectedProviderIds = getConnectedProviderIds(user);
   const showCredentialSetup = shouldShowOptionalCredentialSetup(user);
+  const showGoogleLinking = shouldShowOptionalGoogleLinking(user);
 
   const selectedTenant = useMemo(
     () =>
@@ -175,6 +179,10 @@ export default function Settings() {
     const completed = await completeCredentialSetup(currentUser);
     if (completed) setCredentialSetupCompleted(true);
     return completed;
+  }
+
+  function handleGoogleLinkingComplete() {
+    setGoogleLinkingCompleted(true);
   }
 
   if (loading) {
@@ -338,12 +346,30 @@ export default function Settings() {
                   </div>
                 )}
 
+                {googleLinkingCompleted && !showGoogleLinking && (
+                  <div className="flex gap-3 rounded-md border border-emerald-900/80 bg-emerald-950/40 p-4 text-emerald-100" role="status">
+                    <CheckCircle2 className="h-5 w-5 shrink-0" aria-hidden="true" />
+                    <div>
+                      <p className="font-semibold">Google sign-in is connected</p>
+                      <p className="mt-1 text-sm">Google and Email / Password remain connected to the same account.</p>
+                    </div>
+                  </div>
+                )}
+
                 {showCredentialSetup && (
                   <CredentialMigration
                     key={`${user.uid}:${credentialSetupRevision}`}
                     firebaseUser={user}
                     onComplete={handleCredentialSetupComplete}
                     onVerificationRequired={beginCredentialSetupVerification}
+                  />
+                )}
+
+                {showGoogleLinking && (
+                  <GoogleProviderLinking
+                    key={`${user.uid}:google:${credentialSetupRevision}`}
+                    firebaseUser={user}
+                    onComplete={handleGoogleLinkingComplete}
                   />
                 )}
               </section>

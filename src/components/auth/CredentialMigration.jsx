@@ -12,6 +12,7 @@ import {
   classifyCredentialMigrationError,
   readPendingCredentialMigration,
   hasConnectedProvider,
+  isIdentityContinuityResponseValid,
   PASSWORD_PROVIDER_ID,
   storePendingCredentialMigration,
 } from "../../auth/credentialMigration";
@@ -58,12 +59,24 @@ export default function CredentialMigration({
 
     try {
       const result = await getIdentityContinuity();
-      if (!result?.neonUserId) return false;
+      if (
+        !isIdentityContinuityResponseValid(
+          result,
+          originalUidRef.current,
+          initial ? "" : neonUserIdRef.current
+        )
+      ) {
+        return false;
+      }
       if (initial) {
         const pending = readPendingCredentialMigration(originalUidRef.current);
         if (pending) {
           neonUserIdRef.current = pending.neonUserId;
-          return result.neonUserId === pending.neonUserId;
+          return isIdentityContinuityResponseValid(
+            result,
+            originalUidRef.current,
+            pending.neonUserId
+          );
         }
         neonUserIdRef.current = result.neonUserId;
         storePendingCredentialMigration(
@@ -71,7 +84,7 @@ export default function CredentialMigration({
           result.neonUserId
         );
       }
-      return initial || result.neonUserId === neonUserIdRef.current;
+      return true;
     } catch {
       return false;
     }

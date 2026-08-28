@@ -1,11 +1,14 @@
 import {
   EmailAuthProvider,
   GoogleAuthProvider,
+  linkWithPopup,
   linkWithCredential,
+  reauthenticateWithCredential,
   reauthenticateWithPopup,
 } from "firebase/auth";
 
 const passwordLinkAttempts = new WeakMap();
+const googleLinkAttempts = new Map();
 
 export function linkPasswordToFirebaseUser(firebaseUser, email, password) {
   const existing = passwordLinkAttempts.get(firebaseUser);
@@ -27,4 +30,36 @@ export function linkPasswordToFirebaseUser(firebaseUser, email, password) {
 
 export function reauthenticateFirebaseUserWithGoogle(firebaseUser) {
   return reauthenticateWithPopup(firebaseUser, new GoogleAuthProvider());
+}
+
+export function getPendingGoogleCredentialFromError(error) {
+  return GoogleAuthProvider.credentialFromError(error);
+}
+
+export function linkGoogleToFirebaseUser(firebaseUser) {
+  const attemptKey = firebaseUser?.uid;
+  const existing = googleLinkAttempts.get(attemptKey);
+  if (existing) return existing;
+
+  const attempt = linkWithPopup(firebaseUser, new GoogleAuthProvider());
+  googleLinkAttempts.set(attemptKey, attempt);
+  const clearAttempt = () => {
+    if (googleLinkAttempts.get(attemptKey) === attempt) {
+      googleLinkAttempts.delete(attemptKey);
+    }
+  };
+  attempt.then(clearAttempt, clearAttempt);
+  return attempt;
+}
+
+export function reauthenticatePasswordUser(firebaseUser, email, password) {
+  const credential = EmailAuthProvider.credential(email, password);
+  return reauthenticateWithCredential(firebaseUser, credential);
+}
+
+export function linkPendingGoogleCredentialToFirebaseUser(
+  firebaseUser,
+  googleCredential
+) {
+  return linkWithCredential(firebaseUser, googleCredential);
 }
