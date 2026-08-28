@@ -1,5 +1,6 @@
 import type { VercelRequest, VercelResponse } from "@vercel/node";
 
+import campaignCreateHandler from "../src/server/api-handlers/campaign-create.js";
 import campaignPeopleHandler from "../src/server/api-handlers/campaign-people.js";
 import campaignRoutePeopleHandler from "../src/server/api-handlers/campaign-route-people.js";
 import characterAssignmentsHandler from "../src/server/api-handlers/character-assignments.js";
@@ -27,6 +28,13 @@ function getResource(req: VercelRequest) {
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   const resource = getResource(req);
+
+  if (
+    ["OPTIONS", "POST"].includes(req.method || "") &&
+    (!resource || resource === "campaignCreate")
+  ) {
+    return campaignCreateHandler(req, res);
+  }
 
   if (resource === "campaignPeople") {
     return campaignPeopleHandler(req, res);

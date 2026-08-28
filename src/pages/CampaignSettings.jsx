@@ -1,5 +1,5 @@
 // src/pages/CampaignSettings.jsx
-import React, { useMemo, useState, useEffect } from "react";
+import React, { useMemo, useState, useEffect, useRef } from "react";
 import InvitePlayerForm from "../components/invitations/InvitePlayerForm.jsx";
 import {
   Plus,
@@ -80,6 +80,7 @@ export default function CampaignSettings() {
   const [assignmentRows, setAssignmentRows] = useState([]);
   const [assignmentSelectionByUserId, setAssignmentSelectionByUserId] = useState({});
   const [peopleActionId, setPeopleActionId] = useState(null);
+  const createIdempotencyKeyRef = useRef(null);
 
 	  const createCampaign = async (e) => {
 	    e?.preventDefault?.();
@@ -96,6 +97,7 @@ export default function CampaignSettings() {
         name,
         description: createForm.description || "",
         system: createForm.system || "",
+        idempotencyKey: (createIdempotencyKeyRef.current ??= crypto.randomUUID()),
       });
 
       const createdId = created?.campaignId || created?.id || null;
@@ -111,6 +113,7 @@ export default function CampaignSettings() {
       setDraft(created || null);
       setShowCreate(false);
       setCreateForm({ name: "", description: "", status: "active", system: "" });
+      createIdempotencyKeyRef.current = null;
       setSaveState({ type: "success", message: "Campaign created." });
 	    } catch (error) {
 	      console.error("[CampaignSettings] Failed to create campaign", error);

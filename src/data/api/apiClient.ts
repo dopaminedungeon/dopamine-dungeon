@@ -196,6 +196,26 @@ export async function createApiWorkspace(input: {
   });
 }
 
+export async function createApiCampaign(input: {
+  workspaceId: string;
+  name: string;
+  description: string;
+  system: string;
+  idempotencyKey: string;
+}) {
+  return apiFetch<{
+    ok: true;
+    campaign: {
+      id: string;
+      name: string;
+      slug: string;
+    };
+  }>("/api/campaign-content", {
+    method: "POST",
+    body: JSON.stringify(input),
+  });
+}
+
 export async function requestVerificationEmail(invited: boolean) {
   return apiFetch<{ ok: true }>("/api/auth/send-verification-email", {
     method: "POST",
