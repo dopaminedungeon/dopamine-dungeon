@@ -40,6 +40,28 @@
    password-reset action, preventing reset completion from bypassing verification.
 9. Confirm service failures remain retryable without revealing account or
    provider existence.
+10. Confirm recovery requests enforce atomic rolling email-fingerprint and
+    source-IP limits while retaining the generic email-specific response and
+    minimum accepted-response duration.
+11. Confirm trusted IPv4 and IPv6 addresses are canonicalized from Vercel's
+    platform header and caller-supplied proxy chains are rejected.
+
+## Authentication Email Abuse Controls
+
+1. Exercise verification and recovery limits immediately below, exactly at,
+   and above each hourly and daily threshold with a deterministic clock.
+2. Confirm the 60-second minimum interval and rolling windows recover at their
+   exact boundaries, and stale timestamps do not affect decisions.
+3. Submit concurrent requests and confirm atomic reservations cannot exceed a
+   threshold.
+4. Confirm a combined recovery email/IP rejection writes neither limiter and
+   emits only non-identifying monitoring categories.
+5. Confirm verification returns the longest applicable `Retry-After` and the
+   rendered UI keeps resend disabled for that duration.
+6. Confirm limiter storage/configuration failures fail closed without logging
+   emails, IPs, action links, action codes, provider details, or error objects.
+7. Confirm invitation templates, delivery flow, and `INVITE_EMAIL_*` sender
+   configuration remain unchanged.
 
 ## Sign-Out And Protection
 

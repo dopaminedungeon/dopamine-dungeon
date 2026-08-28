@@ -9,7 +9,7 @@
     "build": "tsc -p tsconfig.api.json && vite build",
     "preview": "vite preview",
     "test": "vitest run",
-    "test:unit": "vitest run src/auth src/data/api/selectedMode.test.js src/data/characters/characterImport.service.test.js src/server/apiErrors.test.js src/server/userIdentity.test.js src/server/verificationEmail.test.js src/server/passwordRecoveryEmail.test.ts",
+    "test:unit": "vitest run src/auth src/data/api/selectedMode.test.js src/data/characters/characterImport.service.test.js src/server/apiErrors.test.js src/server/userIdentity.test.js src/server/authEmailRateLimit.test.ts src/server/verificationEmail.test.js src/server/passwordRecoveryEmail.test.ts",
     "test:api": "vitest run src/server/api-handlers.integration.test.ts",
     "test:boundary": "vitest run src/server/security-boundaries.test.js src/server/access-boundaries.test.ts src/server/viewer-mode.test.ts",
     "test:e2e": "node scripts/auth-test-runner.mjs test",

@@ -71,6 +71,12 @@ environment, confirm all of the following:
 - `PASSWORD_RECOVERY_FINGERPRINT_SECRET` is configured with a high-entropy,
   environment-specific server-only value and is not exposed with a `VITE_`
   prefix;
+- the documented `AUTH_EMAIL_*` rolling limits are configured or intentionally
+  use their reviewed defaults;
+- Firestore TTL policies for all three authentication-email limiter collection
+  groups are active with the configured retention offset;
+- Vercel supplies `x-vercel-forwarded-for` directly to the recovery function;
+- the sanitized recovery-request alert is configured at 50 requests per hour;
 - the Firebase Trigger Email extension and SMTP provider accept
   `Dopamine Dungeon <no-reply@dopamine-dungeon.com>`;
 - `dopamine-dungeon.com` is verified with the configured transport;
@@ -78,6 +84,10 @@ environment, confirm all of the following:
 - `APP_ORIGIN` points to the matching deployed application and its Firebase
   authorized-domain configuration is correct;
 - invitation delivery still uses the independent `INVITE_EMAIL_*` settings.
+
+Use [`AUTH_EMAIL_RATE_LIMITING.md`](./AUTH_EMAIL_RATE_LIMITING.md) for the exact
+TTL, monitoring, threshold-review, secret-rotation, and rollback checks. A Ready
+deployment does not prove those external controls are active.
 
 Repository code and environment variable names do not prove sender
 authorization or successful production delivery. DNS, SMTP, Trigger Email, and

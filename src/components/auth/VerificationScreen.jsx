@@ -1,7 +1,10 @@
 import { useEffect, useState } from "react";
 import { CheckCircle2, LoaderCircle, Mail } from "lucide-react";
 
-import { getAuthErrorMessage } from "../../auth/authMessages";
+import {
+  formatRetryAfterSeconds,
+  getAuthErrorMessage,
+} from "../../auth/authMessages";
 import GradientBackground from "../GradientBackground";
 
 export default function VerificationScreen({
@@ -16,9 +19,14 @@ export default function VerificationScreen({
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
   const [now, setNow] = useState(Date.now());
+  const [serverRetryUntil, setServerRetryUntil] = useState(0);
+  const cooldownUntil = Math.max(
+    (verificationEmailSentAt ?? 0) + 60_000,
+    serverRetryUntil
+  );
   const cooldownSeconds = Math.max(
     0,
-    Math.ceil(((verificationEmailSentAt ?? 0) + 60_000 - now) / 1000)
+    Math.ceil((cooldownUntil - now) / 1000)
   );
 
   useEffect(() => {
@@ -40,9 +48,20 @@ export default function VerificationScreen({
       if (nextAction === "check" && result === false) {
         setError("Your email is not verified yet. Open the link in your email, then try again.");
       } else if (nextAction === "resend") {
+        setServerRetryUntil(0);
         setMessage("A new verification email has been sent.");
       }
     } catch (authError) {
+      if (
+        authError?.status === 429 &&
+        Number(authError?.retryAfterSeconds) > 0
+      ) {
+        const retryStartedAt = Date.now();
+        setServerRetryUntil(
+          retryStartedAt + Number(authError.retryAfterSeconds) * 1000
+        );
+        setNow(retryStartedAt);
+      }
       setError(getAuthErrorMessage(authError, "verification"));
     } finally {
       setAction("");
@@ -92,7 +111,7 @@ export default function VerificationScreen({
             className="mt-[16px] min-h-[56px] w-full rounded-md border border-zinc-700 bg-zinc-800 px-[24px] py-[14px] text-[clamp(16px,1.0625rem,22px)] font-semibold whitespace-nowrap text-white transition hover:border-zinc-500 hover:bg-zinc-700 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-purple-300 disabled:cursor-not-allowed disabled:opacity-60"
           >
             {cooldownSeconds > 0
-              ? `Resend available in ${cooldownSeconds}s`
+              ? `Resend available in ${formatRetryAfterSeconds(cooldownSeconds)}`
               : "Resend verification email"}
           </button>
           <button

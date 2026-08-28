@@ -17,6 +17,10 @@ import {
   PASSWORD_RECOVERY_ACCEPTED_RESPONSE,
 } from "./passwordRecoveryEmail.js";
 import {
+  getRecoveryEmailFingerprint,
+  getRecoveryIpFingerprint,
+} from "./authEmailRateLimit.js";
+import {
   buildPasswordRecoveryEmailHtml,
   PASSWORD_RECOVERY_EMAIL_SUBJECT,
 } from "../domain/mail/passwordRecoveryEmail.template.js";
@@ -24,12 +28,19 @@ import {
 type StoredDocument = Record<string, unknown>;
 const fingerprintSecret = "unit-test-password-recovery-fingerprint-secret";
 
-function createHandler(auth: ReturnType<typeof authDouble>, db: ReturnType<typeof createDatabaseDouble>["db"]) {
+function createHandler(
+  auth: ReturnType<typeof authDouble>,
+  db: ReturnType<typeof createDatabaseDouble>["db"],
+  overrides: Partial<Parameters<typeof createPasswordRecoveryEmailHandler>[0]> = {}
+) {
   return createPasswordRecoveryEmailHandler({
     auth,
     db,
     fingerprintSecret,
     minimumResponseMs: 0,
+    environment: {},
+    metric: vi.fn(),
+    ...overrides,
   });
 }
 
@@ -85,24 +96,29 @@ function request(email: string) {
     body: { email },
     headers: { host: "preview.example.test" },
     method: "POST",
+    socket: { remoteAddress: "203.0.113.10" },
   } as unknown as VercelRequest;
 }
 
 function response() {
   const result: { status?: number; body?: unknown } = {};
+  const headers = new Map<string, unknown>();
   const res = {
     end: vi.fn(() => res),
     json: vi.fn((body: unknown) => {
       result.body = body;
       return res;
     }),
-    setHeader: vi.fn(() => res),
+    setHeader: vi.fn((name: string, value: unknown) => {
+      headers.set(name, value);
+      return res;
+    }),
     status: vi.fn((status: number) => {
       result.status = status;
       return res;
     }),
   } as unknown as VercelResponse;
-  return { res, result };
+  return { res, result, headers };
 }
 
 function authDouble(overrides: Record<string, unknown> = {}) {
@@ -319,6 +335,8 @@ test("a missing fingerprint secret fails safely before account lookup", async ()
     db,
     fingerprintSecret: "",
     minimumResponseMs: 0,
+    environment: {},
+    metric: vi.fn(),
   });
   const { res, result } = response();
 
@@ -350,4 +368,148 @@ test("eligible-account delivery failures remain indistinguishable", async () => 
   assert.deepEqual(consoleError.mock.calls, [
     ["[api/auth/send-password-reset-email] Delivery failed"],
   ]);
+});
+
+test("email throttling preserves the generic response and does not consume the IP limiter", async () => {
+  vi.useFakeTimers();
+  try {
+  const now = Date.UTC(2026, 7, 28, 12, 0, 0);
+  const email = "throttled@example.test";
+  const sourceIp = "203.0.113.10";
+  const { db, documents, mail } = createDatabaseDouble();
+  const emailRef = {
+    id: getRecoveryEmailFingerprint(email, fingerprintSecret),
+    name: "_authPasswordRecoveryCooldowns",
+  };
+  const ipRef = {
+    id: getRecoveryIpFingerprint(sourceIp, fingerprintSecret),
+    name: "_authPasswordRecoveryIpCooldowns",
+  };
+  documents.set(JSON.stringify(emailRef), {
+    attempts: [new Date(now - 30 * 60_000)],
+  });
+  const auth = authDouble();
+  const metric = vi.fn();
+  const handler = createHandler(auth, db, {
+    now: () => now,
+    metric,
+    minimumResponseMs: 500,
+    environment: { AUTH_EMAIL_RECOVERY_HOURLY_LIMIT: "1" },
+  });
+  const { res, result } = response();
+
+  const pendingResponse = handler(request(email), res);
+  await vi.advanceTimersByTimeAsync(499);
+  assert.equal(result.status, undefined);
+  await vi.advanceTimersByTimeAsync(1);
+  await pendingResponse;
+
+  assert.deepEqual(result, { status: 202, body: { ok: true } });
+  assert.equal(documents.has(JSON.stringify(ipRef)), false);
+  assert.equal(auth.getUserByEmail.mock.calls.length, 0);
+  assert.equal(mail.length, 0);
+  assert.deepEqual(metric.mock.calls, [
+    ["recovery", "request"],
+    ["recovery", "throttled"],
+  ]);
+  } finally {
+    vi.useRealTimers();
+  }
+});
+
+test("IP throttling returns a generic 429 and does not consume the email limiter", async () => {
+  vi.useFakeTimers();
+  try {
+  const now = Date.UTC(2026, 7, 28, 12, 0, 0);
+  const email = "candidate@example.test";
+  const sourceIp = "203.0.113.10";
+  const { db, documents, mail } = createDatabaseDouble();
+  const emailRef = {
+    id: getRecoveryEmailFingerprint(email, fingerprintSecret),
+    name: "_authPasswordRecoveryCooldowns",
+  };
+  const ipRef = {
+    id: getRecoveryIpFingerprint(sourceIp, fingerprintSecret),
+    name: "_authPasswordRecoveryIpCooldowns",
+  };
+  documents.set(JSON.stringify(ipRef), {
+    attempts: [new Date(now - 30 * 60_000)],
+  });
+  const auth = authDouble();
+  const handler = createHandler(auth, db, {
+    now: () => now,
+    minimumResponseMs: 500,
+    environment: { AUTH_EMAIL_RECOVERY_IP_HOURLY_LIMIT: "1" },
+  });
+  const { res, result, headers } = response();
+
+  const pendingResponse = handler(request(email), res);
+  await vi.advanceTimersByTimeAsync(499);
+  assert.equal(result.status, undefined);
+  await vi.advanceTimersByTimeAsync(1);
+  await pendingResponse;
+
+  assert.deepEqual(result, {
+    status: 429,
+    body: {
+      ok: false,
+      error: "Too many password recovery requests. Please try again later.",
+    },
+  });
+  assert.equal(headers.get("Retry-After"), "1800");
+  assert.equal(documents.has(JSON.stringify(emailRef)), false);
+  assert.equal(auth.getUserByEmail.mock.calls.length, 0);
+  assert.equal(mail.length, 0);
+  } finally {
+    vi.useRealTimers();
+  }
+});
+
+test("limiter storage failures retain the minimum response duration and sanitized output", async () => {
+  vi.useFakeTimers();
+  try {
+    const storageError = new Error(
+      "private@example.test x-vercel-forwarded-for=203.0.113.10"
+    );
+    const db = {
+      collection(name: string) {
+        return { doc: (id: string) => ({ name, id }) };
+      },
+      runTransaction: vi.fn().mockRejectedValue(storageError),
+    };
+    const consoleError = vi.spyOn(console, "error").mockImplementation(() => {});
+    const metric = vi.fn();
+    const handler = createPasswordRecoveryEmailHandler({
+      auth: authDouble(),
+      db,
+      fingerprintSecret,
+      minimumResponseMs: 500,
+      environment: {},
+      metric,
+    });
+    const { res, result } = response();
+    const pendingResponse = handler(request("private@example.test"), res);
+
+    await vi.advanceTimersByTimeAsync(499);
+    assert.equal(result.status, undefined);
+    await vi.advanceTimersByTimeAsync(1);
+    await pendingResponse;
+
+    assert.deepEqual(result, {
+      status: 503,
+      body: {
+        ok: false,
+        error: "Password recovery is temporarily unavailable. Please try again.",
+      },
+    });
+    assert.deepEqual(consoleError.mock.calls, [
+      ["[api/auth/send-password-reset-email] Request failed"],
+    ]);
+    assert.deepEqual(metric.mock.calls, [
+      ["recovery", "request"],
+      ["recovery", "limiter_failure"],
+    ]);
+  } finally {
+    vi.useRealTimers();
+  }
 });
