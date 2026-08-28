@@ -205,6 +205,62 @@ async function signInWithNewEmulatedGoogle(page: Page, email: string) {
   await popup.waitForEvent("close");
 }
 
+async function connectGoogleProviderFromProfile(page: Page, email: string) {
+  const popupPromise = page.waitForEvent("popup");
+  await page.getByRole("button", { name: "Connect Google" }).click();
+  const popup = await popupPromise;
+  await popup.waitForFunction(
+    () =>
+      typeof (window as Window & { finishWithUser?: unknown }).finishWithUser ===
+      "function"
+  );
+  await popup.getByRole("button", { name: "Add new account" }).click();
+  await popup.locator("#email-input").fill(email);
+  await popup.locator("#sign-in").click();
+  await popup.waitForEvent("close");
+}
+
+async function deferSecondIdentityContinuityResponse(
+  page: Page,
+  secondResponse: { status: number; body: unknown } = {
+    status: 200,
+    body: { ok: true, neonUserId: "e2e-user" },
+  }
+) {
+  let callCount = 0;
+  let releaseSecond: (() => void) | null = null;
+  let notifySecondRequestStarted: (() => void) | null = null;
+  const secondRequestStarted = new Promise<void>((resolve) => {
+    notifySecondRequestStarted = resolve;
+  });
+  await page.route("**/api/auth/identity-continuity", async (route) => {
+    expect(route.request().headers().authorization).toMatch(/^Bearer /);
+    expect(route.request().headers()["x-dd-mode"]).toBeUndefined();
+    callCount += 1;
+    if (callCount === 2) {
+      notifySecondRequestStarted?.();
+      await new Promise<void>((release) => {
+        releaseSecond = release;
+      });
+      await route.fulfill({
+        status: secondResponse.status,
+        json: secondResponse.body,
+      });
+      return;
+    }
+    await route.fulfill({
+      status: 200,
+      json: { ok: true, neonUserId: "e2e-user" },
+    });
+  });
+
+  return {
+    getCallCount: () => callCount,
+    waitForSecondRequest: () => secondRequestStarted,
+    resolveSecondRequest: () => releaseSecond?.(),
+  };
+}
+
 async function seedPendingCredentialSetup(
   page: Page,
   firebaseUid: string,
@@ -2161,6 +2217,104 @@ test("@google-linking password account can connect Google without changing Fireb
   await expect(page.getByRole("heading", { name: "E2E Campaign" })).toBeVisible();
   const authoritativeAccount = await findAuthEmulatorAccountByEmail(request, email);
   expect(authoritativeAccount.localId).toBe(passwordAccount.localId);
+});
+
+test.describe("Google linking verification state", () => {
+  test("@google-linking successful direct link shows neutral verification before success", async ({
+    page,
+    request,
+  }) => {
+    const email = generatedEmail();
+    const passwordAccount = await createVerifiedUser(request, email, password);
+    await openEmailSignIn(page);
+    await page.getByLabel("Email address").fill(email);
+    await page.getByLabel("Password", { exact: true }).fill(password);
+    await page.getByRole("button", { name: "Sign in", exact: true }).click();
+    await expect(page.getByRole("heading", { name: "E2E Campaign" })).toBeVisible();
+
+    const continuity = await deferSecondIdentityContinuityResponse(page);
+    await page.goto("/settings/profile");
+    await expect(page.getByRole("heading", { name: "Connect Google sign-in" })).toBeVisible();
+    await expect.poll(() => continuity.getCallCount()).toBe(1);
+
+    await connectGoogleProviderFromProfile(page, email);
+    await continuity.waitForSecondRequest();
+
+    await expect(
+      page.getByRole("status").filter({
+        hasText: "Google connected. Confirming account continuity...",
+      })
+    ).toBeVisible();
+    await expect(
+      page.getByRole("alert").filter({ hasText: "Google connection unavailable" })
+    ).toHaveCount(0);
+    await expect(
+      page.getByText("This sign-in method was added, but we could not verify account continuity.")
+    ).toHaveCount(0);
+
+    continuity.resolveSecondRequest();
+    await expect(page.getByText("Google sign-in is connected", { exact: true })).toBeVisible();
+    await expect.poll(() => continuity.getCallCount()).toBe(2);
+
+    const googleLinkedAccount = await findAuthEmulatorAccountByEmail(request, email);
+    expect(googleLinkedAccount.localId).toBe(passwordAccount.localId);
+  });
+});
+
+test.describe("Google linking continuity failure", () => {
+  test("@google-linking real continuity failure shows recoverable warning", async ({
+    page,
+    request,
+  }) => {
+    const email = generatedEmail();
+    const passwordAccount = await createVerifiedUser(request, email, password);
+    await openEmailSignIn(page);
+    await page.getByLabel("Email address").fill(email);
+    await page.getByLabel("Password", { exact: true }).fill(password);
+    await page.getByRole("button", { name: "Sign in", exact: true }).click();
+    await expect(page.getByRole("heading", { name: "E2E Campaign" })).toBeVisible();
+
+    const continuity = await deferSecondIdentityContinuityResponse(page, {
+      status: 200,
+      body: { ok: true, neonUserId: "different-neon-user" },
+    });
+    await page.goto("/settings/profile");
+    await expect(page.getByRole("heading", { name: "Connect Google sign-in" })).toBeVisible();
+    await expect.poll(() => continuity.getCallCount()).toBe(1);
+
+    await connectGoogleProviderFromProfile(page, email);
+    await continuity.waitForSecondRequest();
+
+    await expect(
+      page.getByRole("status").filter({
+        hasText: "Google connected. Confirming account continuity...",
+      })
+    ).toBeVisible();
+    await expect(
+      page.getByRole("alert").filter({ hasText: "Google connection unavailable" })
+    ).toHaveCount(0);
+
+    continuity.resolveSecondRequest();
+
+    await expect(
+      page.getByRole("alert").filter({ hasText: "Google connection unavailable" })
+    ).toBeVisible();
+    await expect(
+      page.getByText("This sign-in method was added, but we could not verify account continuity.")
+    ).toBeVisible();
+    await expect(
+      page.getByRole("button", { name: "Try again" })
+    ).toBeEnabled();
+    await expect(
+      page.getByRole("status").filter({
+        hasText: "Google connected. Confirming account continuity...",
+      })
+    ).toHaveCount(0);
+    await expect.poll(() => continuity.getCallCount()).toBe(2);
+
+    const googleLinkedAccount = await findAuthEmulatorAccountByEmail(request, email);
+    expect(googleLinkedAccount.localId).toBe(passwordAccount.localId);
+  });
 });
 
 test.describe("missing identity continuity", () => {

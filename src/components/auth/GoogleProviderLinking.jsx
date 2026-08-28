@@ -75,7 +75,7 @@ export default function GoogleProviderLinking({
   async function finishLinkedSetup() {
     const currentUser = auth.currentUser;
     if (!currentUser || currentUser.uid !== originalUidRef.current) {
-      setStage("verification");
+      setStage("verification-failed");
       return false;
     }
 
@@ -86,12 +86,12 @@ export default function GoogleProviderLinking({
       currentUser.email !== originalEmailRef.current ||
       !hasConnectedProvider(currentUser, GOOGLE_PROVIDER_ID)
     ) {
-      setStage("verification");
+      setStage("verification-failed");
       return false;
     }
 
     if (!(await verifyContinuity())) {
-      setStage("verification");
+      setStage("verification-failed");
       return false;
     }
 
@@ -116,7 +116,7 @@ export default function GoogleProviderLinking({
         try {
           await finishLinkedSetup();
         } catch {
-          setStage("verification");
+          setStage("verification-failed");
         }
       } else {
         setStage("ready");
@@ -172,7 +172,7 @@ export default function GoogleProviderLinking({
         try {
           await finishLinkedSetup();
         } catch {
-          setStage("verification");
+          setStage("verification-failed");
         }
       } else if (failure === "cancelled") {
         pendingGoogleCredentialRef.current = null;
@@ -241,7 +241,7 @@ export default function GoogleProviderLinking({
         try {
           await finishLinkedSetup();
         } catch {
-          setStage("verification");
+          setStage("verification-failed");
         }
       } else if (failure === "password-reauthentication-failed") {
         setError(GENERIC_PASSWORD_FAILURE);
@@ -272,7 +272,7 @@ export default function GoogleProviderLinking({
     try {
       await finishLinkedSetup();
     } catch {
-      setStage("verification");
+      setStage("verification-failed");
     } finally {
       setSubmitting(false);
     }
@@ -328,14 +328,21 @@ export default function GoogleProviderLinking({
         </form>
       )}
 
-      {(stage === "unavailable" || stage === "verification" || stage === "conflict") && (
+      {stage === "verification" && (
+        <div className="mt-6 flex items-center gap-2 rounded-md border border-zinc-700/80 bg-zinc-900/60 px-4 py-3 text-zinc-200" role="status">
+          <LoaderCircle className="h-5 w-5 animate-spin text-purple-300" aria-hidden="true" />
+          Google connected. Confirming account continuity...
+        </div>
+      )}
+
+      {(stage === "unavailable" || stage === "verification-failed" || stage === "conflict") && (
         <div className="mt-6 space-y-4">
           <div className="flex gap-3 rounded-md border border-amber-900/80 bg-amber-950/40 p-4 text-amber-100" role="alert">
             <ShieldAlert className="h-5 w-5 shrink-0" aria-hidden="true" />
             <div>
               <p className="font-semibold">Google connection unavailable</p>
               <p className="mt-1 text-sm">
-                {stage === "verification"
+                {stage === "verification-failed"
                   ? "This sign-in method was added, but we could not verify account continuity. Try the check again."
                   : stage === "conflict"
                     ? "This sign-in method belongs to a different account. No accounts or application data were merged."
@@ -345,7 +352,7 @@ export default function GoogleProviderLinking({
           </div>
           {error && <div className="text-red-200" role="alert" aria-live="polite">{error}</div>}
           {stage !== "conflict" && (
-            <button type="button" disabled={submitting} onClick={stage === "verification" ? retryPostLinkVerification : retryPreflight} className="min-h-14 w-full rounded-md bg-purple-600 px-6 py-3 font-bold text-white disabled:opacity-60">
+            <button type="button" disabled={submitting} onClick={stage === "verification-failed" ? retryPostLinkVerification : retryPreflight} className="min-h-14 w-full rounded-md bg-purple-600 px-6 py-3 font-bold text-white disabled:opacity-60">
               {submitting ? "Checking..." : "Try again"}
             </button>
           )}
