@@ -171,12 +171,30 @@ export async function getIdentityContinuity() {
 export async function getApiMe() {
   return apiFetch<{
     ok: true;
-    user: unknown;
+    user: {
+      id: string;
+      displayName: string | null;
+    };
+    profile: {
+      reducedMotion: boolean;
+    };
     workspaces: unknown[];
     workspaceMemberships: unknown[];
     campaigns: unknown[];
     campaignMemberships: unknown[];
   }>("/api/me");
+}
+
+export async function updateApiProfile(input: { reducedMotion: boolean }) {
+  return apiFetch<{
+    ok: true;
+    profile: {
+      reducedMotion: boolean;
+    };
+  }>("/api/me", {
+    method: "PATCH",
+    body: JSON.stringify(input),
+  });
 }
 
 export async function createApiWorkspace(input: {

@@ -9,14 +9,14 @@ import {
   AlertCircle,
 } from "lucide-react";
 import { updateProfile } from "firebase/auth";
-import { doc, getDoc, setDoc } from "firebase/firestore";
 
 import { useAuth } from "../context/AuthContext.jsx";
 import { useMode } from "../context/ModeContext.jsx";
 import { useTenant } from "../context/TenantContext.jsx";
 import { useCampaign } from "../context/CampaignContext.jsx";
-import { auth, db } from "../firebase/firebase";
+import { auth } from "../firebase/firebase";
 import { isAuthTestMode } from "../config/firebase/firebase";
+import { getApiMe, updateApiProfile } from "../data/api/apiClient";
 import WorkspaceSettings from "./WorkspaceSettings.jsx";
 import CredentialMigration from "../components/auth/CredentialMigration.jsx";
 import GoogleProviderLinking from "../components/auth/GoogleProviderLinking.jsx";
@@ -105,12 +105,11 @@ export default function Settings() {
     async function loadProfile() {
       setLoading(true);
       try {
-        const snap = await getDoc(doc(db, "users", user.uid));
-        const profileDoc = snap.exists() ? snap.data() : {};
+        const apiMe = await getApiMe();
 
         setProfile({
-          displayName: profileDoc?.displayName || user.displayName || "",
-          reducedMotion: Boolean(profileDoc?.reducedMotion),
+          displayName: apiMe.user.displayName || user.displayName || "",
+          reducedMotion: apiMe.profile.reducedMotion,
         });
       } catch (error) {
         console.error("[Settings] Failed to load profile", error);
@@ -145,18 +144,16 @@ export default function Settings() {
         await updateProfile(auth.currentUser, {
           displayName: nextDisplayName || null,
         });
+        await auth.currentUser.getIdToken(true);
       }
 
-      await setDoc(
-        doc(db, "users", user.uid),
-        {
-          displayName: nextDisplayName,
-          reducedMotion: Boolean(profile.reducedMotion),
-          email: user.email || null,
-          updatedAt: Date.now(),
-        },
-        { merge: true }
-      );
+      const savedProfile = await updateApiProfile({
+        reducedMotion: Boolean(profile.reducedMotion),
+      });
+      setProfile({
+        displayName: auth.currentUser?.displayName || nextDisplayName,
+        reducedMotion: savedProfile.profile.reducedMotion,
+      });
 
       setSaveState({ type: "success", message: "Profile settings saved." });
     } catch (error) {
