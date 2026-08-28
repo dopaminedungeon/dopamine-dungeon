@@ -179,6 +179,23 @@ export async function getApiMe() {
   }>("/api/me");
 }
 
+export async function createApiWorkspace(input: {
+  name: string;
+  idempotencyKey: string;
+}) {
+  return apiFetch<{
+    ok: true;
+    workspace: {
+      id: string;
+      name: string;
+      slug: string;
+    };
+  }>("/api/workspace", {
+    method: "POST",
+    body: JSON.stringify(input),
+  });
+}
+
 export async function requestVerificationEmail(invited: boolean) {
   return apiFetch<{ ok: true }>("/api/auth/send-verification-email", {
     method: "POST",

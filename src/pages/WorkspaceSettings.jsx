@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import { Shield, Users, CheckCircle2, AlertCircle, Trash2, PlusCircle } from "lucide-react";
 import { useAuth } from "../context/AuthContext";
 import { useTenant } from "../context/TenantContext";
@@ -43,16 +43,15 @@ export default function WorkspaceSettings() {
     const [version, setVersion] = useState(0);
 
     const [newWorkspaceName, setNewWorkspaceName] = useState("");
-    const [newWorkspaceDescription, setNewWorkspaceDescription] = useState("");
     const [isCreatingWorkspace, setIsCreatingWorkspace] = useState(false);
     const [createWorkspaceState, setCreateWorkspaceState] = useState({ type: null, message: "" });
+
+    const workspaceCreateIdempotencyKeyRef = useRef(null);
 	    const handleCreateWorkspace = async (event) => {
 	        event.preventDefault();
 	        if (isCreatingWorkspace) return;
 
         const name = String(newWorkspaceName || "").trim();
-        const description = String(newWorkspaceDescription || "").trim();
-
         if (!name) {
             setCreateWorkspaceState({
                 type: "error",
@@ -76,7 +75,9 @@ export default function WorkspaceSettings() {
 
             const createdTenant = await fn({
                 name,
-                description,
+                idempotencyKey:
+                    workspaceCreateIdempotencyKeyRef.current ??=
+                    crypto.randomUUID(),
             });
 
             const nextTenantId =
@@ -90,7 +91,7 @@ export default function WorkspaceSettings() {
             }
 
             setNewWorkspaceName("");
-            setNewWorkspaceDescription("");
+            workspaceCreateIdempotencyKeyRef.current = null;
             setCreateWorkspaceState({
                 type: "success",
                 message: `Workspace ${name} created successfully.`,
@@ -234,7 +235,7 @@ export default function WorkspaceSettings() {
 
 	                    <form className="relative z-10 mt-5 space-y-4" onSubmit={handleCreateWorkspace}>
 	                        <fieldset disabled={isCreatingWorkspace} className="space-y-4 disabled:opacity-60">
-                        <div className="grid gap-4 md:grid-cols-2">
+                        <div>
                             <label className="block">
                                 <span className="mb-2 block text-sm text-zinc-300">Workspace name</span>
                                 <input
@@ -246,16 +247,6 @@ export default function WorkspaceSettings() {
                                 />
                             </label>
 
-                            <label className="block">
-                                <span className="mb-2 block text-sm text-zinc-300">Description (optional)</span>
-                                <input
-                                    type="text"
-                                    value={newWorkspaceDescription}
-                                    onChange={(event) => setNewWorkspaceDescription(event.target.value)}
-                                    placeholder="What is this workspace for?"
-                                    className="w-full rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-3 text-sm text-white outline-none transition placeholder:text-zinc-500 focus:border-fuchsia-400/40 focus:ring-2 focus:ring-fuchsia-400/20"
-                                />
-                            </label>
                         </div>
 
                         <div className="flex flex-wrap items-center gap-3">
@@ -336,7 +327,7 @@ export default function WorkspaceSettings() {
 
 	                <form className="relative z-10 mt-5 space-y-4" onSubmit={handleCreateWorkspace}>
 	                    <fieldset disabled={isCreatingWorkspace} className="space-y-4 disabled:opacity-60">
-                    <div className="grid gap-4 md:grid-cols-2">
+                    <div>
                         <label className="block">
                             <span className="mb-2 block text-sm text-zinc-300">Workspace name</span>
                             <input
@@ -348,16 +339,6 @@ export default function WorkspaceSettings() {
                             />
                         </label>
 
-                        <label className="block">
-                            <span className="mb-2 block text-sm text-zinc-300">Description (optional)</span>
-                            <input
-                                type="text"
-                                value={newWorkspaceDescription}
-                                onChange={(event) => setNewWorkspaceDescription(event.target.value)}
-                                placeholder="What is this workspace for?"
-                                className="w-full rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-3 text-sm text-white outline-none transition placeholder:text-zinc-500 focus:border-fuchsia-400/40 focus:ring-2 focus:ring-fuchsia-400/20"
-                            />
-                        </label>
                     </div>
 
                     <div className="flex flex-wrap items-center gap-3">

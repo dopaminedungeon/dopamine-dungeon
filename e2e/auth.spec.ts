@@ -1623,6 +1623,93 @@ test.describe("verified user identity provisioning", () => {
   });
 });
 
+test.describe("canonical workspace creation", () => {
+  const workspaceId = "00000000-0000-4000-8000-000000000018";
+  const userId = "e2e-canonical-workspace-user";
+
+  test.use({
+    apiMeResponse: emptyApiMeResponse(userId),
+    apiMeResponseAfterWorkspaceCreate: {
+      ok: true,
+      user: { id: userId },
+      workspaces: [
+        {
+          id: workspaceId,
+          slug: "created-workspace",
+          name: "Created Workspace",
+        },
+      ],
+      workspaceMemberships: [
+        { workspaceId, userId, role: "owner" },
+      ],
+      campaigns: [],
+      campaignMemberships: [],
+    },
+  });
+
+  test("creates through the API and refreshes Neon-backed tenant state", async ({
+    apiCallLog,
+    page,
+    request,
+  }) => {
+    const email = generatedEmail();
+    await createVerifiedUser(request, email, password);
+
+    await openEmailSignIn(page);
+    await page.getByLabel("Email address").fill(email);
+    await page.getByLabel("Password", { exact: true }).fill(password);
+    await page.getByRole("button", { name: "Sign in", exact: true }).click();
+
+    await expect(page.getByRole("heading", { name: "Create your workspace" })).toBeVisible();
+    await page
+      .getByPlaceholder("e.g. Chronicles of Varionath")
+      .fill("Created Workspace");
+    await page.getByRole("button", { name: "Create workspace" }).click();
+
+    await expect(
+      page.getByRole("heading", { name: "Create your first campaign" })
+    ).toBeVisible();
+    expect(apiCallLog.workspaceCreate).toHaveLength(1);
+    expect(apiCallLog.workspaceCreate[0]).toMatchObject({ name: "Created Workspace" });
+    expect(apiCallLog.workspaceCreate[0]).not.toHaveProperty("ownerUid");
+    expect(apiCallLog.workspaceCreate[0]).not.toHaveProperty("role");
+    expect(apiCallLog.workspaceCreate[0].idempotencyKey).toMatch(
+      /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
+    );
+    await expect
+      .poll(() => page.evaluate(() => localStorage.getItem("dd_selectedTenantId")))
+      .toBe("created-workspace");
+  });
+});
+
+test.describe("workspace fixture routing", () => {
+  test.use({ expectedConsoleErrors: ["Failed to load resource"] });
+
+  test("does not handle workspacePeople requests as workspace creation", async ({
+    apiCallLog,
+    page,
+  }) => {
+    await page.goto("/");
+
+    const outcome = await page.evaluate(async () => {
+      try {
+        await fetch("/api/workspace?resource=workspacePeople", {
+          headers: {
+            Authorization: "Bearer emulator-token",
+            "X-DD-Mode": "player",
+          },
+        });
+        return "fulfilled";
+      } catch {
+        return "blocked";
+      }
+    });
+
+    expect(outcome).toBe("blocked");
+    expect(apiCallLog.workspaceCreate).toHaveLength(0);
+  });
+});
+
 test.describe("bootstrap sign out", () => {
   test.describe("without a workspace", () => {
     test.use({

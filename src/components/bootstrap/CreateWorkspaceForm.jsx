@@ -1,24 +1,17 @@
-import { useState } from "react";
-import { createWorkspaceWithOwner } from "../../domain/bootstrap/workspaceBootstrap.service";
-import { useAuth } from "../../context/AuthContext";
+import { useRef, useState } from "react";
 import { useTenant } from "../../context/TenantContext";
 
 export default function CreateWorkspaceForm() {
-  const { user } = useAuth();
-  const { refreshTenants, selectTenant } = useTenant();
+  const { createTenant } = useTenant();
 
   const [name, setName] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState("");
+  const idempotencyKeyRef = useRef(null);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     if (isSubmitting) return;
-
-    if (!user?.uid) {
-      setError("You must be signed in to create a workspace.");
-      return;
-    }
 
     const trimmedName = name.trim();
 
@@ -31,13 +24,13 @@ export default function CreateWorkspaceForm() {
     setError("");
 
     try {
-      const { tenant } = await createWorkspaceWithOwner({
+      idempotencyKeyRef.current ??= crypto.randomUUID();
+      await createTenant({
         name: trimmedName,
-        userId: user.uid,
+        idempotencyKey: idempotencyKeyRef.current,
       });
 
-      await refreshTenants();
-      selectTenant(tenant.id);
+      idempotencyKeyRef.current = null;
       setName("");
     } catch (err) {
       console.error("[CreateWorkspaceForm] Failed to create workspace", err);
