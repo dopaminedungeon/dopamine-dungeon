@@ -170,6 +170,28 @@ test("identity continuity responses fail closed on malformed or changed identity
     ),
     false
   );
+  assert.equal(
+    isIdentityContinuityResponseValid(
+      { firebaseUid: "firebase-uid", neonUserId: "   " },
+      "firebase-uid"
+    ),
+    false
+  );
+  assert.equal(
+    isIdentityContinuityResponseValid(
+      { firebaseUid: "firebase-uid", neonUserId: 42 },
+      "firebase-uid"
+    ),
+    false
+  );
+  assert.equal(
+    isIdentityContinuityResponseValid(
+      { firebaseUid: "firebase-uid", neonUserId: " neon-user-id " },
+      "firebase-uid",
+      "neon-user-id"
+    ),
+    false
+  );
 });
 
 test("pending continuity stores only the UID and Neon ID for interrupted-session revalidation", () => {

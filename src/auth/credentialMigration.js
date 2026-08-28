@@ -106,7 +106,12 @@ export function isIdentityContinuityResponseValid(
   originalFirebaseUid,
   expectedNeonUserId = ""
 ) {
-  if (!result || typeof result.neonUserId !== "string" || !result.neonUserId) {
+  if (
+    !result ||
+    typeof result.neonUserId !== "string" ||
+    !result.neonUserId ||
+    !result.neonUserId.trim()
+  ) {
     return false;
   }
   if (
