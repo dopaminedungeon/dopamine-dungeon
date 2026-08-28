@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { test } from "vitest";
 
 import {
+  formatRetryAfterSeconds,
   GENERIC_SIGN_IN_ERROR,
   getAuthErrorMessage,
   getPasswordRequirements,
@@ -34,6 +35,14 @@ test("verification rate limits provide a cooldown message", () => {
     getAuthErrorMessage({ status: 429 }, "verification"),
     "Please wait before requesting another verification email."
   );
+  assert.equal(
+    getAuthErrorMessage(
+      { status: 429, retryAfterSeconds: 3_661 },
+      "verification"
+    ),
+    "Verification email limit reached. Try again in 1h 1m 1s."
+  );
+  assert.equal(formatRetryAfterSeconds(125), "2m 5s");
 });
 
 test("registration errors do not reveal that an email is already registered", () => {

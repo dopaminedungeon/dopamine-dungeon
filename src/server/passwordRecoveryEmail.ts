@@ -1,10 +1,21 @@
-import { createHmac, randomUUID } from "node:crypto";
 import type { VercelRequest, VercelResponse } from "@vercel/node";
 
 import {
   buildPasswordRecoveryEmailHtml,
   PASSWORD_RECOVERY_EMAIL_SUBJECT,
 } from "../domain/mail/passwordRecoveryEmail.template.js";
+import {
+  getAuthEmailRateLimitConfig,
+  getLegacyRecoveryEmailFingerprint,
+  getRecoveryEmailFingerprint,
+  getRecoveryIpFingerprint,
+  getRetryAfterSeconds,
+  getTrustedClientIp,
+  logAuthEmailMetric,
+  reserveAuthEmailRateLimits,
+  type AuthEmailRateLimitDatabase,
+  type AuthEmailRateLimitTarget,
+} from "./authEmailRateLimit.js";
 import { getAuthEmailDelivery } from "./authEmail.js";
 import { setCorsHeaders } from "./cors.js";
 import { getApplicationOrigin } from "./verificationEmail.js";
@@ -32,19 +43,12 @@ type PasswordRecoveryDependencies = {
     getUserByEmail(email: string): Promise<FirebaseUser>;
     generatePasswordResetLink(email: string): Promise<string>;
   };
-  db: {
-    collection(name: string): {
-      doc(id: string): unknown;
-      add(data: unknown): Promise<unknown>;
-    };
-    runTransaction<T>(callback: (transaction: {
-      get(ref: unknown): Promise<{ get(field: string): unknown }>;
-      set(ref: unknown, data: unknown): void;
-      delete(ref: unknown): void;
-    }) => Promise<T>): Promise<T>;
-  };
+  db: AuthEmailRateLimitDatabase;
   fingerprintSecret: string;
   minimumResponseMs: number;
+  environment?: Record<string, string | undefined>;
+  now?: () => number;
+  metric?: typeof logAuthEmailMetric;
 };
 
 function normalizeEmail(email: unknown) {
@@ -76,10 +80,7 @@ export function getPasswordRecoveryCooldownMs(
 }
 
 export function getPasswordRecoveryFingerprint(email: string, secret: string) {
-  if (!secret.trim()) {
-    throw new Error("Password recovery fingerprint secret is not configured");
-  }
-  return createHmac("sha256", secret).update(email).digest("hex");
+  return getRecoveryEmailFingerprint(email, secret);
 }
 
 export function isNonIdentifyingPasswordRecoveryError(error: unknown) {
@@ -87,48 +88,26 @@ export function isNonIdentifyingPasswordRecoveryError(error: unknown) {
   return typeof code === "string" && NON_IDENTIFYING_FIREBASE_CODES.has(code);
 }
 
-async function reserveCooldown(
-  db: PasswordRecoveryDependencies["db"],
-  email: string,
-  fingerprintSecret: string
-) {
-  const ref = db
-    .collection("_authPasswordRecoveryCooldowns")
-    .doc(getPasswordRecoveryFingerprint(email, fingerprintSecret));
-  const requestId = randomUUID();
-  const reserved = await db.runTransaction(async (transaction) => {
-    const snapshot = await transaction.get(ref);
-    const storedValue = snapshot.get("lastSentAt") as
-      | { toMillis?: () => number }
-      | undefined;
-    const lastSentAt = storedValue?.toMillis?.() ?? 0;
-
-    if (getPasswordRecoveryCooldownMs(lastSentAt) > 0) return false;
-
-    transaction.set(ref, { lastSentAt: new Date(), requestId });
-    return true;
-  });
-
-  return { ref, requestId, reserved };
-}
-
-async function releaseFailedCooldown(
-  db: PasswordRecoveryDependencies["db"],
-  ref: unknown,
-  requestId: string
-) {
-  await db.runTransaction(async (transaction) => {
-    const snapshot = await transaction.get(ref);
-    if (snapshot.get("requestId") === requestId) transaction.delete(ref);
-  });
-}
-
 export function createPasswordRecoveryEmailHandler(
   dependencies: PasswordRecoveryDependencies
 ) {
   return async function handler(req: VercelRequest, res: VercelResponse) {
     const requestStartedAt = Date.now();
-    async function acceptedResponse() {
+    const recordMetric = dependencies.metric ?? logAuthEmailMetric;
+
+    function metric(outcome: Parameters<typeof logAuthEmailMetric>[1]) {
+      try {
+        recordMetric("recovery", outcome);
+      } catch {
+        // Monitoring must not alter authentication behavior.
+      }
+    }
+
+    async function delayedResponse(
+      status: number,
+      body: unknown,
+      retryAfter?: number
+    ) {
       const remainingDelay = Math.max(
         0,
         dependencies.minimumResponseMs - (Date.now() - requestStartedAt)
@@ -136,7 +115,14 @@ export function createPasswordRecoveryEmailHandler(
       if (remainingDelay > 0) {
         await new Promise((resolve) => setTimeout(resolve, remainingDelay));
       }
-      return res.status(202).json(PASSWORD_RECOVERY_ACCEPTED_RESPONSE);
+      if (retryAfter !== undefined) {
+        res.setHeader("Retry-After", String(retryAfter));
+      }
+      return res.status(status).json(body);
+    }
+
+    function acceptedResponse() {
+      return delayedResponse(202, PASSWORD_RECOVERY_ACCEPTED_RESPONSE);
     }
 
     setCorsHeaders(res, "POST, OPTIONS");
@@ -151,18 +137,71 @@ export function createPasswordRecoveryEmailHandler(
       return res.status(400).json({ ok: false, error: "Enter a valid email address." });
     }
 
-    let cooldown:
-      | { ref: unknown; requestId: string; reserved: boolean }
-      | undefined;
+    metric("request");
     let eligibleAccount = false;
+    let limiterCompleted = false;
 
     try {
-      cooldown = await reserveCooldown(
-        dependencies.db,
+      const config = getAuthEmailRateLimitConfig(dependencies.environment);
+      const logicalRequestTime = dependencies.now?.() ?? Date.now();
+      const emailFingerprint = getRecoveryEmailFingerprint(
         email,
         dependencies.fingerprintSecret
       );
-      if (!cooldown.reserved) {
+      const legacyEmailFingerprint = getLegacyRecoveryEmailFingerprint(
+        email,
+        dependencies.fingerprintSecret
+      );
+      const emailRef = dependencies.db
+        .collection("_authPasswordRecoveryCooldowns")
+        .doc(emailFingerprint);
+      const legacyEmailRef = dependencies.db
+        .collection("_authPasswordRecoveryCooldowns")
+        .doc(legacyEmailFingerprint);
+      const targets: AuthEmailRateLimitTarget[] = [
+        {
+          key: "email",
+          ref: emailRef,
+          legacyRef: legacyEmailRef,
+          policy: config.recoveryEmail,
+        },
+      ];
+      if (config.extendedLimitsEnabled) {
+        const clientIp = getTrustedClientIp(req, dependencies.environment);
+        const ipFingerprint = getRecoveryIpFingerprint(
+          clientIp,
+          dependencies.fingerprintSecret
+        );
+        targets.push({
+          key: "ip",
+          ref: dependencies.db
+            .collection("_authPasswordRecoveryIpCooldowns")
+            .doc(ipFingerprint),
+          policy: config.recoveryIp,
+        });
+      }
+      const reservation = await reserveAuthEmailRateLimits(
+        dependencies.db,
+        targets,
+        logicalRequestTime
+      );
+      limiterCompleted = true;
+
+      if (!reservation.allowed) {
+        metric("throttled");
+        if (reservation.decisions.ip?.allowed === false) {
+          const retryAfter = getRetryAfterSeconds(
+            reservation.decisions.ip.retryAfterMs
+          );
+          return delayedResponse(
+            429,
+            {
+              ok: false,
+              error: "Too many password recovery requests. Please try again later.",
+            },
+            retryAfter
+          );
+        }
         return acceptedResponse();
       }
 
@@ -183,7 +222,9 @@ export function createPasswordRecoveryEmailHandler(
       });
       const { from, replyTo } = getAuthEmailDelivery();
 
-      await dependencies.db.collection("mail").add({
+      const mailCollection = dependencies.db.collection("mail");
+      if (!mailCollection.add) throw new Error("Mail delivery is unavailable");
+      await mailCollection.add({
         to: [email],
         from,
         replyTo,
@@ -193,6 +234,7 @@ export function createPasswordRecoveryEmailHandler(
         },
       });
 
+      metric("delivery_accepted");
       return acceptedResponse();
     } catch (error) {
       if (isNonIdentifyingPasswordRecoveryError(error)) {
@@ -200,24 +242,14 @@ export function createPasswordRecoveryEmailHandler(
       }
 
       if (eligibleAccount) {
+        metric("delivery_failure");
         console.error("[api/auth/send-password-reset-email] Delivery failed");
         return acceptedResponse();
       }
 
-      if (cooldown?.reserved) {
-        try {
-          await releaseFailedCooldown(
-            dependencies.db,
-            cooldown.ref,
-            cooldown.requestId
-          );
-        } catch {
-          // Preserve the original system-wide failure response.
-        }
-      }
-
+      metric(limiterCompleted ? "delivery_failure" : "limiter_failure");
       console.error("[api/auth/send-password-reset-email] Request failed");
-      return res.status(503).json({
+      return delayedResponse(503, {
         ok: false,
         error: "Password recovery is temporarily unavailable. Please try again.",
       });

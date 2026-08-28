@@ -30,12 +30,31 @@ type ApiOptions = RequestInit & {
 
 export class ApiRequestError extends Error {
   status: number;
+  retryAfterSeconds?: number;
 
-  constructor(message: string, status: number) {
+  constructor(message: string, status: number, retryAfterSeconds?: number) {
     super(message);
     this.name = "ApiRequestError";
     this.status = status;
+    this.retryAfterSeconds = retryAfterSeconds;
   }
+}
+
+function readRetryAfterSeconds(response: Response, responseBody: unknown) {
+  const headerValue = response.headers.get("retry-after");
+  if (headerValue && /^\d+$/.test(headerValue) && Number(headerValue) > 0) {
+    return Number(headerValue);
+  }
+  if (
+    responseBody &&
+    typeof responseBody === "object" &&
+    "retryAfterSeconds" in responseBody &&
+    Number.isInteger(responseBody.retryAfterSeconds) &&
+    Number(responseBody.retryAfterSeconds) > 0
+  ) {
+    return Number(responseBody.retryAfterSeconds);
+  }
+  return undefined;
 }
 
 async function waitForAuthUser() {
@@ -132,7 +151,11 @@ export async function apiFetch<T>(path: string, options: ApiOptions = {}): Promi
       errorMessage = responseBody.error;
     }
 
-    throw new ApiRequestError(errorMessage, response.status);
+    throw new ApiRequestError(
+      errorMessage,
+      response.status,
+      readRetryAfterSeconds(response, responseBody)
+    );
   }
 
   return responseBody as T;

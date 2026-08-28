@@ -9,4 +9,5 @@ export default createPasswordRecoveryEmailHandler({
   db: adminDb,
   fingerprintSecret: process.env.PASSWORD_RECOVERY_FINGERPRINT_SECRET || "",
   minimumResponseMs: PASSWORD_RECOVERY_MIN_RESPONSE_MS,
+  environment: process.env,
 });

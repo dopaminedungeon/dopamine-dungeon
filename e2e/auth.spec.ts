@@ -2104,18 +2104,22 @@ test.describe("pending credential verification cooldown", () => {
       manualRequests += 1;
       await route.fulfill({
         status: 429,
-        json: { error: "Too many verification requests" },
+        headers: { "Retry-After": "125" },
+        json: {
+          error: "Too many verification requests",
+          retryAfterSeconds: 125,
+        },
       });
     });
     await page.getByRole("button", { name: "Resend verification email" }).click();
 
     await expect(
-      page.getByText("Please wait before requesting another verification email.")
+      page.getByText("Verification email limit reached. Try again in 2m 5s.")
     ).toBeVisible();
     await expect(page.getByText("A new verification email has been sent.")).toHaveCount(0);
     await expect(
-      page.getByRole("button", { name: "Resend verification email" })
-    ).toBeEnabled();
+      page.getByRole("button", { name: /Resend available in 2m [45]s/ })
+    ).toBeDisabled();
     expect(manualRequests).toBe(1);
     const pendingAfterRateLimit = await page.evaluate(() =>
       JSON.parse(

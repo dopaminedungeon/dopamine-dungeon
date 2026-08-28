@@ -9,10 +9,25 @@ const TEMPORARY_AUTH_ERROR_CODES = new Set([
 export const GENERIC_SIGN_IN_ERROR =
   "We couldn't sign you in with those credentials.";
 
+export function formatRetryAfterSeconds(value) {
+  const totalSeconds = Math.max(1, Math.ceil(Number(value) || 0));
+  const hours = Math.floor(totalSeconds / 3600);
+  const minutes = Math.floor((totalSeconds % 3600) / 60);
+  const seconds = totalSeconds % 60;
+  return [
+    hours > 0 ? `${hours}h` : "",
+    minutes > 0 ? `${minutes}m` : "",
+    seconds > 0 ? `${seconds}s` : "",
+  ].filter(Boolean).join(" ");
+}
+
 export function getAuthErrorMessage(error, operation) {
   const code = typeof error?.code === "string" ? error.code : "";
 
   if (operation === "verification" && (code === "auth/too-many-requests" || error?.status === 429)) {
+    if (Number(error?.retryAfterSeconds) > 0) {
+      return `Verification email limit reached. Try again in ${formatRetryAfterSeconds(error.retryAfterSeconds)}.`;
+    }
     return "Please wait before requesting another verification email.";
   }
 
