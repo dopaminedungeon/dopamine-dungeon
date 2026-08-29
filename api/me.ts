@@ -64,6 +64,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const campaignsData = campaignIds.length
       ? await db.select().from(campaigns).where(inArray(campaigns.id, campaignIds))
       : [];
+    const playerSafeCampaigns = campaignsData.map(({ gmNotes: _gmNotes, ...campaign }) => campaign);
     const { reducedMotion: _reducedMotion, ...userResponse } = user;
 
     return res.status(200).json({
@@ -72,7 +73,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       profile: toUserProfile(user),
       workspaces: workspacesData,
       workspaceMemberships: workspaceMembershipsData,
-      campaigns: campaignsData,
+      campaigns: playerSafeCampaigns,
       campaignMemberships: campaignMembershipsData,
     });
   } catch (error) {
