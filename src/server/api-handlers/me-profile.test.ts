@@ -7,7 +7,7 @@ import { AuthenticationError } from "../apiErrors.js";
 const mocks = vi.hoisted(() => ({
   db: {
     select: vi.fn(() => ({
-      from: vi.fn(() => ({ where: vi.fn(() => []) })),
+      from: vi.fn(() => ({ where: vi.fn((): unknown[] => []) })),
     })),
   },
   getCurrentUser: vi.fn(),
@@ -103,6 +103,48 @@ test("returns only the authenticated caller profile through the existing me resp
     campaigns: [],
     campaignMemberships: [],
   });
+});
+
+test("never serializes campaign GM notes through the shared me response", async () => {
+  const workspace = { id: "workspace-1", slug: "workspace-alpha" };
+  const campaign = {
+    id: "campaign-1",
+    workspaceId: workspace.id,
+    slug: "campaign-alpha",
+    name: "Alpha",
+    playerSummary: "Player-safe summary",
+    gmNotes: "Private preparation",
+  };
+  const rows = [
+    [{ workspaceId: workspace.id, userId: currentUser.id, role: "player" }],
+    [workspace],
+    [{ campaignId: campaign.id, userId: currentUser.id, role: "player" }],
+    [campaign],
+  ];
+  mocks.db.select.mockImplementationOnce(() => ({
+    from: vi.fn(() => ({ where: vi.fn(() => rows.shift() ?? []) })),
+  }));
+  mocks.db.select.mockImplementationOnce(() => ({
+    from: vi.fn(() => ({ where: vi.fn(() => rows.shift() ?? []) })),
+  }));
+  mocks.db.select.mockImplementationOnce(() => ({
+    from: vi.fn(() => ({ where: vi.fn(() => rows.shift() ?? []) })),
+  }));
+  mocks.db.select.mockImplementationOnce(() => ({
+    from: vi.fn(() => ({ where: vi.fn(() => rows.shift() ?? []) })),
+  }));
+  const { res, result } = response();
+
+  await handler(getRequest(), res);
+
+  assert.equal(result.status, 200);
+  assert.deepEqual((result.body as { campaigns: unknown[] }).campaigns, [{
+    id: campaign.id,
+    workspaceId: campaign.workspaceId,
+    slug: campaign.slug,
+    name: campaign.name,
+    playerSummary: campaign.playerSummary,
+  }]);
 });
 
 test("rejects unauthenticated profile updates before a write", async () => {

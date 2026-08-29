@@ -14,7 +14,12 @@ export const campaigns = pgTable("campaigns", {
   description: text("description"),
   system: text("system").default("").notNull(),
   status: text("status").default("active").notNull(),
+  playerSummary: text("player_summary").default("").notNull(),
+  gmNotes: text("gm_notes").default("").notNull(),
+  startDate: text("start_date").default("").notNull(),
+  endDate: text("end_date").default("").notNull(),
   createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
 }, (table) => ({
   uniqueWorkspaceCreatorCreationRequest: unique().on(
     table.workspaceId,

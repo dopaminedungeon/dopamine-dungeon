@@ -310,6 +310,48 @@ export async function updateApiCampaign(input: {
   });
 }
 
+export type CampaignSettings = {
+  id: string;
+  campaignId: string;
+  workspaceId: string;
+  name: string;
+  description: string;
+  status: string;
+  system: string;
+  playerSummary: string;
+  startDate: string;
+  endDate: string;
+  updatedAt: string;
+  gmNotes?: string;
+};
+
+export type CampaignSettingsUpdate = Pick<
+  CampaignSettings,
+  | "name"
+  | "description"
+  | "status"
+  | "system"
+  | "playerSummary"
+  | "gmNotes"
+  | "startDate"
+  | "endDate"
+>;
+
+export async function getApiCampaignSettings(campaignId: string) {
+  return apiFetch<{ ok: true; campaign: CampaignSettings }>(
+    `/api/campaign-content?resource=campaignSettings&campaignId=${encodeURIComponent(campaignId)}`
+  );
+}
+
+export async function updateApiCampaignSettings(input: CampaignSettingsUpdate & {
+  campaignId: string;
+}) {
+  return apiFetch<{ ok: true; campaign: CampaignSettings }>(
+    "/api/campaign-content?resource=campaignSettings",
+    { method: "PATCH", body: JSON.stringify(input) }
+  );
+}
+
 export async function getApiCampaignPeople(campaignId: string) {
   return apiFetch<{
     ok: true;

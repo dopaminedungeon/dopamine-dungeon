@@ -4,6 +4,7 @@ import campaignCreateHandler from "../src/server/api-handlers/campaign-create.js
 import campaignPeopleHandler from "../src/server/api-handlers/campaign-people.js";
 import campaignRoutePeopleHandler from "../src/server/api-handlers/campaign-route-people.js";
 import characterAssignmentsHandler from "../src/server/api-handlers/character-assignments.js";
+import campaignSettingsHandler from "../src/server/api-handlers/campaign-settings.js";
 import { setCorsHeaders } from "../src/server/cors.js";
 
 function getQueryValue(value: string | string[] | undefined) {
@@ -46,6 +47,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
   if (resource === "characterAssignments") {
     return characterAssignmentsHandler(req, res);
+  }
+
+  if (resource === "campaignSettings") {
+    return campaignSettingsHandler(req, res);
   }
 
   setCorsHeaders(res, "GET, POST, PATCH, DELETE, OPTIONS");

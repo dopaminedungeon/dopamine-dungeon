@@ -7,6 +7,7 @@ const mocks = vi.hoisted(() => ({
   campaignPeopleHandler: vi.fn(),
   campaignRoutePeopleHandler: vi.fn(),
   characterAssignmentsHandler: vi.fn(),
+  campaignSettingsHandler: vi.fn(),
   setCorsHeaders: vi.fn(),
 }));
 
@@ -18,6 +19,7 @@ vi.mock("./campaign-route-people.js", () => ({
 vi.mock("./character-assignments.js", () => ({
   default: mocks.characterAssignmentsHandler,
 }));
+vi.mock("./campaign-settings.js", () => ({ default: mocks.campaignSettingsHandler }));
 vi.mock("../cors.js", () => ({ setCorsHeaders: mocks.setCorsHeaders }));
 
 import handler from "../../../api/campaign-content.js";
@@ -46,4 +48,11 @@ test("preserves campaignPeople routing instead of treating it as campaign creati
   assert.equal(mocks.campaignPeopleHandler.mock.calls.length, 1);
   assert.equal(mocks.campaignPeopleHandler.mock.calls[0][1], response);
   assert.equal(mocks.campaignCreateHandler.mock.calls.length, 0);
+});
+
+test("routes campaign settings through the consolidated campaign entrypoint", async () => {
+  await handler(request("GET", { resource: "campaignSettings" }), response);
+
+  assert.equal(mocks.campaignSettingsHandler.mock.calls.length, 1);
+  assert.equal(mocks.campaignSettingsHandler.mock.calls[0][1], response);
 });
