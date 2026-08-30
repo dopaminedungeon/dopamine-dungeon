@@ -266,9 +266,10 @@ export async function createApiInvitation(input: {
       campaignId: string;
       workspaceRole: string;
       campaignRole: string;
-      characterId: string | null;
+      characterIds: string[];
       status: string;
       createdAt: string;
+      expiresAt: string;
     };
   }>("/api/invitations", {
     method: "POST",

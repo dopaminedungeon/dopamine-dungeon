@@ -1,21 +1,26 @@
 import type { VercelRequest, VercelResponse } from "@vercel/node";
-import { and, eq, inArray } from "drizzle-orm";
+import { and, eq, gt, inArray, isNotNull, isNull, lt, or } from "drizzle-orm";
 
 import { adminDb } from "../../src/server/auth.js";
 import {
   getCurrentUser,
   normalizeEmail,
-  requireCampaignGm,
+  requireCampaignMember,
   requireWorkspaceOwner,
   resolveCampaignByAppId,
   resolveWorkspaceByAppId,
 } from "../../src/server/access.js";
+import { canViewAsGm } from "../../src/server/viewer-mode.js";
 import { setCorsHeaders } from "../../src/server/cors.js";
 import { db } from "../../src/server/db.js";
-import { invitations } from "../../db/schema/invitations.js";
+import {
+  invitationCharacterAssignments,
+  invitations,
+} from "../../db/schema/invitations.js";
 import { characterAssignments } from "../../db/schema/characterAssignments.js";
 import { characters } from "../../db/schema/characters.js";
 import { buildInviteEmailHtml } from "../../src/domain/mail/inviteEmail.template.js";
+import { getInvitationCharacterIdsByInvitationId } from "../../src/server/invitation-characters.js";
 
 function getFrontendOrigin(req: VercelRequest) {
   const requestOrigin = req.headers.origin;
@@ -48,11 +53,18 @@ const inviteEmailReplyTo = formatMailbox(
   process.env.INVITE_EMAIL_REPLY_TO || "dopamine.dungeon.info@gmail.com"
 );
 
-function parseInvitationCharacterIds(value?: string | null) {
-  return String(value || "")
-    .split(",")
-    .map((id) => id.trim())
-    .filter(Boolean);
+const INVITATION_LIFETIME_MS = 7 * 24 * 60 * 60 * 1000;
+const invitationRequestFields = new Set([
+  "email",
+  "tenantId",
+  "campaignId",
+  "campaignRole",
+  "characterIds",
+]);
+
+function hasOnlyInvitationRequestFields(body: unknown) {
+  if (!body || typeof body !== "object" || Array.isArray(body)) return false;
+  return Object.keys(body).every((key) => invitationRequestFields.has(key));
 }
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
@@ -68,12 +80,21 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
   try {
     const currentUser = await getCurrentUser(req);
+    if (!hasOnlyInvitationRequestFields(req.body)) {
+      return res.status(400).json({ ok: false, error: "Unsupported invitation fields" });
+    }
     const email = String(req.body?.email || "").trim();
     const tenantId = String(req.body?.tenantId || "").trim();
     const campaignId = String(req.body?.campaignId || "").trim();
     const campaignRole = req.body?.campaignRole === "gm" ? "gm" : "player";
-    const characterIds = Array.isArray(req.body?.characterIds)
-      ? req.body.characterIds.map((id: unknown) => String(id)).filter(Boolean)
+    const characterIds: string[] = Array.isArray(req.body?.characterIds)
+      ? Array.from(
+          new Set<string>(
+            (req.body.characterIds as unknown[])
+              .map((id) => String(id).trim())
+              .filter(Boolean)
+          )
+        )
       : [];
     const normalizedEmail = normalizeEmail(email);
 
@@ -91,10 +112,30 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       workspaceId: workspace.id,
       userId: currentUser.id,
     });
-    await requireCampaignGm({
+    const campaignMembership = await requireCampaignMember({
       campaignId: campaign.id,
       userId: currentUser.id,
     });
+    if (!canViewAsGm(req, campaignMembership.role)) {
+      return res.status(403).json({ ok: false, error: "Campaign GM mode required" });
+    }
+
+    const now = new Date();
+    // Never let a stale pending invitation block a replacement. Accepted and
+    // revoked rows are deliberately untouched.
+    await db
+      .update(invitations)
+      .set({ status: "expired" })
+      .where(
+        and(
+          eq(invitations.workspaceId, workspace.id),
+          eq(invitations.campaignId, campaign.id),
+          eq(invitations.normalizedEmail, normalizedEmail),
+          eq(invitations.status, "pending"),
+          isNotNull(invitations.expiresAt),
+          lt(invitations.expiresAt, now)
+        )
+      );
 
     const existingPendingInvitations = await db
       .select()
@@ -144,7 +185,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           .where(
             and(
               eq(invitations.campaignId, campaign.id),
-              eq(invitations.status, "pending")
+              eq(invitations.status, "pending"),
+              or(isNull(invitations.expiresAt), gt(invitations.expiresAt, now))
             )
           ),
       ]);
@@ -157,10 +199,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         });
       }
 
+      const pendingCharacterIdsByInvitationId =
+        await getInvitationCharacterIdsByInvitationId(db, pendingInvitations);
       const pendingAssignedIds = new Set(
-        pendingInvitations.flatMap((invitation) =>
-          parseInvitationCharacterIds(invitation.characterId)
-        )
+        Array.from(pendingCharacterIdsByInvitationId.values()).flat()
       );
       const blockedCharacterId =
         existingAssignments[0]?.characterId ||
@@ -174,22 +216,41 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       }
     }
 
-    const insertedInvitations = await db
-      .insert(invitations)
-      .values({
-        email,
-        normalizedEmail,
-        workspaceId: workspace.id,
-        campaignId: campaign.id,
-        workspaceRole: "member",
-        campaignRole,
-        characterId: characterIds.join(",") || null,
-        status: "pending",
-        invitedByUserId: currentUser.id,
-      })
-      .returning();
+    const expiresAt = new Date(now.getTime() + INVITATION_LIFETIME_MS);
+    const invitation = await db.transaction(async (tx) => {
+      const insertedInvitations = await tx
+        .insert(invitations)
+        .values({
+          email,
+          normalizedEmail,
+          workspaceId: workspace.id,
+          campaignId: campaign.id,
+          workspaceRole: "member",
+          campaignRole,
+          // Deprecated compatibility column. New invitations are represented
+          // exclusively by invitation_character_assignments.
+          characterId: null,
+          status: "pending",
+          expiresAt,
+          invitedByUserId: currentUser.id,
+        })
+        .returning();
+      const insertedInvitation = insertedInvitations[0];
 
-    const invitation = insertedInvitations[0];
+      if (!insertedInvitation) throw new Error("Invitation could not be created");
+
+      if (characterIds.length) {
+        await tx.insert(invitationCharacterAssignments).values(
+          characterIds.map((characterId) => ({
+            invitationId: insertedInvitation.id,
+            characterId,
+          }))
+        );
+      }
+
+      return insertedInvitation;
+    });
+
     const assignedCharacterNames = matchingCharacters
       .map((character) => String(character.name || "").trim())
       .filter(Boolean);
@@ -223,9 +284,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         campaignId: campaign.slug,
         workspaceRole: invitation.workspaceRole,
         campaignRole: invitation.campaignRole,
-        characterId: invitation.characterId,
+        characterIds,
         status: invitation.status,
         createdAt: invitation.createdAt,
+        expiresAt: invitation.expiresAt,
       },
     });
   } catch (error) {

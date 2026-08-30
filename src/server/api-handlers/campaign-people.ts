@@ -1,5 +1,5 @@
 import type { VercelRequest, VercelResponse } from "@vercel/node";
-import { and, eq, inArray } from "drizzle-orm";
+import { and, eq, gt, inArray, isNull, or } from "drizzle-orm";
 
 import {
   getCurrentUser,
@@ -16,6 +16,7 @@ import {
 } from "../../../db/schema/memberships.js";
 import { characterAssignments } from "../../../db/schema/characterAssignments.js";
 import { users } from "../../../db/schema/users.js";
+import { getInvitationCharacterIdsByInvitationId } from "../invitation-characters.js";
 
 type User = typeof users.$inferSelect;
 
@@ -277,7 +278,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           .where(
             and(
               eq(invitations.campaignId, campaign.id),
-              eq(invitations.status, "pending")
+              eq(invitations.status, "pending"),
+              or(
+                isNull(invitations.expiresAt),
+                gt(invitations.expiresAt, new Date())
+              )
             )
           ),
         db
@@ -326,6 +331,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       };
     });
 
+    const pendingCharacterIdsByInvitationId =
+      await getInvitationCharacterIdsByInvitationId(db, pendingInvitations);
     const pendingRows = pendingInvitations.map((invitation) => ({
       id: `invite-${invitation.id}`,
       docId: invitation.id,
@@ -340,10 +347,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       userId: null,
       workspaceRole: invitation.workspaceRole || "member",
       campaignRole: invitation.campaignRole || "player",
-      characterIds: String(invitation.characterId || "")
-        .split(",")
-        .map((id) => id.trim())
-        .filter(Boolean),
+      characterIds: pendingCharacterIdsByInvitationId.get(invitation.id) ?? [],
     }));
 
     return res.status(200).json({

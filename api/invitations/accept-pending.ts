@@ -1,5 +1,5 @@
 import type { VercelRequest, VercelResponse } from "@vercel/node";
-import { and, eq } from "drizzle-orm";
+import { and, eq, inArray } from "drizzle-orm";
 
 import { getCurrentUser, normalizeEmail } from "../../src/server/access.js";
 import { setCorsHeaders } from "../../src/server/cors.js";
@@ -10,12 +10,14 @@ import {
   workspaceMemberships,
 } from "../../db/schema/memberships.js";
 import { characterAssignments } from "../../db/schema/characterAssignments.js";
+import { characters } from "../../db/schema/characters.js";
 import { campaigns } from "../../db/schema/campaigns.js";
 import { workspaces } from "../../db/schema/workspaces.js";
 import {
   getApiErrorMessage,
   getApiErrorStatus,
 } from "../../src/server/apiErrors.js";
+import { getInvitationCharacterIds } from "../../src/server/invitation-characters.js";
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   setCorsHeaders(res, "POST, OPTIONS");
@@ -58,33 +60,68 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       const accepted = [];
 
       for (const invitation of pendingInvitations) {
+        // Re-read inside the transaction so a concurrent revoke, acceptance,
+        // or expiry transition cannot create access from a stale read.
+        const currentInvitationRows = await tx
+          .select()
+          .from(invitations)
+          .where(eq(invitations.id, invitation.id))
+          .limit(1);
+        const currentInvitation = currentInvitationRows[0];
+
+        if (!currentInvitation || currentInvitation.status !== "pending") {
+          continue;
+        }
+
+        if (currentInvitation.expiresAt && currentInvitation.expiresAt <= now) {
+          await tx
+            .update(invitations)
+            .set({ status: "expired" })
+            .where(
+              and(
+                eq(invitations.id, currentInvitation.id),
+                eq(invitations.status, "pending")
+              )
+            );
+          continue;
+        }
+
+        const characterIds = await getInvitationCharacterIds(tx, currentInvitation);
+        if (characterIds.length) {
+          const matchingCharacters = await tx
+            .select()
+            .from(characters)
+            .where(
+              and(
+                eq(characters.campaignId, currentInvitation.campaignId),
+                inArray(characters.id, characterIds)
+              )
+            );
+
+          if (matchingCharacters.length !== characterIds.length) {
+            throw new Error("Invitation contains a character outside its campaign");
+          }
+        }
+
         await tx
           .insert(workspaceMemberships)
           .values({
-            workspaceId: invitation.workspaceId,
+            workspaceId: currentInvitation.workspaceId,
             userId: currentUser.id,
-            role: invitation.workspaceRole || "member",
+            role: currentInvitation.workspaceRole || "member",
           })
           .onConflictDoNothing();
 
+        // Invitations may grant an initial role only. An established member's
+        // role is changed solely by membership-management APIs.
         await tx
           .insert(campaignMemberships)
           .values({
-            campaignId: invitation.campaignId,
+            campaignId: currentInvitation.campaignId,
             userId: currentUser.id,
-            role: invitation.campaignRole || "player",
+            role: currentInvitation.campaignRole || "player",
           })
-          .onConflictDoUpdate({
-            target: [campaignMemberships.campaignId, campaignMemberships.userId],
-            set: {
-              role: invitation.campaignRole || "player",
-            },
-          });
-
-        const characterIds = String(invitation.characterId || "")
-          .split(",")
-          .map((id) => id.trim())
-          .filter(Boolean);
+          .onConflictDoNothing();
 
         for (const characterId of characterIds) {
           const existingAssignments = await tx
@@ -92,7 +129,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
             .from(characterAssignments)
             .where(
               and(
-                eq(characterAssignments.campaignId, invitation.campaignId),
+                eq(characterAssignments.campaignId, currentInvitation.campaignId),
                 eq(characterAssignments.characterId, characterId)
               )
             )
@@ -107,10 +144,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           }
 
           await tx.insert(characterAssignments).values({
-            campaignId: invitation.campaignId,
+            campaignId: currentInvitation.campaignId,
             characterId,
             userId: currentUser.id,
-            createdByUserId: invitation.invitedByUserId,
+            createdByUserId: currentInvitation.invitedByUserId,
           });
         }
 
@@ -121,10 +158,15 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
             acceptedAt: now,
             acceptedByUserId: currentUser.id,
           })
-          .where(eq(invitations.id, invitation.id))
+          .where(
+            and(
+              eq(invitations.id, currentInvitation.id),
+              eq(invitations.status, "pending")
+            )
+          )
           .returning();
 
-        accepted.push(updatedInvitations[0] ?? invitation);
+        if (updatedInvitations[0]) accepted.push(updatedInvitations[0]);
       }
 
       return accepted;

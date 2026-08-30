@@ -10,7 +10,7 @@
     "preview": "vite preview",
     "test": "vitest run",
     "test:unit": "vitest run src/auth src/data/api/selectedMode.test.js src/data/characters/characterImport.service.test.js src/server/apiErrors.test.js src/server/userIdentity.test.js src/server/authEmailRateLimit.test.ts src/server/verificationEmail.test.js src/server/passwordRecoveryEmail.test.ts",
-    "test:api": "vitest run src/server/api-handlers.integration.test.ts src/server/api-handlers/workspace-create.test.ts src/server/api-handlers/campaign-create.test.ts src/server/api-handlers/campaign-content-router.test.ts src/server/api-handlers/campaign-settings.test.ts src/server/api-handlers/me-profile.test.ts src/server/userProfile.test.ts",
+    "test:api": "vitest run src/server/api-handlers.integration.test.ts src/server/api-handlers/workspace-create.test.ts src/server/api-handlers/campaign-create.test.ts src/server/api-handlers/campaign-content-router.test.ts src/server/api-handlers/campaign-settings.test.ts src/server/api-handlers/me-profile.test.ts src/server/userProfile.test.ts src/server/legacy-firestore-retirement.test.ts api/invitations/accept-pending.test.ts api/invitations/index.test.ts",
     "test:boundary": "vitest run src/server/security-boundaries.test.js src/server/access-boundaries.test.ts src/server/viewer-mode.test.ts",
     "test:e2e": "node scripts/auth-test-runner.mjs test",
     "test:e2e:smoke": "node scripts/auth-test-runner.mjs test --grep @smoke",
