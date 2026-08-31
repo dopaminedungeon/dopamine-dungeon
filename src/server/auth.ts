@@ -1,6 +1,5 @@
 import { getApps, cert, initializeApp } from "firebase-admin/app";
 import { getAuth } from "firebase-admin/auth";
-import { getFirestore } from "firebase-admin/firestore";
 import { getServerAuthRuntime } from "../auth/authEmulatorSafety.js";
 import { AuthenticationError } from "./apiErrors.js";
 
@@ -27,7 +26,6 @@ const app = authRuntime.useAuthEmulator
     });
 
 export const adminAuth = getAuth(app);
-export const adminDb = getFirestore(app);
 
 export async function verifyFirebaseToken(authHeader?: string) {
   if (!authHeader || !authHeader.startsWith("Bearer ")) {

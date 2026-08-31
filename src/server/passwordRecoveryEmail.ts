@@ -12,8 +12,7 @@ import {
   getRetryAfterSeconds,
   getTrustedClientIp,
   logAuthEmailMetric,
-  reserveAuthEmailRateLimits,
-  type AuthEmailRateLimitDatabase,
+  type AuthEmailRateLimitStore,
   type AuthEmailRateLimitTarget,
 } from "./authEmailRateLimit.js";
 import { getAuthEmailDelivery } from "./authEmail.js";
@@ -44,7 +43,7 @@ type PasswordRecoveryDependencies = {
     getUserByEmail(email: string): Promise<FirebaseUser>;
     generatePasswordResetLink(email: string): Promise<string>;
   };
-  db: AuthEmailRateLimitDatabase;
+  limiter: AuthEmailRateLimitStore;
   fingerprintSecret: string;
   minimumResponseMs: number;
   environment?: Record<string, string | undefined>;
@@ -154,17 +153,12 @@ export function createPasswordRecoveryEmailHandler(
         email,
         dependencies.fingerprintSecret
       );
-      const emailRef = dependencies.db
-        .collection("_authPasswordRecoveryCooldowns")
-        .doc(emailFingerprint);
-      const legacyEmailRef = dependencies.db
-        .collection("_authPasswordRecoveryCooldowns")
-        .doc(legacyEmailFingerprint);
       const targets: AuthEmailRateLimitTarget[] = [
         {
           key: "email",
-          ref: emailRef,
-          legacyRef: legacyEmailRef,
+          scope: "recovery_email",
+          subjectKey: emailFingerprint,
+          legacySubjectKey: legacyEmailFingerprint,
           policy: config.recoveryEmail,
         },
       ];
@@ -176,17 +170,12 @@ export function createPasswordRecoveryEmailHandler(
         );
         targets.push({
           key: "ip",
-          ref: dependencies.db
-            .collection("_authPasswordRecoveryIpCooldowns")
-            .doc(ipFingerprint),
+          scope: "recovery_ip",
+          subjectKey: ipFingerprint,
           policy: config.recoveryIp,
         });
       }
-      const reservation = await reserveAuthEmailRateLimits(
-        dependencies.db,
-        targets,
-        logicalRequestTime
-      );
+      const reservation = await dependencies.limiter.reserve(targets, logicalRequestTime);
       limiterCompleted = true;
 
       if (!reservation.allowed) {

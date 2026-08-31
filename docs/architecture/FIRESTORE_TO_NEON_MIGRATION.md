@@ -41,9 +41,9 @@ application data.
 | `invitations/{invitationId}` | Historical migration/retention input; no active application repository | Legacy Firestore values are not consumed by application code. | Pending/accepted invitation state, recipient email, roles, workspace-only shape, and character-ID arrays. Email-sensitive. | Neon `invitations` with server-managed `expires_at`, plus `invitation_character_assignments`; `/api/invitations` and `/api/invitations/accept-pending`. | Workspace-only invitations are explicitly retired. Multi-character behavior is retained through typed relational rows. Historical values must be exported/reported, never silently transformed or dropped. |
 | `characterAssignments/{assignmentId}` | Historical migration/retention input; no active application repository | Legacy invitation and workspace-member application services are retired. | Player-to-character assignment. Role and campaign confidentiality boundary. | Neon `character_assignments`; `/api/campaign-content?resource=characterAssignments`. | **Retired application code**. Retain historical input until reconciliation and rollback gates pass. |
 | `mail/{mailId}` | Historical Trigger Email operational input; no active application writer. | Trigger Email configuration remains retained temporarily for rollback only. | Recipient and rendered mail may contain delivery-sensitive action links. | Server-owned Brevo REST transport called by invitation, verification, and recovery handlers. | **Replaced application path**. Do not disable the extension until controlled real-delivery validation and explicit decommission approval. |
-| `_authVerificationCooldowns/{firebaseUid}` | Active; Admin SDK only | Verification email limiter transaction reads/writes | Per-UID resend throttling. Stores bounded rolling timestamps and TTL metadata. | No replacement. | **Replace** with a server-only atomic limiter. Preserve accurate retry timing. |
-| `_authPasswordRecoveryCooldowns/{emailHmac}` and legacy fingerprint variant | Active; Admin SDK only | Recovery limiter transaction reads/writes | Per-recovery-email throttling. HMAC fingerprint only; recovery responses remain account-neutral. | No replacement. | **Replace** with a server-only atomic limiter. Preserve HMAC domain separation and enumeration-resistant timing. |
-| `_authPasswordRecoveryIpCooldowns/{ipHmac}` | Active; Admin SDK only | Recovery limiter transaction reads/writes | Per-source-IP abuse throttling. HMAC fingerprint only. | No replacement. | **Replace** with a server-only atomic limiter using the same trusted platform-IP policy. |
+| `_authVerificationCooldowns/{firebaseUid}` | Historical operational input after Neon limiter cutover | No application runtime reader/writer. Retain temporarily for production cutover/rollback reconciliation. | Per-UID resend throttling. | Neon `auth_email_rate_limit_subjects` and `auth_email_rate_limit_attempts`. | **Replaced application path**. Development/Preview start fresh; Production requires a final last-24-hour opaque-state import and reconciliation gate. |
+| `_authPasswordRecoveryCooldowns/{emailHmac}` and legacy fingerprint variant | Historical operational input after Neon limiter cutover | No application runtime reader/writer. | Per-recovery-email throttling; HMAC only. | Neon limiter tables; current and legacy opaque HMAC keys remain separately addressable for the production cutover horizon. | **Replaced application path**. No plaintext identifier conversion is permitted. |
+| `_authPasswordRecoveryIpCooldowns/{ipHmac}` | Historical operational input after Neon limiter cutover | No application runtime reader/writer. | Per-source-IP abuse throttling; HMAC only. | Neon limiter tables. | **Replaced application path**. Production export/import gate remains mandatory. |
 
 The audit found no committed Firestore rules or indexes and no committed
 Trigger Email extension configuration. Dynamic collection access or documents
@@ -67,8 +67,8 @@ Neon.
 | Invitations and acceptance | Active APIs use Neon invitations; Firestore mail delivery is intentionally retained temporarily. | Server-only seven-day expiration; relational multi-character invitation rows; atomic, idempotent acceptance; existing campaign roles are preserved; no email identity migration. | Inviter authorization; repeated acceptance; wrong UID/same-email isolation; expired/pending state; assignment and role boundaries. |
 | Character assignments | Legacy browser `characterAssignments`. **Pending environment export**. | Authenticated API; campaign membership and GM/Player mode validation; scoped reads; Neon uniqueness constraints. | GM assignment changes; Player restricted view; unrelated campaign denied; duplicate assignment constraint. |
 | Email queue | Admin Firestore `mail`; Admin bypasses rules. | Server-only queue/transport with sender configuration held server-side. No client direct queue access. | Unauthorized caller cannot enqueue; invitation regression; verification/recovery delivery behavior; sensitive payload absent from logs/metrics. |
-| Verification cooldown | Admin Firestore transaction; no Firestore-rule boundary. | Server-only atomic limiter keyed by Firebase UID; bounded windows/expiry; accurate `Retry-After`. | Cooldown/hour/day boundaries; concurrent requests; storage failure; accurate wait time. |
-| Recovery cooldown | Admin Firestore transaction; no Firestore-rule boundary. | Server-only atomic combined email-HMAC and trusted-IP-HMAC limiter; all-or-none reservation; generic account-neutral response and timing. | Existing/nonexistent equivalence; IPv4/IPv6; spoofed headers; concurrent requests; limiter failure; no raw identifier persistence. |
+| Verification cooldown | Server-only Neon transaction keyed by Firebase UID. | `auth_email_rate_limit_subjects` plus timestamp attempts; locked, bounded windows and accurate `Retry-After`. | Cooldown/hour/day boundaries; concurrent requests; storage failure; accurate wait time. |
+| Recovery cooldown | Server-only Neon transaction keyed by email/IP HMACs. | Atomic combined reservation; generic account-neutral response and timing. | Existing/nonexistent equivalence; IPv4/IPv6; spoofed headers; concurrent requests; limiter failure; no raw identifier persistence. |
 
 ## Migration ordering and gates
 
@@ -109,10 +109,15 @@ all be resolved first.
   compatibility only. New invitations use typed
   `invitation_character_assignments` rows; do not drop the CSV column before
   historical reconciliation.
-- Firestore Trigger Email remains intentionally retained until the separate
-  mail-delivery phase.
-- Profile preferences need an explicit Neon model/API destination.
-- Mail delivery and rate limiting need approved replacement infrastructure.
+- Trigger Email has no active application writer, but extension decommission
+  remains an explicit operational approval after controlled delivery evidence.
+- Expired Neon limiter rows are logically ignored and pruned on touched
+  subjects. Physical deletion needs later operational housekeeping; it is never
+  an authorization dependency.
+- Production limiter cutover must export the final complete 24-hour Firestore
+  horizon, import opaque UID/HMAC keys and timestamps, reconcile both counts
+  and timestamps, and fail closed during the final cutover window. No
+  dual-read/write is permitted. Development and Preview may begin fresh.
 - Migration scripts need formal reconciliation and safety controls before they
   can be used for a cutover.
 

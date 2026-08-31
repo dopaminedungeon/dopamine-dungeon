@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { existsSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { test } from "vitest";
 
@@ -22,4 +22,26 @@ test("legacy Firestore membership, invitation, and assignment application paths 
       `${relativePath} must not be restored as an application persistence path`
     );
   });
+});
+
+test("authentication-email runtime no longer depends on Firestore limiter state", () => {
+  const runtimePaths = [
+    "auth.ts",
+    "verificationEmail.ts",
+    "passwordRecoveryEmail.ts",
+    "neonAuthEmailRateLimit.ts",
+  ];
+  const forbidden = [
+    "firebase-admin/firestore",
+    "_authVerificationCooldowns",
+    "_authPasswordRecoveryCooldowns",
+    "_authPasswordRecoveryIpCooldowns",
+  ];
+
+  for (const relativePath of runtimePaths) {
+    const source = readFileSync(new URL(`server/${relativePath}`, new URL(`file://${sourceRoot}/`)), "utf8");
+    for (const value of forbidden) {
+      assert.equal(source.includes(value), false, `${relativePath} must not reference ${value}`);
+    }
+  }
 });

@@ -26,30 +26,19 @@ export type AuthEmailRateLimitConfig = {
   recoveryIp: AuthEmailRateLimitPolicy;
 };
 
-type RateLimitSnapshot = {
-  get(field: string): unknown;
-};
-
-type RateLimitTransaction = {
-  get(ref: unknown): Promise<RateLimitSnapshot>;
-  set(ref: unknown, data: unknown): void;
-};
-
-export type AuthEmailRateLimitDatabase = {
-  collection(name: string): {
-    doc(id: string): unknown;
-    add?(data: unknown): Promise<unknown>;
-  };
-  runTransaction<T>(
-    callback: (transaction: RateLimitTransaction) => Promise<T>
-  ): Promise<T>;
-};
+export type AuthEmailRateLimitScope =
+  | "verification"
+  | "recovery_email"
+  | "recovery_ip";
 
 export type AuthEmailRateLimitTarget = {
   key: string;
-  ref: unknown;
+  scope: AuthEmailRateLimitScope;
+  subjectKey: string;
   policy: AuthEmailRateLimitPolicy;
-  legacyRef?: unknown;
+  // Required only for the future production cutover: old Firestore HMACs
+  // cannot be converted into the newer domain-separated form.
+  legacySubjectKey?: string;
 };
 
 export type AuthEmailRateLimitDecision = {
@@ -61,6 +50,13 @@ export type AuthEmailRateLimitDecision = {
 export type AuthEmailRateLimitReservation = {
   allowed: boolean;
   decisions: Record<string, AuthEmailRateLimitDecision>;
+};
+
+export type AuthEmailRateLimitStore = {
+  reserve(
+    targets: AuthEmailRateLimitTarget[],
+    nowMs: number
+  ): Promise<AuthEmailRateLimitReservation>;
 };
 
 function readPositiveInteger(
@@ -232,37 +228,6 @@ export function getTrustedClientIp(
   return canonicalizeIpAddress(req.socket?.remoteAddress);
 }
 
-function timestampToMillis(value: unknown) {
-  if (value instanceof Date) return value.getTime();
-  if (
-    value &&
-    typeof value === "object" &&
-    "toMillis" in value &&
-    typeof (value as { toMillis?: unknown }).toMillis === "function"
-  ) {
-    return (value as { toMillis(): number }).toMillis();
-  }
-  throw new Error("Authentication email rate-limit record is malformed");
-}
-
-function readStoredTimestamps(snapshot: RateLimitSnapshot) {
-  const attemptsValue = snapshot.get("attempts");
-  const attempts = attemptsValue === undefined ? [] : attemptsValue;
-  if (!Array.isArray(attempts)) {
-    throw new Error("Authentication email rate-limit record is malformed");
-  }
-
-  const timestamps = attempts.map(timestampToMillis);
-  const lastSentAt = snapshot.get("lastSentAt");
-  if (attemptsValue === undefined && lastSentAt !== undefined) {
-    timestamps.push(timestampToMillis(lastSentAt));
-  }
-  return {
-    hasRollingRecord: attemptsValue !== undefined,
-    timestamps: timestamps.sort((left, right) => left - right),
-  };
-}
-
 export function evaluateAuthEmailRateLimit(
   timestamps: number[],
   policy: AuthEmailRateLimitPolicy,
@@ -301,61 +266,12 @@ export function evaluateAuthEmailRateLimit(
   };
 }
 
-export async function reserveAuthEmailRateLimits(
-  db: AuthEmailRateLimitDatabase,
-  targets: AuthEmailRateLimitTarget[],
-  nowMs: number
-): Promise<AuthEmailRateLimitReservation> {
+export function validateAuthEmailRateLimitTargets(
+  targets: AuthEmailRateLimitTarget[]
+) {
   if (targets.length === 0 || new Set(targets.map((target) => target.key)).size !== targets.length) {
     throw new Error("Authentication email rate-limit targets are invalid");
   }
-
-  return db.runTransaction(async (transaction) => {
-    const snapshots = await Promise.all(
-      targets.map(async (target) => ({
-        target,
-        current: await transaction.get(target.ref),
-        legacy: target.legacyRef
-          ? await transaction.get(target.legacyRef)
-          : undefined,
-      }))
-    );
-    const decisions: Record<string, AuthEmailRateLimitDecision> = {};
-
-    for (const { target, current, legacy } of snapshots) {
-      const currentRecord = readStoredTimestamps(current);
-      const timestamps = currentRecord.hasRollingRecord
-        ? currentRecord.timestamps
-        : [
-            ...currentRecord.timestamps,
-            ...(legacy ? readStoredTimestamps(legacy).timestamps : []),
-          ];
-      decisions[target.key] = evaluateAuthEmailRateLimit(
-        timestamps,
-        target.policy,
-        nowMs
-      );
-    }
-
-    const allowed = Object.values(decisions).every((decision) => decision.allowed);
-    // Multi-key requests reserve every target or none of them.
-    if (!allowed) return { allowed: false, decisions };
-
-    for (const target of targets) {
-      transaction.set(target.ref, {
-        attempts: [
-          ...decisions[target.key].activeTimestamps.map(
-            (timestamp) => new Date(timestamp)
-          ),
-          new Date(nowMs),
-        ],
-        lastSentAt: new Date(nowMs),
-        expiresAt: new Date(nowMs + target.policy.recordTtlMs),
-      });
-    }
-
-    return { allowed: true, decisions };
-  });
 }
 
 export function getRetryAfterSeconds(retryAfterMs: number) {

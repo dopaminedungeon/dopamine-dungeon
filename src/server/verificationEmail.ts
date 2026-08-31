@@ -8,8 +8,7 @@ import {
   getAuthEmailRateLimitConfig,
   getRetryAfterSeconds,
   logAuthEmailMetric,
-  reserveAuthEmailRateLimits,
-  type AuthEmailRateLimitDatabase,
+  type AuthEmailRateLimitStore,
 } from "./authEmailRateLimit.js";
 import { getApiErrorMessage, getApiErrorStatus } from "./apiErrors.js";
 import { getAuthEmailDelivery } from "./authEmail.js";
@@ -63,7 +62,7 @@ type VerificationEmailDependencies = {
   auth: {
     generateEmailVerificationLink(email: string): Promise<string>;
   };
-  db: AuthEmailRateLimitDatabase;
+  limiter: AuthEmailRateLimitStore;
   environment?: Record<string, string | undefined>;
   now?: () => number;
   metric?: typeof logAuthEmailMetric;
@@ -116,15 +115,12 @@ export function createVerificationEmailHandler(
       metric("request");
       const config = getAuthEmailRateLimitConfig(dependencies.environment);
       const logicalRequestTime = dependencies.now?.() ?? Date.now();
-      const limiterRef = dependencies.db
-        .collection("_authVerificationCooldowns")
-        .doc(decodedToken.uid);
-      const reservation = await reserveAuthEmailRateLimits(
-        dependencies.db,
+      const reservation = await dependencies.limiter.reserve(
         [
           {
             key: "verification",
-            ref: limiterRef,
+            scope: "verification",
+            subjectKey: decodedToken.uid,
             policy: config.verification,
           },
         ],
