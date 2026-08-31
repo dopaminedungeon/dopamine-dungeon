@@ -23,6 +23,7 @@ function createDatabaseDouble(initial = []) {
     documents,
     mail,
     db: {
+      __mail: mail,
       collection(name) {
         return {
           doc(id) {
@@ -96,6 +97,7 @@ function createHandler(db, overrides = {}) {
       ),
     },
     db,
+    sendMail: async (message) => db.__mail.push(message),
     environment: {},
     now: () => NOW,
     metric: vi.fn(),

@@ -19,6 +19,7 @@ import {
 import { getAuthEmailDelivery } from "./authEmail.js";
 import { setCorsHeaders } from "./cors.js";
 import { getApplicationOrigin } from "./verificationEmail.js";
+import { sendTransactionalEmail } from "./transactionalMail.js";
 
 export const PASSWORD_RECOVERY_COOLDOWN_MS = 60_000;
 export const PASSWORD_RECOVERY_MIN_RESPONSE_MS = 500;
@@ -49,6 +50,7 @@ type PasswordRecoveryDependencies = {
   environment?: Record<string, string | undefined>;
   now?: () => number;
   metric?: typeof logAuthEmailMetric;
+  sendMail?: typeof sendTransactionalEmail;
 };
 
 function normalizeEmail(email: unknown) {
@@ -222,16 +224,12 @@ export function createPasswordRecoveryEmailHandler(
       });
       const { from, replyTo } = getAuthEmailDelivery();
 
-      const mailCollection = dependencies.db.collection("mail");
-      if (!mailCollection.add) throw new Error("Mail delivery is unavailable");
-      await mailCollection.add({
-        to: [email],
+      await (dependencies.sendMail ?? sendTransactionalEmail)({
+        to: email,
         from,
         replyTo,
-        message: {
-          subject: PASSWORD_RECOVERY_EMAIL_SUBJECT,
-          html: buildPasswordRecoveryEmailHtml({ passwordResetLink }),
-        },
+        subject: PASSWORD_RECOVERY_EMAIL_SUBJECT,
+        html: buildPasswordRecoveryEmailHtml({ passwordResetLink }),
       });
 
       metric("delivery_accepted");

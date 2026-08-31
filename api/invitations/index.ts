@@ -1,7 +1,6 @@
 import type { VercelRequest, VercelResponse } from "@vercel/node";
 import { and, eq, gt, inArray, isNotNull, isNull, lt, or } from "drizzle-orm";
 
-import { adminDb } from "../../src/server/auth.js";
 import {
   getCurrentUser,
   normalizeEmail,
@@ -21,6 +20,7 @@ import { characterAssignments } from "../../db/schema/characterAssignments.js";
 import { characters } from "../../db/schema/characters.js";
 import { buildInviteEmailHtml } from "../../src/domain/mail/inviteEmail.template.js";
 import { getInvitationCharacterIdsByInvitationId } from "../../src/server/invitation-characters.js";
+import { sendTransactionalEmail } from "../../src/server/transactionalMail.js";
 
 function getFrontendOrigin(req: VercelRequest) {
   const requestOrigin = req.headers.origin;
@@ -255,14 +255,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       .map((character) => String(character.name || "").trim())
       .filter(Boolean);
 
-    // Firestore mail delivery is intentionally retained temporarily until email sending moves server-side.
-    await adminDb.collection("mail").add({
-      to: [email],
+    await sendTransactionalEmail({
+      to: email,
       from: inviteEmailFrom,
       replyTo: inviteEmailReplyTo,
-      message: {
-        subject: "✨You’ve been summoned to a campaign✨",
-        html: buildInviteEmailHtml({
+      subject: "✨You’ve been summoned to a campaign✨",
+      html: buildInviteEmailHtml({
           campaignName: campaign.name,
           workspaceName: workspace.name,
           inviteEmail: email,
@@ -270,8 +268,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           inviterName: "Dungeon Master",
           campaignRole,
           assignedCharacterNames,
-        }),
-      },
+      }),
     });
 
     return res.status(201).json({

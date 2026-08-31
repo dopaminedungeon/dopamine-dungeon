@@ -40,6 +40,9 @@ function createHandler(
     minimumResponseMs: 0,
     environment: {},
     metric: vi.fn(),
+    sendMail: async (message) => {
+      (db as typeof db & { __mail: unknown[] }).__mail.push(message);
+    },
     ...overrides,
   });
 }
@@ -48,6 +51,7 @@ function createDatabaseDouble() {
   const documents = new Map<string, StoredDocument>();
   const mail: unknown[] = [];
   const db = {
+    __mail: mail,
     collection(name: string) {
       return {
         doc(id: string) {
@@ -207,16 +211,14 @@ test("verified password users queue branded mail with the shared authentication 
   assert.equal(auth.generatePasswordResetLink.mock.calls[0][0], "user@example.test");
   assert.equal(mail.length, 1);
   assert.deepEqual(mail[0], {
-    to: ["user@example.test"],
+    to: "user@example.test",
     from: "Dopamine Dungeon <no-reply@dopamine-dungeon.com>",
     replyTo: "Dopamine Dungeon <dopamine.dungeon.info@gmail.com>",
-    message: {
-      subject: PASSWORD_RECOVERY_EMAIL_SUBJECT,
-      html: buildPasswordRecoveryEmailHtml({
-        passwordResetLink:
-          "https://preview.example.test/auth/reset-password?mode=resetPassword&oobCode=reset-123&lang=en",
-      }),
-    },
+    subject: PASSWORD_RECOVERY_EMAIL_SUBJECT,
+    html: buildPasswordRecoveryEmailHtml({
+      passwordResetLink:
+        "https://preview.example.test/auth/reset-password?mode=resetPassword&oobCode=reset-123&lang=en",
+    }),
   });
 });
 

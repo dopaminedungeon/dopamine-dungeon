@@ -39,6 +39,7 @@ vi.mock("../../src/server/access.js", () => ({
   resolveWorkspaceByAppId: mocks.resolveWorkspaceByAppId,
 }));
 vi.mock("../../src/server/cors.js", () => ({ setCorsHeaders: vi.fn() }));
+vi.mock("../../src/server/transactionalMail.js", () => ({ sendTransactionalEmail: vi.fn().mockResolvedValue(undefined) }));
 vi.mock("../../src/domain/mail/inviteEmail.template.js", () => ({ buildInviteEmailHtml: vi.fn(() => "html") }));
 
 import invitationHandler from "./index.js";

@@ -14,6 +14,7 @@ import {
 import { getApiErrorMessage, getApiErrorStatus } from "./apiErrors.js";
 import { getAuthEmailDelivery } from "./authEmail.js";
 import { setCorsHeaders } from "./cors.js";
+import { sendTransactionalEmail } from "./transactionalMail.js";
 
 const LOCAL_HOST_PATTERN = /^(localhost|127\.0\.0\.1)(:\d+)?$/;
 export const VERIFICATION_EMAIL_COOLDOWN_MS = 60_000;
@@ -66,6 +67,7 @@ type VerificationEmailDependencies = {
   environment?: Record<string, string | undefined>;
   now?: () => number;
   metric?: typeof logAuthEmailMetric;
+  sendMail?: typeof sendTransactionalEmail;
 };
 
 export function createVerificationEmailHandler(
@@ -154,16 +156,12 @@ export function createVerificationEmailHandler(
       });
       const { from, replyTo } = getAuthEmailDelivery();
 
-      const mailCollection = dependencies.db.collection("mail");
-      if (!mailCollection.add) throw new Error("Mail delivery is unavailable");
-      await mailCollection.add({
-        to: [email],
+      await (dependencies.sendMail ?? sendTransactionalEmail)({
+        to: email,
         from,
         replyTo,
-        message: {
-          subject: VERIFICATION_EMAIL_SUBJECT,
-          html: buildVerificationEmailHtml({ verificationLink }),
-        },
+        subject: VERIFICATION_EMAIL_SUBJECT,
+        html: buildVerificationEmailHtml({ verificationLink }),
       });
 
       metric("delivery_accepted");
