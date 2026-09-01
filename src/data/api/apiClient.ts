@@ -416,6 +416,11 @@ export async function getApiCampaignPeople(campaignId: string) {
       workspaceRole: string;
       campaignRole: string;
       characterIds: string[];
+      createdAt: string | null;
+      expiresAt: string | null;
+      acceptedAt: string | null;
+      revokedAt: string | null;
+      lastSentAt: string | null;
     }>;
   }>(
     `/api/campaign-content?resource=campaignPeople&campaignId=${encodeURIComponent(campaignId)}`

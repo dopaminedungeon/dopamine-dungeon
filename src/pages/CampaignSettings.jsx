@@ -1,23 +1,24 @@
 // src/pages/CampaignSettings.jsx
 import React, { useMemo, useState, useEffect, useRef } from "react";
 import InvitePlayerForm from "../components/invitations/InvitePlayerForm.jsx";
-import InvitationManagementList from "../components/invitations/InvitationManagementList.jsx";
 import {
   Plus,
   CheckCircle2,
   AlertCircle,
   Trash2,
-  MoreHorizontal,
   UserMinus,
 } from "lucide-react";
 import { useMode } from "../context/ModeContext.jsx";
 import { useCampaign } from "../context/CampaignContext.jsx";
 import { useTenant } from "../context/TenantContext.jsx";
 import {
+  ApiRequestError,
   assignApiCharacter,
   getApiCampaignPeople,
   getApiCharacterAssignments,
   removeApiCampaignMember,
+  resendApiInvitation,
+  revokeApiInvitation,
   unassignApiCharacter,
   getApiCampaignSettings,
   updateApiCampaignSettings,
@@ -25,6 +26,20 @@ import {
 import { getAllCharacters } from "../data/characters/characters.repo";
 
 const STATUS = ["active", "paused", "completed"];
+
+function formatTimestamp(value) {
+  if (!value) return "—";
+  const timestamp = new Date(value);
+  return Number.isNaN(timestamp.getTime())
+    ? "—"
+    : timestamp.toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" });
+}
+
+function invitationStatusClass(status) {
+  if (status === "accepted") return "border-emerald-400/20 bg-emerald-400/10 text-emerald-200";
+  if (status === "pending") return "border-amber-400/20 bg-amber-400/10 text-amber-200";
+  return "border-zinc-400/20 bg-zinc-400/10 text-zinc-300";
+}
 
 export default function CampaignSettings() {
   const { isGM } = useMode();
@@ -64,13 +79,14 @@ export default function CampaignSettings() {
   });
   const [campaignPeople, setCampaignPeople] = useState([]);
   const [campaignPeopleLoading, setCampaignPeopleLoading] = useState(false);
-  const [openActionsId, setOpenActionsId] = useState(null);
   const [campaignPeopleVersion, setCampaignPeopleVersion] = useState(0);
   const [campaignCharacters, setCampaignCharacters] = useState([]);
   const [assignableCharacters, setAssignableCharacters] = useState([]);
   const [assignmentRows, setAssignmentRows] = useState([]);
   const [assignmentSelectionByUserId, setAssignmentSelectionByUserId] = useState({});
   const [peopleActionId, setPeopleActionId] = useState(null);
+  const [invitationActionError, setInvitationActionError] = useState("");
+  const [invitationActionNotice, setInvitationActionNotice] = useState("");
   const createIdempotencyKeyRef = useRef(null);
   const canManageInvitations =
     isGM && workspaceRole === "owner" && campaignRole === "gm";
@@ -383,7 +399,6 @@ export default function CampaignSettings() {
 	    try {
       setPeopleActionId(actionId);
 	      await removeApiCampaignMember(campaignId, memberDocId);
-      setOpenActionsId(null);
       setCampaignPeopleVersion((value) => value + 1);
       setSaveState({ type: "success", message: "Campaign member removed." });
 	    } catch (error) {
@@ -393,6 +408,58 @@ export default function CampaignSettings() {
       setPeopleActionId(null);
 	    }
 	  };
+
+  const onInvitationAction = async (person, action) => {
+    const campaignId = draft?.campaignId || selectedCampaignId;
+    const invitationId = person?.docId;
+    if (
+      peopleActionId ||
+      !selectedTenantId ||
+      !campaignId ||
+      !invitationId ||
+      person?.status !== "pending"
+    ) {
+      return;
+    }
+
+    const actionId = `${action}-${invitationId}`;
+    try {
+      setPeopleActionId(actionId);
+      setInvitationActionError("");
+      setInvitationActionNotice("");
+      if (action === "resend") {
+        await resendApiInvitation({
+          tenantId: selectedTenantId,
+          campaignId,
+          invitationId,
+        });
+      } else {
+        await revokeApiInvitation({
+          tenantId: selectedTenantId,
+          campaignId,
+          invitationId,
+        });
+      }
+      setInvitationActionNotice(
+        action === "resend" ? "Invitation resent." : "Invitation revoked."
+      );
+      setCampaignPeopleVersion((value) => value + 1);
+    } catch (error) {
+      if (error instanceof ApiRequestError && error.retryAfterSeconds) {
+        setInvitationActionError(
+          `Please wait ${error.retryAfterSeconds}s before resending this invitation.`
+        );
+      } else {
+        setInvitationActionError(
+          action === "resend"
+            ? "Could not resend this invitation."
+            : "Could not revoke this invitation."
+        );
+      }
+    } finally {
+      setPeopleActionId(null);
+    }
+  };
 
   const getAssignmentForCharacter = (characterId) =>
     assignmentRows.find((assignment) => assignment.characterId === characterId) || null;
@@ -439,6 +506,15 @@ export default function CampaignSettings() {
       setPeopleActionId(null);
 	    }
 	  };
+
+  const memberPeople = campaignPeople.filter((person) => person.type === "member");
+  const invitationPeople = campaignPeople.filter((person) => person.type === "invite");
+  const pendingInvitationPeople = invitationPeople.filter(
+    (person) => person.status === "pending"
+  );
+  const invitationHistoryPeople = invitationPeople.filter(
+    (person) => person.status !== "pending"
+  );
 
   return (
     <div className="w-full text-white">
@@ -646,46 +722,48 @@ export default function CampaignSettings() {
                       }}
                     />
                   </div>
-                  <div className="mb-4">
-                    <InvitationManagementList
-                      tenantId={selectedTenantId}
-                      campaignId={selectedCampaignId}
-                      availabilityVersion={campaignPeopleVersion}
-                      onInvitationChanged={() => {
-                        setCampaignPeopleVersion((value) => value + 1);
-                      }}
-                    />
-                  </div>
                 </>
               ) : null}
 
               <div className="rounded-2xl border border-white/10 bg-white/[0.035] p-4 shadow-[0_0_24px_rgba(168,85,247,0.05)]">
                 <div className="mb-3 flex items-center justify-between gap-3">
-                  <p className="text-sm text-zinc-200 font-medium">Current campaign members</p>
+                  <p className="text-sm text-zinc-200 font-medium">Campaign people</p>
                   <span className="text-xs text-zinc-300/70">
-                    {campaignPeopleLoading ? "Loading…" : `${campaignPeople.filter((person) => person.type === "member").length} member${campaignPeople.filter((person) => person.type === "member").length === 1 ? "" : "s"}`}
+                    {campaignPeopleLoading
+                      ? "Loading…"
+                      : `${memberPeople.length} member${memberPeople.length === 1 ? "" : "s"} · ${invitationPeople.length} invitation${invitationPeople.length === 1 ? "" : "s"}`}
                   </span>
                 </div>
 
+                {invitationActionError ? (
+                  <p role="alert" className="mb-3 rounded-xl border border-red-400/20 bg-red-400/10 px-3 py-2 text-sm text-red-100">
+                    {invitationActionError}
+                  </p>
+                ) : null}
+                {invitationActionNotice ? (
+                  <p role="status" className="mb-3 rounded-xl border border-emerald-400/20 bg-emerald-400/10 px-3 py-2 text-sm text-emerald-100">
+                    {invitationActionNotice}
+                  </p>
+                ) : null}
+
                 {campaignPeopleLoading ? (
-                  <p className="text-sm text-zinc-300/75">Loading campaign members and invitations…</p>
-                ) : campaignPeople.filter((person) => person.type === "member").length === 0 ? (
-                  <p className="text-sm text-zinc-300/75">No campaign members yet.</p>
+                  <p className="text-sm text-zinc-300/75">Loading campaign people…</p>
+                ) : campaignPeople.length === 0 ? (
+                  <p className="text-sm text-zinc-300/75">No campaign people or invitations yet.</p>
                 ) : (
-                  <div className="overflow-x-auto overflow-y-visible pb-24">
-                    <table className="w-full min-w-[920px] border-separate border-spacing-y-2">
+                  <div className="overflow-x-auto overflow-y-visible">
+                    <table className="w-full min-w-[880px] border-separate border-spacing-y-2">
                       <thead>
                         <tr className="text-left text-xs uppercase tracking-[0.18em] text-zinc-400/80">
                           <th className="pb-2 pr-4 font-medium">Person</th>
-                          <th className="pb-2 pr-4 font-medium">Invite status</th>
-                          <th className="pb-2 pr-4 font-medium">Workspace role</th>
-                          <th className="pb-2 pr-4 font-medium">Campaign role</th>
+                          <th className="pb-2 pr-4 font-medium">Status</th>
+                          <th className="pb-2 pr-4 font-medium">Access</th>
                           <th className="pb-2 pr-4 font-medium">Assigned characters</th>
                           <th className="pb-2 font-medium">Actions</th>
                         </tr>
                       </thead>
                       <tbody>
-                        {campaignPeople.filter((person) => person.type === "member").map((person) => (
+                        {memberPeople.map((person) => (
                           <tr key={person.id} className="align-top">
                             <td className="rounded-l-2xl border-y border-l border-white/10 bg-white/[0.025] px-4 py-3">
                               <div className="space-y-1">
@@ -697,19 +775,14 @@ export default function CampaignSettings() {
                             </td>
                             <td className="border-y border-white/10 bg-white/[0.025] py-3">
                               <span
-                                className={`inline-flex rounded-full border px-2.5 py-1 text-xs font-medium ${person.status === "accepted"
-                                  ? "border-emerald-400/20 bg-emerald-400/10 text-emerald-200"
-                                  : "border-amber-400/20 bg-amber-400/10 text-amber-200"
-                                  }`}
+                                className={`inline-flex rounded-full border px-2.5 py-1 text-xs font-medium ${invitationStatusClass(person.status)}`}
                               >
                                 {person.status}
                               </span>
                             </td>
                             <td className="border-y border-white/10 bg-white/[0.025] px-4 py-3 text-sm text-zinc-200">
-                              {person.workspaceRole}
-                            </td>
-                            <td className="border-y border-white/10 bg-white/[0.025] px-4 py-3 text-sm text-zinc-200">
-                              {person.campaignRole}
+                              <p>Workspace {person.workspaceRole}</p>
+                              <p className="mt-1 text-xs text-zinc-400">Campaign {person.campaignRole}</p>
                             </td>
                             <td className="border-y border-white/10 bg-white/[0.025] px-4 py-3">
                               {person.characterIds?.length ? (
@@ -770,49 +843,76 @@ export default function CampaignSettings() {
                               ) : null}
                             </td>
                             <td className="rounded-r-2xl border-y border-r border-white/10 bg-white/[0.025] px-4 py-3">
-                              <div className="relative flex justify-end overflow-visible">
+                              <div className="flex justify-end">
                                 <button
                                   type="button"
-	                                  onClick={() =>
-                                    setOpenActionsId((current) =>
-                                      current === person.id ? null : person.id
-                                    )
-                                  }
-	                                  disabled={Boolean(peopleActionId)}
-	                                  className="inline-flex h-9 w-9 items-center justify-center rounded-xl border border-white/10 bg-white/[0.03] text-zinc-200 transition hover:bg-white/[0.06] disabled:cursor-not-allowed disabled:opacity-50"
+                                  onClick={() => onRemoveCampaignMember(person.docId)}
+                                  disabled={Boolean(peopleActionId)}
+                                  className="inline-flex items-center gap-2 rounded-xl border border-red-400/20 bg-red-400/10 px-3 py-2 text-xs text-red-100 transition hover:bg-red-400/20 disabled:cursor-not-allowed disabled:opacity-50"
                                 >
-                                  <MoreHorizontal className="h-4 w-4" />
+                                  <UserMinus className="h-4 w-4" />
+                                  {peopleActionId === `remove-${person.docId}`
+                                    ? "Removing…"
+                                    : "Remove"}
                                 </button>
-
-                                {openActionsId === person.id ? (
-                                  <div className="absolute right-0 top-11 z-30 min-w-[200px] overflow-hidden rounded-2xl border border-white/10 bg-zinc-950/95 shadow-[0_12px_30px_rgba(0,0,0,0.35)] backdrop-blur-xl">
-                                    <>
-                                        <button
-                                          type="button"
-	                                          onClick={() => {
-                                            setOpenActionsId(null);
-                                            window.alert("Character assignment actions are next up in #84.");
-                                          }}
-	                                          disabled={Boolean(peopleActionId)}
-	                                          className="flex w-full items-center gap-2 px-3 py-2.5 text-left text-sm text-zinc-200 transition hover:bg-white/[0.06] disabled:cursor-not-allowed disabled:opacity-50"
-                                        >
-                                          <Plus className="h-4 w-4" />
-                                          Assign character
-                                        </button>
-                                        <button
-                                          type="button"
-	                                          onClick={() => onRemoveCampaignMember(person.docId)}
-	                                          disabled={Boolean(peopleActionId)}
-	                                          className="flex w-full items-center gap-2 px-3 py-2.5 text-left text-sm text-red-200 transition hover:bg-red-400/10 disabled:cursor-not-allowed disabled:opacity-50"
-                                        >
-                                          <UserMinus className="h-4 w-4" />
-                                          Remove from campaign
-                                        </button>
-                                    </>
-                                  </div>
-                                ) : null}
                               </div>
                             </td>
+                          </tr>
+                        ))}
+                        {pendingInvitationPeople.map((person) => (
+                          <tr key={person.id} className="align-top">
+                            <td className="rounded-l-2xl border-y border-l border-amber-400/15 bg-amber-400/[0.035] px-4 py-3">
+                              <div className="space-y-1">
+                                <p className="break-all text-sm font-medium text-zinc-100">{person.email}</p>
+                                <p className="text-xs text-zinc-400">Pending invitation · expires {formatTimestamp(person.expiresAt)}</p>
+                              </div>
+                            </td>
+                            <td className="border-y border-amber-400/15 bg-amber-400/[0.035] py-3">
+                              <span className={`inline-flex rounded-full border px-2.5 py-1 text-xs font-medium ${invitationStatusClass(person.status)}`}>{person.status}</span>
+                            </td>
+                            <td className="border-y border-amber-400/15 bg-amber-400/[0.035] px-4 py-3 text-sm text-zinc-200">
+                              <p>Workspace {person.workspaceRole}</p>
+                              <p className="mt-1 text-xs text-zinc-400">Campaign {person.campaignRole}</p>
+                            </td>
+                            <td className="border-y border-amber-400/15 bg-amber-400/[0.035] px-4 py-3">
+                              {person.characterIds?.length ? (
+                                <div className="flex flex-wrap gap-2">
+                                  {person.characterIds.map((characterId) => (
+                                    <span key={`${person.id}-${characterId}`} className="inline-flex rounded-full border border-cyan-400/20 bg-cyan-400/10 px-2.5 py-1 text-xs text-cyan-100">
+                                      Reserved: {getCharacterName(characterId)}
+                                    </span>
+                                  ))}
+                                </div>
+                              ) : <span className="text-xs text-zinc-500">No characters reserved</span>}
+                            </td>
+                            <td className="rounded-r-2xl border-y border-r border-amber-400/15 bg-amber-400/[0.035] px-4 py-3">
+                              {canManageInvitations ? (
+                                <div className="flex flex-wrap justify-end gap-2">
+                                  <button type="button" disabled={Boolean(peopleActionId)} onClick={() => onInvitationAction(person, "resend")} className="rounded-lg border border-white/10 bg-white/[0.04] px-2.5 py-1.5 text-xs text-zinc-100 transition hover:bg-white/[0.08] disabled:cursor-not-allowed disabled:opacity-50">
+                                    {peopleActionId === `resend-${person.docId}` ? "Resending…" : "Resend"}
+                                  </button>
+                                  <button type="button" disabled={Boolean(peopleActionId)} onClick={() => onInvitationAction(person, "revoke")} className="rounded-lg border border-red-400/20 bg-red-400/10 px-2.5 py-1.5 text-xs text-red-100 transition hover:bg-red-400/20 disabled:cursor-not-allowed disabled:opacity-50">
+                                    {peopleActionId === `revoke-${person.docId}` ? "Revoking…" : "Revoke"}
+                                  </button>
+                                </div>
+                              ) : <span className="text-xs text-zinc-500">—</span>}
+                            </td>
+                          </tr>
+                        ))}
+                        {invitationHistoryPeople.map((person) => (
+                          <tr key={person.id} className="align-top text-zinc-400">
+                            <td className="rounded-l-2xl border-y border-l border-white/8 bg-white/[0.015] px-4 py-3">
+                              <div className="space-y-1">
+                                <p className="break-all text-sm text-zinc-300">{person.email}</p>
+                                <p className="text-xs text-zinc-500">{person.status === "revoked" ? `Revoked ${formatTimestamp(person.revokedAt)}` : `${person.status} ${formatTimestamp(person.acceptedAt || person.expiresAt || person.createdAt)}`}</p>
+                              </div>
+                            </td>
+                            <td className="border-y border-white/8 bg-white/[0.015] py-3"><span className={`inline-flex rounded-full border px-2.5 py-1 text-xs font-medium ${invitationStatusClass(person.status)}`}>{person.status}</span></td>
+                            <td className="border-y border-white/8 bg-white/[0.015] px-4 py-3 text-sm"><p>Workspace {person.workspaceRole}</p><p className="mt-1 text-xs text-zinc-500">Campaign {person.campaignRole}</p></td>
+                            <td className="border-y border-white/8 bg-white/[0.015] px-4 py-3">
+                              {person.characterIds?.length ? <span className="text-xs text-zinc-400">{person.characterIds.length} character{person.characterIds.length === 1 ? "" : "s"} reserved</span> : <span className="text-xs text-zinc-500">No characters reserved</span>}
+                            </td>
+                            <td className="rounded-r-2xl border-y border-r border-white/8 bg-white/[0.015] px-4 py-3 text-xs text-zinc-500">—</td>
                           </tr>
                         ))}
                       </tbody>

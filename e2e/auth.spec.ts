@@ -2444,7 +2444,7 @@ test("keeps retired feature and placeholder controls out of authenticated naviga
   }
 });
 
-test("shows scoped invitation lifecycle controls only in owner GM mode", async ({
+test("consolidates scoped invitation lifecycle rows into Campaign people for owner GM mode", async ({
   page,
   request,
 }) => {
@@ -2469,35 +2469,101 @@ test("shows scoped invitation lifecycle controls only in owner GM mode", async (
       },
     });
   });
+  let campaignPeopleRequests = 0;
   await page.route("**/api/campaign-content?resource=campaignPeople**", async (route) => {
-    await route.fulfill({ status: 200, json: { ok: true, campaignId: "e2e-campaign", people: [] } });
+    campaignPeopleRequests += 1;
+    await route.fulfill({
+      status: 200,
+      json: {
+        ok: true,
+        campaignId: "e2e-campaign",
+        people: [
+          {
+            id: "member-owner",
+            docId: "membership-owner",
+            type: "member",
+            status: "accepted",
+            email: "owner@example.test",
+            displayName: "Owner",
+            label: "Owner",
+            userId: "owner-user",
+            workspaceRole: "owner",
+            campaignRole: "gm",
+            characterIds: [],
+            createdAt: null,
+            expiresAt: null,
+            acceptedAt: null,
+            revokedAt: null,
+            lastSentAt: null,
+          },
+          {
+            id: "invite-pending",
+            docId: "e2e-pending-invitation",
+            type: "invite",
+            status: "pending",
+            email: "invitee@example.test",
+            displayName: null,
+            label: "invitee",
+            userId: null,
+            workspaceRole: "member",
+            campaignRole: "player",
+            characterIds: ["reserved-character"],
+            createdAt: "2026-01-01T00:00:00.000Z",
+            expiresAt: "2099-01-01T00:00:00.000Z",
+            acceptedAt: null,
+            revokedAt: null,
+            lastSentAt: "2026-01-01T00:00:00.000Z",
+          },
+          {
+            id: "invite-expired",
+            docId: "e2e-expired-invitation",
+            type: "invite",
+            status: "expired",
+            email: "expired@example.test",
+            displayName: null,
+            label: "expired",
+            userId: null,
+            workspaceRole: "member",
+            campaignRole: "player",
+            characterIds: [],
+            createdAt: "2026-01-01T00:00:00.000Z",
+            expiresAt: "2026-01-02T00:00:00.000Z",
+            acceptedAt: null,
+            revokedAt: null,
+            lastSentAt: "2026-01-01T00:00:00.000Z",
+          },
+          {
+            id: "invite-revoked",
+            docId: "e2e-revoked-invitation",
+            type: "invite",
+            status: "revoked",
+            email: "revoked@example.test",
+            displayName: null,
+            label: "revoked",
+            userId: null,
+            workspaceRole: "member",
+            campaignRole: "player",
+            characterIds: [],
+            createdAt: "2026-01-01T00:00:00.000Z",
+            expiresAt: null,
+            acceptedAt: null,
+            revokedAt: "2026-01-03T00:00:00.000Z",
+            lastSentAt: "2026-01-01T00:00:00.000Z",
+          },
+        ],
+      },
+    });
   });
   await page.route("**/api/campaign-content?resource=characterAssignments**", async (route) => {
     await route.fulfill({ status: 200, json: { ok: true, assignments: [], assignedCharacterIds: [], pendingAssignedCharacterIds: [], characters: [] } });
   });
   await page.route("**/api/worldbuilding?resource=characters**", async (route) => {
-    await route.fulfill({ status: 200, json: { ok: true, characters: [] } });
+    await route.fulfill({ status: 200, json: { ok: true, characters: [{ id: "available-character", name: "Available PC" }, { id: "reserved-character", name: "Reserved PC" }] } });
   });
-  await page.route("**/api/invitations?**", async (route) => {
+  await page.route("**/api/invitations", async (route) => {
     await route.fulfill({
       status: 200,
-      json: {
-        ok: true,
-        invitations: [{
-          id: "e2e-pending-invitation",
-          email: "invitee@example.test",
-          normalizedEmail: "invitee@example.test",
-          workspaceRole: "member",
-          campaignRole: "player",
-          status: "pending",
-          characterIds: [],
-          createdAt: "2026-01-01T00:00:00.000Z",
-          expiresAt: "2099-01-01T00:00:00.000Z",
-          acceptedAt: null,
-          revokedAt: null,
-          lastSentAt: "2026-01-01T00:00:00.000Z",
-        }],
-      },
+      json: { ok: true, invitation: { id: "e2e-pending-invitation" } },
     });
   });
 
@@ -2512,14 +2578,36 @@ test("shows scoped invitation lifecycle controls only in owner GM mode", async (
   await page.getByRole("button", { name: "GM", exact: true }).click();
   await page.goto("/campaigns/settings");
   await expect(page.getByRole("button", { name: "Invite player", exact: true })).toBeVisible();
-  await expect(page.getByRole("heading", { name: "Invitations" })).toBeVisible();
+  await expect(page.getByText("Campaign people", { exact: true })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Invitations" })).toHaveCount(0);
+  await expect(page.getByText("Owner", { exact: true })).toBeVisible();
   await expect(page.getByText("invitee@example.test", { exact: true })).toBeVisible();
-  await expect(page.getByRole("button", { name: "Resend", exact: true })).toBeVisible();
-  await expect(page.getByRole("button", { name: "Revoke", exact: true })).toBeVisible();
+  await expect(page.getByText("expired@example.test", { exact: true })).toBeVisible();
+  await expect(page.getByText("revoked@example.test", { exact: true })).toBeVisible();
+  await expect(page.getByText("Reserved: Reserved PC", { exact: true })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Resend", exact: true })).toHaveCount(1);
+  await expect(page.getByRole("button", { name: "Revoke", exact: true })).toHaveCount(1);
+  await expect(page.getByRole("button", { name: "Remove", exact: true })).toHaveCount(1);
+  await expect(page.getByRole("button", { name: "Assign", exact: true })).toBeVisible();
+  await expect(page.getByText("Assign character", { exact: true })).toHaveCount(0);
 
+  await page.getByRole("button", { name: "Resend", exact: true }).click();
+  await expect(page.getByRole("status")).toHaveText("Invitation resent.");
+  await expect.poll(() => campaignPeopleRequests).toBeGreaterThan(1);
+
+  await page.setViewportSize({ width: 375, height: 667 });
+  await expect
+    .poll(() =>
+      page.evaluate(
+        () => document.documentElement.scrollWidth <= document.documentElement.clientWidth
+      )
+    )
+    .toBe(true);
+
+  await page.setViewportSize({ width: 1280, height: 900 });
   await page.getByRole("button", { name: "Player", exact: true }).click();
   await expect(page.getByRole("button", { name: "Invite player", exact: true })).toHaveCount(0);
-  await expect(page.getByRole("heading", { name: "Invitations" })).toHaveCount(0);
+  await expect(page.getByText("Campaign people", { exact: true })).toHaveCount(0);
 });
 
 test("shows a generic error for incorrect credentials", async ({ page }) => {

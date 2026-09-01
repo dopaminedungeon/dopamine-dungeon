@@ -1,5 +1,5 @@
 import type { VercelRequest, VercelResponse } from "@vercel/node";
-import { and, eq, gt, inArray, isNull, or } from "drizzle-orm";
+import { and, eq, inArray, isNotNull, lte } from "drizzle-orm";
 
 import {
   getCurrentUser,
@@ -221,6 +221,23 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       return res.status(400).json({ ok: false, error: "personType is required" });
     }
 
+    const now = new Date();
+    // Keep this scoped people projection aligned with the invitation lifecycle
+    // endpoint: an expired pending invite is historical state, never an active
+    // reservation or action row.
+    await db
+      .update(invitations)
+      .set({ status: "expired" })
+      .where(
+        and(
+          eq(invitations.workspaceId, campaign.workspaceId),
+          eq(invitations.campaignId, campaign.id),
+          eq(invitations.status, "pending"),
+          isNotNull(invitations.expiresAt),
+          lte(invitations.expiresAt, now)
+        )
+      );
+
     const memberships = await db
       .select()
       .from(campaignMemberships)
@@ -228,7 +245,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     const userIds = memberships.map((membership) => membership.userId);
 
-    const [memberUsers, memberWorkspaceMemberships, pendingInvitations, assignments] =
+    const [memberUsers, memberWorkspaceMemberships, scopedInvitations, assignments] =
       await Promise.all([
         userIds.length
           ? db.select().from(users).where(inArray(users.id, userIds))
@@ -249,12 +266,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           .from(invitations)
           .where(
             and(
+              eq(invitations.workspaceId, campaign.workspaceId),
               eq(invitations.campaignId, campaign.id),
-              eq(invitations.status, "pending"),
-              or(
-                isNull(invitations.expiresAt),
-                gt(invitations.expiresAt, new Date())
-              )
             )
           ),
         db
@@ -303,9 +316,30 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       };
     });
 
-    const pendingCharacterIdsByInvitationId =
-      await getInvitationCharacterIdsByInvitationId(db, pendingInvitations);
-    const pendingRows = pendingInvitations.map((invitation) => ({
+    const activeMemberUserIds = new Set(memberships.map((membership) => membership.userId));
+    // A membership is the canonical accepted state. Do not add an email-derived
+    // duplicate history row; only an invitation explicitly accepted by an active
+    // membership is suppressed here.
+    const visibleInvitations = scopedInvitations.filter(
+      (invitation) =>
+        !(
+          invitation.status === "accepted" &&
+          invitation.acceptedByUserId &&
+          activeMemberUserIds.has(invitation.acceptedByUserId)
+        )
+    );
+    const characterIdsByInvitationId =
+      await getInvitationCharacterIdsByInvitationId(db, visibleInvitations);
+    const invitationRows = visibleInvitations
+      .sort((left, right) => {
+        const statusOrder = (status: string) =>
+          status === "pending" ? 0 : status === "accepted" ? 1 : 2;
+        return (
+          statusOrder(left.status) - statusOrder(right.status) ||
+          right.createdAt.getTime() - left.createdAt.getTime()
+        );
+      })
+      .map((invitation) => ({
       id: `invite-${invitation.id}`,
       docId: invitation.id,
       type: "invite",
@@ -319,13 +353,18 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       userId: null,
       workspaceRole: invitation.workspaceRole || "member",
       campaignRole: invitation.campaignRole || "player",
-      characterIds: pendingCharacterIdsByInvitationId.get(invitation.id) ?? [],
+      characterIds: characterIdsByInvitationId.get(invitation.id) ?? [],
+      createdAt: invitation.createdAt,
+      expiresAt: invitation.expiresAt,
+      acceptedAt: invitation.acceptedAt,
+      revokedAt: invitation.revokedAt,
+      lastSentAt: invitation.lastSentAt,
     }));
 
     return res.status(200).json({
       ok: true,
       campaignId: campaign.slug,
-      people: [...acceptedRows, ...pendingRows],
+      people: [...acceptedRows, ...invitationRows],
     });
   } catch (error) {
     return res.status(401).json({
