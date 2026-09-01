@@ -1910,7 +1910,7 @@ test.describe("canonical campaign creation", () => {
     await expect(
       page.getByRole("heading", { name: "Create your first campaign" })
     ).toBeVisible();
-    const campaignName = page.getByPlaceholder("e.g. Chronicles of Varionath");
+    const campaignName = page.getByPlaceholder("e.g. The Lantern Accord");
     await campaignName.fill("Created Campaign");
     await page.getByLabel("Description").fill("Created during campaign bootstrap");
     await page.getByRole("button", { name: "Create campaign" }).click();
@@ -1966,11 +1966,11 @@ test.describe("campaign creation onboarding states", () => {
     await expect(page.getByTestId("campaign-bootstrap-brand")).toContainText("Dopamine Dungeon");
     await expect(page.getByText("TTRPG Manager", { exact: true })).toBeVisible();
     await expect(page.getByLabel("Current Workspace:")).toHaveValue("bootstrap-workspace");
-    await expect(page.getByLabel("Current Workspace:")).toBeDisabled();
+    await expect(page.getByLabel("Current Workspace:")).toBeEnabled();
     await expect(page.getByText("System", { exact: true })).toHaveCount(0);
     await expect(page.getByRole("button", { name: "Sign out", exact: true })).toHaveCount(1);
 
-    const campaignName = page.getByPlaceholder("e.g. Chronicles of Varionath");
+    const campaignName = page.getByPlaceholder("e.g. The Lantern Accord");
     await expect(page.getByText("Enter a campaign name.", { exact: true })).toHaveCount(0);
     await page.getByRole("button", { name: "Create campaign", exact: true }).click();
     await expect(page.getByText("Enter a campaign name.", { exact: true })).toBeVisible();
@@ -1985,10 +1985,28 @@ test.describe("campaign creation onboarding states", () => {
       { width: 375, height: 420 },
     ]) {
       await page.setViewportSize(viewport);
-      await expect(page.getByTestId("campaign-bootstrap-card")).toBeVisible();
+      const card = page.getByTestId("campaign-bootstrap-card");
+      const workspaceSelect = page.getByLabel("Current Workspace:");
+      await expect(card).toBeVisible();
       await expect
         .poll(() => page.evaluate(() => document.documentElement.scrollWidth <= innerWidth))
         .toBe(true);
+
+      const [cardBox, workspaceSelectBox] = await Promise.all([
+        card.boundingBox(),
+        workspaceSelect.boundingBox(),
+      ]);
+      expect(cardBox).not.toBeNull();
+      expect(workspaceSelectBox).not.toBeNull();
+      expect(workspaceSelectBox!.y + workspaceSelectBox!.height).toBeLessThanOrEqual(
+        cardBox!.y
+      );
+
+      if (viewport.width === 1440) {
+        const contentBox = await page.getByTestId("campaign-bootstrap-content").boundingBox();
+        expect(contentBox).not.toBeNull();
+        expect(contentBox!.y + contentBox!.height / 2).toBeCloseTo(viewport.height / 2, 0);
+      }
     }
   });
 
@@ -2002,7 +2020,7 @@ test.describe("campaign creation onboarding states", () => {
     }) => {
       await enterCampaignBootstrap(page, request);
 
-      const campaignName = page.getByPlaceholder("e.g. Chronicles of Varionath");
+      const campaignName = page.getByPlaceholder("e.g. The Lantern Accord");
       const description = page.getByLabel("Description");
       await campaignName.fill("Frozen Campaign");
       await description.fill("Frozen description");
@@ -2035,7 +2053,7 @@ test.describe("campaign creation onboarding states", () => {
     }) => {
       await enterCampaignBootstrap(page, request);
 
-      const campaignName = page.getByPlaceholder("e.g. Chronicles of Varionath");
+      const campaignName = page.getByPlaceholder("e.g. The Lantern Accord");
       const description = page.getByLabel("Description");
       await campaignName.fill("Retry Campaign");
       await description.fill("Retained description");
@@ -2078,7 +2096,7 @@ test.describe("campaign onboarding workspace context", () => {
     await page.getByRole("button", { name: "Sign in", exact: true }).click();
     await expect(page.getByRole("heading", { name: "Create your first campaign" })).toBeVisible();
 
-    const campaignName = page.getByPlaceholder("e.g. Chronicles of Varionath");
+    const campaignName = page.getByPlaceholder("e.g. The Lantern Accord");
     const description = page.getByLabel("Description");
     await campaignName.fill("Moved Campaign");
     await description.fill("Still here after workspace change");
@@ -2284,7 +2302,7 @@ test.describe("bootstrap sign out", () => {
         page.getByRole("heading", { name: "Create your first campaign" })
       ).toBeVisible();
       await expect(page.getByLabel("Current Workspace:")).toHaveValue("bootstrap-workspace");
-      await expect(page.getByLabel("Current Workspace:")).toBeDisabled();
+      await expect(page.getByLabel("Current Workspace:")).toBeEnabled();
       await expect(page.getByRole("button", { name: "Sign out" })).toBeVisible();
     });
 

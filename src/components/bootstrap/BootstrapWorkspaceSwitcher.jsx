@@ -24,8 +24,7 @@ export default function BootstrapWorkspaceSwitcher() {
         id="bootstrap-workspace-switcher"
         value={selectedTenantId ?? ""}
         onChange={handleWorkspaceChange}
-        disabled={workspaces.length <= 1}
-        className="min-h-11 max-w-full rounded-lg border border-zinc-700 bg-zinc-900 px-3 py-2 text-sm text-white outline-none focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-violet-300 disabled:cursor-default disabled:opacity-80 sm:min-w-60"
+        className="min-h-11 max-w-full rounded-lg border border-zinc-700 bg-zinc-900 px-3 py-2 text-sm text-white outline-none focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-violet-300 sm:min-w-60"
       >
         {workspaces.length ? (
           workspaces.map((workspace) => (

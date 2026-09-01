@@ -138,7 +138,7 @@ export default function CreateCampaignForm() {
             type="text"
             value={name}
             onChange={handleNameChange}
-            placeholder="e.g. Chronicles of Varionath"
+            placeholder="e.g. The Lantern Accord"
             required
             aria-invalid={Boolean(validationError)}
             aria-describedby={validationError ? validationErrorId : undefined}
