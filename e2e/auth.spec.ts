@@ -2232,6 +2232,44 @@ test("auth return navigation stays clear of the brand on short phones", async ({
   }
 });
 
+test("public return control is visible and clickable across authorization viewports", async ({ page }) => {
+  for (const viewport of [
+    { width: 1440, height: 900 },
+    { width: 820, height: 1180 },
+    { width: 375, height: 667 },
+    { width: 375, height: 420 },
+  ]) {
+    await page.setViewportSize(viewport);
+
+    for (const path of ["/login", "/get-started", "/home"]) {
+      await page.goto(path);
+      const returnLink = page.getByTestId("back-to-public");
+      await expect(returnLink).toBeVisible();
+      await expect(returnLink).toBeEnabled();
+      await expect(returnLink).toHaveAttribute("href", "/");
+
+      const linkBox = await returnLink.boundingBox();
+      expect(linkBox).not.toBeNull();
+      expect(linkBox!.y).toBeGreaterThanOrEqual(0);
+      expect(linkBox!.y + linkBox!.height).toBeLessThanOrEqual(viewport.height);
+
+      const isTopmost = await returnLink.evaluate((element) => {
+        const rect = element.getBoundingClientRect();
+        const topmost = document.elementFromPoint(
+          rect.left + rect.width / 2,
+          rect.top + rect.height / 2,
+        );
+        return topmost === element || element.contains(topmost);
+      });
+      expect(isTopmost).toBeTruthy();
+
+      await returnLink.click();
+      await expect(page).toHaveURL(/\/$/);
+      await expect(page.getByTestId("public-home")).toBeVisible();
+    }
+  }
+});
+
 test("keeps authenticated users on the public homepage until they enter the app", async ({
   apiCallLog,
   page,

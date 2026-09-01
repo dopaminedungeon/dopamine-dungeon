@@ -317,7 +317,7 @@ function BackToPublicLink() {
   return (
     <Link
       to="/"
-      className="mx-4 mt-4 inline-flex min-h-11 items-center rounded-md border border-zinc-700 bg-zinc-900/80 px-4 text-sm font-semibold text-zinc-200 shadow-sm transition hover:border-zinc-500 hover:bg-zinc-800 hover:text-white focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-purple-300 sm:mx-6"
+      className="relative z-20 mx-4 mt-4 inline-flex min-h-11 items-center rounded-md border border-zinc-700 bg-zinc-900/80 px-4 text-sm font-semibold text-zinc-200 shadow-sm transition hover:border-zinc-500 hover:bg-zinc-800 hover:text-white focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-purple-300 sm:mx-6"
       data-testid="back-to-public"
     >
       Back to public site
