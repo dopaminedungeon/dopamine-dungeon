@@ -14,22 +14,22 @@ export default function PublicSiteShell() {
       <header className="border-b border-zinc-800/90 bg-zinc-950/95">
         <nav
           aria-label="Public navigation"
-          className="mx-auto flex w-full max-w-7xl flex-wrap items-center justify-between gap-x-8 gap-y-4 px-6 py-5"
+          className="mx-auto flex w-full max-w-[1120px] flex-wrap items-center justify-between gap-x-8 gap-y-4 px-6 py-4 lg:py-[18px]"
         >
           <Link
             to="/"
-            className="flex items-center gap-3 text-lg font-semibold tracking-tight text-white"
+            className="flex items-center gap-3 text-xl font-semibold tracking-tight text-white"
             data-testid="public-brand"
           >
             <img
               src="/logo/dd-app-icon-master.png"
               alt=""
-              className="h-9 w-9 rounded-lg object-contain"
+              className="h-10 w-10 rounded-lg object-contain"
             />
             <span>Dopamine Dungeon</span>
           </Link>
 
-          <div className="flex flex-wrap items-center justify-end gap-x-5 gap-y-2 text-sm">
+          <div className="flex flex-wrap items-center justify-end gap-x-6 gap-y-2 text-[15px]">
             {publicLinks.map(([label, path]) => (
               <Link
                 key={path}
@@ -66,14 +66,14 @@ export default function PublicSiteShell() {
 export function PublicHome() {
   return (
     <main
-      className="mx-auto grid min-h-[calc(100vh-91px)] w-full max-w-7xl items-center gap-14 px-6 py-16 lg:grid-cols-[1.05fr_0.95fr] lg:gap-20 lg:py-24"
+      className="mx-auto grid min-h-[calc(100vh-76px)] w-full max-w-[1080px] items-center gap-10 px-6 py-10 sm:py-14 lg:grid-cols-[minmax(0,520px)_minmax(360px,400px)] lg:justify-between lg:gap-14 lg:py-14"
       data-testid="public-home"
     >
-      <section className="max-w-2xl">
+      <section className="w-full max-w-[520px]">
         <p className="mb-5 text-sm font-semibold uppercase tracking-[0.25em] text-violet-300">
           TTRPG campaign management
         </p>
-        <h1 className="text-4xl font-bold tracking-tight text-white sm:text-6xl">
+        <h1 className="text-5xl font-bold leading-[1.05] tracking-tight text-white sm:text-[clamp(52px,5vw,64px)]">
           Organize the chaos of every campaign.
         </h1>
         <p className="mt-6 max-w-xl text-lg leading-8 text-zinc-300">
@@ -99,7 +99,7 @@ export function PublicHome() {
 
       <aside
         aria-label="Dopamine Dungeon artwork placeholder"
-        className="relative mx-auto flex aspect-square w-full max-w-[520px] items-center justify-center overflow-hidden rounded-[2rem] border border-violet-400/20 bg-[radial-gradient(circle_at_50%_38%,rgba(139,92,246,0.3),transparent_42%),linear-gradient(145deg,rgba(39,39,42,0.9),rgba(9,9,11,0.98))] shadow-2xl shadow-violet-950/30"
+        className="relative mx-auto flex aspect-square w-full max-w-[400px] items-center justify-center overflow-hidden rounded-[2rem] border border-violet-400/20 bg-[radial-gradient(circle_at_50%_38%,rgba(139,92,246,0.3),transparent_42%),linear-gradient(145deg,rgba(39,39,42,0.9),rgba(9,9,11,0.98))] shadow-2xl shadow-violet-950/30"
         data-testid="public-artwork"
       >
         <div className="absolute inset-8 rounded-[1.5rem] border border-white/10" />
