@@ -133,6 +133,33 @@ function multiWorkspaceCampaignBootstrapApiMeResponse(
   };
 }
 
+function multiIncompleteWorkspaceCampaignBootstrapApiMeResponse(
+  userId = "e2e-multi-incomplete-workspace-bootstrap-user"
+) {
+  return {
+    ok: true,
+    user: { id: userId },
+    workspaces: [
+      {
+        id: bootstrapWorkspaceId,
+        slug: "bootstrap-workspace",
+        name: "Bootstrap Workspace",
+      },
+      {
+        id: readyWorkspaceId,
+        slug: "secondary-workspace",
+        name: "Secondary Workspace",
+      },
+    ],
+    workspaceMemberships: [
+      { workspaceId: bootstrapWorkspaceId, userId, role: "owner" },
+      { workspaceId: readyWorkspaceId, userId, role: "owner" },
+    ],
+    campaigns: [],
+    campaignMemberships: [],
+  };
+}
+
 function mixedVisibilityCampaignBootstrapApiMeResponse(
   userId = "e2e-bootstrap-visibility-user"
 ) {
@@ -1883,9 +1910,9 @@ test.describe("canonical campaign creation", () => {
     await expect(
       page.getByRole("heading", { name: "Create your first campaign" })
     ).toBeVisible();
-    await page
-      .getByPlaceholder("e.g. Adventurers Guild")
-      .fill("Created Campaign");
+    const campaignName = page.getByPlaceholder("e.g. Chronicles of Varionath");
+    await campaignName.fill("Created Campaign");
+    await page.getByLabel("Description").fill("Created during campaign bootstrap");
     await page.getByRole("button", { name: "Create campaign" }).click();
 
     await expect(
@@ -1895,7 +1922,9 @@ test.describe("canonical campaign creation", () => {
     expect(apiCallLog.campaignCreate[0]).toMatchObject({
       workspaceId: "bootstrap-workspace",
       name: "Created Campaign",
+      description: "Created during campaign bootstrap",
     });
+    expect(apiCallLog.campaignCreate[0]).not.toHaveProperty("system");
     expect(apiCallLog.campaignCreate[0]).not.toHaveProperty("ownerUid");
     expect(apiCallLog.campaignCreate[0]).not.toHaveProperty("gmUid");
     expect(apiCallLog.campaignCreate[0]).not.toHaveProperty("role");
@@ -1905,6 +1934,189 @@ test.describe("canonical campaign creation", () => {
     await expect
       .poll(() => page.evaluate(() => localStorage.getItem("dd_selectedCampaignId")))
       .toBe("created-campaign");
+    await expect(page.getByRole("button", { name: "GM", exact: true })).toBeVisible();
+  });
+});
+
+test.describe("campaign creation onboarding states", () => {
+  const userId = "e2e-campaign-onboarding-user";
+
+  test.use({
+    apiMeResponse: campaignBootstrapApiMeResponse(userId),
+  });
+
+  async function enterCampaignBootstrap(page: Page, request: APIRequestContext) {
+    const email = generatedEmail();
+    await createVerifiedUser(request, email, password);
+
+    await openEmailSignIn(page);
+    await page.getByLabel("Email address").fill(email);
+    await page.getByLabel("Password", { exact: true }).fill(password);
+    await page.getByRole("button", { name: "Sign in", exact: true }).click();
+    await expect(page.getByRole("heading", { name: "Create your first campaign" })).toBeVisible();
+  }
+
+  test("uses the approved onboarding card, visible workspace context, and local validation", async ({
+    page,
+    request,
+  }) => {
+    await enterCampaignBootstrap(page, request);
+
+    await expect(page.getByTestId("gradient-background")).toBeVisible();
+    await expect(page.getByTestId("campaign-bootstrap-brand")).toContainText("Dopamine Dungeon");
+    await expect(page.getByText("TTRPG Manager", { exact: true })).toBeVisible();
+    await expect(page.getByLabel("Current Workspace:")).toHaveValue("bootstrap-workspace");
+    await expect(page.getByLabel("Current Workspace:")).toBeDisabled();
+    await expect(page.getByText("System", { exact: true })).toHaveCount(0);
+    await expect(page.getByRole("button", { name: "Sign out", exact: true })).toHaveCount(1);
+
+    const campaignName = page.getByPlaceholder("e.g. Chronicles of Varionath");
+    await expect(page.getByText("Enter a campaign name.", { exact: true })).toHaveCount(0);
+    await page.getByRole("button", { name: "Create campaign", exact: true }).click();
+    await expect(page.getByText("Enter a campaign name.", { exact: true })).toBeVisible();
+    await expect(campaignName).toBeFocused();
+
+    await campaignName.fill("Onboarding Campaign");
+    await expect(page.getByText("Enter a campaign name.", { exact: true })).toHaveCount(0);
+
+    for (const viewport of [
+      { width: 1440, height: 900 },
+      { width: 375, height: 667 },
+      { width: 375, height: 420 },
+    ]) {
+      await page.setViewportSize(viewport);
+      await expect(page.getByTestId("campaign-bootstrap-card")).toBeVisible();
+      await expect
+        .poll(() => page.evaluate(() => document.documentElement.scrollWidth <= innerWidth))
+        .toBe(true);
+    }
+  });
+
+  test.describe("while creating", () => {
+    test.use({ campaignCreateDelayMs: 350 });
+
+    test("freezes one campaign payload and prevents repeated submission", async ({
+      apiCallLog,
+      page,
+      request,
+    }) => {
+      await enterCampaignBootstrap(page, request);
+
+      const campaignName = page.getByPlaceholder("e.g. Chronicles of Varionath");
+      const description = page.getByLabel("Description");
+      await campaignName.fill("Frozen Campaign");
+      await description.fill("Frozen description");
+      await page.getByRole("button", { name: "Create campaign", exact: true }).click();
+
+      await expect(page.getByRole("button", { name: "Creating campaign…" })).toBeDisabled();
+      await expect(campaignName).toBeDisabled();
+      await expect(description).toBeDisabled();
+      await page.keyboard.press("Enter");
+
+      await expect.poll(() => apiCallLog.campaignCreate).toHaveLength(1);
+      expect(apiCallLog.campaignCreate[0]).toMatchObject({
+        workspaceId: "bootstrap-workspace",
+        name: "Frozen Campaign",
+        description: "Frozen description",
+      });
+    });
+  });
+
+  test.describe("after a recoverable creation failure", () => {
+    test.use({
+      campaignCreateStatuses: [500, 201],
+      expectedConsoleErrors: ["Failed to load resource"],
+    });
+
+    test("retains the campaign fields and retries with the same idempotency key", async ({
+      apiCallLog,
+      page,
+      request,
+    }) => {
+      await enterCampaignBootstrap(page, request);
+
+      const campaignName = page.getByPlaceholder("e.g. Chronicles of Varionath");
+      const description = page.getByLabel("Description");
+      await campaignName.fill("Retry Campaign");
+      await description.fill("Retained description");
+      await page.getByRole("button", { name: "Create campaign", exact: true }).click();
+
+      const systemError = page.getByRole("alert").filter({
+        hasText: "We couldn't create your campaign.",
+      });
+      await expect(systemError).toBeVisible();
+      await expect(systemError).toBeFocused();
+      await expect(campaignName).toHaveValue("Retry Campaign");
+      await expect(description).toHaveValue("Retained description");
+      await expect(page.getByRole("button", { name: "Create campaign", exact: true })).toBeEnabled();
+
+      await page.getByRole("button", { name: "Create campaign", exact: true }).click();
+      await expect.poll(() => apiCallLog.campaignCreate).toHaveLength(2);
+      expect(apiCallLog.campaignCreate[1].idempotencyKey).toBe(
+        apiCallLog.campaignCreate[0].idempotencyKey
+      );
+    });
+  });
+});
+
+test.describe("campaign onboarding workspace context", () => {
+  test.use({
+    apiMeResponse: multiIncompleteWorkspaceCampaignBootstrapApiMeResponse(),
+  });
+
+  test("keeps retained fields and makes a changed authorized workspace explicit", async ({
+    apiCallLog,
+    page,
+    request,
+  }) => {
+    const email = generatedEmail();
+    await createVerifiedUser(request, email, password);
+
+    await openEmailSignIn(page);
+    await page.getByLabel("Email address").fill(email);
+    await page.getByLabel("Password", { exact: true }).fill(password);
+    await page.getByRole("button", { name: "Sign in", exact: true }).click();
+    await expect(page.getByRole("heading", { name: "Create your first campaign" })).toBeVisible();
+
+    const campaignName = page.getByPlaceholder("e.g. Chronicles of Varionath");
+    const description = page.getByLabel("Description");
+    await campaignName.fill("Moved Campaign");
+    await description.fill("Still here after workspace change");
+    await page.getByLabel("Current Workspace:").selectOption("secondary-workspace");
+
+    await expect(page.getByText(/Workspace changed\. You're now creating this campaign in Secondary Workspace\./)).toBeVisible();
+    await expect(campaignName).toHaveValue("Moved Campaign");
+    await expect(description).toHaveValue("Still here after workspace change");
+
+    await page.getByRole("button", { name: "Create campaign", exact: true }).click();
+    await expect.poll(() => apiCallLog.campaignCreate).toHaveLength(1);
+    expect(apiCallLog.campaignCreate[0]).toMatchObject({
+      workspaceId: "secondary-workspace",
+      name: "Moved Campaign",
+    });
+  });
+
+  test("leaves campaign creation when refreshed membership no longer provides a workspace", async ({
+    apiCallLog,
+    apiMeResponseController,
+    page,
+    request,
+  }) => {
+    const email = generatedEmail();
+    await createVerifiedUser(request, email, password);
+
+    await openEmailSignIn(page);
+    await page.getByLabel("Email address").fill(email);
+    await page.getByLabel("Password", { exact: true }).fill(password);
+    await page.getByRole("button", { name: "Sign in", exact: true }).click();
+    await expect(page.getByRole("heading", { name: "Create your first campaign" })).toBeVisible();
+
+    apiMeResponseController.current = emptyApiMeResponse("e2e-campaign-onboarding-user");
+    await page.reload();
+
+    await expect(page.getByRole("heading", { name: "Create your first workspace" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Create your first campaign" })).toHaveCount(0);
+    expect(apiCallLog.campaignCreate).toHaveLength(0);
   });
 });
 
@@ -2071,7 +2283,8 @@ test.describe("bootstrap sign out", () => {
       await expect(
         page.getByRole("heading", { name: "Create your first campaign" })
       ).toBeVisible();
-      await expect(page.getByLabel("Workspace")).toHaveCount(0);
+      await expect(page.getByLabel("Current Workspace:")).toHaveValue("bootstrap-workspace");
+      await expect(page.getByLabel("Current Workspace:")).toBeDisabled();
       await expect(page.getByRole("button", { name: "Sign out" })).toBeVisible();
     });
 
@@ -2114,10 +2327,10 @@ test.describe("bootstrap sign out", () => {
       await expect(
         page.getByRole("heading", { name: "Create your first campaign" })
       ).toBeVisible();
-      await expect(page.getByText("Current workspace: Bootstrap Workspace")).toBeVisible();
+      await expect(page.getByLabel("Current Workspace:")).toHaveValue("bootstrap-workspace");
       await expect(page.getByRole("button", { name: "Sign out" })).toBeVisible();
 
-      await page.getByLabel("Workspace").selectOption("ready-workspace");
+      await page.getByLabel("Current Workspace:").selectOption("ready-workspace");
 
       await expect(
         page.getByRole("heading", { name: "Create your first campaign" })
@@ -2141,11 +2354,11 @@ test.describe("bootstrap sign out", () => {
       await expect(
         page.getByRole("heading", { name: "Create your first campaign" })
       ).toBeVisible();
-      await expect(page.getByLabel("Workspace")).toBeVisible();
+      await expect(page.getByLabel("Current Workspace:")).toBeVisible();
       await expect(page.locator("body")).not.toContainText("Unauthorized Workspace");
       await expect(page.locator("body")).not.toContainText("GM Secret Campaign");
 
-      await page.getByLabel("Workspace").selectOption("ready-workspace");
+      await page.getByLabel("Current Workspace:").selectOption("ready-workspace");
 
       await expect(page.getByRole("heading", { name: "Ready Campaign" })).toBeVisible();
       await expect(page.locator("body")).not.toContainText("Unauthorized Workspace");

@@ -6,13 +6,6 @@ export default function BootstrapWorkspaceSwitcher() {
   const { selectCampaign } = useCampaign();
   const workspaces = (tenants ?? []).filter((workspace) => workspace?.tenantId);
 
-  if (workspaces.length <= 1) {
-    return null;
-  }
-
-  const currentWorkspace =
-    workspaces.find((workspace) => workspace.tenantId === selectedTenantId) ?? null;
-
   const handleWorkspaceChange = (event) => {
     const nextTenantId = event.target.value || null;
     selectTenant(nextTenantId);
@@ -20,27 +13,29 @@ export default function BootstrapWorkspaceSwitcher() {
   };
 
   return (
-    <div className="rounded-lg border border-zinc-800 bg-zinc-950/60 p-4">
+    <div className="flex max-w-full flex-col gap-2 sm:flex-row sm:items-center sm:gap-3">
       <label
         htmlFor="bootstrap-workspace-switcher"
-        className="block text-sm font-medium text-zinc-200"
+        className="text-sm font-medium text-zinc-200"
       >
-        Workspace
+        Current Workspace:
       </label>
-      <p className="mt-1 text-sm text-zinc-400">
-        Current workspace: {currentWorkspace?.name ?? "Select a workspace"}
-      </p>
       <select
         id="bootstrap-workspace-switcher"
         value={selectedTenantId ?? ""}
         onChange={handleWorkspaceChange}
-        className="mt-3 w-full rounded-lg border border-zinc-700 bg-zinc-900 px-3 py-2 text-sm text-white outline-none focus:border-violet-500"
+        disabled={workspaces.length <= 1}
+        className="min-h-11 max-w-full rounded-lg border border-zinc-700 bg-zinc-900 px-3 py-2 text-sm text-white outline-none focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-violet-300 disabled:cursor-default disabled:opacity-80 sm:min-w-60"
       >
-        {workspaces.map((workspace) => (
-          <option key={workspace.tenantId} value={workspace.tenantId}>
-            {workspace.name ?? "Unnamed workspace"}
-          </option>
-        ))}
+        {workspaces.length ? (
+          workspaces.map((workspace) => (
+            <option key={workspace.tenantId} value={workspace.tenantId}>
+              {workspace.name ?? "Unnamed workspace"}
+            </option>
+          ))
+        ) : (
+          <option value="">No accessible workspace</option>
+        )}
       </select>
     </div>
   );
