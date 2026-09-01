@@ -23,8 +23,9 @@ export default function AuthScreen({
   onGoogle,
   onEmailSignIn,
   onEmailRegistration,
+  initialView = "choices",
 }) {
-  const [view, setView] = useState("choices");
+  const [view, setView] = useState(initialView);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [confirmation, setConfirmation] = useState("");
@@ -33,6 +34,11 @@ export default function AuthScreen({
   const [passwordValidation, setPasswordValidation] = useState(null);
   const [error, setError] = useState("");
   const [submitting, setSubmitting] = useState(false);
+
+  useEffect(() => {
+    setView(initialView);
+    setError("");
+  }, [initialView]);
 
   const isRegistering = view === "register";
   const passwordToValidate = isRegistering ? password : "";

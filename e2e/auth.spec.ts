@@ -2090,7 +2090,7 @@ test("@smoke signs out and keeps protected routes behind authentication", async 
   await page.getByRole("button").filter({ hasText: email }).click();
   await page.getByRole("button", { name: "Sign out" }).click();
   await expect(page.getByTestId("public-home")).toBeVisible();
-  await expect(page.getByTestId("enter-app")).toBeVisible();
+  await expect(page.getByTestId("enter-dungeon")).toBeVisible();
 
   await page.goto("/home");
   await expect(page.getByRole("heading", { name: "Sign in to your account" })).toBeVisible();
@@ -2111,18 +2111,46 @@ test("@smoke keeps the public homepage outside application bootstrap", async ({
 
   await expect(page.getByTestId("public-home")).toBeVisible();
   await expect(page.getByRole("navigation", { name: "Public navigation" })).toBeVisible();
-  await expect(page.getByTestId("enter-app")).toBeVisible();
-  await expect(page.getByTestId("enter-app")).toHaveCount(1);
-  await expect(
-    page.getByRole("navigation", { name: "Public navigation" }).getByRole("link", { name: "Login" })
-  ).toHaveCount(0);
-  await expect(
-    page.getByRole("navigation", { name: "Public navigation" }).getByRole("link", { name: "Get started" })
-  ).toHaveCount(0);
+  await expect(page.getByTestId("enter-dungeon")).toBeVisible();
+  await expect(page.getByTestId("enter-dungeon")).toHaveCount(1);
+  await expect(page.getByTestId("enter-dungeon")).toHaveText("Enter The Dungeon");
+  await expect(page.getByTestId("enter-dungeon")).toHaveAttribute("href", "/home");
+  await expect(page.getByTestId("public-login")).toHaveAttribute("href", "/login");
+  await expect(page.getByTestId("public-sign-up")).toHaveAttribute("href", "/get-started");
   await expect(page.getByText("Sessions", { exact: true })).toHaveCount(0);
   await expect(page.getByText("Campaign Settings", { exact: true })).toHaveCount(0);
   expect(apiRequests).toEqual([]);
   expect(apiCallLog.apiMe).toHaveLength(0);
+
+  await page.getByTestId("enter-dungeon").click();
+  await expect(page).toHaveURL(/\/home$/);
+  await expect(page.getByRole("heading", { name: "Sign in to your account" })).toBeVisible();
+});
+
+test("public navigation reaches each coming-soon page and auth entry state", async ({ page }) => {
+  await page.goto("/");
+
+  for (const [label, path] of [
+    ["About Us", "/about"],
+    ["Features", "/features"],
+    ["Pricing", "/pricing"],
+    ["Resources", "/resources"],
+    ["Socials", "/socials"],
+  ]) {
+    await page.getByRole("link", { name: label, exact: true }).click();
+    await expect(page).toHaveURL(new RegExp(`${path}$`));
+    await expect(page.getByText("Coming soon", { exact: true })).toBeVisible();
+    await page.goto("/");
+  }
+
+  await page.getByTestId("public-login").click();
+  await expect(page).toHaveURL(/\/login$/);
+  await expect(page.getByRole("heading", { name: "Sign in with email" })).toBeVisible();
+
+  await page.goto("/");
+  await page.getByTestId("public-sign-up").click();
+  await expect(page).toHaveURL(/\/get-started$/);
+  await expect(page.getByRole("heading", { name: "Create your account" })).toBeVisible();
 });
 
 test("keeps authenticated users on the public homepage until they enter the app", async ({
@@ -2143,7 +2171,7 @@ test("keeps authenticated users on the public homepage until they enter the app"
   await page.goto("/");
 
   await expect(page.getByTestId("public-home")).toBeVisible();
-  await expect(page.getByTestId("enter-app")).toBeVisible();
+  await expect(page.getByTestId("enter-dungeon")).toBeVisible();
   await expect(page.getByText("E2E Campaign", { exact: true })).toHaveCount(0);
   await expect(page.getByText("Sessions", { exact: true })).toHaveCount(0);
   expect(apiCallLog.apiMe).toHaveLength(apiMeCallsBeforePublicHome);

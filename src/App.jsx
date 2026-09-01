@@ -39,8 +39,10 @@ import VerificationActionScreen from "./components/auth/VerificationActionScreen
 import PasswordRecoveryRequestScreen from "./components/auth/PasswordRecoveryRequestScreen.jsx";
 import PasswordResetActionScreen from "./components/auth/PasswordResetActionScreen.jsx";
 import PublicSiteShell, {
+  PublicComingSoonPage,
   PublicFeatures,
   PublicHome,
+  PublicSocialsPage,
 } from "./layouts/PublicSiteShell.jsx";
 
 function App() {
@@ -57,10 +59,14 @@ function App() {
       <Routes>
         <Route element={<PublicSiteShell />}>
           <Route index element={<PublicEntryRoute />} />
+          <Route path="/about" element={<PublicComingSoonPage title="About Us" />} />
           <Route path="/features" element={<PublicFeatures />} />
+          <Route path="/pricing" element={<PublicComingSoonPage title="Pricing" />} />
+          <Route path="/resources" element={<PublicComingSoonPage title="Resources" />} />
+          <Route path="/socials" element={<PublicSocialsPage />} />
         </Route>
-        <Route path="/login" element={<PublicAuthEntry />} />
-        <Route path="/get-started" element={<PublicAuthEntry />} />
+        <Route path="/login" element={<PublicAuthEntry initialView="sign-in" />} />
+        <Route path="/get-started" element={<PublicAuthEntry initialView="register" />} />
         <Route path="*" element={<ApplicationBoundary />} />
       </Routes>
     </BrowserRouter>
@@ -77,7 +83,7 @@ function PublicEntryRoute() {
   );
 }
 
-function PublicAuthEntry() {
+function PublicAuthEntry({ initialView }) {
   const navigate = useNavigate();
   const {
     authStatus,
@@ -105,6 +111,7 @@ function PublicAuthEntry() {
         onGoogle={signInWithGoogle}
         onEmailSignIn={signInWithEmail}
         onEmailRegistration={registerWithEmail}
+        initialView={initialView}
       />
       <Link
         to="/"
