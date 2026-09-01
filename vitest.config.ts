@@ -4,7 +4,7 @@ export default defineConfig({
   test: {
     environment: "node",
     fileParallelism: false,
-    include: ["src/**/*.test.js", "src/server/**/*.test.ts", "api/**/*.test.ts"],
+    include: ["src/**/*.test.js", "src/server/**/*.test.ts", "api/**/*.test.ts", "scripts/**/*.test.ts"],
     restoreMocks: true,
   },
 });

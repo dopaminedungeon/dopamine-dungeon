@@ -1,6 +1,6 @@
 # Firestore to Neon Migration Inventory and Authorization Matrix
 
-Status: Phase 1 inventory
+Status: Development implementation complete; Production release operations pending
 
 Date: 2026-08-28
 
@@ -8,7 +8,8 @@ Related issue: [#298](https://github.com/dopaminedungeon/dopamine-dungeon/issues
 
 ## Scope and evidence
 
-This document records the current repository audit for #298. The issue body is
+This document records the current repository audit and completed Development
+implementation for #298. The issue body is
 not exhaustive: paths below were discovered from current source, tests,
 migration scripts, and repository configuration. It is not evidence of every
 document or collection that may exist in a live Firebase environment.
@@ -25,11 +26,17 @@ only cross-system identity key. Normalized email is not an identity migration
 key and must not merge, transfer, or reconcile users, memberships, roles, or
 application data.
 
+Development implementation is complete: browser application state uses
+authenticated APIs backed by Neon, transactional mail uses direct Brevo, and
+auth-email limiter persistence uses Neon. Remaining Firestore entries are
+historical inputs or operational rollback evidence until the Production release
+gates below are completed.
+
 ## Firestore inventory
 
 | Firestore path | Audit status and owner | Readers and writers | Purpose and sensitivity | Existing Neon/API destination | Migration disposition and gaps |
 | --- | --- | --- | --- | --- | --- |
-| `users/{firebaseUid}` | Active; browser client SDK | `AuthContext` initializes, `Settings` reads/writes, user repository writes | Profile and preferences. Contains email, display name, photo URL, onboarding state, and login metadata. Self-only boundary required. | Neon `users`, provisioned through `/api/me`, stores UID, email, display name, and verification history. No profile-preference API/model. | **Migrate**. Define allowed self-editable fields; reconcile profile fields absent from Neon. |
+| `users/{firebaseUid}` | Historical migration input; browser application path retired | Legacy migration/reconciliation tooling only | Legacy profile and preference fields. | Neon `users`, provisioned through `/api/me`, with self-only field allowlist. | Retain for environment export/reconciliation and rollback evidence; no active browser reader/writer remains. |
 | `tenants/{tenantId}` | Historical migration input; unreachable browser repository retired. | Canonical browser creation/projection use `/api/workspace` and `/api/me`. | Workspace record. Legacy documents may contain a Firestore-only `description`. | Neon `workspaces`. | Browser Firestore path is retired. Export/reconcile legacy values before destructive data retirement. |
 | `tenantMembers/{membershipId}` | Historical migration input; no active application repository | `scripts/migrate-firebase.ts` reads legacy membership records. | Workspace roles and membership. Role escalation/isolation risk. Some legacy shapes include user email/display name. | Neon `workspace_memberships`; `/api/workspace?resource=workspacePeople` supports people management. | **Retired application code**. Retain data and migration tooling until environment export/reconciliation gates pass. |
 | `campaigns/{campaignId}` | Historical migration input; unreachable browser repository/bootstrap service retired. | Canonical campaign creation/projection use authenticated APIs and `/api/me`; Campaign Settings uses `/api/campaign-content?resource=campaignSettings`; migration scripts read root records. | Campaign bootstrap plus settings. Retained values are `name`, `description`, `status`, `system`, `playerSummary`, `startDate`, `endDate`, and GM-private `gmNotes`. | Neon `campaigns` explicit columns; authenticated `campaignSettings` handler. | Browser Firestore path is retired. Legacy values require export/retention review; campaign deletion is deferred to [#364](https://github.com/dopaminedungeon/dopamine-dungeon/issues/364). |
@@ -94,6 +101,31 @@ retirement. Writes, Admin SDK dependencies, migration/recovery needs, rules,
 indexes, TTL, Trigger Email, data reconciliation, and rollback evidence must
 all be resolved first.
 
+## Read-only inventory and reconciliation tooling
+
+`scripts/firestore-reconciliation.ts` is the #298 read-only operational
+inventory/reconciliation reporter. It requires an explicit target,
+target-specific confirmation, explicit environment file, and matching Firebase
+project ID; it has no apply mode and never selects inherited credentials. It
+creates ignored, sanitized reports under
+`reports/firestore-reconciliation/<target>/<timestamp>/` and detects unknown
+top-level and campaign subcollection paths rather than assuming this inventory
+is exhaustive.
+
+Its reconciliation output now assigns one primary disposition per evaluated
+record (`CANONICAL_IN_NEON`, `NEEDS_RECONCILIATION`, `ARCHIVE_ONLY`,
+`EXPLICITLY_RETIRED`, or `UNRESOLVED`) and attaches independent secondary
+findings for retired fields, role/scope mismatches, or compatibility evidence.
+`unresolved.json` contains only records needing reconciliation or investigation;
+harmless legacy/archive notices remain in the full report. Invitation mapping
+requires an exact non-email identifier and is unresolved when that proof is
+absent. Its 24-hour limiter export preserves only opaque Firebase UID/HMAC keys and
+attempt timestamps for the later Production cutover import. It does not import
+or mutate either datastore. See
+[`FIRESTORE_RECONCILIATION.md`](../operations/FIRESTORE_RECONCILIATION.md) for
+the command, sanitization contract, report meanings, manual configuration
+archive checklist, and historical-script limitations.
+
 ## Open questions and gates
 
 - Exported rules, indexes, TTL, and extension configuration for every
@@ -120,6 +152,26 @@ all be resolved first.
   dual-read/write is permitted. Development and Preview may begin fresh.
 - Migration scripts need formal reconciliation and safety controls before they
   can be used for a cutover.
+
+## Development closeout and Production release boundary
+
+The Development portion of #298 is complete. The Iteration 3 implementation
+includes migrations `0015_black_mandroid` through `0021_puzzling_kid_colt`,
+Neon/API ownership for application state, direct Brevo delivery, Neon auth
+limiter persistence, browser Firestore retirement, and validated
+inventory/reconciliation tooling. Development and Preview validation are
+complete; no Production migration or cutover is implied.
+
+The future Production release must first run the temporary
+`productionReadOnlyAudit` path through the existing `api/worldbuilding`
+function. A controlled verified Firebase identity must receive the temporary
+`productionAudit: true` custom claim, the sanitized audit must be captured,
+then the claim and route/module must be removed and removal deployed. The
+Production release checklist must verify migrations `0015`–`0021`, snapshot and
+preserve the final 24-hour Firestore limiter horizon, import and reconcile
+opaque subjects/attempts into Neon, and retain Firestore source evidence for
+rollback. Trigger Email disablement, rules deny-all, and physical Firestore
+retirement are separate later operational windows.
 
 ## Related architecture records
 
