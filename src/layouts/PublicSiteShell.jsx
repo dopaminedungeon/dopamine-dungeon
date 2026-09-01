@@ -24,18 +24,6 @@ export default function PublicSiteShell() {
               Features
             </Link>
             <Link
-              to="/login"
-              className="text-zinc-300 transition hover:text-white"
-            >
-              Login
-            </Link>
-            <Link
-              to="/get-started"
-              className="text-zinc-300 transition hover:text-white"
-            >
-              Get started
-            </Link>
-            <Link
               to="/home"
               className="rounded-md bg-violet-500 px-4 py-2 font-semibold text-white transition hover:bg-violet-400"
               data-testid="enter-app"
@@ -68,13 +56,6 @@ export function PublicHome() {
           Dopamine Dungeon keeps your campaign world, sessions, and party ready
           when your table is.
         </p>
-        <Link
-          to="/home"
-          className="mt-8 inline-flex rounded-md bg-violet-500 px-5 py-3 font-semibold text-white transition hover:bg-violet-400"
-          data-testid="enter-app-hero"
-        >
-          Enter App
-        </Link>
       </section>
     </main>
   );

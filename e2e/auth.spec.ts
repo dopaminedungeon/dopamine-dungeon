@@ -2112,6 +2112,13 @@ test("@smoke keeps the public homepage outside application bootstrap", async ({
   await expect(page.getByTestId("public-home")).toBeVisible();
   await expect(page.getByRole("navigation", { name: "Public navigation" })).toBeVisible();
   await expect(page.getByTestId("enter-app")).toBeVisible();
+  await expect(page.getByTestId("enter-app")).toHaveCount(1);
+  await expect(
+    page.getByRole("navigation", { name: "Public navigation" }).getByRole("link", { name: "Login" })
+  ).toHaveCount(0);
+  await expect(
+    page.getByRole("navigation", { name: "Public navigation" }).getByRole("link", { name: "Get started" })
+  ).toHaveCount(0);
   await expect(page.getByText("Sessions", { exact: true })).toHaveCount(0);
   await expect(page.getByText("Campaign Settings", { exact: true })).toHaveCount(0);
   expect(apiRequests).toEqual([]);
@@ -2140,6 +2147,26 @@ test("keeps authenticated users on the public homepage until they enter the app"
   await expect(page.getByText("E2E Campaign", { exact: true })).toHaveCount(0);
   await expect(page.getByText("Sessions", { exact: true })).toHaveCount(0);
   expect(apiCallLog.apiMe).toHaveLength(apiMeCallsBeforePublicHome);
+});
+
+test("returns from the auth entry to the public shell with browser navigation intact", async ({
+  page,
+}) => {
+  await page.goto("/login");
+  await expect(page.getByTestId("auth-card")).toBeVisible();
+  await expect(page.getByTestId("back-to-public")).toBeVisible();
+
+  await page.getByTestId("back-to-public").click();
+  await expect(page).toHaveURL(/\/$/);
+  await expect(page.getByTestId("public-home")).toBeVisible();
+
+  await page.goBack();
+  await expect(page).toHaveURL(/\/login$/);
+  await expect(page.getByTestId("auth-card")).toBeVisible();
+
+  await page.goForward();
+  await expect(page).toHaveURL(/\/$/);
+  await expect(page.getByTestId("public-home")).toBeVisible();
 });
 
 test("@credential-migration keeps normal access available and optional setup locally validated", async ({

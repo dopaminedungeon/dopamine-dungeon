@@ -101,17 +101,18 @@ function PublicAuthEntry() {
 
   return (
     <div className="relative min-h-screen bg-zinc-950">
-      <Link
-        to="/"
-        className="absolute left-6 top-6 z-10 text-sm font-semibold text-zinc-300 hover:text-white"
-      >
-        Back to public site
-      </Link>
       <AuthScreen
         onGoogle={signInWithGoogle}
         onEmailSignIn={signInWithEmail}
         onEmailRegistration={registerWithEmail}
       />
+      <Link
+        to="/"
+        className="fixed left-6 top-6 z-[100] inline-flex min-h-11 items-center rounded-md border border-zinc-700 bg-zinc-900/80 px-4 text-sm font-semibold text-zinc-200 shadow-sm transition hover:border-zinc-500 hover:bg-zinc-800 hover:text-white focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-purple-300"
+        data-testid="back-to-public"
+      >
+        Back to public site
+      </Link>
     </div>
   );
 }
