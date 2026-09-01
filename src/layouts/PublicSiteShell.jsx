@@ -29,11 +29,11 @@ export default function PublicSiteShell() {
       <header className="relative border-b border-zinc-800/90 bg-zinc-950/95">
         <nav
           aria-label="Public navigation"
-          className="mx-auto flex w-full max-w-[1240px] items-center justify-between gap-3 px-4 py-[18px] sm:px-6 lg:gap-x-[28px] lg:py-[20px]"
+          className="mx-auto flex w-full max-w-[1240px] flex-wrap items-center justify-between gap-3 px-4 py-[18px] sm:flex-nowrap sm:px-6 xl:gap-x-[28px] xl:py-[20px]"
         >
           <Link
             to="/"
-            className="flex min-w-0 items-center gap-2 text-[18px] font-semibold tracking-tight text-white sm:gap-3 sm:text-[22px]"
+            className="flex w-full shrink-0 items-center gap-2 whitespace-nowrap text-[18px] font-semibold tracking-tight text-white sm:w-auto sm:gap-3 sm:text-[22px]"
             data-testid="public-brand"
           >
             <img
@@ -41,10 +41,10 @@ export default function PublicSiteShell() {
               alt=""
               className="h-[36px] w-[36px] shrink-0 rounded-lg object-contain sm:h-[44px] sm:w-[44px]"
             />
-            <span className="truncate">Dopamine Dungeon</span>
+            <span>Dopamine Dungeon</span>
           </Link>
 
-          <div className="hidden flex-wrap items-center justify-end gap-x-[28px] gap-y-2 text-[16px] lg:flex">
+          <div className="hidden flex-wrap items-center justify-end gap-x-[28px] gap-y-2 text-[16px] xl:flex">
             {publicLinks.map(([label, path]) => (
               <Link
                 key={path}
@@ -71,7 +71,7 @@ export default function PublicSiteShell() {
             </Link>
           </div>
 
-          <div className="flex shrink-0 items-center gap-2 text-[14px] sm:gap-3 sm:text-[16px] lg:hidden">
+          <div className="flex w-full shrink-0 items-center justify-end gap-2 text-[14px] sm:w-auto sm:gap-3 sm:text-[16px] xl:hidden">
             <Link
               to="/login"
               className="text-zinc-200 transition hover:text-white"
@@ -103,7 +103,7 @@ export default function PublicSiteShell() {
             id="public-mobile-menu"
             role="menu"
             aria-label="Public menu"
-            className="absolute right-4 top-full z-20 w-[min(220px,calc(100vw-32px))] rounded-xl border border-zinc-700 bg-zinc-900 p-2 shadow-2xl shadow-black/40 lg:hidden"
+            className="absolute right-4 top-full z-20 w-[min(220px,calc(100vw-32px))] rounded-xl border border-zinc-700 bg-zinc-900 p-2 shadow-2xl shadow-black/40 xl:hidden"
             data-testid="public-mobile-menu"
           >
             {publicLinks.map(([label, path]) => (

@@ -2165,6 +2165,7 @@ test("public navigation collapses into an accessible phone menu", async ({ page 
   await page.setViewportSize({ width: 375, height: 667 });
   await page.goto("/");
 
+  await expect(page.getByTestId("public-brand")).toContainText("Dopamine Dungeon");
   await expect(page.getByRole("link", { name: "Log in", exact: true })).toBeVisible();
   await expect(page.getByRole("link", { name: "Sign up", exact: true })).toBeVisible();
   await expect(page.getByTestId("public-menu-toggle")).toHaveAttribute("aria-expanded", "false");
@@ -2184,12 +2185,18 @@ test("public navigation collapses into an accessible phone menu", async ({ page 
   await page.getByRole("menuitem", { name: "Features", exact: true }).click();
   await expect(page).toHaveURL(/\/features$/);
   await expect(page.getByText("Coming soon", { exact: true })).toBeVisible();
+  const phoneWidth = await page.evaluate(() => ({
+    documentWidth: document.documentElement.scrollWidth,
+    viewportWidth: window.innerWidth,
+  }));
+  expect(phoneWidth.documentWidth).toBeLessThanOrEqual(phoneWidth.viewportWidth);
 });
 
 test("public tablet layouts stay centered and within the viewport", async ({ page }) => {
   await page.setViewportSize({ width: 820, height: 1180 });
   await page.goto("/");
 
+  await expect(page.getByTestId("public-brand")).toContainText("Dopamine Dungeon");
   const hero = await page.getByTestId("public-home").boundingBox();
   const artwork = await page.getByTestId("public-artwork").boundingBox();
   expect(hero).not.toBeNull();
@@ -2197,6 +2204,11 @@ test("public tablet layouts stay centered and within the viewport", async ({ pag
   expect(hero!.x + hero!.width / 2).toBeCloseTo(410, 0);
   expect(artwork!.x).toBeGreaterThanOrEqual(0);
   expect(artwork!.x + artwork!.width).toBeLessThanOrEqual(820);
+  const tabletWidth = await page.evaluate(() => ({
+    documentWidth: document.documentElement.scrollWidth,
+    viewportWidth: window.innerWidth,
+  }));
+  expect(tabletWidth.documentWidth).toBeLessThanOrEqual(tabletWidth.viewportWidth);
 
   await page.goto("/about");
   const card = await page.locator('[data-testid="public-coming-soon"] section').boundingBox();
