@@ -92,32 +92,6 @@ async function getWorkspaceRolesByUserId(campaign: {
   return workspaceRolesByUserId;
 }
 
-async function revokePendingInvitation(params: {
-  campaignId: string;
-  invitationId: string;
-}) {
-  const matchingInvitations = await db
-    .select()
-    .from(invitations)
-    .where(
-      and(
-        eq(invitations.id, params.invitationId),
-        eq(invitations.campaignId, params.campaignId),
-        eq(invitations.status, "pending")
-      )
-    )
-    .limit(1);
-
-  if (!matchingInvitations[0]) {
-    throw new Error("Pending invitation not found");
-  }
-
-  await db
-    .update(invitations)
-    .set({ status: "revoked" })
-    .where(eq(invitations.id, params.invitationId));
-}
-
 async function removeCampaignMember(params: {
   campaignId: string;
   workspaceId: string;
@@ -228,12 +202,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       }
 
       if (personType === "invite" || getRequestValue(req, "inviteId")) {
-        await revokePendingInvitation({
-          campaignId: campaign.id,
-          invitationId: personId,
+        return res.status(400).json({
+          ok: false,
+          error: "Invitation lifecycle actions use /api/invitations.",
         });
-
-        return res.status(200).json({ ok: true });
       }
 
       if (personType === "member" || getRequestValue(req, "memberId")) {

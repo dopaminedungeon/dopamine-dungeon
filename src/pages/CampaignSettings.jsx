@@ -1,6 +1,7 @@
 // src/pages/CampaignSettings.jsx
 import React, { useMemo, useState, useEffect, useRef } from "react";
 import InvitePlayerForm from "../components/invitations/InvitePlayerForm.jsx";
+import InvitationManagementList from "../components/invitations/InvitationManagementList.jsx";
 import {
   Plus,
   CheckCircle2,
@@ -8,7 +9,6 @@ import {
   Trash2,
   MoreHorizontal,
   UserMinus,
-  MailX,
 } from "lucide-react";
 import { useMode } from "../context/ModeContext.jsx";
 import { useCampaign } from "../context/CampaignContext.jsx";
@@ -18,7 +18,6 @@ import {
   getApiCampaignPeople,
   getApiCharacterAssignments,
   removeApiCampaignMember,
-  revokeApiCampaignInvite,
   unassignApiCharacter,
   getApiCampaignSettings,
   updateApiCampaignSettings,
@@ -39,7 +38,7 @@ export default function CampaignSettings() {
     campaignRole,
     refreshCampaigns,
   } = useCampaign();
-  const { selectedTenantId } = useTenant();
+  const { selectedTenantId, workspaceRole } = useTenant();
 
   const activeCampaign = useMemo(() => {
     return (
@@ -73,6 +72,8 @@ export default function CampaignSettings() {
   const [assignmentSelectionByUserId, setAssignmentSelectionByUserId] = useState({});
   const [peopleActionId, setPeopleActionId] = useState(null);
   const createIdempotencyKeyRef = useRef(null);
+  const canManageInvitations =
+    isGM && workspaceRole === "owner" && campaignRole === "gm";
 
 	  const createCampaign = async (e) => {
 	    e?.preventDefault?.();
@@ -371,28 +372,6 @@ export default function CampaignSettings() {
     }
   };
 
-	  const onRevokeInvite = async (inviteDocId) => {
-	    const campaignId = draft?.campaignId || selectedCampaignId;
-	    const actionId = `revoke-${inviteDocId}`;
-	    if (peopleActionId || !inviteDocId || !campaignId) return;
-
-    const confirmed = window.confirm("Revoke this pending invitation?");
-    if (!confirmed) return;
-
-	    try {
-      setPeopleActionId(actionId);
-	      await revokeApiCampaignInvite(campaignId, inviteDocId);
-      setOpenActionsId(null);
-      setCampaignPeopleVersion((value) => value + 1);
-      setSaveState({ type: "success", message: "Invitation revoked." });
-	    } catch (error) {
-	      console.error("[CampaignSettings] Failed to revoke invitation", error);
-	      setSaveState({ type: "error", message: "Could not revoke invitation." });
-    } finally {
-      setPeopleActionId(null);
-	    }
-	  };
-
 	  const onRemoveCampaignMember = async (memberDocId) => {
 	    const campaignId = draft?.campaignId || selectedCampaignId;
 	    const actionId = `remove-${memberDocId}`;
@@ -652,32 +631,46 @@ export default function CampaignSettings() {
                 Invite players, review current campaign membership, track invite status, and manage character assignments.
               </p>
 
-              <div className="rounded-xl border border-white/10 bg-white/[0.025] p-3.5 mb-4 shadow-[0_0_20px_rgba(168,85,247,0.04)]">
-                <p className="text-sm text-zinc-200 font-medium mb-2">Invite player</p>
-                <p className="mb-3 text-xs text-zinc-300/70">
-                  Create a pending invitation for the active campaign and optionally reserve an available character.
-                </p>
-                <InvitePlayerForm
-                  availabilityVersion={campaignPeopleVersion}
-                  onInvitationCreated={() => {
-                    setCampaignPeopleVersion((value) => value + 1);
-                    setSaveState({ type: "success", message: "Invitation created." });
-                  }}
-                />
-              </div>
+              {canManageInvitations ? (
+                <>
+                  <div className="rounded-xl border border-white/10 bg-white/[0.025] p-3.5 mb-4 shadow-[0_0_20px_rgba(168,85,247,0.04)]">
+                    <p className="text-sm text-zinc-200 font-medium mb-2">Invite player</p>
+                    <p className="mb-3 text-xs text-zinc-300/70">
+                      Create a pending invitation for the active campaign and optionally reserve an available character.
+                    </p>
+                    <InvitePlayerForm
+                      availabilityVersion={campaignPeopleVersion}
+                      onInvitationCreated={() => {
+                        setCampaignPeopleVersion((value) => value + 1);
+                        setSaveState({ type: "success", message: "Invitation created." });
+                      }}
+                    />
+                  </div>
+                  <div className="mb-4">
+                    <InvitationManagementList
+                      tenantId={selectedTenantId}
+                      campaignId={selectedCampaignId}
+                      availabilityVersion={campaignPeopleVersion}
+                      onInvitationChanged={() => {
+                        setCampaignPeopleVersion((value) => value + 1);
+                      }}
+                    />
+                  </div>
+                </>
+              ) : null}
 
               <div className="rounded-2xl border border-white/10 bg-white/[0.035] p-4 shadow-[0_0_24px_rgba(168,85,247,0.05)]">
                 <div className="mb-3 flex items-center justify-between gap-3">
-                  <p className="text-sm text-zinc-200 font-medium">Current campaign members & invites</p>
+                  <p className="text-sm text-zinc-200 font-medium">Current campaign members</p>
                   <span className="text-xs text-zinc-300/70">
-                    {campaignPeopleLoading ? "Loading…" : `${campaignPeople.length} record${campaignPeople.length === 1 ? "" : "s"}`}
+                    {campaignPeopleLoading ? "Loading…" : `${campaignPeople.filter((person) => person.type === "member").length} member${campaignPeople.filter((person) => person.type === "member").length === 1 ? "" : "s"}`}
                   </span>
                 </div>
 
                 {campaignPeopleLoading ? (
                   <p className="text-sm text-zinc-300/75">Loading campaign members and invitations…</p>
-                ) : campaignPeople.length === 0 ? (
-                  <p className="text-sm text-zinc-300/75">No members or pending invites for this campaign yet.</p>
+                ) : campaignPeople.filter((person) => person.type === "member").length === 0 ? (
+                  <p className="text-sm text-zinc-300/75">No campaign members yet.</p>
                 ) : (
                   <div className="overflow-x-auto overflow-y-visible pb-24">
                     <table className="w-full min-w-[920px] border-separate border-spacing-y-2">
@@ -692,7 +685,7 @@ export default function CampaignSettings() {
                         </tr>
                       </thead>
                       <tbody>
-                        {campaignPeople.map((person) => (
+                        {campaignPeople.filter((person) => person.type === "member").map((person) => (
                           <tr key={person.id} className="align-top">
                             <td className="rounded-l-2xl border-y border-l border-white/10 bg-white/[0.025] px-4 py-3">
                               <div className="space-y-1">
@@ -793,18 +786,7 @@ export default function CampaignSettings() {
 
                                 {openActionsId === person.id ? (
                                   <div className="absolute right-0 top-11 z-30 min-w-[200px] overflow-hidden rounded-2xl border border-white/10 bg-zinc-950/95 shadow-[0_12px_30px_rgba(0,0,0,0.35)] backdrop-blur-xl">
-                                    {person.type === "invite" ? (
-                                      <button
-                                        type="button"
-	                                        onClick={() => onRevokeInvite(person.docId)}
-	                                        disabled={Boolean(peopleActionId)}
-	                                        className="flex w-full items-center gap-2 px-3 py-2.5 text-left text-sm text-red-200 transition hover:bg-red-400/10 disabled:cursor-not-allowed disabled:opacity-50"
-                                      >
-                                        <MailX className="h-4 w-4" />
-                                        Revoke invite
-                                      </button>
-                                    ) : (
-                                      <>
+                                    <>
                                         <button
                                           type="button"
 	                                          onClick={() => {
@@ -826,8 +808,7 @@ export default function CampaignSettings() {
                                           <UserMinus className="h-4 w-4" />
                                           Remove from campaign
                                         </button>
-                                      </>
-                                    )}
+                                    </>
                                   </div>
                                 ) : null}
                               </div>

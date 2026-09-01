@@ -2444,6 +2444,84 @@ test("keeps retired feature and placeholder controls out of authenticated naviga
   }
 });
 
+test("shows scoped invitation lifecycle controls only in owner GM mode", async ({
+  page,
+  request,
+}) => {
+  await page.route("**/api/campaign-content?resource=campaignSettings**", async (route) => {
+    await route.fulfill({
+      status: 200,
+      json: {
+        ok: true,
+        campaign: {
+          id: readyCampaignId,
+          campaignId: "e2e-campaign",
+          workspaceId: readyWorkspaceId,
+          name: "E2E Campaign",
+          description: "Authentication emulator test campaign",
+          status: "active",
+          system: "",
+          playerSummary: "",
+          gmNotes: "",
+          startDate: "",
+          endDate: "",
+        },
+      },
+    });
+  });
+  await page.route("**/api/campaign-content?resource=campaignPeople**", async (route) => {
+    await route.fulfill({ status: 200, json: { ok: true, campaignId: "e2e-campaign", people: [] } });
+  });
+  await page.route("**/api/campaign-content?resource=characterAssignments**", async (route) => {
+    await route.fulfill({ status: 200, json: { ok: true, assignments: [], assignedCharacterIds: [], pendingAssignedCharacterIds: [], characters: [] } });
+  });
+  await page.route("**/api/worldbuilding?resource=characters**", async (route) => {
+    await route.fulfill({ status: 200, json: { ok: true, characters: [] } });
+  });
+  await page.route("**/api/invitations?**", async (route) => {
+    await route.fulfill({
+      status: 200,
+      json: {
+        ok: true,
+        invitations: [{
+          id: "e2e-pending-invitation",
+          email: "invitee@example.test",
+          normalizedEmail: "invitee@example.test",
+          workspaceRole: "member",
+          campaignRole: "player",
+          status: "pending",
+          characterIds: [],
+          createdAt: "2026-01-01T00:00:00.000Z",
+          expiresAt: "2099-01-01T00:00:00.000Z",
+          acceptedAt: null,
+          revokedAt: null,
+          lastSentAt: "2026-01-01T00:00:00.000Z",
+        }],
+      },
+    });
+  });
+
+  const email = generatedEmail();
+  await createVerifiedUser(request, email, password);
+  await openEmailSignIn(page);
+  await page.getByLabel("Email address").fill(email);
+  await page.getByLabel("Password", { exact: true }).fill(password);
+  await page.getByRole("button", { name: "Sign in", exact: true }).click();
+  await expect(page.getByRole("heading", { name: "E2E Campaign" })).toBeVisible();
+
+  await page.getByRole("button", { name: "GM", exact: true }).click();
+  await page.goto("/campaigns/settings");
+  await expect(page.getByRole("button", { name: "Invite player", exact: true })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Invitations" })).toBeVisible();
+  await expect(page.getByText("invitee@example.test", { exact: true })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Resend", exact: true })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Revoke", exact: true })).toBeVisible();
+
+  await page.getByRole("button", { name: "Player", exact: true }).click();
+  await expect(page.getByRole("button", { name: "Invite player", exact: true })).toHaveCount(0);
+  await expect(page.getByRole("heading", { name: "Invitations" })).toHaveCount(0);
+});
+
 test("shows a generic error for incorrect credentials", async ({ page }) => {
   const email = generatedEmail();
 
