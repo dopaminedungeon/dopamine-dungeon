@@ -1,5 +1,12 @@
 // src/App.jsx
-import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
+import {
+  BrowserRouter,
+  Routes,
+  Route,
+  Navigate,
+  Link,
+  useNavigate,
+} from "react-router-dom";
 import AppLayout from "./layouts/AppLayout.jsx";
 import Dashboard from "./pages/DopamineDungeonDashboard.jsx";
 import Npcs from "./pages/Npcs";
@@ -24,13 +31,17 @@ import { useTenant } from "./context/TenantContext.jsx";
 import { useCampaign } from "./context/CampaignContext.jsx";
 import AppProviders, { useAccessResolution } from "./context/AppProviders.jsx";
 import { features } from "./config/features";
-import React from "react";
+import React, { useEffect } from "react";
 import Welcome from "./pages/Welcome";
 import AuthScreen from "./components/auth/AuthScreen.jsx";
 import VerificationScreen from "./components/auth/VerificationScreen.jsx";
 import VerificationActionScreen from "./components/auth/VerificationActionScreen.jsx";
 import PasswordRecoveryRequestScreen from "./components/auth/PasswordRecoveryRequestScreen.jsx";
 import PasswordResetActionScreen from "./components/auth/PasswordResetActionScreen.jsx";
+import PublicSiteShell, {
+  PublicFeatures,
+  PublicHome,
+} from "./layouts/PublicSiteShell.jsx";
 
 function App() {
   if (window.location.pathname === "/auth/recover") {
@@ -42,10 +53,73 @@ function App() {
   }
 
   return (
+    <BrowserRouter>
+      <Routes>
+        <Route element={<PublicSiteShell />}>
+          <Route index element={<PublicEntryRoute />} />
+          <Route path="/features" element={<PublicFeatures />} />
+        </Route>
+        <Route path="/login" element={<PublicAuthEntry />} />
+        <Route path="/get-started" element={<PublicAuthEntry />} />
+        <Route path="*" element={<ApplicationBoundary />} />
+      </Routes>
+    </BrowserRouter>
+  );
+}
+
+function PublicEntryRoute() {
+  const invited = new URLSearchParams(window.location.search).get("invited") === "true";
+
+  return invited ? (
+    <Navigate to="/welcome?invited=true" replace />
+  ) : (
+    <PublicHome />
+  );
+}
+
+function PublicAuthEntry() {
+  const navigate = useNavigate();
+  const {
+    authStatus,
+    user,
+    verificationUser,
+    profileInitializationFailed,
+    signInWithGoogle,
+    signInWithEmail,
+    registerWithEmail,
+  } = useAuth();
+
+  useEffect(() => {
+    if (user || verificationUser || profileInitializationFailed) {
+      navigate("/home", { replace: true });
+    }
+  }, [navigate, profileInitializationFailed, user, verificationUser]);
+
+  if (authStatus === "loading") {
+    return <LoadingScreen label="Loading…" />;
+  }
+
+  return (
+    <div className="relative min-h-screen bg-zinc-950">
+      <Link
+        to="/"
+        className="absolute left-6 top-6 z-10 text-sm font-semibold text-zinc-300 hover:text-white"
+      >
+        Back to public site
+      </Link>
+      <AuthScreen
+        onGoogle={signInWithGoogle}
+        onEmailSignIn={signInWithEmail}
+        onEmailRegistration={registerWithEmail}
+      />
+    </div>
+  );
+}
+
+function ApplicationBoundary() {
+  return (
     <AppProviders>
-      <BrowserRouter>
-        <AppGate />
-      </BrowserRouter>
+      <AppGate />
     </AppProviders>
   );
 }

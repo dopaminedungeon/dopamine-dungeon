@@ -1027,7 +1027,7 @@ test("verifies a reset link, enforces shared password policy, and replaces the c
   expect(uncaughtPageErrors).toBe(0);
   await expect(page.locator("main")).not.toContainText(email);
 
-  await page.goto("/");
+  await page.goto("/login");
   await page.getByRole("button", { name: "Continue with email" }).click();
   await page.getByLabel("Email address").fill(email);
   await page.getByLabel("Password", { exact: true }).fill(replacementPassword);
@@ -1443,7 +1443,7 @@ test.describe("post-verification routing", () => {
     test("continues to independent workspace onboarding", async ({ page, request }) => {
       const email = generatedEmail();
 
-      await page.goto("/");
+      await page.goto("/login");
       await page.getByRole("button", { name: "Create an account" }).click();
       await page.getByLabel("Email address").fill(email);
       await page.getByLabel("Password", { exact: true }).fill(password);
@@ -2089,11 +2089,57 @@ test("@smoke signs out and keeps protected routes behind authentication", async 
 
   await page.getByRole("button").filter({ hasText: email }).click();
   await page.getByRole("button", { name: "Sign out" }).click();
-  await expect(page.getByRole("heading", { name: "Sign in to your account" })).toBeVisible();
+  await expect(page.getByTestId("public-home")).toBeVisible();
+  await expect(page.getByTestId("enter-app")).toBeVisible();
 
   await page.goto("/home");
   await expect(page.getByRole("heading", { name: "Sign in to your account" })).toBeVisible();
   await expect(page.getByText("E2E Campaign", { exact: true })).toHaveCount(0);
+});
+
+test("@smoke keeps the public homepage outside application bootstrap", async ({
+  apiCallLog,
+  page,
+}) => {
+  const apiRequests: string[] = [];
+  page.on("request", (request) => {
+    const url = new URL(request.url());
+    if (url.pathname.startsWith("/api/")) apiRequests.push(url.pathname);
+  });
+
+  await page.goto("/");
+
+  await expect(page.getByTestId("public-home")).toBeVisible();
+  await expect(page.getByRole("navigation", { name: "Public navigation" })).toBeVisible();
+  await expect(page.getByTestId("enter-app")).toBeVisible();
+  await expect(page.getByText("Sessions", { exact: true })).toHaveCount(0);
+  await expect(page.getByText("Campaign Settings", { exact: true })).toHaveCount(0);
+  expect(apiRequests).toEqual([]);
+  expect(apiCallLog.apiMe).toHaveLength(0);
+});
+
+test("keeps authenticated users on the public homepage until they enter the app", async ({
+  apiCallLog,
+  page,
+  request,
+}) => {
+  const email = generatedEmail();
+  await createVerifiedUser(request, email, password);
+
+  await openEmailSignIn(page);
+  await page.getByLabel("Email address").fill(email);
+  await page.getByLabel("Password", { exact: true }).fill(password);
+  await page.getByRole("button", { name: "Sign in", exact: true }).click();
+  await expect(page.getByRole("heading", { name: "E2E Campaign" })).toBeVisible();
+  const apiMeCallsBeforePublicHome = apiCallLog.apiMe.length;
+
+  await page.goto("/");
+
+  await expect(page.getByTestId("public-home")).toBeVisible();
+  await expect(page.getByTestId("enter-app")).toBeVisible();
+  await expect(page.getByText("E2E Campaign", { exact: true })).toHaveCount(0);
+  await expect(page.getByText("Sessions", { exact: true })).toHaveCount(0);
+  expect(apiCallLog.apiMe).toHaveLength(apiMeCallsBeforePublicHome);
 });
 
 test("@credential-migration keeps normal access available and optional setup locally validated", async ({

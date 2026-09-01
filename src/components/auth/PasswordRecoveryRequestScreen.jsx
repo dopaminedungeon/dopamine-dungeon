@@ -94,7 +94,7 @@ export default function PasswordRecoveryRequestScreen() {
         >
           Try again
         </button>
-        <a href="/" className="mt-[16px] flex min-h-[44px] items-center justify-center text-zinc-400 underline-offset-4 hover:text-white hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-purple-300">
+        <a href="/login" className="mt-[16px] flex min-h-[44px] items-center justify-center text-zinc-400 underline-offset-4 hover:text-white hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-purple-300">
           Return to sign in
         </a>
       </AuthRecoveryShell>
@@ -121,7 +121,7 @@ export default function PasswordRecoveryRequestScreen() {
         >
           Request another reset
         </button>
-        <a href="/" className="mt-[12px] flex min-h-[44px] items-center justify-center text-zinc-400 underline-offset-4 hover:text-white hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-purple-300">
+        <a href="/login" className="mt-[12px] flex min-h-[44px] items-center justify-center text-zinc-400 underline-offset-4 hover:text-white hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-purple-300">
           Return to sign in
         </a>
       </AuthRecoveryShell>
@@ -168,7 +168,7 @@ export default function PasswordRecoveryRequestScreen() {
         </button>
       </form>
 
-      <a href="/" className="mt-[18px] flex min-h-[44px] items-center justify-center text-zinc-400 underline-offset-4 hover:text-white hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-purple-300">
+      <a href="/login" className="mt-[18px] flex min-h-[44px] items-center justify-center text-zinc-400 underline-offset-4 hover:text-white hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-purple-300">
         Return to sign in
       </a>
     </AuthRecoveryShell>
