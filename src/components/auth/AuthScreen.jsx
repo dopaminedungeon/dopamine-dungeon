@@ -24,6 +24,7 @@ export default function AuthScreen({
   onEmailSignIn,
   onEmailRegistration,
   initialView = "choices",
+  reserveReturnSpace = false,
 }) {
   const [view, setView] = useState(initialView);
   const [email, setEmail] = useState("");
@@ -124,7 +125,7 @@ export default function AuthScreen({
   return (
     <GradientBackground>
       <main className="min-h-screen text-zinc-100">
-        <div className="relative mx-auto flex min-h-screen w-full items-center justify-center px-[16px] py-[32px] sm:py-[48px]">
+        <div className={`relative mx-auto flex min-h-screen w-full items-center justify-center px-[16px] ${reserveReturnSpace ? "pb-[32px] pt-[88px] sm:py-[48px]" : "py-[32px] sm:py-[48px]"}`}>
           <section className="w-[calc(100vw-32px)] max-w-[480px]" aria-labelledby="auth-title">
           <header className="mb-[32px] flex w-full items-center gap-[20px]" data-testid="auth-brand">
             <img

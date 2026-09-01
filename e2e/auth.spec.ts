@@ -2120,8 +2120,8 @@ test("@smoke keeps the public homepage outside application bootstrap", async ({
   await expect(page.getByTestId("enter-dungeon")).toHaveCount(1);
   await expect(page.getByTestId("enter-dungeon")).toHaveText("Enter The Dungeon");
   await expect(page.getByTestId("enter-dungeon")).toHaveAttribute("href", "/home");
-  await expect(page.getByTestId("public-login")).toHaveAttribute("href", "/login");
-  await expect(page.getByTestId("public-sign-up")).toHaveAttribute("href", "/get-started");
+  await expect(page.getByRole("link", { name: "Log in", exact: true })).toHaveAttribute("href", "/login");
+  await expect(page.getByRole("link", { name: "Sign up", exact: true })).toHaveAttribute("href", "/get-started");
   await expect(page.getByText("Sessions", { exact: true })).toHaveCount(0);
   await expect(page.getByText("Campaign Settings", { exact: true })).toHaveCount(0);
   expect(apiRequests).toEqual([]);
@@ -2148,7 +2148,7 @@ test("public navigation reaches each coming-soon page and auth entry state", asy
     await page.goto("/");
   }
 
-  await page.getByTestId("public-login").click();
+  await page.getByRole("link", { name: "Log in", exact: true }).click();
   await expect(page).toHaveURL(/\/login$/);
   await expect(page.getByRole("heading", { name: "Sign in to your account" })).toBeVisible();
   await expect(page.getByRole("button", { name: "Continue with Google" })).toBeVisible();
@@ -2159,6 +2159,65 @@ test("public navigation reaches each coming-soon page and auth entry state", asy
   await expect(page).toHaveURL(/\/get-started$/);
   await expect(page.getByRole("heading", { name: "Create your account" })).toBeVisible();
   await expect(page.getByRole("button", { name: "Continue with Google" })).toBeVisible();
+});
+
+test("public navigation collapses into an accessible phone menu", async ({ page }) => {
+  await page.setViewportSize({ width: 375, height: 667 });
+  await page.goto("/");
+
+  await expect(page.getByRole("link", { name: "Log in", exact: true })).toBeVisible();
+  await expect(page.getByRole("link", { name: "Sign up", exact: true })).toBeVisible();
+  await expect(page.getByTestId("public-menu-toggle")).toHaveAttribute("aria-expanded", "false");
+  await expect(page.getByTestId("public-mobile-menu")).toHaveCount(0);
+  await expect(page.getByRole("link", { name: "Features", exact: true })).toHaveCount(0);
+
+  await page.getByTestId("public-menu-toggle").click();
+  await expect(page.getByTestId("public-mobile-menu")).toBeVisible();
+  await expect(page.getByTestId("public-menu-toggle")).toHaveAttribute("aria-expanded", "true");
+  for (const label of ["About Us", "Features", "Pricing", "Resources", "Socials"]) {
+    await expect(page.getByRole("menuitem", { name: label, exact: true })).toBeVisible();
+  }
+
+  await page.keyboard.press("Escape");
+  await expect(page.getByTestId("public-mobile-menu")).toHaveCount(0);
+  await page.getByTestId("public-menu-toggle").click();
+  await page.getByRole("menuitem", { name: "Features", exact: true }).click();
+  await expect(page).toHaveURL(/\/features$/);
+  await expect(page.getByText("Coming soon", { exact: true })).toBeVisible();
+});
+
+test("public tablet layouts stay centered and within the viewport", async ({ page }) => {
+  await page.setViewportSize({ width: 820, height: 1180 });
+  await page.goto("/");
+
+  const hero = await page.getByTestId("public-home").boundingBox();
+  const artwork = await page.getByTestId("public-artwork").boundingBox();
+  expect(hero).not.toBeNull();
+  expect(artwork).not.toBeNull();
+  expect(hero!.x + hero!.width / 2).toBeCloseTo(410, 0);
+  expect(artwork!.x).toBeGreaterThanOrEqual(0);
+  expect(artwork!.x + artwork!.width).toBeLessThanOrEqual(820);
+
+  await page.goto("/about");
+  const card = await page.locator('[data-testid="public-coming-soon"] section').boundingBox();
+  expect(card).not.toBeNull();
+  expect(card!.x + card!.width / 2).toBeCloseTo(410, 0);
+});
+
+test("auth return navigation stays clear of the brand on short phones", async ({ page }) => {
+  await page.setViewportSize({ width: 375, height: 667 });
+
+  for (const path of ["/login", "/get-started", "/home"]) {
+    await page.goto(path);
+    await expect(page.getByTestId("back-to-public")).toBeVisible();
+    const back = await page.getByTestId("back-to-public").boundingBox();
+    const brand = await page.getByTestId("auth-brand").boundingBox();
+    expect(back).not.toBeNull();
+    expect(brand).not.toBeNull();
+    expect(
+      back!.y + back!.height <= brand!.y || brand!.y + brand!.height <= back!.y
+    ).toBeTruthy();
+  }
 });
 
 test("keeps authenticated users on the public homepage until they enter the app", async ({

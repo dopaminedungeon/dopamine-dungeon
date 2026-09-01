@@ -1,3 +1,5 @@
+import { useEffect, useState } from "react";
+import { Menu, X } from "lucide-react";
 import { Link, Outlet } from "react-router-dom";
 
 const publicLinks = [
@@ -9,27 +11,40 @@ const publicLinks = [
 ];
 
 export default function PublicSiteShell() {
+  const [menuOpen, setMenuOpen] = useState(false);
+
+  useEffect(() => {
+    if (!menuOpen) return undefined;
+
+    function handleKeyDown(event) {
+      if (event.key === "Escape") setMenuOpen(false);
+    }
+
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [menuOpen]);
+
   return (
     <div className="min-h-screen bg-zinc-950 text-zinc-100">
-      <header className="border-b border-zinc-800/90 bg-zinc-950/95">
+      <header className="relative border-b border-zinc-800/90 bg-zinc-950/95">
         <nav
           aria-label="Public navigation"
-          className="mx-auto flex w-full max-w-[1240px] flex-wrap items-center justify-between gap-x-[28px] gap-y-4 px-6 py-[18px] lg:py-[20px]"
+          className="mx-auto flex w-full max-w-[1240px] items-center justify-between gap-3 px-4 py-[18px] sm:px-6 lg:gap-x-[28px] lg:py-[20px]"
         >
           <Link
             to="/"
-            className="flex items-center gap-3 text-[22px] font-semibold tracking-tight text-white"
+            className="flex min-w-0 items-center gap-2 text-[18px] font-semibold tracking-tight text-white sm:gap-3 sm:text-[22px]"
             data-testid="public-brand"
           >
             <img
               src="/logo/dd-app-icon-master.png"
               alt=""
-              className="h-[44px] w-[44px] rounded-lg object-contain"
+              className="h-[36px] w-[36px] shrink-0 rounded-lg object-contain sm:h-[44px] sm:w-[44px]"
             />
-            <span>Dopamine Dungeon</span>
+            <span className="truncate">Dopamine Dungeon</span>
           </Link>
 
-          <div className="flex flex-wrap items-center justify-end gap-x-[28px] gap-y-2 text-[16px]">
+          <div className="hidden flex-wrap items-center justify-end gap-x-[28px] gap-y-2 text-[16px] lg:flex">
             {publicLinks.map(([label, path]) => (
               <Link
                 key={path}
@@ -55,7 +70,55 @@ export default function PublicSiteShell() {
               Sign up
             </Link>
           </div>
+
+          <div className="flex shrink-0 items-center gap-2 text-[14px] sm:gap-3 sm:text-[16px] lg:hidden">
+            <Link
+              to="/login"
+              className="text-zinc-200 transition hover:text-white"
+            >
+              Log in
+            </Link>
+            <Link
+              to="/get-started"
+              className="rounded-md border border-violet-400/60 px-3 py-2 font-semibold text-violet-200 transition hover:border-violet-300 hover:bg-violet-500/10 hover:text-white"
+            >
+              Sign up
+            </Link>
+            <button
+              type="button"
+              className="inline-flex h-10 w-10 items-center justify-center rounded-md border border-zinc-700 text-zinc-200 transition hover:border-zinc-500 hover:bg-zinc-800 hover:text-white focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-violet-300"
+              aria-expanded={menuOpen}
+              aria-controls="public-mobile-menu"
+              aria-label={menuOpen ? "Close public navigation" : "Open public navigation"}
+              data-testid="public-menu-toggle"
+              onClick={() => setMenuOpen((open) => !open)}
+            >
+              {menuOpen ? <X className="h-5 w-5" aria-hidden="true" /> : <Menu className="h-5 w-5" aria-hidden="true" />}
+            </button>
+          </div>
         </nav>
+
+        {menuOpen && (
+          <div
+            id="public-mobile-menu"
+            role="menu"
+            aria-label="Public menu"
+            className="absolute right-4 top-full z-20 w-[min(220px,calc(100vw-32px))] rounded-xl border border-zinc-700 bg-zinc-900 p-2 shadow-2xl shadow-black/40 lg:hidden"
+            data-testid="public-mobile-menu"
+          >
+            {publicLinks.map(([label, path]) => (
+              <Link
+                key={path}
+                to={path}
+                role="menuitem"
+                className="block rounded-lg px-4 py-3 text-[15px] text-zinc-200 transition hover:bg-zinc-800 hover:text-white focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-violet-300"
+                onClick={() => setMenuOpen(false)}
+              >
+                {label}
+              </Link>
+            ))}
+          </div>
+        )}
       </header>
 
       <Outlet />
@@ -66,7 +129,7 @@ export default function PublicSiteShell() {
 export function PublicHome() {
   return (
     <main
-      className="mx-auto grid min-h-[calc(100vh-84px)] w-full max-w-[1200px] items-center gap-10 px-6 py-10 sm:py-14 lg:grid-cols-[minmax(0,600px)_minmax(420px,480px)] lg:justify-between lg:gap-16 lg:py-14"
+      className="mx-auto grid min-h-[calc(100vh-84px)] w-full max-w-[1200px] items-center gap-10 px-6 py-10 text-center sm:py-14 lg:grid-cols-[minmax(0,600px)_minmax(420px,480px)] lg:justify-between lg:gap-16 lg:py-14 lg:text-left"
       data-testid="public-home"
     >
       <section className="w-full max-w-[600px]">
@@ -86,7 +149,7 @@ export function PublicHome() {
         >
           Coming soon
         </p>
-        <div className="mt-8">
+        <div className="mt-8 flex justify-center lg:justify-start">
           <Link
             to="/home"
             className="inline-flex rounded-md bg-violet-500 px-6 py-3 font-semibold text-white shadow-lg shadow-violet-950/30 transition hover:bg-violet-400 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-violet-300"
@@ -120,10 +183,10 @@ export function PublicFeatures() {
 export function PublicComingSoonPage({ title, testId = "public-coming-soon" }) {
   return (
     <main
-      className="mx-auto flex min-h-[calc(100vh-91px)] w-full max-w-7xl items-center px-6 py-16"
+      className="mx-auto flex min-h-[calc(100vh-84px)] w-full max-w-7xl items-center justify-center px-6 py-16"
       data-testid={testId}
     >
-      <section className="w-full max-w-3xl rounded-3xl border border-zinc-800 bg-zinc-900/50 p-8 shadow-2xl shadow-black/20 sm:p-12">
+      <section className="w-full max-w-3xl rounded-3xl border border-zinc-800 bg-zinc-900/50 p-8 text-center shadow-2xl shadow-black/20 sm:p-12">
         <p className="text-sm font-semibold uppercase tracking-[0.25em] text-violet-300">
           Coming soon
         </p>
@@ -139,10 +202,10 @@ export function PublicComingSoonPage({ title, testId = "public-coming-soon" }) {
 export function PublicSocialsPage() {
   return (
     <main
-      className="mx-auto flex min-h-[calc(100vh-91px)] w-full max-w-7xl items-center px-6 py-16"
+      className="mx-auto flex min-h-[calc(100vh-84px)] w-full max-w-7xl items-center justify-center px-6 py-16"
       data-testid="public-socials"
     >
-      <section className="w-full max-w-3xl rounded-3xl border border-zinc-800 bg-zinc-900/50 p-8 shadow-2xl shadow-black/20 sm:p-12">
+      <section className="w-full max-w-3xl rounded-3xl border border-zinc-800 bg-zinc-900/50 p-8 text-center shadow-2xl shadow-black/20 sm:p-12">
         <p className="text-sm font-semibold uppercase tracking-[0.25em] text-violet-300">
           Coming soon
         </p>

@@ -107,13 +107,14 @@ function PublicAuthEntry({ initialView }) {
 
   return (
     <div className="relative min-h-screen bg-zinc-950">
+      <BackToPublicLink />
       <AuthScreen
         onGoogle={signInWithGoogle}
         onEmailSignIn={signInWithEmail}
         onEmailRegistration={registerWithEmail}
         initialView={initialView}
+        reserveReturnSpace
       />
-      <BackToPublicLink />
     </div>
   );
 }
@@ -192,12 +193,13 @@ function AppGate() {
   if (!user) {
     return (
       <div className="relative min-h-screen bg-zinc-950">
+        <BackToPublicLink />
         <AuthScreen
           onGoogle={signInWithGoogle}
           onEmailSignIn={signInWithEmail}
           onEmailRegistration={registerWithEmail}
+          reserveReturnSpace
         />
-        <BackToPublicLink />
       </div>
     );
   }
@@ -315,7 +317,7 @@ function BackToPublicLink() {
   return (
     <Link
       to="/"
-      className="fixed left-6 top-6 z-[100] inline-flex min-h-11 items-center rounded-md border border-zinc-700 bg-zinc-900/80 px-4 text-sm font-semibold text-zinc-200 shadow-sm transition hover:border-zinc-500 hover:bg-zinc-800 hover:text-white focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-purple-300"
+      className="mx-4 mt-4 inline-flex min-h-11 items-center rounded-md border border-zinc-700 bg-zinc-900/80 px-4 text-sm font-semibold text-zinc-200 shadow-sm transition hover:border-zinc-500 hover:bg-zinc-800 hover:text-white focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-purple-300 sm:mx-6"
       data-testid="back-to-public"
     >
       Back to public site
