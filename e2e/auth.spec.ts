@@ -353,7 +353,7 @@ async function startWorkspaceOnboardingObserver(page: Page) {
     trackedWindow.__ddWorkspaceOnboardingObserver?.disconnect();
 
     const check = () => {
-      if (document.body?.innerText.includes("Create your workspace")) {
+      if (document.body?.innerText.includes("Create your first workspace")) {
         trackedWindow.__ddWorkspaceOnboardingSeen = true;
       }
     };
@@ -378,7 +378,7 @@ async function startWorkspaceOnboardingObserver(page: Page) {
       trackedWindow.__ddWorkspaceOnboardingObserver?.disconnect();
 
       const check = () => {
-        if (document.body?.innerText.includes("Create your workspace")) {
+        if (document.body?.innerText.includes("Create your first workspace")) {
           trackedWindow.__ddWorkspaceOnboardingSeen = true;
         }
       };
@@ -876,7 +876,7 @@ test("offers non-identifying password recovery for existing and nonexistent addr
   await expect(page.getByText(resetConfirmation, { exact: true })).toBeVisible();
   await expect(page.locator("main")).not.toContainText(nonexistentEmail);
   await expect(page.getByText("E2E Campaign", { exact: true })).toHaveCount(0);
-  await expect(page.getByRole("heading", { name: "Create your workspace" })).toHaveCount(0);
+  await expect(page.getByRole("heading", { name: "Create your first workspace" })).toHaveCount(0);
 });
 
 test.describe("password recovery service failures", () => {
@@ -923,7 +923,7 @@ test("forces password recovery into a signed-out route without application conte
   await page.goto("/auth/recover");
   await expect(page.getByRole("heading", { name: "Reset your password" })).toBeVisible();
   await expect(page.getByText("E2E Campaign", { exact: true })).toHaveCount(0);
-  await expect(page.getByRole("heading", { name: "Create your workspace" })).toHaveCount(0);
+  await expect(page.getByRole("heading", { name: "Create your first workspace" })).toHaveCount(0);
 
   await page.getByRole("link", { name: "Return to sign in" }).click();
   await expect(page.getByRole("heading", { name: "Sign in to your account" })).toBeVisible();
@@ -1033,7 +1033,7 @@ test("verifies a reset link, enforces shared password policy, and replaces the c
   await page.getByLabel("Password", { exact: true }).fill(replacementPassword);
   await page.getByRole("button", { name: "Sign in", exact: true }).click();
   await expect(page.getByRole("heading", { name: "E2E Campaign" })).toBeVisible();
-  await expect(page.getByRole("heading", { name: "Create your workspace" })).toHaveCount(0);
+  await expect(page.getByRole("heading", { name: "Create your first workspace" })).toHaveCount(0);
 });
 
 test("does not issue reset actions or verify an unverified account", async ({
@@ -1049,7 +1049,7 @@ test("does not issue reset actions or verify an unverified account", async ({
   await expect(page.getByRole("heading", { name: "Check your email" })).toBeVisible();
   await expect(page.getByText(resetConfirmation, { exact: true })).toBeVisible();
   await expect(page.getByText("E2E Campaign", { exact: true })).toHaveCount(0);
-  await expect(page.getByRole("heading", { name: "Create your workspace" })).toHaveCount(0);
+  await expect(page.getByRole("heading", { name: "Create your first workspace" })).toHaveCount(0);
   expect(await hasPasswordResetCode(request, email)).toBe(false);
 
   const storedAccount = await lookupAuthEmulatorAccount(request, account.idToken);
@@ -1068,7 +1068,7 @@ test("handles malformed and expired reset links with a recovery action", async (
   await expect(page.getByRole("heading", { name: "Reset link expired" })).toBeVisible();
   await expect(page.getByRole("link", { name: "Request another reset" })).toBeVisible();
   await expect(page.getByText("E2E Campaign", { exact: true })).toHaveCount(0);
-  await expect(page.getByRole("heading", { name: "Create your workspace" })).toHaveCount(0);
+  await expect(page.getByRole("heading", { name: "Create your first workspace" })).toHaveCount(0);
 });
 
 test("@smoke registers a password user, blocks access, and completes emulator verification", async ({
@@ -1184,7 +1184,7 @@ test.describe("post-verification routing", () => {
 
       await expect(page.getByRole("heading", { name: "Email verified" })).toBeVisible();
       await expect(
-        page.getByRole("heading", { name: "Create your workspace" })
+        page.getByRole("heading", { name: "Create your first workspace" })
       ).toHaveCount(0);
       await expect(
         page.getByRole("heading", { name: "You have entered the dungeon" })
@@ -1260,7 +1260,7 @@ test.describe("post-verification routing", () => {
       await signInVerifiedInvitedUser(page, request);
 
       await expect(
-        page.getByRole("heading", { name: "Create your workspace" })
+        page.getByRole("heading", { name: "Create your first workspace" })
       ).toHaveCount(0);
       await expect(page.getByRole("heading", { name: "You have entered the dungeon" }))
         .toBeVisible({ timeout: 10_000 });
@@ -1304,7 +1304,7 @@ test.describe("post-verification routing", () => {
       ).toBeVisible();
       await expect(page.getByRole("button", { name: "Try again" })).toBeVisible();
       await expect(
-        page.getByRole("heading", { name: "Create your workspace" })
+        page.getByRole("heading", { name: "Create your first workspace" })
       ).toHaveCount(0);
       await expectWorkspaceOnboardingWasNeverRendered(page);
       expect(apiCallLog.acceptPending).toHaveLength(1);
@@ -1341,7 +1341,7 @@ test.describe("post-verification routing", () => {
 
       await expect(page.getByText("Loading access…", { exact: true })).toBeVisible();
       await expect(
-        page.getByRole("heading", { name: "Create your workspace" })
+        page.getByRole("heading", { name: "Create your first workspace" })
       ).toHaveCount(0);
       await expect(page.getByRole("heading", { name: "You have entered the dungeon" }))
         .toBeVisible({ timeout: 10_000 });
@@ -1385,7 +1385,7 @@ test.describe("post-verification routing", () => {
 
       const signIn = page.getByRole("button", { name: "Sign in", exact: true }).click();
       await expect(
-        page.getByRole("heading", { name: "Create your workspace" })
+        page.getByRole("heading", { name: "Create your first workspace" })
       ).toHaveCount(0);
       await signIn;
       await expect(page.getByRole("heading", { name: "You have entered the dungeon" }))
@@ -1420,7 +1420,7 @@ test.describe("post-verification routing", () => {
         page.getByRole("button", { name: "Use a different account" })
       ).toBeVisible();
       await expect(
-        page.getByRole("heading", { name: "Create your workspace" })
+        page.getByRole("heading", { name: "Create your first workspace" })
       ).toHaveCount(0);
       await expect(page.locator("body")).not.toContainText("Invited Workspace");
       await expect(page.locator("body")).not.toContainText("Invited Campaign");
@@ -1453,7 +1453,7 @@ test.describe("post-verification routing", () => {
 
       await page.goto(`/auth/verify-email?mode=verifyEmail&oobCode=${encodeURIComponent(oobCode)}`);
       await expect(
-        page.getByRole("heading", { name: "Create your workspace" })
+        page.getByRole("heading", { name: "Create your first workspace" })
       ).toBeVisible({ timeout: 10_000 });
       await expect(page.getByText("Invitation accepted", { exact: true })).toHaveCount(0);
     });
@@ -1589,7 +1589,7 @@ test.describe("verified user identity provisioning", () => {
       await page.getByRole("button", { name: "Sign in", exact: true }).click();
 
       await expect(
-        page.getByRole("heading", { name: "Create your workspace" })
+        page.getByRole("heading", { name: "Create your first workspace" })
       ).toBeVisible();
     });
   });
@@ -1617,7 +1617,7 @@ test.describe("verified user identity provisioning", () => {
       ).toBeVisible();
       await expect(page.getByRole("button", { name: "Try again" })).toBeVisible();
       await expect(
-        page.getByRole("heading", { name: "Create your workspace" })
+        page.getByRole("heading", { name: "Create your first workspace" })
       ).toHaveCount(0);
     });
   });
@@ -1660,9 +1660,9 @@ test.describe("canonical workspace creation", () => {
     await page.getByLabel("Password", { exact: true }).fill(password);
     await page.getByRole("button", { name: "Sign in", exact: true }).click();
 
-    await expect(page.getByRole("heading", { name: "Create your workspace" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Create your first workspace" })).toBeVisible();
     await page
-      .getByPlaceholder("e.g. Chronicles of Varionath")
+      .getByPlaceholder("e.g. Adventurers Guild")
       .fill("Created Workspace");
     await page.getByRole("button", { name: "Create workspace" }).click();
 
@@ -1679,6 +1679,157 @@ test.describe("canonical workspace creation", () => {
     await expect
       .poll(() => page.evaluate(() => localStorage.getItem("dd_selectedTenantId")))
       .toBe("created-workspace");
+  });
+});
+
+test.describe("workspace creation onboarding states", () => {
+  const userId = "e2e-workspace-onboarding-user";
+  const workspaceApiMeResponse = {
+    ok: true,
+    user: { id: userId },
+    workspaces: [
+      {
+        id: bootstrapWorkspaceId,
+        slug: "bootstrap-workspace",
+        name: "Bootstrap Workspace",
+      },
+    ],
+    workspaceMemberships: [
+      { workspaceId: bootstrapWorkspaceId, userId, role: "owner" },
+    ],
+    campaigns: [],
+    campaignMemberships: [],
+  };
+
+  test.use({
+    apiMeResponse: emptyApiMeResponse(userId),
+    apiMeResponseAfterWorkspaceCreate: workspaceApiMeResponse,
+  });
+
+  async function enterWorkspaceBootstrap(page: Page, request: APIRequestContext) {
+    const email = generatedEmail();
+    await createVerifiedUser(request, email, password);
+
+    await openEmailSignIn(page);
+    await page.getByLabel("Email address").fill(email);
+    await page.getByLabel("Password", { exact: true }).fill(password);
+    await page.getByRole("button", { name: "Sign in", exact: true }).click();
+    await expect(page.getByRole("heading", { name: "Create your first workspace" })).toBeVisible();
+  }
+
+  test("uses the approved name-only onboarding card and local validation", async ({
+    page,
+    request,
+  }) => {
+    await enterWorkspaceBootstrap(page, request);
+
+    await expect(page.getByTestId("gradient-background")).toBeVisible();
+    await expect(page.getByTestId("workspace-bootstrap-brand")).toContainText("Dopamine Dungeon");
+    await expect(page.getByText("TTRPG Manager", { exact: true })).toBeVisible();
+    await expect(page.getByText("Description", { exact: true })).toHaveCount(0);
+    await expect(page.getByText("Current workspace", { exact: true })).toHaveCount(0);
+    await expect(page.getByRole("button", { name: "Sign out", exact: true })).toHaveCount(1);
+
+    const workspaceName = page.getByPlaceholder("e.g. Adventurers Guild");
+    await expect(page.getByText("Enter a workspace name.", { exact: true })).toHaveCount(0);
+    await page.getByRole("button", { name: "Create workspace", exact: true }).click();
+    await expect(page.getByText("Enter a workspace name.", { exact: true })).toBeVisible();
+    await expect(workspaceName).toBeFocused();
+
+    await workspaceName.fill("New Workspace");
+    await expect(page.getByText("Enter a workspace name.", { exact: true })).toHaveCount(0);
+
+    for (const viewport of [
+      { width: 1440, height: 900 },
+      { width: 375, height: 667 },
+      { width: 375, height: 420 },
+    ]) {
+      await page.setViewportSize(viewport);
+      await expect(page.getByTestId("workspace-bootstrap-card")).toBeVisible();
+      await expect
+        .poll(() => page.evaluate(() => document.documentElement.scrollWidth <= innerWidth))
+        .toBe(true);
+    }
+  });
+
+  test.describe("while creating", () => {
+    test.use({ workspaceCreateDelayMs: 350 });
+
+    test("freezes one payload and transitions directly to campaign creation", async ({
+      apiCallLog,
+      page,
+      request,
+    }) => {
+      await enterWorkspaceBootstrap(page, request);
+
+      const workspaceName = page.getByPlaceholder("e.g. Adventurers Guild");
+      await workspaceName.fill("Frozen Workspace");
+      await page.getByRole("button", { name: "Create workspace", exact: true }).click();
+
+      await expect(page.getByRole("button", { name: "Creating workspace…" })).toBeDisabled();
+      await expect(workspaceName).toBeDisabled();
+      await page.keyboard.press("Enter");
+
+      await expect(
+        page.getByRole("heading", { name: "Create your first campaign" })
+      ).toBeVisible();
+      expect(apiCallLog.workspaceCreate).toHaveLength(1);
+    });
+  });
+
+  test.describe("after a recoverable creation failure", () => {
+    test.use({
+      workspaceCreateStatuses: [500, 201],
+      expectedConsoleErrors: ["Failed to load resource"],
+    });
+
+    test("retains the name and retries with the same idempotency key", async ({
+      apiCallLog,
+      page,
+      request,
+    }) => {
+      await enterWorkspaceBootstrap(page, request);
+
+      const workspaceName = page.getByPlaceholder("e.g. Adventurers Guild");
+      await workspaceName.fill("Retry Workspace");
+      await page.getByRole("button", { name: "Create workspace", exact: true }).click();
+
+      const systemError = page.getByRole("alert").filter({
+        hasText: "We couldn't create your workspace.",
+      });
+      await expect(systemError).toBeVisible();
+      await expect(systemError).toBeFocused();
+      await expect(workspaceName).toHaveValue("Retry Workspace");
+      await expect(page.getByRole("button", { name: "Create workspace", exact: true })).toBeEnabled();
+
+      await page.getByRole("button", { name: "Create workspace", exact: true }).click();
+      await expect(
+        page.getByRole("heading", { name: "Create your first campaign" })
+      ).toBeVisible();
+      expect(apiCallLog.workspaceCreate).toHaveLength(2);
+      expect(apiCallLog.workspaceCreate[1].idempotencyKey).toBe(
+        apiCallLog.workspaceCreate[0].idempotencyKey
+      );
+    });
+  });
+
+  test("leaves stale workspace onboarding when refreshed membership becomes available", async ({
+    apiCallLog,
+    apiMeResponseController,
+    page,
+    request,
+  }) => {
+    await enterWorkspaceBootstrap(page, request);
+    apiMeResponseController.current = workspaceApiMeResponse;
+    await page.reload();
+
+    await expect(
+      page.getByRole("heading", { name: "Create your first campaign" })
+    ).toBeVisible();
+    await expect(
+      page.getByRole("heading", { name: "Create your first workspace" })
+    ).toHaveCount(0);
+    expect(apiCallLog.workspaceCreate).toHaveLength(0);
   });
 });
 
@@ -1733,7 +1884,7 @@ test.describe("canonical campaign creation", () => {
       page.getByRole("heading", { name: "Create your first campaign" })
     ).toBeVisible();
     await page
-      .getByPlaceholder("e.g. Chronicles of Varionath")
+      .getByPlaceholder("e.g. Adventurers Guild")
       .fill("Created Campaign");
     await page.getByRole("button", { name: "Create campaign" }).click();
 
@@ -1827,7 +1978,7 @@ test.describe("bootstrap sign out", () => {
       await signInVerifiedUser(page, request);
 
       await expect(
-        page.getByRole("heading", { name: "Create your workspace" })
+        page.getByRole("heading", { name: "Create your first workspace" })
       ).toBeVisible();
       await observeBootstrapFormSubmissions(page);
 
@@ -1852,7 +2003,7 @@ test.describe("bootstrap sign out", () => {
     }) => {
       await signInVerifiedUser(page, request);
       await expect(
-        page.getByRole("heading", { name: "Create your workspace" })
+        page.getByRole("heading", { name: "Create your first workspace" })
       ).toBeVisible();
 
       await page.evaluate(() => {
@@ -1881,7 +2032,7 @@ test.describe("bootstrap sign out", () => {
         "Could not sign out. Please try again."
       );
       await expect(
-        page.getByRole("heading", { name: "Create your workspace" })
+        page.getByRole("heading", { name: "Create your first workspace" })
       ).toBeVisible();
       await expect(page.getByRole("button", { name: "Sign out" })).toBeEnabled();
       await expect
