@@ -85,12 +85,7 @@ export function AuthProvider({ children }) {
 
       if (!isAuthTestMode) {
         try {
-          await ensureUserProfile({
-            userId: firebaseUser.uid,
-            email: firebaseUser.email ?? "",
-            displayName: firebaseUser.displayName ?? "",
-            photoURL: firebaseUser.photoURL ?? "",
-          });
+          await ensureUserProfile();
         } catch (error) {
           console.error("[AuthContext] Failed to sync user profile", error);
           if (sequence === authChangeSequence) {
@@ -119,12 +114,7 @@ export function AuthProvider({ children }) {
 
     setAuthStatus("loading");
     try {
-      await ensureUserProfile({
-        userId: currentUser.uid,
-        email: currentUser.email ?? "",
-        displayName: currentUser.displayName ?? "",
-        photoURL: currentUser.photoURL ?? "",
-      });
+      await ensureUserProfile();
       setProfileInitializationFailed(false);
       setProfileInitializationUser(null);
       setUser(getApplicationUser(currentUser, "ready", isAuthTestMode));
@@ -196,12 +186,7 @@ export function AuthProvider({ children }) {
     }
     if (!isAuthTestMode) {
       try {
-        await ensureUserProfile({
-          userId: currentUser.uid,
-          email: currentUser.email ?? "",
-          displayName: currentUser.displayName ?? "",
-          photoURL: currentUser.photoURL ?? "",
-        });
+        await ensureUserProfile();
       } catch (error) {
         setVerificationUser(null);
         setUser(null);

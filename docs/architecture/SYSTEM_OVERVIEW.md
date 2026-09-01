@@ -83,11 +83,13 @@ sessions, items, inventory, NPCs, locations, lore, PCs, and typed
 entity links. Campaign and workspace scoping is enforced at the API/data-access
 boundary.
 
-Firestore remains on explicitly transitional paths, including workspace
-bootstrap, some membership and invitation flows, settings, mail delivery, and
-legacy character-assignment/user repositories. No new Firestore application
-data writes should be introduced. Do not remove a transitional path until its
-replacement and rollback behavior are verified. ADR 0003 records the
+Firestore has no active application-state, transactional-mail, or auth-email
+limiter runtime path. Historical migration/reconciliation scripts and retained
+operational Firestore configuration still require explicit decommission gates;
+Firebase Authentication and Firebase Storage remain intentional separate
+services. No new Firestore application data writes should be introduced. Do not
+remove historical inputs or operational configuration until replacement,
+production cutover, and rollback behavior are verified. ADR 0003 records the
 transition; the Neon decision is bounded by ADR 0001.
 
 ## Environments and repository workflow

@@ -106,6 +106,55 @@
       "when": 1787041843916,
       "tag": "0014_brief_mac_gargan",
       "breakpoints": true
+    },
+    {
+      "idx": 15,
+      "version": "7",
+      "when": 1787939389262,
+      "tag": "0015_black_mandroid",
+      "breakpoints": true
+    },
+    {
+      "idx": 16,
+      "version": "7",
+      "when": 1787941373397,
+      "tag": "0016_clumsy_solo",
+      "breakpoints": true
+    },
+    {
+      "idx": 17,
+      "version": "7",
+      "when": 1787943821391,
+      "tag": "0017_married_ravenous",
+      "breakpoints": true
+    },
+    {
+      "idx": 18,
+      "version": "7",
+      "when": 1787986332289,
+      "tag": "0018_glorious_marvex",
+      "breakpoints": true
+    },
+    {
+      "idx": 19,
+      "version": "7",
+      "when": 1788108578017,
+      "tag": "0019_magical_meltdown",
+      "breakpoints": true
+    },
+    {
+      "idx": 20,
+      "version": "7",
+      "when": 1788170219021,
+      "tag": "0020_round_meltdown",
+      "breakpoints": true
+    },
+    {
+      "idx": 21,
+      "version": "7",
+      "when": 1788171272524,
+      "tag": "0021_puzzling_kid_colt",
+      "breakpoints": true
     }
   ]
 }

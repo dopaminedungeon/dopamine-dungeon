@@ -1,10 +1,7 @@
 import { createContext, useCallback, useContext, useEffect, useState } from "react";
-import { doc, setDoc } from "firebase/firestore";
-import { db } from "../firebase/firebase";
 import { useTenant } from "./TenantContext";
 import { useAuth } from "./AuthContext";
-import { createCampaignMember } from "../data/campaignMembers/campaignMembers.repo";
-import { getApiMe } from "../data/api/apiClient";
+import { createApiCampaign, getApiMe } from "../data/api/apiClient";
 
 const CampaignContext = createContext(null);
 const CAMPAIGN_STORAGE_KEY = "dd_selectedCampaignId";
@@ -209,7 +206,12 @@ export function CampaignProvider({ children }) {
     );
   }, []);
 
-  const createCampaign = async ({ name, description = "", system = "" }) => {
+  const createCampaign = async ({
+    name,
+    description = "",
+    system = "",
+    idempotencyKey,
+  }) => {
     if (!user?.uid) {
       throw new Error("You must be signed in to create a campaign.");
     }
@@ -226,40 +228,26 @@ export function CampaignProvider({ children }) {
       throw new Error("Campaign name is required.");
     }
 
-    const campaignId = crypto.randomUUID();
-    const now = Date.now();
+    if (!idempotencyKey) {
+      throw new Error("Campaign creation request is invalid.");
+    }
 
-    const campaign = {
-      id: campaignId,
-      tenantId: selectedTenantId,
+    const created = await createApiCampaign({
+      workspaceId: selectedTenantId,
       name: trimmedName,
       description: trimmedDescription,
       system: trimmedSystem,
-      status: "active",
-      createdAt: now,
-      createdBy: user.uid,
-      updatedAt: now,
-    };
-
-    await setDoc(doc(db, "campaigns", campaignId), campaign);
-
-    await createCampaignMember({
-      id: `${campaignId}_${user.uid}`,
-      campaignId,
-      tenantId: selectedTenantId,
-      userId: user.uid,
-      role: "gm",
-      characterId: null,
-      createdAt: now,
-      createdBy: user.uid,
+      idempotencyKey,
     });
+    const campaign = created.campaign;
 
     await loadCampaigns();
-    selectCampaign(campaignId);
+    selectCampaign(campaign.slug);
 
     return {
       ...campaign,
-      campaignId,
+      campaignId: campaign.slug,
+      tenantId: selectedTenantId,
     };
   };
 

@@ -17,8 +17,11 @@ import {
   PASSWORD_RECOVERY_ACCEPTED_RESPONSE,
 } from "./passwordRecoveryEmail.js";
 import {
+  evaluateAuthEmailRateLimit,
   getRecoveryEmailFingerprint,
   getRecoveryIpFingerprint,
+  type AuthEmailRateLimitStore,
+  type AuthEmailRateLimitTarget,
 } from "./authEmailRateLimit.js";
 import {
   buildPasswordRecoveryEmailHtml,
@@ -35,11 +38,14 @@ function createHandler(
 ) {
   return createPasswordRecoveryEmailHandler({
     auth,
-    db,
+    limiter: createLimiter(db as unknown as { __documents: Map<string, StoredDocument> }),
     fingerprintSecret,
     minimumResponseMs: 0,
     environment: {},
     metric: vi.fn(),
+    sendMail: async (message) => {
+      (db as typeof db & { __mail: unknown[] }).__mail.push(message);
+    },
     ...overrides,
   });
 }
@@ -48,6 +54,8 @@ function createDatabaseDouble() {
   const documents = new Map<string, StoredDocument>();
   const mail: unknown[] = [];
   const db = {
+    __documents: documents,
+    __mail: mail,
     collection(name: string) {
       return {
         doc(id: string) {
@@ -89,6 +97,65 @@ function createDatabaseDouble() {
   };
 
   return { db, documents, mail };
+}
+
+function createLimiter(
+  db: { __documents: Map<string, StoredDocument> }
+): AuthEmailRateLimitStore {
+  const documents = db.__documents;
+  return {
+    async reserve(targets: AuthEmailRateLimitTarget[], nowMs: number) {
+      const documentKey = (scope: string, subjectKey: string) =>
+        JSON.stringify({
+          name:
+            scope === "recovery_ip"
+              ? "_authPasswordRecoveryIpCooldowns"
+              : "_authPasswordRecoveryCooldowns",
+          id: subjectKey,
+        });
+      const findDocument = (scope: string, subjectKey: string) =>
+        Array.from(documents.entries()).find(([key]) => {
+          const reference = JSON.parse(key) as { name?: string; id?: string };
+          return reference.name === (scope === "recovery_ip"
+            ? "_authPasswordRecoveryIpCooldowns"
+            : "_authPasswordRecoveryCooldowns") && reference.id === subjectKey;
+        })?.[1];
+      const decisions: Record<string, ReturnType<typeof evaluateAuthEmailRateLimit>> = {};
+      for (const target of targets) {
+        const current = findDocument(target.scope, target.subjectKey);
+        const legacy = target.legacySubjectKey
+          ? findDocument(target.scope, target.legacySubjectKey)
+          : undefined;
+        const currentAttempts = Array.isArray(current?.attempts) ? current.attempts : [];
+        const legacyAttempts = currentAttempts.length || !Array.isArray(legacy?.attempts)
+          ? []
+          : legacy.attempts;
+        const timestamps = [...currentAttempts, ...legacyAttempts].map((value) =>
+          (value as Date).getTime()
+        );
+        decisions[target.key] = evaluateAuthEmailRateLimit(
+          timestamps,
+          target.policy,
+          nowMs
+        );
+      }
+      const allowed = Object.values(decisions).every((decision) => decision.allowed);
+      if (!allowed) return { allowed, decisions };
+      for (const target of targets) {
+        const record = {
+          attempts: [
+            ...decisions[target.key].activeTimestamps.map((timestamp) => new Date(timestamp)),
+            new Date(nowMs),
+          ],
+        };
+        documents.set(documentKey(target.scope, target.subjectKey), record);
+        documents.set(JSON.stringify({ id: target.subjectKey, name: target.scope === "recovery_ip"
+          ? "_authPasswordRecoveryIpCooldowns"
+          : "_authPasswordRecoveryCooldowns" }), record);
+      }
+      return { allowed, decisions };
+    },
+  };
 }
 
 function request(email: string) {
@@ -207,16 +274,14 @@ test("verified password users queue branded mail with the shared authentication 
   assert.equal(auth.generatePasswordResetLink.mock.calls[0][0], "user@example.test");
   assert.equal(mail.length, 1);
   assert.deepEqual(mail[0], {
-    to: ["user@example.test"],
+    to: "user@example.test",
     from: "Dopamine Dungeon <no-reply@dopamine-dungeon.com>",
     replyTo: "Dopamine Dungeon <dopamine.dungeon.info@gmail.com>",
-    message: {
-      subject: PASSWORD_RECOVERY_EMAIL_SUBJECT,
-      html: buildPasswordRecoveryEmailHtml({
-        passwordResetLink:
-          "https://preview.example.test/auth/reset-password?mode=resetPassword&oobCode=reset-123&lang=en",
-      }),
-    },
+    subject: PASSWORD_RECOVERY_EMAIL_SUBJECT,
+    html: buildPasswordRecoveryEmailHtml({
+      passwordResetLink:
+        "https://preview.example.test/auth/reset-password?mode=resetPassword&oobCode=reset-123&lang=en",
+    }),
   });
 });
 
@@ -332,7 +397,7 @@ test("a missing fingerprint secret fails safely before account lookup", async ()
   const consoleError = vi.spyOn(console, "error").mockImplementation(() => {});
   const handler = createPasswordRecoveryEmailHandler({
     auth,
-    db,
+    limiter: createLimiter(db as unknown as { __documents: Map<string, StoredDocument> }),
     fingerprintSecret: "",
     minimumResponseMs: 0,
     environment: {},
@@ -481,7 +546,9 @@ test("limiter storage failures retain the minimum response duration and sanitize
     const metric = vi.fn();
     const handler = createPasswordRecoveryEmailHandler({
       auth: authDouble(),
-      db,
+      limiter: {
+        reserve: vi.fn().mockRejectedValue(storageError),
+      },
       fingerprintSecret,
       minimumResponseMs: 500,
       environment: {},

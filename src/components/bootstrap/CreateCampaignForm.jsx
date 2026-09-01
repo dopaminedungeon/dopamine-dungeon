@@ -1,5 +1,4 @@
-import { useState } from "react";
-import { createCampaignWithGm } from "../../domain/bootstrap/workspaceBootstrap.service";
+import { useRef, useState } from "react";
 import { useAuth } from "../../context/AuthContext";
 import { useTenant } from "../../context/TenantContext";
 import { useCampaign } from "../../context/CampaignContext";
@@ -7,13 +6,14 @@ import { useCampaign } from "../../context/CampaignContext";
 export default function CreateCampaignForm() {
   const { user } = useAuth();
   const { selectedTenantId } = useTenant();
-  const { refreshCampaigns, selectCampaign } = useCampaign();
+  const { createCampaign } = useCampaign();
 
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
   const [system, setSystem] = useState("D&D 5.5e");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState("");
+  const idempotencyKeyRef = useRef(null);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -42,16 +42,15 @@ export default function CreateCampaignForm() {
     setError("");
 
     try {
-      const { campaign } = await createCampaignWithGm({
-        tenantId: selectedTenantId,
+      idempotencyKeyRef.current ??= crypto.randomUUID();
+      await createCampaign({
         name: trimmedName,
-        userId: user.uid,
         description: normalizedDescription,
         system: normalizedSystem,
+        idempotencyKey: idempotencyKeyRef.current,
       });
 
-      await refreshCampaigns();
-      selectCampaign(campaign.id);
+      idempotencyKeyRef.current = null;
       setName("");
       setDescription("");
       setSystem("D&D 5.5e");

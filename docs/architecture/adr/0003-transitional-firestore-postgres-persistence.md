@@ -19,11 +19,17 @@ persist data in different systems.
 
 ## Decision
 
-Neon PostgreSQL remains the target primary application database.
+Neon PostgreSQL is canonical for Dopamine Dungeon application data. This is
+the destination architecture, not merely an intended direction.
 
 Firebase Authentication remains responsible for user authentication.
 
 Existing Firestore-backed application-data paths are treated as migration debt.
+
+[ADR 0006](0006-canonical-workspace-and-campaign-creation.md) defines the
+canonical server-API creation path for workspaces and campaigns. [#298](https://github.com/dopaminedungeon/dopamine-dungeon/issues/298) owns the complete
+Firestore retirement programme, including environment exports, authorization
+parity, reconciliation, canary, and retirement gates.
 
 No new application-data persistence should be added to Firestore unless an
 explicit architecture decision approves it.
@@ -72,6 +78,8 @@ boundary, not permission to add new Firestore-backed features.
 - Treat cross-database behaviour as high risk.
 - Re-check `docs/architecture/SYSTEM_OVERVIEW.md` when a module is migrated so
   the ownership boundary stays canonical.
+- Follow the [Firestore to Neon migration inventory](../FIRESTORE_TO_NEON_MIGRATION.md)
+  before changing a Firestore dependency.
 
 ## Revisit when
 

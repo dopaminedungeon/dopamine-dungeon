@@ -567,6 +567,23 @@ test("API integration: a dual-role user in Player mode receives only their chara
   assert.deepEqual(assignmentQuery.params, [campaign.id, currentUser.id]);
 });
 
+test("API integration: a persisted GM in Player mode cannot mutate character assignments", async () => {
+  mocks.requireCampaignMember.mockResolvedValue({ role: "gm" });
+  const { res, result } = response();
+
+  await characterAssignmentsHandler(
+    request("POST", undefined, { userId: currentUser.id, characterId: "assigned-hero" }),
+    res
+  );
+
+  assert.equal(result.status, 401);
+  assert.deepEqual(result.body, {
+    ok: false,
+    error: "Campaign GM mode required",
+  });
+  assert.equal(mocks.db.insert.mock.calls.length, 0);
+});
+
 test("API integration: item writes fail closed when GM authorization is denied", async () => {
   mocks.requireCampaignGm.mockRejectedValue(
     new Error("Campaign GM permission required")

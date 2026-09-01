@@ -12,13 +12,13 @@ import {
   getRetryAfterSeconds,
   getTrustedClientIp,
   logAuthEmailMetric,
-  reserveAuthEmailRateLimits,
-  type AuthEmailRateLimitDatabase,
+  type AuthEmailRateLimitStore,
   type AuthEmailRateLimitTarget,
 } from "./authEmailRateLimit.js";
 import { getAuthEmailDelivery } from "./authEmail.js";
 import { setCorsHeaders } from "./cors.js";
 import { getApplicationOrigin } from "./verificationEmail.js";
+import { sendTransactionalEmail } from "./transactionalMail.js";
 
 export const PASSWORD_RECOVERY_COOLDOWN_MS = 60_000;
 export const PASSWORD_RECOVERY_MIN_RESPONSE_MS = 500;
@@ -43,12 +43,13 @@ type PasswordRecoveryDependencies = {
     getUserByEmail(email: string): Promise<FirebaseUser>;
     generatePasswordResetLink(email: string): Promise<string>;
   };
-  db: AuthEmailRateLimitDatabase;
+  limiter: AuthEmailRateLimitStore;
   fingerprintSecret: string;
   minimumResponseMs: number;
   environment?: Record<string, string | undefined>;
   now?: () => number;
   metric?: typeof logAuthEmailMetric;
+  sendMail?: typeof sendTransactionalEmail;
 };
 
 function normalizeEmail(email: unknown) {
@@ -152,17 +153,12 @@ export function createPasswordRecoveryEmailHandler(
         email,
         dependencies.fingerprintSecret
       );
-      const emailRef = dependencies.db
-        .collection("_authPasswordRecoveryCooldowns")
-        .doc(emailFingerprint);
-      const legacyEmailRef = dependencies.db
-        .collection("_authPasswordRecoveryCooldowns")
-        .doc(legacyEmailFingerprint);
       const targets: AuthEmailRateLimitTarget[] = [
         {
           key: "email",
-          ref: emailRef,
-          legacyRef: legacyEmailRef,
+          scope: "recovery_email",
+          subjectKey: emailFingerprint,
+          legacySubjectKey: legacyEmailFingerprint,
           policy: config.recoveryEmail,
         },
       ];
@@ -174,17 +170,12 @@ export function createPasswordRecoveryEmailHandler(
         );
         targets.push({
           key: "ip",
-          ref: dependencies.db
-            .collection("_authPasswordRecoveryIpCooldowns")
-            .doc(ipFingerprint),
+          scope: "recovery_ip",
+          subjectKey: ipFingerprint,
           policy: config.recoveryIp,
         });
       }
-      const reservation = await reserveAuthEmailRateLimits(
-        dependencies.db,
-        targets,
-        logicalRequestTime
-      );
+      const reservation = await dependencies.limiter.reserve(targets, logicalRequestTime);
       limiterCompleted = true;
 
       if (!reservation.allowed) {
@@ -222,16 +213,12 @@ export function createPasswordRecoveryEmailHandler(
       });
       const { from, replyTo } = getAuthEmailDelivery();
 
-      const mailCollection = dependencies.db.collection("mail");
-      if (!mailCollection.add) throw new Error("Mail delivery is unavailable");
-      await mailCollection.add({
-        to: [email],
+      await (dependencies.sendMail ?? sendTransactionalEmail)({
+        to: email,
         from,
         replyTo,
-        message: {
-          subject: PASSWORD_RECOVERY_EMAIL_SUBJECT,
-          html: buildPasswordRecoveryEmailHtml({ passwordResetLink }),
-        },
+        subject: PASSWORD_RECOVERY_EMAIL_SUBJECT,
+        html: buildPasswordRecoveryEmailHtml({ passwordResetLink }),
       });
 
       metric("delivery_accepted");

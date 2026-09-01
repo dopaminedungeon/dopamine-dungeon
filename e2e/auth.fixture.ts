@@ -45,6 +45,8 @@ async function wait(delayMs: number) {
 export const test = base.extend<{
   apiMeResponse: ApiMeResponse;
   apiMeResponseAfterAcceptPending: ApiMeResponse | null;
+  apiMeResponseAfterCampaignCreate: ApiMeResponse | null;
+  apiMeResponseAfterWorkspaceCreate: ApiMeResponse | null;
   apiMeResponses: ApiMeResponse[] | null;
   apiMeStatus: number;
   apiMeDelayMs: number;
@@ -56,6 +58,8 @@ export const test = base.extend<{
     acceptPending: string[];
     identityContinuity: string[];
     verificationEmail: string[];
+    campaignCreate: Array<Record<string, unknown>>;
+    workspaceCreate: Array<Record<string, unknown>>;
   };
   identityContinuityStatus: number;
   identityContinuityUserId: string;
@@ -74,6 +78,8 @@ export const test = base.extend<{
 }>({
   apiMeResponse: [defaultApiMeResponse, { option: true }],
   apiMeResponseAfterAcceptPending: [null, { option: true }],
+  apiMeResponseAfterCampaignCreate: [null, { option: true }],
+  apiMeResponseAfterWorkspaceCreate: [null, { option: true }],
   apiMeResponses: [null, { option: true }],
   apiMeStatus: [200, { option: true }],
   apiMeDelayMs: [0, { option: true }],
@@ -91,6 +97,8 @@ export const test = base.extend<{
       acceptPending: [],
       identityContinuity: [],
       verificationEmail: [],
+      campaignCreate: [],
+      workspaceCreate: [],
     });
   },
   consoleGuard: [
@@ -137,6 +145,8 @@ test.beforeEach(async ({
   apiMeDelaySequence,
   apiMeResponse,
   apiMeResponseAfterAcceptPending,
+  apiMeResponseAfterCampaignCreate,
+  apiMeResponseAfterWorkspaceCreate,
   apiMeResponses,
   apiMeStatus,
   identityContinuityStatus,
@@ -149,6 +159,8 @@ test.beforeEach(async ({
   let apiMeCallCount = 0;
   let identityContinuityCallCount = 0;
   let acceptPendingCompleted = false;
+  let campaignCreated = false;
+  let workspaceCreated = false;
 
   await page.route("http://127.0.0.1:4173/api/**", async (route) => {
     const requestUrl = new URL(route.request().url());
@@ -205,6 +217,8 @@ test.beforeEach(async ({
       const delayMs = apiMeDelaySequence?.[callIndex] ?? apiMeDelayMs;
       await wait(delayMs);
       const response =
+        (workspaceCreated && apiMeResponseAfterWorkspaceCreate) ||
+        (campaignCreated && apiMeResponseAfterCampaignCreate) ||
         (acceptPendingCompleted && apiMeResponseAfterAcceptPending) ||
         apiMeResponses?.[Math.min(callIndex, apiMeResponses.length - 1)] ||
         apiMeResponse;
@@ -222,6 +236,52 @@ test.beforeEach(async ({
       apiCallLog.verificationEmail.push(requestUrl.pathname);
       await sendVerificationEmail(request, authorization!.slice("Bearer ".length));
       await route.fulfill({ status: 202, json: { ok: true } });
+      return;
+    }
+
+    if (
+      requestUrl.pathname === "/api/workspace" &&
+      route.request().method() === "POST" &&
+      !requestUrl.searchParams.has("resource") &&
+      !requestUrl.searchParams.has("type")
+    ) {
+      const requestBody = route.request().postDataJSON() as Record<string, unknown>;
+      apiCallLog.workspaceCreate.push(requestBody);
+      workspaceCreated = true;
+      await route.fulfill({
+        status: 201,
+        json: {
+          ok: true,
+          workspace: {
+            id: "00000000-0000-4000-8000-000000000018",
+            name: String(requestBody.name || "Created Workspace"),
+            slug: "created-workspace",
+          },
+        },
+      });
+      return;
+    }
+
+    if (
+      requestUrl.pathname === "/api/campaign-content" &&
+      route.request().method() === "POST" &&
+      !requestUrl.searchParams.has("resource") &&
+      !requestUrl.searchParams.has("type")
+    ) {
+      const requestBody = route.request().postDataJSON() as Record<string, unknown>;
+      apiCallLog.campaignCreate.push(requestBody);
+      campaignCreated = true;
+      await route.fulfill({
+        status: 201,
+        json: {
+          ok: true,
+          campaign: {
+            id: "00000000-0000-4000-8000-000000000027",
+            name: String(requestBody.name || "Created Campaign"),
+            slug: "created-campaign",
+          },
+        },
+      });
       return;
     }
 

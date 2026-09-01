@@ -12,6 +12,7 @@ import {
   VERIFICATION_EMAIL_SUBJECT,
 } from "../domain/mail/verificationEmail.template.ts";
 import { getAuthEmailDelivery } from "./authEmail.ts";
+import { evaluateAuthEmailRateLimit } from "./authEmailRateLimit.ts";
 
 const NOW = Date.UTC(2026, 7, 28, 12, 0, 0);
 const HOUR_MS = 60 * 60 * 1000;
@@ -23,6 +24,8 @@ function createDatabaseDouble(initial = []) {
     documents,
     mail,
     db: {
+      __mail: mail,
+      __documents: documents,
       collection(name) {
         return {
           doc(id) {
@@ -48,6 +51,40 @@ function createDatabaseDouble(initial = []) {
         for (const [key, data] of writes) documents.set(key, data);
         return result;
       },
+    },
+  };
+}
+
+function createLimiter(db) {
+  return {
+    async reserve(targets, nowMs) {
+      const decisions = {};
+      for (const target of targets) {
+        const document = db.__documents.get(
+          JSON.stringify({ name: "_authVerificationCooldowns", id: target.subjectKey })
+        );
+        decisions[target.key] = evaluateAuthEmailRateLimit(
+          (document?.attempts || []).map((attempt) => attempt.getTime()),
+          target.policy,
+          nowMs
+        );
+      }
+      const allowed = Object.values(decisions).every((decision) => decision.allowed);
+      if (allowed) {
+        for (const target of targets) {
+          db.__documents.set(
+            JSON.stringify({ name: "_authVerificationCooldowns", id: target.subjectKey }),
+            {
+              attempts: [
+                ...decisions[target.key].activeTimestamps.map((timestamp) => new Date(timestamp)),
+                new Date(nowMs),
+              ],
+              lastSentAt: new Date(nowMs),
+            }
+          );
+        }
+      }
+      return { allowed, decisions };
     },
   };
 }
@@ -95,7 +132,8 @@ function createHandler(db, overrides = {}) {
         "https://demo.firebaseapp.com/__/auth/action?mode=verifyEmail&oobCode=code-123"
       ),
     },
-    db,
+    limiter: createLimiter(db),
+    sendMail: async (message) => db.__mail.push(message),
     environment: {},
     now: () => NOW,
     metric: vi.fn(),

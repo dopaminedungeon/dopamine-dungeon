@@ -1,5 +1,5 @@
 // src/pages/CampaignSettings.jsx
-import React, { useMemo, useState, useEffect } from "react";
+import React, { useMemo, useState, useEffect, useRef } from "react";
 import InvitePlayerForm from "../components/invitations/InvitePlayerForm.jsx";
 import {
   Plus,
@@ -10,18 +10,9 @@ import {
   UserMinus,
   MailX,
 } from "lucide-react";
-import {
-  collection,
-  doc,
-  updateDoc,
-  deleteDoc,
-  getDocs,
-  writeBatch,
-} from "firebase/firestore";
 import { useMode } from "../context/ModeContext.jsx";
 import { useCampaign } from "../context/CampaignContext.jsx";
 import { useTenant } from "../context/TenantContext.jsx";
-import { db } from "../firebase/firebase";
 import {
   assignApiCharacter,
   getApiCampaignPeople,
@@ -29,7 +20,8 @@ import {
   removeApiCampaignMember,
   revokeApiCampaignInvite,
   unassignApiCharacter,
-  updateApiCampaign,
+  getApiCampaignSettings,
+  updateApiCampaignSettings,
 } from "../data/api/apiClient.ts";
 import { getAllCharacters } from "../data/characters/characters.repo";
 
@@ -63,7 +55,7 @@ export default function CampaignSettings() {
   const [showCreate, setShowCreate] = useState(false);
   const [creating, setCreating] = useState(false);
   const [saving, setSaving] = useState(false);
-  const [deleting, setDeleting] = useState(false);
+  const [settingsLoading, setSettingsLoading] = useState(false);
   const [saveState, setSaveState] = useState({ type: null, message: "" });
   const [createForm, setCreateForm] = useState({
     name: "",
@@ -80,6 +72,7 @@ export default function CampaignSettings() {
   const [assignmentRows, setAssignmentRows] = useState([]);
   const [assignmentSelectionByUserId, setAssignmentSelectionByUserId] = useState({});
   const [peopleActionId, setPeopleActionId] = useState(null);
+  const createIdempotencyKeyRef = useRef(null);
 
 	  const createCampaign = async (e) => {
 	    e?.preventDefault?.();
@@ -96,6 +89,7 @@ export default function CampaignSettings() {
         name,
         description: createForm.description || "",
         system: createForm.system || "",
+        idempotencyKey: (createIdempotencyKeyRef.current ??= crypto.randomUUID()),
       });
 
       const createdId = created?.campaignId || created?.id || null;
@@ -111,6 +105,7 @@ export default function CampaignSettings() {
       setDraft(created || null);
       setShowCreate(false);
       setCreateForm({ name: "", description: "", status: "active", system: "" });
+      createIdempotencyKeyRef.current = null;
       setSaveState({ type: "success", message: "Campaign created." });
 	    } catch (error) {
 	      console.error("[CampaignSettings] Failed to create campaign", error);
@@ -121,10 +116,36 @@ export default function CampaignSettings() {
 	  };
 
   useEffect(() => {
-    // Sync the draft whenever the active campaign changes.
-    // If there is no active campaign, keep whatever is in draft (e.g. right after creating).
-    if (activeCampaign) setDraft({ ...activeCampaign });
-  }, [selectedCampaignId, activeCampaign]);
+    let cancelled = false;
+
+    async function loadCampaignSettings() {
+      if (!activeCampaign || !selectedCampaignId) {
+        setDraft(null);
+        return;
+      }
+
+      try {
+        setDraft(null);
+        setSettingsLoading(true);
+        setSaveState({ type: null, message: "" });
+        const response = await getApiCampaignSettings(selectedCampaignId);
+        if (!cancelled) setDraft(response.campaign);
+      } catch (error) {
+        console.error("[CampaignSettings] Failed to load campaign settings", error);
+        if (!cancelled) {
+          setDraft(null);
+          setSaveState({ type: "error", message: "Could not load campaign settings." });
+        }
+      } finally {
+        if (!cancelled) setSettingsLoading(false);
+      }
+    }
+
+    loadCampaignSettings();
+    return () => {
+      cancelled = true;
+    };
+  }, [activeCampaign, selectedCampaignId]);
 
   useEffect(() => {
     const loadCampaignPeople = async () => {
@@ -180,13 +201,15 @@ export default function CampaignSettings() {
         <div className="flex items-center justify-between gap-3">
           <div>
             <h1 className="text-2xl font-bold">Campaign Settings</h1>
-            <p className="text-zinc-300/75 mt-2">No active campaign selected.</p>
+            <p className="text-zinc-300/75 mt-2">
+              {settingsLoading ? "Loading campaign settings…" : "No active campaign selected."}
+            </p>
           </div>
 
           {isGM && (
 	            <button
 	              type="button"
-	              disabled={saving || deleting || creating}
+              disabled={saving || creating}
 	              onClick={() => setShowCreate(true)}
 	              className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-linear-to-r from-indigo-500 to-purple-500 text-white font-medium hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
             >
@@ -276,74 +299,13 @@ export default function CampaignSettings() {
 
   const update = (key, value) => setDraft((p) => ({ ...p, [key]: value }));
 
-  async function deleteSubcollectionDocs(campaignId, subcollectionName) {
-    const snap = await getDocs(collection(db, "campaigns", campaignId, subcollectionName));
-    if (snap.empty) return;
-
-    const batch = writeBatch(db);
-    snap.docs.forEach((docSnap) => {
-      batch.delete(docSnap.ref);
-    });
-    await batch.commit();
-  }
-
-	  const onDeleteCampaign = async () => {
-	    const campaignId = draft?.campaignId || selectedCampaignId;
-	    if (saving || deleting || !campaignId) return;
-
-    const confirmed = window.confirm(
-      "Delete this campaign and all associated sessions, items, and bag data? This cannot be undone."
-    );
-    if (!confirmed) return;
-
-    try {
-      setDeleting(true);
-      setSaveState({ type: null, message: "" });
-
-      await deleteSubcollectionDocs(campaignId, "sessions");
-      await deleteSubcollectionDocs(campaignId, "items");
-      await deleteSubcollectionDocs(campaignId, "meta");
-      await deleteDoc(doc(db, "campaigns", campaignId));
-
-      if (typeof refreshCampaigns === "function") {
-        await refreshCampaigns();
-      }
-
-      setDraft(null);
-      setSaveState({ type: "success", message: "Campaign deleted." });
-    } catch (error) {
-      console.error("[CampaignSettings] Failed to delete campaign", error);
-      setSaveState({ type: "error", message: "Could not delete campaign." });
-    } finally {
-      setDeleting(false);
-    }
-  };
-
 	  const onSave = async () => {
 	    const campaignId = draft?.campaignId || selectedCampaignId;
-	    if (saving || deleting || !draft || !campaignId) return;
+	    if (saving || !draft || !campaignId) return;
 
     try {
       setSaving(true);
       setSaveState({ type: null, message: "" });
-
-      await updateDoc(doc(db, "campaigns", campaignId), {
-        name: draft.name || "",
-        description: draft.description || "",
-        status: draft.status || "active",
-        system: draft.system || "",
-        playerSummary: draft.playerSummary || "",
-        publicLore: draft.publicLore || "",
-        gmNotes: draft.gmNotes || "",
-        privateLore: draft.privateLore || "",
-        hiddenFactions: draft.hiddenFactions || "",
-        hiddenTimelines: draft.hiddenTimelines || "",
-        metaCommentary: draft.metaCommentary || "",
-        tags: draft.tags || "",
-        startDate: draft.startDate || "",
-        endDate: draft.endDate || "",
-        lastUpdated: Date.now(),
-      });
 
       const requestedUpdate = {
         campaignId,
@@ -351,9 +313,13 @@ export default function CampaignSettings() {
         description: draft.description || "",
         status: draft.status || "active",
         system: draft.system || "",
+        playerSummary: draft.playerSummary || "",
+        gmNotes: draft.gmNotes || "",
+        startDate: draft.startDate || "",
+        endDate: draft.endDate || "",
       };
 
-      const apiResponse = await updateApiCampaign(requestedUpdate);
+      const apiResponse = await updateApiCampaignSettings(requestedUpdate);
       const returnedCampaign =
         apiResponse?.campaign && typeof apiResponse.campaign === "object"
           ? apiResponse.campaign
@@ -379,6 +345,11 @@ export default function CampaignSettings() {
         description: returnedCampaign.description ?? requestedUpdate.description,
         status: returnedCampaign.status ?? requestedUpdate.status,
         system: returnedCampaign.system ?? requestedUpdate.system,
+        playerSummary: returnedCampaign.playerSummary ?? requestedUpdate.playerSummary,
+        gmNotes: returnedCampaign.gmNotes ?? requestedUpdate.gmNotes,
+        startDate: returnedCampaign.startDate ?? requestedUpdate.startDate,
+        endDate: returnedCampaign.endDate ?? requestedUpdate.endDate,
+        updatedAt: returnedCampaign.updatedAt ?? draft.updatedAt,
       };
 
       setDraft((current) => ({
@@ -387,7 +358,8 @@ export default function CampaignSettings() {
       }));
 
       if (typeof updateCampaignInContext === "function") {
-        updateCampaignInContext(campaignId, savedFields);
+        const { gmNotes: _gmNotes, ...playerSafeSavedFields } = savedFields;
+        updateCampaignInContext(campaignId, playerSafeSavedFields);
       }
 
       setSaveState({ type: "success", message: "Campaign settings saved." });
@@ -515,10 +487,21 @@ export default function CampaignSettings() {
 
             <button
 	              type="button"
-	              disabled={saving || deleting}
-	              onClick={() => {
-                setDraft(activeCampaign ? { ...activeCampaign } : null);
-                setSaveState({ type: null, message: "" });
+              disabled={saving}
+              onClick={() => {
+                if (activeCampaign && selectedCampaignId) {
+                  setSettingsLoading(true);
+                  getApiCampaignSettings(selectedCampaignId)
+                    .then((response) => {
+                      setDraft(response.campaign);
+                      setSaveState({ type: null, message: "" });
+                    })
+                    .catch((error) => {
+                      console.error("[CampaignSettings] Failed to reset campaign settings", error);
+                      setSaveState({ type: "error", message: "Could not reload campaign settings." });
+                    })
+                    .finally(() => setSettingsLoading(false));
+                }
               }}
 	              className="px-4 py-2 rounded-xl bg-white/5 text-zinc-300 hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-50"
             >
@@ -528,7 +511,7 @@ export default function CampaignSettings() {
             <button
               type="button"
               onClick={onSave}
-	              disabled={saving || deleting}
+              disabled={saving}
 	              className="px-4 py-2 rounded-xl bg-linear-to-r from-blue-500 to-cyan-500 text-white font-medium hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
             >
               {saving ? "Saving..." : "Save"}
@@ -536,13 +519,15 @@ export default function CampaignSettings() {
 
             <button
               type="button"
-              onClick={onDeleteCampaign}
-	              disabled={deleting || saving}
+	              disabled
 	              className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-red-500/15 border border-red-500/40 text-red-200 hover:bg-red-500/25 disabled:cursor-not-allowed disabled:opacity-50"
             >
               <Trash2 className="w-4 h-4" />
-              {deleting ? "Deleting..." : "Delete Campaign"}
+              Delete Campaign (temporarily unavailable)
             </button>
+            <p className="self-center text-xs text-zinc-300/70">
+              Campaign deletion is temporarily unavailable while #364 defines the safe lifecycle.
+            </p>
             {saveState.type === "success" && (
               <div className="mb-4 inline-flex items-center gap-2 rounded-full border border-emerald-400/20 bg-emerald-400/10 px-3 py-1.5 text-emerald-200 text-sm">
                 <CheckCircle2 className="w-4 h-4" />
@@ -630,16 +615,6 @@ export default function CampaignSettings() {
                   />
                 </div>
 
-                <div>
-                  <label className="block text-sm text-zinc-200/95 mb-1">High-level intro / lore</label>
-                  <textarea
-                    value={draft.publicLore || ""}
-                    onChange={(e) => update("publicLore", e.target.value)}
-                    rows={5}
-                    placeholder="Public-facing intro lore / campaign premise…"
-                    className="w-full rounded-xl border border-white/10 bg-white/[0.03] px-3.5 py-2.5 text-sm text-white placeholder:text-zinc-400/80 shadow-inner shadow-black/10 focus:outline-none focus:ring-2 focus:ring-fuchsia-400/20"
-                  />
-                </div>
               </div>
             </div>
 	          </section>
@@ -650,9 +625,7 @@ export default function CampaignSettings() {
           <section className="relative overflow-hidden rounded-3xl border border-fuchsia-500/22 bg-zinc-950/55 p-5 shadow-[0_0_0_1px_rgba(217,70,239,0.05),0_0_44px_rgba(168,85,247,0.10)] before:pointer-events-none before:absolute before:inset-0 before:bg-[radial-gradient(circle_at_top_left,rgba(217,70,239,0.15),transparent_34%),radial-gradient(circle_at_bottom_right,rgba(99,102,241,0.12),transparent_36%),radial-gradient(circle_at_center,rgba(168,85,247,0.07),transparent_42%)] before:opacity-100 before:content-['']">
             <div className="relative z-10">
               <h2 className="text-lg font-semibold mb-2">GM-only notes</h2>
-              <p className="mb-4 text-sm text-zinc-300/70">
-                Hidden campaign truth, prep notes, secret timelines, and anything the players are not supposed to see.
-              </p>
+              <p className="mb-4 text-sm text-zinc-300/70">Private prep notes and campaign truth that players must not receive.</p>
 
               <div className="space-y-3">
                 <div>
@@ -662,50 +635,6 @@ export default function CampaignSettings() {
                     onChange={(e) => update("gmNotes", e.target.value)}
                     rows={4}
                     placeholder="Private prep notes, reminders, table meta…"
-                    className="w-full rounded-xl border border-white/10 bg-white/[0.03] px-3.5 py-2.5 text-sm text-white placeholder:text-zinc-400/80 shadow-inner shadow-black/10 focus:outline-none focus:ring-2 focus:ring-fuchsia-400/20"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-sm text-zinc-200/95 mb-1">Private campaign lore</label>
-                  <textarea
-                    value={draft.privateLore || ""}
-                    onChange={(e) => update("privateLore", e.target.value)}
-                    rows={4}
-                    placeholder="Secrets, true history, hidden truths…"
-                    className="w-full rounded-xl border border-white/10 bg-white/[0.03] px-3.5 py-2.5 text-sm text-white placeholder:text-zinc-400/80 shadow-inner shadow-black/10 focus:outline-none focus:ring-2 focus:ring-fuchsia-400/20"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-sm text-zinc-200/95 mb-1">Hidden factions / arcs</label>
-                  <textarea
-                    value={draft.hiddenFactions || ""}
-                    onChange={(e) => update("hiddenFactions", e.target.value)}
-                    rows={3}
-                    placeholder="Who is pulling strings? Which arcs are actually happening?"
-                    className="w-full rounded-xl border border-white/10 bg-white/[0.03] px-3.5 py-2.5 text-sm text-white placeholder:text-zinc-400/80 shadow-inner shadow-black/10 focus:outline-none focus:ring-2 focus:ring-fuchsia-400/20"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-sm text-zinc-200/95 mb-1">Hidden timelines</label>
-                  <textarea
-                    value={draft.hiddenTimelines || ""}
-                    onChange={(e) => update("hiddenTimelines", e.target.value)}
-                    rows={3}
-                    placeholder="Off-screen events / clocks / what advances between sessions…"
-                    className="w-full rounded-xl border border-white/10 bg-white/[0.03] px-3.5 py-2.5 text-sm text-white placeholder:text-zinc-400/80 shadow-inner shadow-black/10 focus:outline-none focus:ring-2 focus:ring-fuchsia-400/20"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-sm text-zinc-200/95 mb-1">Meta commentary</label>
-                  <textarea
-                    value={draft.metaCommentary || ""}
-                    onChange={(e) => update("metaCommentary", e.target.value)}
-                    rows={3}
-                    placeholder="How you prep, themes, tone rules, pacing notes…"
                     className="w-full rounded-xl border border-white/10 bg-white/[0.03] px-3.5 py-2.5 text-sm text-white placeholder:text-zinc-400/80 shadow-inner shadow-black/10 focus:outline-none focus:ring-2 focus:ring-fuchsia-400/20"
                   />
                 </div>
@@ -919,17 +848,7 @@ export default function CampaignSettings() {
           <div className="relative z-10">
             <h3 className="text-base font-semibold text-white mb-2">Metadata</h3>
 
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-              <div>
-                <label className="block text-sm text-zinc-200/95 mb-1">Tags</label>
-                <input
-                  value={draft.tags || ""}
-                  onChange={(e) => update("tags", e.target.value)}
-                  placeholder="comma-separated (e.g. feywild, intrigue, horror)"
-                  className="w-full rounded-xl border border-white/10 bg-white/[0.03] px-3.5 py-2.5 text-sm text-white placeholder:text-zinc-400/80 shadow-inner shadow-black/10 focus:outline-none focus:ring-2 focus:ring-fuchsia-400/20"
-                />
-                <p className="mt-1 text-sm text-zinc-300/75">Use commas to separate tags.</p>
-              </div>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
 
               <div>
                 <label className="block text-sm text-zinc-200/95 mb-1">Start date</label>

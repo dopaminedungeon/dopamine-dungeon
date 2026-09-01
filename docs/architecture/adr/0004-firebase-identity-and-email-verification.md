@@ -1,21 +1,22 @@
 # ADR 0004: Firebase Identity and Email Verification
 
-Status: Proposed
+Status: Accepted
 
 Date: 2026-08-24
 
 Decision owner: Magda
 
-Audit classification: Proposed for Iteration 3/#256; not current behavior on
-`dev`
+Audit classification: Current for implemented #256 verification behavior;
+future authentication changes remain subject to this identity boundary
 
 ## Scope
 
-This proposal records the security direction for the Iteration 3
-authentication feature work associated with #256. The #256 implementation is
-not merged into `dev`; this ADR must not be read as proof that branded
-verification pages, verification mail, Neon verification timestamps, or
-invitation continuation currently exist.
+This ADR records the security boundary for the implemented authentication email
+verification work associated with #256. The repository currently contains
+Firebase-generated verification action links, verification mail delivery,
+Firebase-authoritative verification checks, Neon verification timestamp
+reconciliation, and invitation continuation. The implementation details remain
+subject to the identity constraints below.
 
 ## Current identity boundary
 
@@ -27,27 +28,27 @@ invitation continuation currently exist.
 - Authentication, onboarding, invitation administration, and persistence
   migration remain separate responsibilities.
 
-## Proposed Iteration 3 direction
+## Decision
 
-When #256 is re-evaluated, the implementation should use Firebase-generated
-verification action codes, retain Firebase as the ownership authority, and
-keep any DD result page or mail wrapper from becoming a second token system.
+Verification uses Firebase-generated action codes, retains Firebase as the
+ownership authority, and keeps any DD result page or mail wrapper from becoming
+a second token system.
 The action link must not act as a login credential. Invitation details and
 membership assignment must remain behind verified authentication and
 server-side UID validation.
 
-Any future Neon `email_verified_at` reconciliation must be additive,
-server-authenticated, idempotent, and separately migrated. It is not part of
-the current #317 state.
+Neon `email_verified_at` reconciliation is additive, server-authenticated,
+and idempotent. It records application history without replacing Firebase as
+the current verification authority.
 
-## Required validation before acceptance
+## Ongoing validation
 
 - Verify the real development or Preview inbox/action-link flow; emulator
   results alone cannot prove hosted domains, delivery, or provider settings.
 - Cover same-email/different-UID isolation, concurrent first access, retry,
   invitation privacy, and verified-token enforcement.
-- Document environment and sender configuration only after the implementation
-  and provider setup are approved for Iteration 3.
+- Keep environment and sender configuration documented and review it when
+  delivery infrastructure changes.
 - Keep a rollback or forward-fix plan that preserves valid Firebase accounts
   and never merges identities by email.
 

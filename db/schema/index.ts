@@ -12,3 +12,4 @@ export * from "./locations.js";
 export * from "./bag.js";
 export * from "./entityLinks.js";
 export * from "./characterAssignments.js";
+export * from "./authEmailRateLimits.js";

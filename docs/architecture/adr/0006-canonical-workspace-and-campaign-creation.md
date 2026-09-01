@@ -1,12 +1,13 @@
 # ADR 0006: Canonical Workspace and Campaign Creation
 
-Status: Proposed
+Status: Accepted
 
 Date: 2026-08-24
 
 Decision owner: Magda
 
-Audit classification: Proposed; current code has split write and read paths
+Audit classification: Partially implemented; current code still has split
+Firestore write and Neon read paths
 
 ## Context
 
@@ -18,45 +19,69 @@ related onboarding experiences.
 
 Same-email/different-UID records make an email-based bridge unsafe.
 
-## Decision required
+## Decision
 
-Select one canonical write/read path for workspace and campaign creation. The
-decision must provide:
+Firebase Authentication remains authoritative only for authentication and
+verified identity. Firebase UID is the canonical external identity key.
+Neon/PostgreSQL is canonical for all Dopamine Dungeon application data.
 
-- authenticated Firebase UID to Neon user mapping;
-- atomic workspace plus owner membership creation;
-- atomic campaign plus GM membership creation;
-- idempotent retry semantics and immediate `/api/me` consistency;
-- explicit workspace/campaign authorization and isolation;
-- a reviewed plan for legacy Firestore bootstrap records.
+Browser application code must not directly create canonical application records
+in Firestore. Workspace creation occurs through an authenticated server API;
+workspace creation and owner-membership creation are one atomic, idempotent
+Neon operation. Campaign creation follows the same pattern: an authenticated
+server API creates the campaign and initial GM membership as one atomic,
+idempotent Neon operation.
 
-No option is accepted by this ADR yet. Do not simulate a resolution by copying,
-deleting, or reassigning existing records.
+Subsequent workspace and campaign resolution reads those same Neon records.
+Authorization is performed server-side from the authenticated Firebase UID,
+the resolved Neon user, workspace/campaign membership, and GM/Player visibility
+rules. The server API is the data access boundary; this decision does not adopt
+direct browser access to PostgreSQL or PostgreSQL RLS.
 
-## Alternatives to evaluate
+Existing Firestore bootstrap records are migration input, not an identity
+bridge. Records must be reconciled using Firebase UID where identity mapping is
+needed. Email-based linking, merging, or reassignment is prohibited.
 
-1. Authenticated Neon creation APIs with transactional membership writes.
-2. A coordinated migration of existing Firestore bootstrap records before
-   enabling the onboarding path.
-3. Cross-store reads from `/api/me`, only if a later architecture decision
-   explicitly accepts the synchronization and authorization cost.
+## Context for #296
 
-Bridging records by email is rejected. Firebase UID remains the only identity
-bridge, and server-side GM/Player and cross-campaign boundaries remain
-mandatory.
+This resolves the architectural decision behind [#296](https://github.com/dopaminedungeon/dopamine-dungeon/issues/296): a Firestore bootstrap write may
+otherwise succeed while `/api/me` reads no corresponding Neon workspace or
+campaign. The implementation must eliminate that split path rather than mask
+it with cross-store reads.
+
+## Consequences
+
+### Positive
+
+- Workspace and campaign creation have one canonical persistence and read path.
+- Owner and initial GM membership can be created atomically with their parent.
+- Retry behavior can be idempotent without duplicate memberships or campaigns.
+- Server-side authorization preserves tenant, campaign, and GM/Player
+  visibility boundaries.
+
+### Constraints
+
+- Existing Firestore code remains until #298 migration gates and reconciliation
+  are complete; this ADR does not authorize removing it.
+- Creation APIs require explicit authorization, transaction, idempotency, and
+  parity tests before replacing browser writes.
+- No implementation may bridge records by normalized email.
 
 ## Required validation and rollback
 
 Preview QA must cover success, retry, timeout, invited/uninvited routing, and
-same-email/different-UID isolation. Any implementation requires an inventory,
-backup/recovery plan, dry run, validation queries, explicit environment
-targeting, and a rollback or forward-fix strategy.
+same-email/different-UID isolation. Any implementation requires the #298
+inventory, environment export, backup/recovery plan, dry run, validation
+queries, explicit environment targeting, and a rollback or forward-fix
+strategy.
 
 ## Related records
 
 - Issues [#296](https://github.com/dopaminedungeon/dopamine-dungeon/issues/296),
   [#262](https://github.com/dopaminedungeon/dopamine-dungeon/issues/262), and
-  [#263](https://github.com/dopaminedungeon/dopamine-dungeon/issues/263)
+  [#263](https://github.com/dopaminedungeon/dopamine-dungeon/issues/263), and
+  [#298](https://github.com/dopaminedungeon/dopamine-dungeon/issues/298)
 - [ADR 0001](0001-neon-as-primary-database.md)
 - [ADR 0003](0003-transitional-firestore-postgres-persistence.md)
+- [Firestore to Neon migration inventory](../FIRESTORE_TO_NEON_MIGRATION.md)
 - [System Overview](../SYSTEM_OVERVIEW.md)

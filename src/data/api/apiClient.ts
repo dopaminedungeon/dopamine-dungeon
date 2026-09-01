@@ -171,12 +171,67 @@ export async function getIdentityContinuity() {
 export async function getApiMe() {
   return apiFetch<{
     ok: true;
-    user: unknown;
+    user: {
+      id: string;
+      displayName: string | null;
+    };
+    profile: {
+      reducedMotion: boolean;
+    };
     workspaces: unknown[];
     workspaceMemberships: unknown[];
     campaigns: unknown[];
     campaignMemberships: unknown[];
   }>("/api/me");
+}
+
+export async function updateApiProfile(input: { reducedMotion: boolean }) {
+  return apiFetch<{
+    ok: true;
+    profile: {
+      reducedMotion: boolean;
+    };
+  }>("/api/me", {
+    method: "PATCH",
+    body: JSON.stringify(input),
+  });
+}
+
+export async function createApiWorkspace(input: {
+  name: string;
+  idempotencyKey: string;
+}) {
+  return apiFetch<{
+    ok: true;
+    workspace: {
+      id: string;
+      name: string;
+      slug: string;
+    };
+  }>("/api/workspace", {
+    method: "POST",
+    body: JSON.stringify(input),
+  });
+}
+
+export async function createApiCampaign(input: {
+  workspaceId: string;
+  name: string;
+  description: string;
+  system: string;
+  idempotencyKey: string;
+}) {
+  return apiFetch<{
+    ok: true;
+    campaign: {
+      id: string;
+      name: string;
+      slug: string;
+    };
+  }>("/api/campaign-content", {
+    method: "POST",
+    body: JSON.stringify(input),
+  });
 }
 
 export async function requestVerificationEmail(invited: boolean) {
@@ -211,9 +266,10 @@ export async function createApiInvitation(input: {
       campaignId: string;
       workspaceRole: string;
       campaignRole: string;
-      characterId: string | null;
+      characterIds: string[];
       status: string;
       createdAt: string;
+      expiresAt: string;
     };
   }>("/api/invitations", {
     method: "POST",
@@ -253,6 +309,48 @@ export async function updateApiCampaign(input: {
     method: "PATCH",
     body: JSON.stringify(input),
   });
+}
+
+export type CampaignSettings = {
+  id: string;
+  campaignId: string;
+  workspaceId: string;
+  name: string;
+  description: string;
+  status: string;
+  system: string;
+  playerSummary: string;
+  startDate: string;
+  endDate: string;
+  updatedAt: string;
+  gmNotes?: string;
+};
+
+export type CampaignSettingsUpdate = Pick<
+  CampaignSettings,
+  | "name"
+  | "description"
+  | "status"
+  | "system"
+  | "playerSummary"
+  | "gmNotes"
+  | "startDate"
+  | "endDate"
+>;
+
+export async function getApiCampaignSettings(campaignId: string) {
+  return apiFetch<{ ok: true; campaign: CampaignSettings }>(
+    `/api/campaign-content?resource=campaignSettings&campaignId=${encodeURIComponent(campaignId)}`
+  );
+}
+
+export async function updateApiCampaignSettings(input: CampaignSettingsUpdate & {
+  campaignId: string;
+}) {
+  return apiFetch<{ ok: true; campaign: CampaignSettings }>(
+    "/api/campaign-content?resource=campaignSettings",
+    { method: "PATCH", body: JSON.stringify(input) }
+  );
 }
 
 export async function getApiCampaignPeople(campaignId: string) {

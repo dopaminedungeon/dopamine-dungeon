@@ -8,6 +8,11 @@ import {
 } from "../src/server/apiErrors.js";
 import { setCorsHeaders } from "../src/server/cors.js";
 import { db } from "../src/server/db.js";
+import {
+  toUserProfile,
+  updateUserProfile,
+  UserProfileInputError,
+} from "../src/server/userProfile.js";
 import { workspaces } from "../db/schema/workspaces.js";
 import { campaigns } from "../db/schema/campaigns.js";
 import {
@@ -16,14 +21,23 @@ import {
 } from "../db/schema/memberships.js";
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
-  setCorsHeaders(res, "GET, OPTIONS");
+  setCorsHeaders(res, "GET, PATCH, OPTIONS");
 
   if (req.method === "OPTIONS") {
     return res.status(204).end();
   }
 
+  if (!["GET", "PATCH"].includes(req.method || "")) {
+    return res.status(405).json({ ok: false, error: "Method not allowed" });
+  }
+
   try {
     const user = await getCurrentUser(req);
+
+    if (req.method === "PATCH") {
+      const profile = await updateUserProfile(user, req.body);
+      return res.status(200).json({ ok: true, profile });
+    }
 
     const workspaceMembershipsData = await db
       .select()
@@ -50,16 +64,22 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const campaignsData = campaignIds.length
       ? await db.select().from(campaigns).where(inArray(campaigns.id, campaignIds))
       : [];
+    const playerSafeCampaigns = campaignsData.map(({ gmNotes: _gmNotes, ...campaign }) => campaign);
+    const { reducedMotion: _reducedMotion, ...userResponse } = user;
 
     return res.status(200).json({
       ok: true,
-      user,
+      user: userResponse,
+      profile: toUserProfile(user),
       workspaces: workspacesData,
       workspaceMemberships: workspaceMembershipsData,
-      campaigns: campaignsData,
+      campaigns: playerSafeCampaigns,
       campaignMemberships: campaignMembershipsData,
     });
   } catch (error) {
+    if (error instanceof UserProfileInputError) {
+      return res.status(400).json({ ok: false, error: error.message });
+    }
     const status = getApiErrorStatus(error);
 
     if (status === 500) {
