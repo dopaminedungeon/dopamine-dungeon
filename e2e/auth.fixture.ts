@@ -35,6 +35,7 @@ const defaultApiMeResponse = {
 };
 
 type ApiMeResponse = typeof defaultApiMeResponse;
+type ApiMeResponseController = { current: ApiMeResponse | null };
 
 async function wait(delayMs: number) {
   if (delayMs > 0) {
@@ -47,6 +48,7 @@ export const test = base.extend<{
   apiMeResponseAfterAcceptPending: ApiMeResponse | null;
   apiMeResponseAfterCampaignCreate: ApiMeResponse | null;
   apiMeResponseAfterWorkspaceCreate: ApiMeResponse | null;
+  apiMeResponseController: ApiMeResponseController;
   apiMeResponses: ApiMeResponse[] | null;
   apiMeStatus: number;
   apiMeDelayMs: number;
@@ -64,6 +66,8 @@ export const test = base.extend<{
   identityContinuityStatus: number;
   identityContinuityUserId: string;
   identityContinuityUserIds: string[] | null;
+  workspaceCreateDelayMs: number;
+  workspaceCreateStatuses: number[] | null;
   acceptedInvitations: Array<{
     id: string;
     tenantId: string;
@@ -80,6 +84,9 @@ export const test = base.extend<{
   apiMeResponseAfterAcceptPending: [null, { option: true }],
   apiMeResponseAfterCampaignCreate: [null, { option: true }],
   apiMeResponseAfterWorkspaceCreate: [null, { option: true }],
+  apiMeResponseController: async ({}, use) => {
+    await use({ current: null });
+  },
   apiMeResponses: [null, { option: true }],
   apiMeStatus: [200, { option: true }],
   apiMeDelayMs: [0, { option: true }],
@@ -91,6 +98,8 @@ export const test = base.extend<{
   identityContinuityStatus: [200, { option: true }],
   identityContinuityUserId: ["e2e-user", { option: true }],
   identityContinuityUserIds: [null, { option: true }],
+  workspaceCreateDelayMs: [0, { option: true }],
+  workspaceCreateStatuses: [null, { option: true }],
   apiCallLog: async ({}, use) => {
     await use({
       apiMe: [],
@@ -147,6 +156,7 @@ test.beforeEach(async ({
   apiMeResponseAfterAcceptPending,
   apiMeResponseAfterCampaignCreate,
   apiMeResponseAfterWorkspaceCreate,
+  apiMeResponseController,
   apiMeResponses,
   apiMeStatus,
   identityContinuityStatus,
@@ -154,6 +164,8 @@ test.beforeEach(async ({
   identityContinuityUserIds,
   page,
   request,
+  workspaceCreateDelayMs,
+  workspaceCreateStatuses,
 }) => {
   await clearAuthEmulator(request);
   let apiMeCallCount = 0;
@@ -161,6 +173,7 @@ test.beforeEach(async ({
   let acceptPendingCompleted = false;
   let campaignCreated = false;
   let workspaceCreated = false;
+  let workspaceCreateAttempt = 0;
 
   await page.route("http://127.0.0.1:4173/api/**", async (route) => {
     const requestUrl = new URL(route.request().url());
@@ -217,6 +230,7 @@ test.beforeEach(async ({
       const delayMs = apiMeDelaySequence?.[callIndex] ?? apiMeDelayMs;
       await wait(delayMs);
       const response =
+        apiMeResponseController.current ||
         (workspaceCreated && apiMeResponseAfterWorkspaceCreate) ||
         (campaignCreated && apiMeResponseAfterCampaignCreate) ||
         (acceptPendingCompleted && apiMeResponseAfterAcceptPending) ||
@@ -247,6 +261,21 @@ test.beforeEach(async ({
     ) {
       const requestBody = route.request().postDataJSON() as Record<string, unknown>;
       apiCallLog.workspaceCreate.push(requestBody);
+      const status =
+        workspaceCreateStatuses?.[
+          Math.min(workspaceCreateAttempt, workspaceCreateStatuses.length - 1)
+        ] ?? 201;
+      workspaceCreateAttempt += 1;
+      await wait(workspaceCreateDelayMs);
+
+      if (status !== 201) {
+        await route.fulfill({
+          status,
+          json: { ok: false, error: "Workspace creation failed" },
+        });
+        return;
+      }
+
       workspaceCreated = true;
       await route.fulfill({
         status: 201,
