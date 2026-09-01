@@ -2150,7 +2150,9 @@ test("public navigation reaches each coming-soon page and auth entry state", asy
 
   await page.getByTestId("public-login").click();
   await expect(page).toHaveURL(/\/login$/);
-  await expect(page.getByRole("heading", { name: "Sign in with email" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Sign in to your account" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Continue with Google" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Continue with email" })).toBeVisible();
 
   await page.goto("/");
   await page.getByTestId("public-sign-up").click();

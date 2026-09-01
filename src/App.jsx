@@ -65,7 +65,7 @@ function App() {
           <Route path="/resources" element={<PublicComingSoonPage title="Resources" />} />
           <Route path="/socials" element={<PublicSocialsPage />} />
         </Route>
-        <Route path="/login" element={<PublicAuthEntry initialView="sign-in" />} />
+        <Route path="/login" element={<PublicAuthEntry initialView="choices" />} />
         <Route path="/get-started" element={<PublicAuthEntry initialView="register" />} />
         <Route path="*" element={<ApplicationBoundary />} />
       </Routes>
