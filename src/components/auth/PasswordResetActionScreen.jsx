@@ -185,7 +185,7 @@ export default function PasswordResetActionScreen() {
         )}
 
         <a
-          href={isSuccess ? "/" : "/auth/recover"}
+          href={isSuccess ? "/login" : "/auth/recover"}
           className="mt-[16px] flex min-h-[56px] w-full items-center justify-center rounded-md border border-zinc-700 bg-zinc-800 px-[24px] py-[14px] text-[clamp(16px,1.0625rem,22px)] font-semibold text-white transition hover:border-zinc-500 hover:bg-zinc-700 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-purple-300"
         >
           {isSuccess ? "Return to sign in" : "Request another reset"}

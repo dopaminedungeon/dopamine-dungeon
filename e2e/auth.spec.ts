@@ -1027,7 +1027,7 @@ test("verifies a reset link, enforces shared password policy, and replaces the c
   expect(uncaughtPageErrors).toBe(0);
   await expect(page.locator("main")).not.toContainText(email);
 
-  await page.goto("/");
+  await page.goto("/login");
   await page.getByRole("button", { name: "Continue with email" }).click();
   await page.getByLabel("Email address").fill(email);
   await page.getByLabel("Password", { exact: true }).fill(replacementPassword);
@@ -1443,7 +1443,7 @@ test.describe("post-verification routing", () => {
     test("continues to independent workspace onboarding", async ({ page, request }) => {
       const email = generatedEmail();
 
-      await page.goto("/");
+      await page.goto("/login");
       await page.getByRole("button", { name: "Create an account" }).click();
       await page.getByLabel("Email address").fill(email);
       await page.getByLabel("Password", { exact: true }).fill(password);
@@ -2089,11 +2089,240 @@ test("@smoke signs out and keeps protected routes behind authentication", async 
 
   await page.getByRole("button").filter({ hasText: email }).click();
   await page.getByRole("button", { name: "Sign out" }).click();
-  await expect(page.getByRole("heading", { name: "Sign in to your account" })).toBeVisible();
+  await expect(page.getByTestId("public-home")).toBeVisible();
+  await expect(page.getByTestId("enter-dungeon")).toBeVisible();
 
   await page.goto("/home");
   await expect(page.getByRole("heading", { name: "Sign in to your account" })).toBeVisible();
+  await expect(page.getByTestId("back-to-public")).toBeVisible();
+  await expect(page.getByTestId("back-to-public")).toHaveAttribute("href", "/");
+  await page.getByTestId("back-to-public").click();
+  await expect(page).toHaveURL(/\/$/);
+  await expect(page.getByTestId("public-home")).toBeVisible();
   await expect(page.getByText("E2E Campaign", { exact: true })).toHaveCount(0);
+});
+
+test("@smoke keeps the public homepage outside application bootstrap", async ({
+  apiCallLog,
+  page,
+}) => {
+  const apiRequests: string[] = [];
+  page.on("request", (request) => {
+    const url = new URL(request.url());
+    if (url.pathname.startsWith("/api/")) apiRequests.push(url.pathname);
+  });
+
+  await page.goto("/");
+
+  await expect(page.getByTestId("public-home")).toBeVisible();
+  await expect(page.getByRole("navigation", { name: "Public navigation" })).toBeVisible();
+  await expect(page.getByTestId("enter-dungeon")).toBeVisible();
+  await expect(page.getByTestId("enter-dungeon")).toHaveCount(1);
+  await expect(page.getByTestId("enter-dungeon")).toHaveText("Enter The Dungeon");
+  await expect(page.getByTestId("enter-dungeon")).toHaveAttribute("href", "/home");
+  await expect(page.getByRole("link", { name: "Log in", exact: true })).toHaveAttribute("href", "/login");
+  await expect(page.getByRole("link", { name: "Sign up", exact: true })).toHaveAttribute("href", "/get-started");
+  await expect(page.getByText("Sessions", { exact: true })).toHaveCount(0);
+  await expect(page.getByText("Campaign Settings", { exact: true })).toHaveCount(0);
+  expect(apiRequests).toEqual([]);
+  expect(apiCallLog.apiMe).toHaveLength(0);
+
+  await page.getByTestId("enter-dungeon").click();
+  await expect(page).toHaveURL(/\/home$/);
+  await expect(page.getByRole("heading", { name: "Sign in to your account" })).toBeVisible();
+});
+
+test("public navigation reaches each coming-soon page and auth entry state", async ({ page }) => {
+  await page.goto("/");
+
+  for (const [label, path] of [
+    ["About Us", "/about"],
+    ["Features", "/features"],
+    ["Pricing", "/pricing"],
+    ["Resources", "/resources"],
+    ["Socials", "/socials"],
+  ]) {
+    await page.getByRole("link", { name: label, exact: true }).click();
+    await expect(page).toHaveURL(new RegExp(`${path}$`));
+    await expect(page.getByText("Coming soon", { exact: true })).toBeVisible();
+    await page.goto("/");
+  }
+
+  await page.getByRole("link", { name: "Log in", exact: true }).click();
+  await expect(page).toHaveURL(/\/login$/);
+  await expect(page.getByRole("heading", { name: "Sign in to your account" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Continue with Google" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Continue with email" })).toBeVisible();
+
+  await page.goto("/");
+  await page.getByTestId("public-sign-up").click();
+  await expect(page).toHaveURL(/\/get-started$/);
+  await expect(page.getByRole("heading", { name: "Create your account" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Continue with Google" })).toBeVisible();
+});
+
+test("public navigation collapses into an accessible phone menu", async ({ page }) => {
+  await page.setViewportSize({ width: 375, height: 667 });
+  await page.goto("/");
+
+  await expect(page.getByTestId("public-brand")).toContainText("Dopamine Dungeon");
+  await expect(page.getByRole("link", { name: "Log in", exact: true })).toBeVisible();
+  await expect(page.getByRole("link", { name: "Sign up", exact: true })).toBeVisible();
+  await expect(page.getByTestId("public-menu-toggle")).toHaveAttribute("aria-expanded", "false");
+  await expect(page.getByTestId("public-mobile-menu")).toHaveCount(0);
+  await expect(page.getByRole("link", { name: "Features", exact: true })).toHaveCount(0);
+
+  await page.getByTestId("public-menu-toggle").click();
+  await expect(page.getByTestId("public-mobile-menu")).toBeVisible();
+  await expect(page.getByTestId("public-menu-toggle")).toHaveAttribute("aria-expanded", "true");
+  for (const label of ["About Us", "Features", "Pricing", "Resources", "Socials"]) {
+    await expect(page.getByRole("menuitem", { name: label, exact: true })).toBeVisible();
+  }
+
+  await page.keyboard.press("Escape");
+  await expect(page.getByTestId("public-mobile-menu")).toHaveCount(0);
+  await page.getByTestId("public-menu-toggle").click();
+  await page.getByRole("menuitem", { name: "Features", exact: true }).click();
+  await expect(page).toHaveURL(/\/features$/);
+  await expect(page.getByText("Coming soon", { exact: true })).toBeVisible();
+  const phoneWidth = await page.evaluate(() => ({
+    documentWidth: document.documentElement.scrollWidth,
+    viewportWidth: window.innerWidth,
+  }));
+  expect(phoneWidth.documentWidth).toBeLessThanOrEqual(phoneWidth.viewportWidth);
+});
+
+test("public tablet layouts stay centered and within the viewport", async ({ page }) => {
+  for (const viewport of [
+    { width: 768, height: 1024 },
+    { width: 820, height: 1180 },
+    { width: 853, height: 1280 },
+  ]) {
+    await page.setViewportSize(viewport);
+    await page.goto("/");
+
+    await expect(page.getByTestId("public-brand")).toContainText("Dopamine Dungeon");
+    const hero = await page.getByTestId("public-home").boundingBox();
+    const heroText = await page.getByTestId("public-home").locator("section").boundingBox();
+    const artwork = await page.getByTestId("public-artwork").boundingBox();
+    expect(hero).not.toBeNull();
+    expect(heroText).not.toBeNull();
+    expect(artwork).not.toBeNull();
+    expect(hero!.x + hero!.width / 2).toBeCloseTo(viewport.width / 2, 0);
+    expect(heroText!.x + heroText!.width / 2).toBeCloseTo(viewport.width / 2, 0);
+    expect(artwork!.x + artwork!.width / 2).toBeCloseTo(viewport.width / 2, 0);
+    expect(artwork!.x).toBeGreaterThanOrEqual(0);
+    expect(artwork!.x + artwork!.width).toBeLessThanOrEqual(viewport.width);
+    const tabletWidth = await page.evaluate(() => ({
+      documentWidth: document.documentElement.scrollWidth,
+      viewportWidth: window.innerWidth,
+    }));
+    expect(tabletWidth.documentWidth).toBeLessThanOrEqual(tabletWidth.viewportWidth);
+
+    await page.goto("/about");
+    const card = await page.locator('[data-testid="public-coming-soon"] section').boundingBox();
+    expect(card).not.toBeNull();
+    expect(card!.x + card!.width / 2).toBeCloseTo(viewport.width / 2, 0);
+  }
+});
+
+test("auth return navigation stays clear of the brand on short phones", async ({ page }) => {
+  await page.setViewportSize({ width: 375, height: 667 });
+
+  for (const path of ["/login", "/get-started", "/home"]) {
+    await page.goto(path);
+    await expect(page.getByTestId("back-to-public")).toBeVisible();
+    const back = await page.getByTestId("back-to-public").boundingBox();
+    const brand = await page.getByTestId("auth-brand").boundingBox();
+    expect(back).not.toBeNull();
+    expect(brand).not.toBeNull();
+    expect(
+      back!.y + back!.height <= brand!.y || brand!.y + brand!.height <= back!.y
+    ).toBeTruthy();
+  }
+});
+
+test("public return control is visible and clickable across authorization viewports", async ({ page }) => {
+  for (const viewport of [
+    { width: 1440, height: 900 },
+    { width: 820, height: 1180 },
+    { width: 375, height: 667 },
+    { width: 375, height: 420 },
+  ]) {
+    await page.setViewportSize(viewport);
+
+    for (const path of ["/login", "/get-started", "/home"]) {
+      await page.goto(path);
+      const returnLink = page.getByTestId("back-to-public");
+      await expect(returnLink).toBeVisible();
+      await expect(returnLink).toBeEnabled();
+      await expect(returnLink).toHaveAttribute("href", "/");
+
+      const linkBox = await returnLink.boundingBox();
+      expect(linkBox).not.toBeNull();
+      expect(linkBox!.y).toBeGreaterThanOrEqual(0);
+      expect(linkBox!.y + linkBox!.height).toBeLessThanOrEqual(viewport.height);
+
+      const isTopmost = await returnLink.evaluate((element) => {
+        const rect = element.getBoundingClientRect();
+        const topmost = document.elementFromPoint(
+          rect.left + rect.width / 2,
+          rect.top + rect.height / 2,
+        );
+        return topmost === element || element.contains(topmost);
+      });
+      expect(isTopmost).toBeTruthy();
+
+      await returnLink.click();
+      await expect(page).toHaveURL(/\/$/);
+      await expect(page.getByTestId("public-home")).toBeVisible();
+    }
+  }
+});
+
+test("keeps authenticated users on the public homepage until they enter the app", async ({
+  apiCallLog,
+  page,
+  request,
+}) => {
+  const email = generatedEmail();
+  await createVerifiedUser(request, email, password);
+
+  await openEmailSignIn(page);
+  await page.getByLabel("Email address").fill(email);
+  await page.getByLabel("Password", { exact: true }).fill(password);
+  await page.getByRole("button", { name: "Sign in", exact: true }).click();
+  await expect(page.getByRole("heading", { name: "E2E Campaign" })).toBeVisible();
+  await expect(page.getByTestId("back-to-public")).toHaveCount(0);
+  const apiMeCallsBeforePublicHome = apiCallLog.apiMe.length;
+
+  await page.goto("/");
+
+  await expect(page.getByTestId("public-home")).toBeVisible();
+  await expect(page.getByTestId("enter-dungeon")).toBeVisible();
+  await expect(page.getByText("E2E Campaign", { exact: true })).toHaveCount(0);
+  await expect(page.getByText("Sessions", { exact: true })).toHaveCount(0);
+  expect(apiCallLog.apiMe).toHaveLength(apiMeCallsBeforePublicHome);
+});
+
+test("returns from the auth entry to the public shell with browser navigation intact", async ({
+  page,
+}) => {
+  await page.goto("/login");
+  await expect(page.getByTestId("auth-card")).toBeVisible();
+  await expect(page.getByTestId("back-to-public")).toBeVisible();
+
+  await page.getByTestId("back-to-public").click();
+  await expect(page).toHaveURL(/\/$/);
+  await expect(page.getByTestId("public-home")).toBeVisible();
+
+  await page.goBack();
+  await expect(page).toHaveURL(/\/login$/);
+  await expect(page.getByTestId("auth-card")).toBeVisible();
+
+  await page.goForward();
+  await expect(page).toHaveURL(/\/$/);
+  await expect(page.getByTestId("public-home")).toBeVisible();
 });
 
 test("@credential-migration keeps normal access available and optional setup locally validated", async ({

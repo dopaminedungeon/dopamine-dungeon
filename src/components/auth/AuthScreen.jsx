@@ -23,8 +23,10 @@ export default function AuthScreen({
   onGoogle,
   onEmailSignIn,
   onEmailRegistration,
+  initialView = "choices",
+  reserveReturnSpace = false,
 }) {
-  const [view, setView] = useState("choices");
+  const [view, setView] = useState(initialView);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [confirmation, setConfirmation] = useState("");
@@ -33,6 +35,11 @@ export default function AuthScreen({
   const [passwordValidation, setPasswordValidation] = useState(null);
   const [error, setError] = useState("");
   const [submitting, setSubmitting] = useState(false);
+
+  useEffect(() => {
+    setView(initialView);
+    setError("");
+  }, [initialView]);
 
   const isRegistering = view === "register";
   const passwordToValidate = isRegistering ? password : "";
@@ -118,7 +125,7 @@ export default function AuthScreen({
   return (
     <GradientBackground>
       <main className="min-h-screen text-zinc-100">
-        <div className="relative mx-auto flex min-h-screen w-full items-center justify-center px-[16px] py-[32px] sm:py-[48px]">
+        <div className={`relative mx-auto flex min-h-screen w-full items-center justify-center px-[16px] ${reserveReturnSpace ? "pb-[32px] pt-[88px] sm:py-[48px]" : "py-[32px] sm:py-[48px]"}`}>
           <section className="w-[calc(100vw-32px)] max-w-[480px]" aria-labelledby="auth-title">
           <header className="mb-[32px] flex w-full items-center gap-[20px]" data-testid="auth-brand">
             <img
@@ -200,6 +207,24 @@ export default function AuthScreen({
                     ? "We'll send a verification link before you can enter the app."
                     : "Use the email and password for your account."}
                 </p>
+
+                {isRegistering && (
+                  <button
+                    type="button"
+                    onClick={handleGoogle}
+                    disabled={submitting}
+                    className="mt-[28px] flex min-h-[56px] w-full items-center justify-center gap-[12px] rounded-md border border-zinc-700 bg-zinc-800 px-[24px] py-[14px] text-[clamp(16px,1.0625rem,22px)] font-semibold whitespace-nowrap text-white transition hover:border-zinc-500 hover:bg-zinc-700 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-purple-300 disabled:cursor-not-allowed disabled:opacity-60"
+                  >
+                    {submitting ? (
+                      <LoaderCircle className="h-[22px] w-[22px] animate-spin" aria-hidden="true" />
+                    ) : (
+                      <span className="flex h-[26px] w-[26px] items-center justify-center rounded-full bg-white text-[clamp(14px,0.875rem,18px)] font-bold text-zinc-900" aria-hidden="true">
+                        G
+                      </span>
+                    )}
+                    Continue with Google
+                  </button>
+                )}
 
                 <form className="mt-[32px] space-y-[24px]" onSubmit={handleSubmit} noValidate>
                   <label className="block text-[clamp(16px,1.0625rem,22px)] leading-[1.4] font-medium text-zinc-200">

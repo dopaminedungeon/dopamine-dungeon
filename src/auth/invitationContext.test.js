@@ -30,5 +30,5 @@ test("invitation continuation stores only a routing hint", () => {
   assert.doesNotMatch(stored, /campaign|secret|workspace|role/i);
 
   clearInvitationContext();
-  assert.equal(getPostVerificationPath(), "/");
+  assert.equal(getPostVerificationPath(), "/home");
 });

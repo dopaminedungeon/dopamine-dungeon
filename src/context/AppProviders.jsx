@@ -6,7 +6,6 @@ import React, {
   useRef,
   useState,
 } from "react";
-import { AuthProvider } from "./AuthContext.jsx";
 import { TenantProvider } from "./TenantContext.jsx";
 import { CampaignProvider } from "./CampaignContext.jsx";
 import { ModeProvider } from "./ModeContext.jsx";
@@ -310,15 +309,13 @@ function InvitationAcceptanceBridge({ children }) {
 
 export default function AppProviders({ children }) {
   return (
-    <AuthProvider>
-      <TenantProvider>
-        <CampaignProvider>
-          <InvitationAcceptanceBridge>
-            <ModeProvider>{children}</ModeProvider>
-          </InvitationAcceptanceBridge>
-        </CampaignProvider>
-      </TenantProvider>
-    </AuthProvider>
+    <TenantProvider>
+      <CampaignProvider>
+        <InvitationAcceptanceBridge>
+          <ModeProvider>{children}</ModeProvider>
+        </InvitationAcceptanceBridge>
+      </CampaignProvider>
+    </TenantProvider>
   );
 }
 

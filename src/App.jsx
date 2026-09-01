@@ -1,5 +1,12 @@
 // src/App.jsx
-import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
+import {
+  BrowserRouter,
+  Routes,
+  Route,
+  Navigate,
+  Link,
+  useNavigate,
+} from "react-router-dom";
 import AppLayout from "./layouts/AppLayout.jsx";
 import Dashboard from "./pages/DopamineDungeonDashboard.jsx";
 import Npcs from "./pages/Npcs";
@@ -24,13 +31,19 @@ import { useTenant } from "./context/TenantContext.jsx";
 import { useCampaign } from "./context/CampaignContext.jsx";
 import AppProviders, { useAccessResolution } from "./context/AppProviders.jsx";
 import { features } from "./config/features";
-import React from "react";
+import React, { useEffect } from "react";
 import Welcome from "./pages/Welcome";
 import AuthScreen from "./components/auth/AuthScreen.jsx";
 import VerificationScreen from "./components/auth/VerificationScreen.jsx";
 import VerificationActionScreen from "./components/auth/VerificationActionScreen.jsx";
 import PasswordRecoveryRequestScreen from "./components/auth/PasswordRecoveryRequestScreen.jsx";
 import PasswordResetActionScreen from "./components/auth/PasswordResetActionScreen.jsx";
+import PublicSiteShell, {
+  PublicComingSoonPage,
+  PublicFeatures,
+  PublicHome,
+  PublicSocialsPage,
+} from "./layouts/PublicSiteShell.jsx";
 
 function App() {
   if (window.location.pathname === "/auth/recover") {
@@ -42,10 +55,74 @@ function App() {
   }
 
   return (
+    <BrowserRouter>
+      <Routes>
+        <Route element={<PublicSiteShell />}>
+          <Route index element={<PublicEntryRoute />} />
+          <Route path="/about" element={<PublicComingSoonPage title="About Us" />} />
+          <Route path="/features" element={<PublicFeatures />} />
+          <Route path="/pricing" element={<PublicComingSoonPage title="Pricing" />} />
+          <Route path="/resources" element={<PublicComingSoonPage title="Resources" />} />
+          <Route path="/socials" element={<PublicSocialsPage />} />
+        </Route>
+        <Route path="/login" element={<PublicAuthEntry initialView="choices" />} />
+        <Route path="/get-started" element={<PublicAuthEntry initialView="register" />} />
+        <Route path="*" element={<ApplicationBoundary />} />
+      </Routes>
+    </BrowserRouter>
+  );
+}
+
+function PublicEntryRoute() {
+  const invited = new URLSearchParams(window.location.search).get("invited") === "true";
+
+  return invited ? (
+    <Navigate to="/welcome?invited=true" replace />
+  ) : (
+    <PublicHome />
+  );
+}
+
+function PublicAuthEntry({ initialView }) {
+  const navigate = useNavigate();
+  const {
+    authStatus,
+    user,
+    verificationUser,
+    profileInitializationFailed,
+    signInWithGoogle,
+    signInWithEmail,
+    registerWithEmail,
+  } = useAuth();
+
+  useEffect(() => {
+    if (user || verificationUser || profileInitializationFailed) {
+      navigate("/home", { replace: true });
+    }
+  }, [navigate, profileInitializationFailed, user, verificationUser]);
+
+  if (authStatus === "loading") {
+    return <LoadingScreen label="Loading…" />;
+  }
+
+  return (
+    <div className="relative min-h-screen bg-zinc-950">
+      <BackToPublicLink />
+      <AuthScreen
+        onGoogle={signInWithGoogle}
+        onEmailSignIn={signInWithEmail}
+        onEmailRegistration={registerWithEmail}
+        initialView={initialView}
+        reserveReturnSpace
+      />
+    </div>
+  );
+}
+
+function ApplicationBoundary() {
+  return (
     <AppProviders>
-      <BrowserRouter>
-        <AppGate />
-      </BrowserRouter>
+      <AppGate />
     </AppProviders>
   );
 }
@@ -115,11 +192,15 @@ function AppGate() {
 
   if (!user) {
     return (
-      <AuthScreen
-        onGoogle={signInWithGoogle}
-        onEmailSignIn={signInWithEmail}
-        onEmailRegistration={registerWithEmail}
-      />
+      <div className="relative min-h-screen bg-zinc-950">
+        <BackToPublicLink />
+        <AuthScreen
+          onGoogle={signInWithGoogle}
+          onEmailSignIn={signInWithEmail}
+          onEmailRegistration={registerWithEmail}
+          reserveReturnSpace
+        />
+      </div>
     );
   }
 
@@ -229,6 +310,18 @@ function AppGate() {
         <Route path="*" element={<NotFoundScreen />} />
       </Route>
     </Routes>
+  );
+}
+
+function BackToPublicLink() {
+  return (
+    <Link
+      to="/"
+      className="relative z-20 mx-4 mt-4 inline-flex min-h-11 items-center rounded-md border border-zinc-700 bg-zinc-900/80 px-4 text-sm font-semibold text-zinc-200 shadow-sm transition hover:border-zinc-500 hover:bg-zinc-800 hover:text-white focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-purple-300 sm:mx-6"
+      data-testid="back-to-public"
+    >
+      Back to public site
+    </Link>
   );
 }
 

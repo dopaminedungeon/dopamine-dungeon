@@ -40,5 +40,5 @@ export function clearInvitationContext() {
 }
 
 export function getPostVerificationPath() {
-  return hasPendingInvitationContext() ? "/welcome?invited=true" : "/";
+  return hasPendingInvitationContext() ? "/welcome?invited=true" : "/home";
 }
