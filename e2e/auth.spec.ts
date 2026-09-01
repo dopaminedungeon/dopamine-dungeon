@@ -2193,27 +2193,37 @@ test("public navigation collapses into an accessible phone menu", async ({ page 
 });
 
 test("public tablet layouts stay centered and within the viewport", async ({ page }) => {
-  await page.setViewportSize({ width: 820, height: 1180 });
-  await page.goto("/");
+  for (const viewport of [
+    { width: 768, height: 1024 },
+    { width: 820, height: 1180 },
+    { width: 853, height: 1280 },
+  ]) {
+    await page.setViewportSize(viewport);
+    await page.goto("/");
 
-  await expect(page.getByTestId("public-brand")).toContainText("Dopamine Dungeon");
-  const hero = await page.getByTestId("public-home").boundingBox();
-  const artwork = await page.getByTestId("public-artwork").boundingBox();
-  expect(hero).not.toBeNull();
-  expect(artwork).not.toBeNull();
-  expect(hero!.x + hero!.width / 2).toBeCloseTo(410, 0);
-  expect(artwork!.x).toBeGreaterThanOrEqual(0);
-  expect(artwork!.x + artwork!.width).toBeLessThanOrEqual(820);
-  const tabletWidth = await page.evaluate(() => ({
-    documentWidth: document.documentElement.scrollWidth,
-    viewportWidth: window.innerWidth,
-  }));
-  expect(tabletWidth.documentWidth).toBeLessThanOrEqual(tabletWidth.viewportWidth);
+    await expect(page.getByTestId("public-brand")).toContainText("Dopamine Dungeon");
+    const hero = await page.getByTestId("public-home").boundingBox();
+    const heroText = await page.getByTestId("public-home").locator("section").boundingBox();
+    const artwork = await page.getByTestId("public-artwork").boundingBox();
+    expect(hero).not.toBeNull();
+    expect(heroText).not.toBeNull();
+    expect(artwork).not.toBeNull();
+    expect(hero!.x + hero!.width / 2).toBeCloseTo(viewport.width / 2, 0);
+    expect(heroText!.x + heroText!.width / 2).toBeCloseTo(viewport.width / 2, 0);
+    expect(artwork!.x + artwork!.width / 2).toBeCloseTo(viewport.width / 2, 0);
+    expect(artwork!.x).toBeGreaterThanOrEqual(0);
+    expect(artwork!.x + artwork!.width).toBeLessThanOrEqual(viewport.width);
+    const tabletWidth = await page.evaluate(() => ({
+      documentWidth: document.documentElement.scrollWidth,
+      viewportWidth: window.innerWidth,
+    }));
+    expect(tabletWidth.documentWidth).toBeLessThanOrEqual(tabletWidth.viewportWidth);
 
-  await page.goto("/about");
-  const card = await page.locator('[data-testid="public-coming-soon"] section').boundingBox();
-  expect(card).not.toBeNull();
-  expect(card!.x + card!.width / 2).toBeCloseTo(410, 0);
+    await page.goto("/about");
+    const card = await page.locator('[data-testid="public-coming-soon"] section').boundingBox();
+    expect(card).not.toBeNull();
+    expect(card!.x + card!.width / 2).toBeCloseTo(viewport.width / 2, 0);
+  }
 });
 
 test("auth return navigation stays clear of the brand on short phones", async ({ page }) => {

@@ -129,7 +129,7 @@ export default function PublicSiteShell() {
 export function PublicHome() {
   return (
     <main
-      className="mx-auto grid min-h-[calc(100vh-84px)] w-full max-w-[1200px] items-center gap-10 px-6 py-10 text-center sm:py-14 lg:grid-cols-[minmax(0,600px)_minmax(420px,480px)] lg:justify-between lg:gap-16 lg:py-14 lg:text-left"
+      className="mx-auto grid min-h-[calc(100vh-84px)] w-full max-w-[1200px] items-center justify-items-center gap-10 px-6 py-10 text-center sm:py-14 lg:grid-cols-[minmax(0,600px)_minmax(420px,480px)] lg:justify-between lg:justify-items-stretch lg:gap-16 lg:py-14 lg:text-left"
       data-testid="public-home"
     >
       <section className="w-full max-w-[600px]">
