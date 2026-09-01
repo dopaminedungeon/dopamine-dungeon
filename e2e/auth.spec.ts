@@ -2094,6 +2094,11 @@ test("@smoke signs out and keeps protected routes behind authentication", async 
 
   await page.goto("/home");
   await expect(page.getByRole("heading", { name: "Sign in to your account" })).toBeVisible();
+  await expect(page.getByTestId("back-to-public")).toBeVisible();
+  await expect(page.getByTestId("back-to-public")).toHaveAttribute("href", "/");
+  await page.getByTestId("back-to-public").click();
+  await expect(page).toHaveURL(/\/$/);
+  await expect(page.getByTestId("public-home")).toBeVisible();
   await expect(page.getByText("E2E Campaign", { exact: true })).toHaveCount(0);
 });
 
@@ -2151,6 +2156,7 @@ test("public navigation reaches each coming-soon page and auth entry state", asy
   await page.getByTestId("public-sign-up").click();
   await expect(page).toHaveURL(/\/get-started$/);
   await expect(page.getByRole("heading", { name: "Create your account" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Continue with Google" })).toBeVisible();
 });
 
 test("keeps authenticated users on the public homepage until they enter the app", async ({
@@ -2166,6 +2172,7 @@ test("keeps authenticated users on the public homepage until they enter the app"
   await page.getByLabel("Password", { exact: true }).fill(password);
   await page.getByRole("button", { name: "Sign in", exact: true }).click();
   await expect(page.getByRole("heading", { name: "E2E Campaign" })).toBeVisible();
+  await expect(page.getByTestId("back-to-public")).toHaveCount(0);
   const apiMeCallsBeforePublicHome = apiCallLog.apiMe.length;
 
   await page.goto("/");

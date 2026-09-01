@@ -14,22 +14,22 @@ export default function PublicSiteShell() {
       <header className="border-b border-zinc-800/90 bg-zinc-950/95">
         <nav
           aria-label="Public navigation"
-          className="mx-auto flex w-full max-w-[1120px] flex-wrap items-center justify-between gap-x-8 gap-y-4 px-6 py-4 lg:py-[18px]"
+          className="mx-auto flex w-full max-w-[1120px] flex-wrap items-center justify-between gap-x-8 gap-y-4 px-6 py-4 lg:py-5"
         >
           <Link
             to="/"
-            className="flex items-center gap-3 text-xl font-semibold tracking-tight text-white"
+            className="flex items-center gap-3 text-[22px] font-semibold tracking-tight text-white"
             data-testid="public-brand"
           >
             <img
               src="/logo/dd-app-icon-master.png"
               alt=""
-              className="h-10 w-10 rounded-lg object-contain"
+              className="h-11 w-11 rounded-lg object-contain"
             />
             <span>Dopamine Dungeon</span>
           </Link>
 
-          <div className="flex flex-wrap items-center justify-end gap-x-6 gap-y-2 text-[15px]">
+          <div className="flex flex-wrap items-center justify-end gap-x-7 gap-y-2 text-base">
             {publicLinks.map(([label, path]) => (
               <Link
                 key={path}
@@ -66,7 +66,7 @@ export default function PublicSiteShell() {
 export function PublicHome() {
   return (
     <main
-      className="mx-auto grid min-h-[calc(100vh-76px)] w-full max-w-[1080px] items-center gap-10 px-6 py-10 sm:py-14 lg:grid-cols-[minmax(0,520px)_minmax(360px,400px)] lg:justify-between lg:gap-14 lg:py-14"
+      className="mx-auto grid min-h-[calc(100vh-84px)] w-full max-w-[1080px] items-center gap-10 px-6 py-10 sm:py-14 lg:grid-cols-[minmax(0,520px)_minmax(360px,400px)] lg:justify-between lg:gap-14 lg:py-14"
       data-testid="public-home"
     >
       <section className="w-full max-w-[520px]">
