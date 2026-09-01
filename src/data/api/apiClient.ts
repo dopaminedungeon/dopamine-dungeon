@@ -218,7 +218,7 @@ export async function createApiCampaign(input: {
   workspaceId: string;
   name: string;
   description: string;
-  system: string;
+  system?: string;
   idempotencyKey: string;
 }) {
   return apiFetch<{

@@ -66,6 +66,8 @@ export const test = base.extend<{
   identityContinuityStatus: number;
   identityContinuityUserId: string;
   identityContinuityUserIds: string[] | null;
+  campaignCreateDelayMs: number;
+  campaignCreateStatuses: number[] | null;
   workspaceCreateDelayMs: number;
   workspaceCreateStatuses: number[] | null;
   acceptedInvitations: Array<{
@@ -98,6 +100,8 @@ export const test = base.extend<{
   identityContinuityStatus: [200, { option: true }],
   identityContinuityUserId: ["e2e-user", { option: true }],
   identityContinuityUserIds: [null, { option: true }],
+  campaignCreateDelayMs: [0, { option: true }],
+  campaignCreateStatuses: [null, { option: true }],
   workspaceCreateDelayMs: [0, { option: true }],
   workspaceCreateStatuses: [null, { option: true }],
   apiCallLog: async ({}, use) => {
@@ -159,6 +163,8 @@ test.beforeEach(async ({
   apiMeResponseController,
   apiMeResponses,
   apiMeStatus,
+  campaignCreateDelayMs,
+  campaignCreateStatuses,
   identityContinuityStatus,
   identityContinuityUserId,
   identityContinuityUserIds,
@@ -172,6 +178,7 @@ test.beforeEach(async ({
   let identityContinuityCallCount = 0;
   let acceptPendingCompleted = false;
   let campaignCreated = false;
+  let campaignCreateAttempt = 0;
   let workspaceCreated = false;
   let workspaceCreateAttempt = 0;
 
@@ -299,6 +306,21 @@ test.beforeEach(async ({
     ) {
       const requestBody = route.request().postDataJSON() as Record<string, unknown>;
       apiCallLog.campaignCreate.push(requestBody);
+      const status =
+        campaignCreateStatuses?.[
+          Math.min(campaignCreateAttempt, campaignCreateStatuses.length - 1)
+        ] ?? 201;
+      campaignCreateAttempt += 1;
+      await wait(campaignCreateDelayMs);
+
+      if (status !== 201) {
+        await route.fulfill({
+          status,
+          json: { ok: false, error: "Campaign creation failed" },
+        });
+        return;
+      }
+
       campaignCreated = true;
       await route.fulfill({
         status: 201,

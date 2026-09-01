@@ -39,7 +39,7 @@ export default function Sidebar() {
 
   // v0.1: keep navigation intentionally tiny.
   const baseNavItems = [
-    { to: "/", icon: LayoutDashboard, label: "Home", on: features.dashboard },
+    { to: "/home", icon: LayoutDashboard, label: "Home", on: features.dashboard },
     { to: "/sessions", icon: BookOpen, label: "Sessions", on: features.sessions },
     { to: "/items", icon: Package, label: "Items", on: features.items },
     { to: "/npcs", icon: Drama, label: "NPCs", on: features.npcs },

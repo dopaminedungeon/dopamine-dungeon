@@ -209,7 +209,6 @@ export function CampaignProvider({ children }) {
   const createCampaign = async ({
     name,
     description = "",
-    system = "",
     idempotencyKey,
   }) => {
     if (!user?.uid) {
@@ -222,7 +221,6 @@ export function CampaignProvider({ children }) {
 
     const trimmedName = String(name || "").trim();
     const trimmedDescription = String(description ?? "").trim();
-    const trimmedSystem = String(system ?? "").trim();
 
     if (!trimmedName) {
       throw new Error("Campaign name is required.");
@@ -236,7 +234,6 @@ export function CampaignProvider({ children }) {
       workspaceId: selectedTenantId,
       name: trimmedName,
       description: trimmedDescription,
-      system: trimmedSystem,
       idempotencyKey,
     });
     const campaign = created.campaign;
