@@ -8,6 +8,7 @@ const mocks = vi.hoisted(() => ({
   linkWithCredential: vi.fn(),
   reauthenticateWithCredential: vi.fn(),
   reauthenticateWithPopup: vi.fn(),
+  updatePassword: vi.fn(),
   googleProvider: { providerId: "google.com" },
 }));
 
@@ -25,6 +26,7 @@ vi.mock("firebase/auth", () => ({
   linkWithCredential: mocks.linkWithCredential,
   reauthenticateWithCredential: mocks.reauthenticateWithCredential,
   reauthenticateWithPopup: mocks.reauthenticateWithPopup,
+  updatePassword: mocks.updatePassword,
 }));
 
 import {
@@ -34,6 +36,7 @@ import {
   linkPendingGoogleCredentialToFirebaseUser,
   reauthenticatePasswordUser,
   reauthenticateFirebaseUserWithGoogle,
+  updateFirebaseUserPassword,
 } from "./firebaseCredentialMigration";
 
 beforeEach(() => {
@@ -154,6 +157,16 @@ test("password confirmation reauthenticates the existing Firebase user", async (
   assert.deepEqual(mocks.reauthenticateWithCredential.mock.calls, [
     [firebaseUser, credential],
   ]);
+});
+
+test("password changes update the same Firebase user without creating or signing in", async () => {
+  const firebaseUser = { uid: "unchanged-firebase-uid" };
+
+  await updateFirebaseUserPassword(firebaseUser, "not-stored");
+
+  assert.deepEqual(mocks.updatePassword.mock.calls, [[firebaseUser, "not-stored"]]);
+  assert.equal(mocks.linkWithCredential.mock.calls.length, 0);
+  assert.equal(mocks.linkWithPopup.mock.calls.length, 0);
 });
 
 test("pending Google credential recovery links to the existing Firebase user", async () => {

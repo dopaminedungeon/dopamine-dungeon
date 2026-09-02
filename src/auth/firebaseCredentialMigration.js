@@ -5,6 +5,7 @@ import {
   linkWithCredential,
   reauthenticateWithCredential,
   reauthenticateWithPopup,
+  updatePassword,
 } from "firebase/auth";
 
 const passwordLinkAttempts = new WeakMap();
@@ -55,6 +56,10 @@ export function linkGoogleToFirebaseUser(firebaseUser) {
 export function reauthenticatePasswordUser(firebaseUser, email, password) {
   const credential = EmailAuthProvider.credential(email, password);
   return reauthenticateWithCredential(firebaseUser, credential);
+}
+
+export function updateFirebaseUserPassword(firebaseUser, password) {
+  return updatePassword(firebaseUser, password);
 }
 
 export function linkPendingGoogleCredentialToFirebaseUser(

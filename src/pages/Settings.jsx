@@ -2,7 +2,6 @@ import React, { useEffect, useMemo, useState } from "react";
 import {
   User,
   Mail,
-  Shield,
   LogOut,
   Save,
   CheckCircle2,
@@ -18,14 +17,7 @@ import { auth } from "../firebase/firebase";
 import { isAuthTestMode } from "../config/firebase/firebase";
 import { getApiMe, updateApiProfile } from "../data/api/apiClient";
 import WorkspaceSettings from "./WorkspaceSettings.jsx";
-import CredentialMigration from "../components/auth/CredentialMigration.jsx";
-import GoogleProviderLinking from "../components/auth/GoogleProviderLinking.jsx";
-import {
-  getConnectedProviderIds,
-  getConnectedProviderLabel,
-  shouldShowOptionalGoogleLinking,
-  shouldShowOptionalCredentialSetup,
-} from "../auth/credentialMigration";
+import PasswordManagement from "../components/auth/PasswordManagement.jsx";
 
 const EMPTY_PROFILE = {
   displayName: "",
@@ -36,9 +28,7 @@ export default function Settings() {
   const {
     user,
     logout,
-    beginCredentialSetupVerification,
     completeCredentialSetup,
-    credentialSetupRevision,
   } = useAuth();
   const { mode } = useMode();
   const { tenants, selectedTenantId, workspaceRole } = useTenant();
@@ -49,11 +39,6 @@ export default function Settings() {
   const [saving, setSaving] = useState(false);
   const [saveState, setSaveState] = useState({ type: null, message: "" });
   const [activeTab, setActiveTab] = useState("profile");
-  const [credentialSetupCompleted, setCredentialSetupCompleted] = useState(false);
-  const [googleLinkingCompleted, setGoogleLinkingCompleted] = useState(false);
-  const connectedProviderIds = getConnectedProviderIds(user);
-  const showCredentialSetup = shouldShowOptionalCredentialSetup(user);
-  const showGoogleLinking = shouldShowOptionalGoogleLinking(user);
 
   const selectedTenant = useMemo(
     () =>
@@ -172,16 +157,6 @@ export default function Settings() {
     }
   }
 
-  async function handleCredentialSetupComplete(currentUser) {
-    const completed = await completeCredentialSetup(currentUser);
-    if (completed) setCredentialSetupCompleted(true);
-    return completed;
-  }
-
-  function handleGoogleLinkingComplete() {
-    setGoogleLinkingCompleted(true);
-  }
-
   if (loading) {
     return (
       <main className="flex-1 overflow-auto flex items-center justify-center">
@@ -296,80 +271,10 @@ export default function Settings() {
             </section>
 
             <div className="space-y-4 sm:space-y-6">
-              <section className="bg-white/5 border border-white/10 rounded-xl sm:rounded-2xl p-4 sm:p-6 space-y-4">
-                <div>
-                  <h2 className="text-lg font-semibold text-white">Authentication</h2>
-                  <p className="text-zinc-500 text-sm mt-1">
-                    Your connected sign-in methods and account status.
-                  </p>
-                </div>
-
-                <div className="space-y-3 text-sm">
-                  <div className="flex items-start gap-3">
-                    <Shield className="w-5 h-5 text-zinc-400 mt-0.5" />
-                    <div>
-                      <p className="text-white font-medium">Connected providers</p>
-                      {connectedProviderIds.length > 0 ? (
-                        <ul className="mt-1 space-y-1 text-zinc-400">
-                          {connectedProviderIds.map((providerId) => (
-                            <li key={providerId}>{getConnectedProviderLabel(providerId)}</li>
-                          ))}
-                        </ul>
-                      ) : (
-                        <p className="text-zinc-400">Unknown</p>
-                      )}
-                    </div>
-                  </div>
-
-                  <div className="flex items-start gap-3">
-                    <Mail className="w-5 h-5 text-zinc-400 mt-0.5" />
-                    <div>
-                      <p className="text-white font-medium">Authentication email</p>
-                      <p className="text-zinc-400">{user?.email || "No email available"}</p>
-                      <p className={user?.emailVerified ? "mt-1 text-emerald-300" : "mt-1 text-amber-300"}>
-                        {user?.emailVerified ? "Verified" : "Verification required"}
-                      </p>
-                    </div>
-                  </div>
-                </div>
-
-                {credentialSetupCompleted && !showCredentialSetup && (
-                  <div className="flex gap-3 rounded-md border border-emerald-900/80 bg-emerald-950/40 p-4 text-emerald-100" role="status">
-                    <CheckCircle2 className="h-5 w-5 shrink-0" aria-hidden="true" />
-                    <div>
-                      <p className="font-semibold">Password sign-in is ready</p>
-                      <p className="mt-1 text-sm">Google and Email / Password remain connected to the same account.</p>
-                    </div>
-                  </div>
-                )}
-
-                {googleLinkingCompleted && !showGoogleLinking && (
-                  <div className="flex gap-3 rounded-md border border-emerald-900/80 bg-emerald-950/40 p-4 text-emerald-100" role="status">
-                    <CheckCircle2 className="h-5 w-5 shrink-0" aria-hidden="true" />
-                    <div>
-                      <p className="font-semibold">Google sign-in is connected</p>
-                      <p className="mt-1 text-sm">Google and Email / Password remain connected to the same account.</p>
-                    </div>
-                  </div>
-                )}
-
-                {showCredentialSetup && (
-                  <CredentialMigration
-                    key={`${user.uid}:${credentialSetupRevision}`}
-                    firebaseUser={user}
-                    onComplete={handleCredentialSetupComplete}
-                    onVerificationRequired={beginCredentialSetupVerification}
-                  />
-                )}
-
-                {showGoogleLinking && (
-                  <GoogleProviderLinking
-                    key={`${user.uid}:google:${credentialSetupRevision}`}
-                    firebaseUser={user}
-                    onComplete={handleGoogleLinkingComplete}
-                  />
-                )}
-              </section>
+              <PasswordManagement
+                firebaseUser={user}
+                onPasswordConfigured={completeCredentialSetup}
+              />
 
               <section className="bg-white/5 border border-white/10 rounded-xl sm:rounded-2xl p-4 sm:p-6 space-y-4">
                 <div>

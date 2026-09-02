@@ -16,6 +16,20 @@ export function hasConnectedProvider(user, providerId) {
   return getConnectedProviderIds(user).includes(providerId);
 }
 
+/**
+ * Returns the credential capabilities reported by the authenticated Firebase
+ * user. A missing provider snapshot is deliberately represented by null so
+ * callers never render an inferred "not connected" state.
+ */
+export function getSignInMethodState(user) {
+  if (!user?.uid || !Array.isArray(user.providerData)) return null;
+
+  return {
+    hasGoogle: hasConnectedProvider(user, GOOGLE_PROVIDER_ID),
+    hasPassword: hasConnectedProvider(user, PASSWORD_PROVIDER_ID),
+  };
+}
+
 export function isOptionalCredentialSetupCandidate(user) {
   if (!user?.emailVerified) return false;
 

@@ -5,6 +5,7 @@ import {
   classifyCredentialMigrationError,
   classifyGoogleLinkingError,
   getConnectedProviderIds,
+  getSignInMethodState,
   getConnectedProviderLabel,
   clearPendingCredentialMigration,
   isIdentityContinuityResponseValid,
@@ -67,6 +68,22 @@ test("connected provider display de-duplicates and labels every provider", () =>
     "Google",
     "Email / Password",
   ]);
+});
+
+test("sign-in method state derives only from the Firebase provider snapshot", () => {
+  assert.deepEqual(getSignInMethodState(user(["google.com"])), {
+    hasGoogle: true,
+    hasPassword: false,
+  });
+  assert.deepEqual(getSignInMethodState(user(["password"])), {
+    hasGoogle: false,
+    hasPassword: true,
+  });
+  assert.deepEqual(getSignInMethodState(user(["google.com", "password"])), {
+    hasGoogle: true,
+    hasPassword: true,
+  });
+  assert.equal(getSignInMethodState({ uid: "firebase-uid" }), null);
 });
 
 test("credential migration errors are classified without exposing Firebase messages", () => {
