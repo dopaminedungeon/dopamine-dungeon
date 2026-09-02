@@ -1,4 +1,5 @@
-import { pgTable, text, timestamp, unique, uuid } from "drizzle-orm/pg-core";
+import { sql } from "drizzle-orm";
+import { pgTable, text, timestamp, unique, uniqueIndex, uuid } from "drizzle-orm/pg-core";
 import { users } from "./users.js";
 import { workspaces } from "./workspaces.js";
 import { campaigns } from "./campaigns.js";
@@ -26,7 +27,23 @@ export const invitations = pgTable("invitations", {
   acceptedByUserId: uuid("accepted_by_user_id").references(() => users.id),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   acceptedAt: timestamp("accepted_at"),
-});
+  revokedAt: timestamp("revoked_at"),
+  // Reservation time for direct invitation delivery. This is intentionally
+  // separate from auth-email rate limiting because invitation lifecycle and
+  // delivery semantics are scoped to a campaign invitation.
+  lastSentAt: timestamp("last_sent_at"),
+}, (table) => ({
+  // Expiry transitions pending rows to `expired` before creation/retry. The
+  // partial unique index then makes concurrent active-invitation creation safe.
+  uniqueActiveInvitationScopeRole: uniqueIndex("invitations_active_scope_email_role_unique")
+    .on(
+      table.workspaceId,
+      table.campaignId,
+      table.normalizedEmail,
+      table.campaignRole
+    )
+    .where(sql`${table.status} = 'pending'`),
+}));
 
 export const invitationCharacterAssignments = pgTable(
   "invitation_character_assignments",

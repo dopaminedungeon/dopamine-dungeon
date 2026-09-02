@@ -277,6 +277,54 @@ export async function createApiInvitation(input: {
   });
 }
 
+export type ManagedInvitation = {
+  id: string;
+  email: string;
+  normalizedEmail: string;
+  workspaceRole: string;
+  campaignRole: string;
+  status: "pending" | "accepted" | "expired" | "revoked";
+  characterIds: string[];
+  createdAt: string | null;
+  expiresAt: string | null;
+  acceptedAt: string | null;
+  revokedAt: string | null;
+  lastSentAt: string | null;
+  resendAvailableAt: string | null;
+};
+
+function invitationScopeQuery(tenantId: string, campaignId: string) {
+  return `tenantId=${encodeURIComponent(tenantId)}&campaignId=${encodeURIComponent(campaignId)}`;
+}
+
+export async function getApiInvitations(tenantId: string, campaignId: string) {
+  return apiFetch<{ ok: true; invitations: ManagedInvitation[] }>(
+    `/api/invitations?${invitationScopeQuery(tenantId, campaignId)}`
+  );
+}
+
+export async function resendApiInvitation(input: {
+  tenantId: string;
+  campaignId: string;
+  invitationId: string;
+}) {
+  return apiFetch<{ ok: true; invitation: ManagedInvitation }>("/api/invitations", {
+    method: "PATCH",
+    body: JSON.stringify(input),
+  });
+}
+
+export async function revokeApiInvitation(input: {
+  tenantId: string;
+  campaignId: string;
+  invitationId: string;
+}) {
+  return apiFetch<{ ok: true; invitation: ManagedInvitation }>("/api/invitations", {
+    method: "DELETE",
+    body: JSON.stringify(input),
+  });
+}
+
 export async function acceptPendingApiInvitations() {
   return apiFetch<{
     ok: true;
@@ -369,21 +417,16 @@ export async function getApiCampaignPeople(campaignId: string) {
       workspaceRole: string;
       campaignRole: string;
       characterIds: string[];
+      createdAt: string | null;
+      expiresAt: string | null;
+      acceptedAt: string | null;
+      revokedAt: string | null;
+      lastSentAt: string | null;
+      resendAvailableAt: string | null;
     }>;
   }>(
     `/api/campaign-content?resource=campaignPeople&campaignId=${encodeURIComponent(campaignId)}`
   );
-}
-
-export async function revokeApiCampaignInvite(campaignId: string, inviteId: string) {
-  return apiFetch<{ ok: true }>("/api/campaign-content?resource=campaignPeople", {
-    method: "DELETE",
-    body: JSON.stringify({
-      campaignId,
-      personType: "invite",
-      personId: inviteId,
-    }),
-  });
 }
 
 export async function removeApiCampaignMember(campaignId: string, memberId: string) {

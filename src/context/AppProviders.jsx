@@ -15,6 +15,7 @@ import { useCampaign } from "./CampaignContext.jsx";
 import { acceptPendingApiInvitations } from "../data/api/apiClient";
 import {
   clearInvitationContext,
+  hasInvitationQuery,
   hasPendingInvitationContext,
 } from "../auth/invitationContext";
 
@@ -133,6 +134,7 @@ function InvitationAcceptanceBridge({ children }) {
       const processingKey = user.uid;
       activeKeyRef.current = processingKey;
       const hasInvitationContinuation = hasPendingInvitationContext();
+      const isInvitedUrlFlow = hasInvitationQuery();
 
       const isCurrentResolutionInProgress =
         accessResolution.key === processingKey &&
@@ -212,6 +214,13 @@ function InvitationAcceptanceBridge({ children }) {
 
       if (
         accessResolution.key === processingKey &&
+        accessResolution.status === "inactiveInvitation"
+      ) {
+        return;
+      }
+
+      if (
+        accessResolution.key === processingKey &&
         accessResolution.status === "error"
       ) {
         return;
@@ -229,10 +238,7 @@ function InvitationAcceptanceBridge({ children }) {
           await resolvePendingInvitationsOnce(processingKey, async () => {
             const result = await acceptPendingApiInvitations();
 
-            if (
-              result.acceptedInvitations.length > 0 ||
-              hasInvitationContinuation
-            ) {
+            if (result.acceptedInvitations.length > 0) {
               await refreshTenants();
             }
 
@@ -244,6 +250,16 @@ function InvitationAcceptanceBridge({ children }) {
         }
 
         if (acceptedInvitations.length > 0 || hasInvitationContinuation) {
+          if (acceptedInvitations.length === 0 && isInvitedUrlFlow) {
+            updateAccessResolution({
+              status: "inactiveInvitation",
+              key: processingKey,
+              acceptedInvitations: 0,
+              tenantRefreshStatus: null,
+            });
+            return;
+          }
+
           updateAccessResolution({
             status: "refreshingMemberships",
             key: processingKey,

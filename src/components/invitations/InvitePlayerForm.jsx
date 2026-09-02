@@ -1,6 +1,10 @@
 import { useEffect, useState } from "react";
 import { getAllCharacters } from "../../data/characters/characters.repo";
-import { createApiInvitation, getApiCharacterAssignments } from "../../data/api/apiClient";
+import {
+  ApiRequestError,
+  createApiInvitation,
+  getApiCharacterAssignments,
+} from "../../data/api/apiClient";
 import { useAuth } from "../../context/AuthContext";
 import { useTenant } from "../../context/TenantContext";
 import { useCampaign } from "../../context/CampaignContext";
@@ -101,7 +105,11 @@ export default function InvitePlayerForm({ onInvitationCreated, availabilityVers
       }
     } catch (err) {
       console.error("[InvitePlayerForm] Failed to create invitation", err);
-      setError("Failed to create invitation. Please try again.");
+      setError(
+        err instanceof ApiRequestError
+          ? err.message
+          : "Failed to create invitation. Please try again."
+      );
     } finally {
       setIsSubmitting(false);
     }

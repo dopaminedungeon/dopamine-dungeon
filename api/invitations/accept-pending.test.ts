@@ -155,3 +155,20 @@ test("expired invitation is transitioned without memberships or assignments", as
   assert.equal(mocks.state.insertValues.length, 0);
   assert.deepEqual(mocks.state.updateValues[0], { status: "expired" });
 });
+
+test("terminal revoked invitations never create memberships or assignments", async () => {
+  const revokedInvitation = { ...invitation, status: "revoked" };
+  mocks.state.selectRows.push(
+    [revokedInvitation],
+    [revokedInvitation],
+    [{ id: revokedInvitation.workspaceId, slug: "workspace" }],
+    [{ id: revokedInvitation.campaignId, slug: "campaign" }]
+  );
+  const { res, result } = response();
+
+  await acceptPendingHandler(request(), res);
+
+  assert.equal(result.status, 200);
+  assert.deepEqual((result.body as { acceptedInvitations: unknown[] }).acceptedInvitations, []);
+  assert.equal(mocks.state.insertValues.length, 0);
+});

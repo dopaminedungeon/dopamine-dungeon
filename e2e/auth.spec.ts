@@ -1338,6 +1338,54 @@ test.describe("post-verification routing", () => {
     });
   });
 
+  test.describe("when a verification link outlives its invitation", () => {
+    test.use({
+      apiMeResponse: emptyApiMeResponse("e2e-inactive-invitation-user"),
+      acceptedInvitations: [],
+    });
+
+    test("shows the inactive invitation outcome, preserves verification, and continues through normal home routing", async ({
+      apiCallLog,
+      page,
+      request,
+    }) => {
+      const email = generatedEmail();
+
+      await page.goto("/?invited=true");
+      await page.getByRole("button", { name: "Create an account" }).click();
+      await page.getByLabel("Email address").fill(email);
+      await page.getByLabel("Password", { exact: true }).fill(password);
+      await page.getByLabel("Confirm password", { exact: true }).fill(password);
+      await page.getByRole("button", { name: "Create account" }).click();
+      const oobCode = await getVerificationCode(request, email);
+
+      await page.goto(
+        `/auth/verify-email?mode=verifyEmail&oobCode=${encodeURIComponent(oobCode)}&invited=true`
+      );
+
+      await expect(
+        page.getByRole("heading", { name: "Invitation no longer available" })
+      ).toBeVisible();
+      await expect(
+        page.getByText(
+          "Your email is verified, but this invitation was revoked, expired, or is no longer active."
+        )
+      ).toBeVisible();
+      await expect(page.getByRole("button", { name: "Continue" })).toBeVisible();
+      await expect(page.getByRole("heading", { name: "Create your first workspace" })).toHaveCount(0);
+      expect(apiCallLog.acceptPending).toHaveLength(1);
+
+      await page.getByRole("button", { name: "Continue" }).click();
+
+      await expect(page).toHaveURL(/\/home$/);
+      await expect(
+        page.getByRole("heading", { name: "Create your first workspace" })
+      ).toBeVisible({ timeout: 10_000 });
+      await expect(page.getByText("Invited Workspace", { exact: true })).toHaveCount(0);
+      await expect(page.getByText("Invited Campaign", { exact: true })).toHaveCount(0);
+    });
+  });
+
   test.describe("when pending invitation acceptance is delayed", () => {
     test.use({
       apiMeResponses: [
@@ -2442,6 +2490,253 @@ test("keeps retired feature and placeholder controls out of authenticated naviga
     await page.goto(retiredPath);
     await expect(page.getByText("Not Found", { exact: true })).toBeVisible();
   }
+});
+
+test("consolidates scoped invitation lifecycle rows into Campaign people for owner GM mode", async ({
+  expectedConsoleErrors,
+  page,
+  request,
+}) => {
+  expectedConsoleErrors.push("Failed to load resource");
+  const resendAvailableAt = new Date(Date.now() + 1_250).toISOString();
+  await page.route("**/api/campaign-content?resource=campaignSettings**", async (route) => {
+    await route.fulfill({
+      status: 200,
+      json: {
+        ok: true,
+        campaign: {
+          id: readyCampaignId,
+          campaignId: "e2e-campaign",
+          workspaceId: readyWorkspaceId,
+          name: "E2E Campaign",
+          description: "Authentication emulator test campaign",
+          status: "active",
+          system: "",
+          playerSummary: "",
+          gmNotes: "",
+          startDate: "",
+          endDate: "",
+        },
+      },
+    });
+  });
+  let campaignPeopleRequests = 0;
+  await page.route("**/api/campaign-content?resource=campaignPeople**", async (route) => {
+    campaignPeopleRequests += 1;
+    await route.fulfill({
+      status: 200,
+      json: {
+        ok: true,
+        campaignId: "e2e-campaign",
+        people: [
+          {
+            id: "member-owner",
+            docId: "membership-owner",
+            type: "member",
+            status: "accepted",
+            email: "owner@example.test",
+            displayName: "Owner",
+            label: "Owner",
+            userId: "owner-user",
+            workspaceRole: "owner",
+            campaignRole: "gm",
+            characterIds: [],
+            createdAt: null,
+            expiresAt: null,
+            acceptedAt: null,
+            revokedAt: null,
+            lastSentAt: null,
+            resendAvailableAt: null,
+          },
+          {
+            id: "invite-pending",
+            docId: "e2e-pending-invitation",
+            type: "invite",
+            status: "pending",
+            email: "invitee@example.test",
+            displayName: null,
+            label: "invitee",
+            userId: null,
+            workspaceRole: "member",
+            campaignRole: "player",
+            characterIds: ["reserved-character"],
+            createdAt: "2026-01-01T00:00:00.000Z",
+            expiresAt: "2099-01-01T00:00:00.000Z",
+            acceptedAt: null,
+            revokedAt: null,
+            lastSentAt: "2026-01-01T00:00:00.000Z",
+            resendAvailableAt,
+          },
+          {
+            id: "invite-expired",
+            docId: "e2e-expired-invitation",
+            type: "invite",
+            status: "expired",
+            email: "expired@example.test",
+            displayName: null,
+            label: "expired",
+            userId: null,
+            workspaceRole: "member",
+            campaignRole: "player",
+            characterIds: [],
+            createdAt: "2026-01-01T00:00:00.000Z",
+            expiresAt: null,
+            acceptedAt: null,
+            revokedAt: null,
+            lastSentAt: "2026-01-01T00:00:00.000Z",
+            resendAvailableAt: null,
+          },
+          {
+            id: "invite-revoked",
+            docId: "e2e-revoked-invitation",
+            type: "invite",
+            status: "revoked",
+            email: "revoked@example.test",
+            displayName: null,
+            label: "revoked",
+            userId: null,
+            workspaceRole: "member",
+            campaignRole: "player",
+            characterIds: [],
+            createdAt: "2026-01-01T00:00:00.000Z",
+            expiresAt: null,
+            acceptedAt: null,
+            revokedAt: "2026-01-03T00:00:00.000Z",
+            lastSentAt: "2026-01-01T00:00:00.000Z",
+            resendAvailableAt: null,
+          },
+          {
+            id: "invite-historic-revoked",
+            docId: "e2e-historic-revoked-invitation",
+            type: "invite",
+            status: "revoked",
+            email: "historic-revoked@example.test",
+            displayName: null,
+            label: "historic revoked",
+            userId: null,
+            workspaceRole: "member",
+            campaignRole: "player",
+            characterIds: [],
+            createdAt: "2026-01-01T00:00:00.000Z",
+            expiresAt: null,
+            acceptedAt: null,
+            revokedAt: null,
+            lastSentAt: "2026-01-01T00:00:00.000Z",
+            resendAvailableAt: null,
+          },
+          {
+            id: "invite-accepted-history",
+            docId: "e2e-accepted-history-invitation",
+            type: "invite",
+            status: "accepted",
+            email: "historic@example.test",
+            displayName: null,
+            label: "historic",
+            userId: null,
+            workspaceRole: "member",
+            campaignRole: "player",
+            characterIds: ["reserved-character"],
+            createdAt: "2026-01-01T00:00:00.000Z",
+            expiresAt: null,
+            acceptedAt: "2026-01-04T00:00:00.000Z",
+            revokedAt: null,
+            lastSentAt: "2026-01-01T00:00:00.000Z",
+            resendAvailableAt: null,
+          },
+        ],
+      },
+    });
+  });
+  await page.route("**/api/campaign-content?resource=characterAssignments**", async (route) => {
+    await route.fulfill({ status: 200, json: { ok: true, assignments: [], assignedCharacterIds: [], pendingAssignedCharacterIds: [], characters: [] } });
+  });
+  await page.route("**/api/worldbuilding?resource=characters**", async (route) => {
+    await route.fulfill({ status: 200, json: { ok: true, characters: [{ id: "available-character", name: "Available PC" }, { id: "reserved-character", name: "Reserved PC" }] } });
+  });
+  let resendAttempts = 0;
+  await page.route("**/api/invitations", async (route) => {
+    if (route.request().method() === "PATCH" && resendAttempts++ === 0) {
+      await route.fulfill({
+        status: 429,
+        headers: { "Retry-After": "2" },
+        json: { ok: false, error: "This invitation was sent recently.", retryAfterSeconds: 2 },
+      });
+      return;
+    }
+    await route.fulfill({
+      status: 200,
+      json: { ok: true, invitation: { id: "e2e-pending-invitation" } },
+    });
+  });
+
+  const email = generatedEmail();
+  await createVerifiedUser(request, email, password);
+  await openEmailSignIn(page);
+  await page.getByLabel("Email address").fill(email);
+  await page.getByLabel("Password", { exact: true }).fill(password);
+  await page.getByRole("button", { name: "Sign in", exact: true }).click();
+  await expect(page.getByRole("heading", { name: "E2E Campaign" })).toBeVisible();
+
+  await page.getByRole("button", { name: "GM", exact: true }).click();
+  await page.goto("/campaigns/settings");
+  await expect(page.getByRole("button", { name: "Invite player", exact: true })).toBeVisible();
+  await expect(page.getByText("Campaign people", { exact: true })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Invitations" })).toHaveCount(0);
+  await expect(page.getByText("Owner", { exact: true })).toBeVisible();
+  await expect(page.getByText("invitee@example.test", { exact: true })).toBeVisible();
+  await expect(page.getByText("expired@example.test", { exact: true })).toBeVisible();
+  await expect(page.getByText("revoked@example.test", { exact: true })).toBeVisible();
+  await expect(page.getByText("historic-revoked@example.test", { exact: true })).toBeVisible();
+  await expect(page.getByText("historic@example.test", { exact: true })).toBeVisible();
+  await expect(page.getByText("Reserved: Reserved PC", { exact: true })).toBeVisible();
+  await expect(page.getByText("Expired date unavailable", { exact: true })).toBeVisible();
+  await expect(page.getByText("Revoked date unavailable", { exact: true })).toBeVisible();
+  await expect(
+    page
+      .getByText("revoked@example.test", { exact: true })
+      .locator("xpath=ancestor::tr")
+      .getByText(/^Revoked /)
+  ).toBeVisible();
+  await expect(page.getByText("No active campaign membership", { exact: true })).toBeVisible();
+  await expect(page.getByText("Accepted invitation", { exact: true })).toBeVisible();
+  const resendDuringCooldown = page.getByRole("button", { name: /Resend in \d+s/ });
+  await expect(resendDuringCooldown).toBeDisabled();
+  await expect(resendDuringCooldown).toHaveAccessibleDescription(
+    /Resend becomes available in \d+ seconds\./
+  );
+  await expect(page.getByRole("button", { name: "Resend", exact: true })).toBeEnabled({ timeout: 5_000 });
+  await expect(page.getByRole("button", { name: "Revoke", exact: true })).toHaveCount(1);
+  await expect(page.getByRole("button", { name: "Remove", exact: true })).toHaveCount(1);
+  await expect(page.getByRole("button", { name: "Assign", exact: true })).toBeVisible();
+  await expect(page.getByText("Assign character", { exact: true })).toHaveCount(0);
+
+  await page.getByRole("button", { name: "Resend", exact: true }).click();
+  await expect(
+    page.getByText("Please wait 2s before resending this invitation.", { exact: true })
+  ).toBeVisible();
+  const resendAfterRace = page.getByRole("button", { name: /Resend in \d+s/ });
+  await expect(resendAfterRace).toBeDisabled();
+  await expect(resendAfterRace).toHaveAccessibleDescription(
+    /Resend becomes available in \d+ seconds\./
+  );
+  await expect(page.getByRole("button", { name: "Resend", exact: true })).toBeEnabled({ timeout: 5_000 });
+  await page.getByRole("button", { name: "Resend", exact: true }).click();
+  await expect(page.getByRole("status")).toHaveText("Invitation resent.");
+  await expect.poll(() => campaignPeopleRequests).toBeGreaterThan(1);
+
+  await page.setViewportSize({ width: 375, height: 667 });
+  await expect
+    .poll(() =>
+      page.evaluate(
+        () => document.documentElement.scrollWidth <= document.documentElement.clientWidth
+      )
+    )
+    .toBe(true);
+
+  await page.setViewportSize({ width: 1280, height: 900 });
+  await page.getByRole("button", { name: "Player", exact: true }).click();
+  await expect(page.getByRole("button", { name: "Invite player", exact: true })).toHaveCount(0);
+  await expect(page.getByText("Campaign people", { exact: true })).toHaveCount(0);
 });
 
 test("shows a generic error for incorrect credentials", async ({ page }) => {
