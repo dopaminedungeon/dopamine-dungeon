@@ -25,9 +25,12 @@ import {
   getInvitationCharacterIdsByInvitationId,
 } from "../../src/server/invitation-characters.js";
 import { sendTransactionalEmail } from "../../src/server/transactionalMail.js";
+import {
+  getInvitationResendAvailableAt,
+  INVITATION_RESEND_COOLDOWN_MS,
+} from "../../src/server/invitationLifecycle.js";
 
 const INVITATION_LIFETIME_MS = 7 * 24 * 60 * 60 * 1000;
-const INVITATION_RESEND_COOLDOWN_MS = 60 * 1000;
 
 class InvitationRequestError extends Error {
   constructor(
@@ -184,6 +187,7 @@ function toInvitationResponse(
     acceptedAt: invitation.acceptedAt,
     revokedAt: invitation.revokedAt,
     lastSentAt: invitation.lastSentAt,
+    resendAvailableAt: getInvitationResendAvailableAt(invitation.lastSentAt),
   };
 }
 

@@ -35,6 +35,27 @@ function formatTimestamp(value) {
     : timestamp.toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" });
 }
 
+function formatLifecycleTimestamp(value, label) {
+  const formatted = formatTimestamp(value);
+  return formatted === "—" ? `${label} date unavailable` : `${label} ${formatted}`;
+}
+
+function getInvitationHistorySummary(person) {
+  if (person.status === "revoked") {
+    return formatLifecycleTimestamp(person.revokedAt, "Revoked");
+  }
+
+  if (person.status === "expired") {
+    return formatLifecycleTimestamp(person.expiresAt, "Expired");
+  }
+
+  if (person.status === "accepted") {
+    return formatLifecycleTimestamp(person.acceptedAt, "Accepted");
+  }
+
+  return "Invitation history";
+}
+
 function invitationStatusClass(status) {
   if (status === "accepted") return "border-emerald-400/20 bg-emerald-400/10 text-emerald-200";
   if (status === "pending") return "border-amber-400/20 bg-amber-400/10 text-amber-200";
@@ -87,9 +108,27 @@ export default function CampaignSettings() {
   const [peopleActionId, setPeopleActionId] = useState(null);
   const [invitationActionError, setInvitationActionError] = useState("");
   const [invitationActionNotice, setInvitationActionNotice] = useState("");
+  const [resendNow, setResendNow] = useState(() => Date.now());
   const createIdempotencyKeyRef = useRef(null);
   const canManageInvitations =
     isGM && workspaceRole === "owner" && campaignRole === "gm";
+
+  useEffect(() => {
+    const hasActiveResendCooldown = campaignPeople.some((person) => {
+      if (person.type !== "invite" || person.status !== "pending" || !person.resendAvailableAt) {
+        return false;
+      }
+
+      const availableAt = new Date(person.resendAvailableAt).getTime();
+      return Number.isFinite(availableAt) && availableAt > Date.now();
+    });
+
+    if (!hasActiveResendCooldown) return undefined;
+
+    setResendNow(Date.now());
+    const intervalId = window.setInterval(() => setResendNow(Date.now()), 1_000);
+    return () => window.clearInterval(intervalId);
+  }, [campaignPeople]);
 
 	  const createCampaign = async (e) => {
 	    e?.preventDefault?.();
@@ -446,6 +485,17 @@ export default function CampaignSettings() {
       setCampaignPeopleVersion((value) => value + 1);
     } catch (error) {
       if (error instanceof ApiRequestError && error.retryAfterSeconds) {
+        const resendAvailableAt = new Date(
+          Date.now() + error.retryAfterSeconds * 1_000
+        ).toISOString();
+        setCampaignPeople((currentPeople) =>
+          currentPeople.map((currentPerson) =>
+            currentPerson.docId === invitationId
+              ? { ...currentPerson, resendAvailableAt }
+              : currentPerson
+          )
+        );
+        setResendNow(Date.now());
         setInvitationActionError(
           `Please wait ${error.retryAfterSeconds}s before resending this invitation.`
         );
@@ -515,6 +565,11 @@ export default function CampaignSettings() {
   const invitationHistoryPeople = invitationPeople.filter(
     (person) => person.status !== "pending"
   );
+  const getResendSecondsRemaining = (person) => {
+    const availableAt = new Date(person.resendAvailableAt || "").getTime();
+    if (!Number.isFinite(availableAt)) return 0;
+    return Math.max(0, Math.ceil((availableAt - resendNow) / 1_000));
+  };
 
   return (
     <div className="w-full text-white">
@@ -888,9 +943,23 @@ export default function CampaignSettings() {
                             <td className="rounded-r-2xl border-y border-r border-amber-400/15 bg-amber-400/[0.035] px-4 py-3">
                               {canManageInvitations ? (
                                 <div className="flex flex-wrap justify-end gap-2">
-                                  <button type="button" disabled={Boolean(peopleActionId)} onClick={() => onInvitationAction(person, "resend")} className="rounded-lg border border-white/10 bg-white/[0.04] px-2.5 py-1.5 text-xs text-zinc-100 transition hover:bg-white/[0.08] disabled:cursor-not-allowed disabled:opacity-50">
-                                    {peopleActionId === `resend-${person.docId}` ? "Resending…" : "Resend"}
-                                  </button>
+                                  {(() => {
+                                    const resendSecondsRemaining = getResendSecondsRemaining(person);
+                                    const isResendCoolingDown = resendSecondsRemaining > 0;
+                                    const cooldownDescriptionId = `invitation-resend-${person.docId}`;
+                                    return (
+                                  <>
+                                    <button type="button" disabled={Boolean(peopleActionId) || isResendCoolingDown} onClick={() => onInvitationAction(person, "resend")} aria-describedby={isResendCoolingDown ? cooldownDescriptionId : undefined} className="rounded-lg border border-white/10 bg-white/[0.04] px-2.5 py-1.5 text-xs text-zinc-100 transition hover:bg-white/[0.08] disabled:cursor-not-allowed disabled:opacity-50">
+                                      {peopleActionId === `resend-${person.docId}` ? "Resending…" : isResendCoolingDown ? `Resend in ${resendSecondsRemaining}s` : "Resend"}
+                                    </button>
+                                    {isResendCoolingDown ? (
+                                      <span id={cooldownDescriptionId} className="sr-only">
+                                        Resend becomes available in {resendSecondsRemaining} seconds.
+                                      </span>
+                                    ) : null}
+                                  </>
+                                    );
+                                  })()}
                                   <button type="button" disabled={Boolean(peopleActionId)} onClick={() => onInvitationAction(person, "revoke")} className="rounded-lg border border-red-400/20 bg-red-400/10 px-2.5 py-1.5 text-xs text-red-100 transition hover:bg-red-400/20 disabled:cursor-not-allowed disabled:opacity-50">
                                     {peopleActionId === `revoke-${person.docId}` ? "Revoking…" : "Revoke"}
                                   </button>
@@ -904,10 +973,13 @@ export default function CampaignSettings() {
                             <td className="rounded-l-2xl border-y border-l border-white/8 bg-white/[0.015] px-4 py-3">
                               <div className="space-y-1">
                                 <p className="break-all text-sm text-zinc-300">{person.email}</p>
-                                <p className="text-xs text-zinc-500">{person.status === "revoked" ? `Revoked ${formatTimestamp(person.revokedAt)}` : `${person.status} ${formatTimestamp(person.acceptedAt || person.expiresAt || person.createdAt)}`}</p>
+                                <p className="text-xs text-zinc-500">{getInvitationHistorySummary(person)}</p>
+                                {person.status === "accepted" ? (
+                                  <p className="text-xs text-zinc-500">No active campaign membership</p>
+                                ) : null}
                               </div>
                             </td>
-                            <td className="border-y border-white/8 bg-white/[0.015] py-3"><span className={`inline-flex rounded-full border px-2.5 py-1 text-xs font-medium ${invitationStatusClass(person.status)}`}>{person.status}</span></td>
+                            <td className="border-y border-white/8 bg-white/[0.015] py-3"><span className={`inline-flex rounded-full border px-2.5 py-1 text-xs font-medium ${invitationStatusClass(person.status)}`}>{person.status === "accepted" ? "Accepted invitation" : person.status}</span></td>
                             <td className="border-y border-white/8 bg-white/[0.015] px-4 py-3 text-sm"><p>Workspace {person.workspaceRole}</p><p className="mt-1 text-xs text-zinc-500">Campaign {person.campaignRole}</p></td>
                             <td className="border-y border-white/8 bg-white/[0.015] px-4 py-3">
                               {person.characterIds?.length ? <span className="text-xs text-zinc-400">{person.characterIds.length} character{person.characterIds.length === 1 ? "" : "s"} reserved</span> : <span className="text-xs text-zinc-500">No characters reserved</span>}

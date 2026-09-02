@@ -290,6 +290,7 @@ export type ManagedInvitation = {
   acceptedAt: string | null;
   revokedAt: string | null;
   lastSentAt: string | null;
+  resendAvailableAt: string | null;
 };
 
 function invitationScopeQuery(tenantId: string, campaignId: string) {
@@ -421,6 +422,7 @@ export async function getApiCampaignPeople(campaignId: string) {
       acceptedAt: string | null;
       revokedAt: string | null;
       lastSentAt: string | null;
+      resendAvailableAt: string | null;
     }>;
   }>(
     `/api/campaign-content?resource=campaignPeople&campaignId=${encodeURIComponent(campaignId)}`

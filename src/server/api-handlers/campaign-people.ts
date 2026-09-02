@@ -17,6 +17,7 @@ import {
 import { characterAssignments } from "../../../db/schema/characterAssignments.js";
 import { users } from "../../../db/schema/users.js";
 import { getInvitationCharacterIdsByInvitationId } from "../invitation-characters.js";
+import { getInvitationResendAvailableAt } from "../invitationLifecycle.js";
 
 type User = typeof users.$inferSelect;
 
@@ -359,6 +360,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       acceptedAt: invitation.acceptedAt,
       revokedAt: invitation.revokedAt,
       lastSentAt: invitation.lastSentAt,
+      resendAvailableAt: getInvitationResendAvailableAt(invitation.lastSentAt),
     }));
 
     return res.status(200).json({

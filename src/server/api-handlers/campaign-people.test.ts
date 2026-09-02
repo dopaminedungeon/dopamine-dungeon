@@ -155,6 +155,10 @@ test("projects members, pending invitations, and terminal history without duplic
   assert.deepEqual(people[0].characterIds, ["character-assigned"]);
   assert.deepEqual(people[1].characterIds, ["character-reserved"]);
   assert.equal(people[1].status, "pending");
+  assert.equal(
+    (people[1].resendAvailableAt as Date).toISOString(),
+    "2026-01-01T00:01:00.000Z"
+  );
   assert.equal(people[3].status, "expired");
   assert.equal(people[4].status, "revoked");
 });

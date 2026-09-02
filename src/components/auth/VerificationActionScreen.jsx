@@ -14,6 +14,7 @@ import {
   readVerificationAction,
 } from "../../auth/verificationAction";
 import {
+  clearInvitationContext,
   getPostVerificationPath,
   preserveInvitationContext,
 } from "../../auth/invitationContext";
@@ -73,6 +74,12 @@ const CONTENT = {
     icon: AlertTriangle,
     title: "Account access unavailable",
     body: "Your email is verified, but we could not finish resolving your account access. Try again before continuing.",
+    tone: "text-amber-300",
+  },
+  "inactive-invitation": {
+    icon: AlertTriangle,
+    title: "Invitation no longer available",
+    body: "Your email is verified, but this invitation was revoked, expired, or is no longer active.",
     tone: "text-amber-300",
   },
 };
@@ -171,16 +178,24 @@ export default function VerificationActionScreen({
   const displayedState =
     continuationPath && accessResolutionStatus === "error"
       ? "access-failed"
+      : continuationPath && accessResolutionStatus === "inactiveInvitation"
+        ? "inactive-invitation"
       : state;
   const content = CONTENT[displayedState] ?? CONTENT.failure;
   const Icon = content.icon;
   const isBusy = displayedState === "checking" || displayedState === "success";
   const isAccessFailure = displayedState === "access-failed";
+  const isInactiveInvitation = displayedState === "inactive-invitation";
   const canReturnToVerification = Boolean(auth.currentUser && !auth.currentUser.emailVerified);
 
   async function goToSignIn() {
     if (auth.currentUser) await onSignOut();
     window.location.replace(getPostVerificationPath());
+  }
+
+  function continueAfterInactiveInvitation() {
+    clearInvitationContext();
+    window.location.replace("/home");
   }
 
   return (
@@ -207,6 +222,8 @@ export default function VerificationActionScreen({
                         setState("success");
                         onRetryAccessResolution();
                       }
+                    : isInactiveInvitation
+                      ? continueAfterInactiveInvitation
                     : canReturnToVerification
                       ? () => window.location.replace(getPostVerificationPath())
                       : goToSignIn
@@ -216,6 +233,8 @@ export default function VerificationActionScreen({
                 <LogIn className="h-[22px] w-[22px]" aria-hidden="true" />
                 {isAccessFailure
                   ? "Try again"
+                  : isInactiveInvitation
+                    ? "Continue"
                   : canReturnToVerification
                     ? "Return to verification"
                     : "Continue to sign in"}

@@ -200,6 +200,14 @@ test("scoped listing expires before presenting invitations and includes terminal
 
   assert.equal(result.status, 200);
   assert.equal((result.body as { invitations: Array<{ status: string }> }).invitations[0]?.status, "pending");
+  const listedInvitation = (result.body as {
+    invitations: Array<{ resendAvailableAt: Date | null }>;
+  }).invitations[0];
+  assert.ok(listedInvitation?.resendAvailableAt instanceof Date);
+  assert.equal(
+    listedInvitation?.resendAvailableAt?.getTime(),
+    managedInvitation.lastSentAt.getTime() + 60 * 1000
+  );
 });
 
 test("resend reserves one pending invitation before direct delivery", async () => {
