@@ -6,11 +6,14 @@ import { auth } from "../../firebase/firebase";
 import {
   GOOGLE_PROVIDER_ID,
   PASSWORD_PROVIDER_ID,
+  captureFirebaseCredentialState,
   classifyCredentialMigrationError,
   getSignInMethodState,
   hasConnectedProvider,
   isIdentityContinuityResponseValid,
-  readPendingCredentialMigration,
+  isVerifiedGoogleFirstCredentialState,
+  preservesVerifiedGoogleFirstCredentialState,
+  clearPendingCredentialMigration,
 } from "../../auth/credentialMigration";
 import { getPasswordRequirements } from "../../auth/authMessages";
 import { validatePasswordForAuth } from "../../auth/passwordValidation";
@@ -20,7 +23,7 @@ import {
   reauthenticatePasswordUser,
   updateFirebaseUserPassword,
 } from "../../auth/firebaseCredentialMigration";
-import { getIdentityContinuity } from "../../data/api/apiClient";
+import { getApiMe, getIdentityContinuity } from "../../data/api/apiClient";
 import GoogleProviderLinking from "./GoogleProviderLinking";
 import PasswordField from "./PasswordField";
 import PasswordRequirements from "./PasswordRequirements";
@@ -46,7 +49,6 @@ function failureMessage(error, operation) {
 
 export default function PasswordManagement({
   firebaseUser,
-  onPasswordConfigured,
   onProviderStateChange,
 }) {
   const originalUidRef = useRef(firebaseUser?.uid || "");
@@ -87,6 +89,10 @@ export default function PasswordManagement({
   async function verifyContinuity({ initial = false } = {}) {
     if (!currentFirebaseUserIsOriginal()) return false;
     try {
+      // `/api/me` is the existing authenticated reconciliation boundary. For a
+      // Firebase-verified account it records (without replacing) the first
+      // `users.email_verified_at` timestamp under the exact Firebase UID.
+      const reconciled = await getApiMe();
       const result = await getIdentityContinuity();
       if (
         !isIdentityContinuityResponseValid(
@@ -97,16 +103,8 @@ export default function PasswordManagement({
       ) {
         return false;
       }
+      if (reconciled?.user?.id !== result.neonUserId) return false;
       if (initial) {
-        const pending = readPendingCredentialMigration(originalUidRef.current);
-        if (pending) {
-          neonUserIdRef.current = pending.neonUserId;
-          return isIdentityContinuityResponseValid(
-            result,
-            originalUidRef.current,
-            pending.neonUserId
-          );
-        }
         neonUserIdRef.current = result.neonUserId;
       }
       return true;
@@ -207,6 +205,12 @@ export default function PasswordManagement({
         return;
       }
 
+      if (!(await refreshProviderState())) {
+        clearSensitiveState();
+        setStatus({ type: "error", message: "Your sign-in method state is temporarily unavailable. Try again later." });
+        return;
+      }
+
       const currentUser = auth.currentUser;
       if (!currentUser || !currentFirebaseUserIsOriginal() || !(await verifyContinuity({ initial: !neonUserIdRef.current }))) {
         clearSensitiveState();
@@ -215,7 +219,36 @@ export default function PasswordManagement({
       }
 
       if (mode === "set") {
+        const preLinkState = captureFirebaseCredentialState(currentUser);
+        if (!isVerifiedGoogleFirstCredentialState(preLinkState)) {
+          clearSensitiveState();
+          setStatus({
+            type: "error",
+            message: "Your email must be verified before you can add a password.",
+          });
+          return;
+        }
+
+        // This Profile Settings flow is not the legacy credential-migration
+        // verification flow. A stale, UID-scoped session latch must not cause
+        // a verified Google account to request another verification email.
+        clearPendingCredentialMigration();
         await linkPasswordToFirebaseUser(currentUser, originalEmailRef.current, password);
+
+        clearSensitiveState();
+        if (!(await refreshProviderState())) {
+          setStatus({ type: "error", message: "Your sign-in method state is temporarily unavailable. Try again later." });
+          return;
+        }
+
+        const postLinkState = captureFirebaseCredentialState(auth.currentUser);
+        if (!preservesVerifiedGoogleFirstCredentialState(preLinkState, postLinkState)) {
+          setStatus({
+            type: "error",
+            message: "Your verified Google account changed unexpectedly while adding a password. No password setup was confirmed. Please sign in again and contact support if this continues.",
+          });
+          return;
+        }
       } else {
         await reauthenticatePasswordUser(currentUser, originalEmailRef.current, currentPassword);
         if (!currentFirebaseUserIsOriginal()) throw new Error("identity");
@@ -228,9 +261,6 @@ export default function PasswordManagement({
         return;
       }
       setMode(null);
-      if (mode === "set") {
-        await onPasswordConfigured?.(auth.currentUser);
-      }
       setStatus({ type: "success", message: mode === "set" ? "Password configured" : "Password updated" });
       onProviderStateChange?.();
     } catch (error) {

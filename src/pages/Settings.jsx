@@ -28,7 +28,6 @@ export default function Settings() {
   const {
     user,
     logout,
-    completeCredentialSetup,
   } = useAuth();
   const { mode } = useMode();
   const { tenants, selectedTenantId, workspaceRole } = useTenant();
@@ -273,7 +272,6 @@ export default function Settings() {
             <div className="space-y-4 sm:space-y-6">
               <PasswordManagement
                 firebaseUser={user}
-                onPasswordConfigured={completeCredentialSetup}
               />
 
               <section className="bg-white/5 border border-white/10 rounded-xl sm:rounded-2xl p-4 sm:p-6 space-y-4">

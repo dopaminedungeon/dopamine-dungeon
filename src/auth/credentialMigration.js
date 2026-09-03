@@ -30,6 +30,44 @@ export function getSignInMethodState(user) {
   };
 }
 
+/**
+ * Captures the Firebase-owned identity and provider state that must survive a
+ * password-link operation. This is deliberately an in-memory snapshot: Neon
+ * never receives credentials or provider-state flags from the browser.
+ */
+export function captureFirebaseCredentialState(user) {
+  if (!user?.uid || typeof user.email !== "string") return null;
+
+  const providerIds = getConnectedProviderIds(user);
+  return {
+    uid: user.uid,
+    email: user.email,
+    emailVerified: user.emailVerified === true,
+    providerIds,
+  };
+}
+
+export function isVerifiedGoogleFirstCredentialState(state) {
+  return Boolean(
+    state?.uid &&
+      state.email &&
+      state.emailVerified === true &&
+      state.providerIds?.includes(GOOGLE_PROVIDER_ID) &&
+      !state.providerIds?.includes(PASSWORD_PROVIDER_ID)
+  );
+}
+
+export function preservesVerifiedGoogleFirstCredentialState(before, after) {
+  return Boolean(
+    isVerifiedGoogleFirstCredentialState(before) &&
+      after?.uid === before.uid &&
+      after.email === before.email &&
+      after.emailVerified === true &&
+      after.providerIds?.includes(GOOGLE_PROVIDER_ID) &&
+      after.providerIds?.includes(PASSWORD_PROVIDER_ID)
+  );
+}
+
 export function isOptionalCredentialSetupCandidate(user) {
   if (!user?.emailVerified) return false;
 
