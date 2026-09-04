@@ -190,6 +190,38 @@ Rollback is not normally required because the nullable column is backward
 compatible. Prefer a forward fix. Drop the column only after reverting all code
 that reads or writes `email_verified_at`; never delete or reassign user rows.
 
+### v0.6 Google-only verification migration
+
+The v0.6 Google-only verification migration is an operator-only Firebase Admin
+and Neon reconciliation operation. It is not a deployment side effect and must
+not run from a browser, an API route, or a routine application startup.
+
+Use the runbook in
+[`GOOGLE_ONLY_VERIFICATION_MIGRATION.md`](./GOOGLE_ONLY_VERIFICATION_MIGRATION.md).
+The required sequence is:
+
+1. Prove the Firebase project, Neon host, and database target using non-secret
+   runtime metadata.
+2. Confirm `0014_brief_mac_gargan.sql` is present on that Neon target.
+3. Run a dry run and review the sanitized UID-scoped report.
+4. Freeze the reviewed manifest outside the repository.
+5. Obtain explicit environment-specific approval.
+6. Run the guarded apply with that manifest; Production requires an additional
+   explicit Production confirmation.
+7. Capture the post-run report and perform the manual verification steps.
+
+The operation may only update Firebase `emailVerified` and a null
+`users.email_verified_at` timestamp for revalidated, exact Google-only
+Firebase/Neon UID pairs. It must not send verification mail or modify
+credentials, providers, DD users, memberships, roles, preferences, invitations,
+campaigns, workspaces, or content. Firebase-success/Neon-failure is a recorded
+partial completion; preserve the manifest and use a separately approved forward
+retry rather than reverting verified users.
+
+Feature Preview currently has a documented Development-resource topology in
+`ENVIRONMENT.md`. Resolve that operational decision and prove the actual target
+before treating a Development or Preview migration run as isolated.
+
 ## Agent restrictions
 
 Coding agents may:

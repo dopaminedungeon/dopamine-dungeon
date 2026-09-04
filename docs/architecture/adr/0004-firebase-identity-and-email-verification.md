@@ -41,6 +41,25 @@ Neon `email_verified_at` reconciliation is additive, server-authenticated,
 and idempotent. It records application history without replacing Firebase as
 the current verification authority.
 
+### v0.6 historical Google-only verification migration
+
+The v0.6 release has one narrow exception to the general rule that a provider
+name alone must not establish verification. A trusted, one-time, server-only
+migration may treat an **existing enabled DD user** as verified only when all
+of these conditions hold for the same Firebase UID:
+
+- the Firebase account has a non-empty email;
+- its complete provider set is exactly `google.com`;
+- no password or other provider is linked; and
+- exactly one existing Neon `users.firebase_uid` record resolves for that UID.
+
+The operator tool must re-check those conditions at apply time, set Firebase
+`emailVerified` only when it is false, then write `users.email_verified_at`
+only when it is null. Existing non-null timestamps remain unchanged. The tool
+must never select, merge, or repair an identity by email, and browser clients
+cannot invoke or assert this migration state. Firebase remains the live
+verification authority after the migration.
+
 ## Ongoing validation
 
 - Verify the real development or Preview inbox/action-link flow; emulator
