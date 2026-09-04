@@ -23,7 +23,11 @@ import {
   reauthenticatePasswordUser,
   updateFirebaseUserPassword,
 } from "../../auth/firebaseCredentialMigration";
-import { getApiMe, getIdentityContinuity } from "../../data/api/apiClient";
+import {
+  getApiMe,
+  getIdentityContinuity,
+  restoreVerifiedPasswordLink,
+} from "../../data/api/apiClient";
 import GoogleProviderLinking from "./GoogleProviderLinking";
 import PasswordField from "./PasswordField";
 import PasswordRequirements from "./PasswordRequirements";
@@ -229,6 +233,11 @@ export default function PasswordManagement({
           return;
         }
 
+        // Keep the token in this function scope only. The server independently
+        // verifies its email_verified claim if a provider link unexpectedly
+        // drops Firebase's current verified state.
+        const preLinkVerifiedToken = await currentUser.getIdToken(true);
+
         // This Profile Settings flow is not the legacy credential-migration
         // verification flow. A stale, UID-scoped session latch must not cause
         // a verified Google account to request another verification email.
@@ -242,10 +251,35 @@ export default function PasswordManagement({
         }
 
         const postLinkState = captureFirebaseCredentialState(auth.currentUser);
-        if (!preservesVerifiedGoogleFirstCredentialState(preLinkState, postLinkState)) {
+        if (
+          postLinkState?.uid !== preLinkState.uid ||
+          postLinkState.email !== preLinkState.email ||
+          !postLinkState.providerIds.includes(GOOGLE_PROVIDER_ID) ||
+          !postLinkState.providerIds.includes(PASSWORD_PROVIDER_ID)
+        ) {
           setStatus({
             type: "error",
-            message: "Your verified Google account changed unexpectedly while adding a password. No password setup was confirmed. Please sign in again and contact support if this continues.",
+            message: "Your account identity changed unexpectedly while adding a password. No password setup was confirmed. Please sign in again and contact support if this continues.",
+          });
+          return;
+        }
+        if (!postLinkState.emailVerified) {
+          await restoreVerifiedPasswordLink(preLinkVerifiedToken);
+          await auth.currentUser?.getIdToken(true);
+          if (!(await refreshProviderState())) {
+            setStatus({ type: "error", message: "Your sign-in method state is temporarily unavailable. Try again later." });
+            return;
+          }
+        }
+        if (
+          !preservesVerifiedGoogleFirstCredentialState(
+            preLinkState,
+            captureFirebaseCredentialState(auth.currentUser)
+          )
+        ) {
+          setStatus({
+            type: "error",
+            message: "Your verified Google account could not be confirmed after password setup. Please sign in again and contact support if this continues.",
           });
           return;
         }

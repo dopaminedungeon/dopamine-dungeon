@@ -80,6 +80,10 @@ const mocks = vi.hoisted(() => {
     requireCampaignMember: vi.fn(),
     resolveCampaignBySlug: vi.fn(),
     verifyAuthHeader: vi.fn(),
+    adminAuth: {
+      getUser: vi.fn(),
+      updateUser: vi.fn(),
+    },
   };
 });
 
@@ -90,7 +94,10 @@ vi.mock("./access.js", () => ({
   requireCampaignMember: mocks.requireCampaignMember,
   resolveCampaignBySlug: mocks.resolveCampaignBySlug,
 }));
-vi.mock("./auth.js", () => ({ verifyAuthHeader: mocks.verifyAuthHeader }));
+vi.mock("./auth.js", () => ({
+  verifyAuthHeader: mocks.verifyAuthHeader,
+  adminAuth: mocks.adminAuth,
+}));
 
 import characterAssignmentsHandler from "./api-handlers/character-assignments.js";
 import charactersHandler from "./api-handlers/characters.js";
@@ -202,7 +209,17 @@ beforeEach(() => {
   mocks.requireCampaignGm.mockResolvedValue(undefined);
   mocks.verifyAuthHeader.mockResolvedValue({
     uid: "firebase-uid-existing",
+    email: "verified-google@example.test",
     email_verified: true,
+  });
+  mocks.adminAuth.getUser.mockResolvedValue({
+    uid: "firebase-uid-existing",
+    email: "verified-google@example.test",
+    emailVerified: false,
+    providerData: [
+      { providerId: "google.com" },
+      { providerId: "password" },
+    ],
   });
 });
 
@@ -252,6 +269,91 @@ test("identity continuity API fails safely for missing, duplicate, or unverified
   assert.equal(result.status, 409);
   assert.equal(mocks.db.insert.mock.calls.length, 0);
   assert.equal(mocks.db.update.mock.calls.length, 0);
+});
+
+test("verified pre-link token can restore verification only for the same linked Firebase and Neon identity", async () => {
+  const neonUserId = "00000000-0000-4000-8000-000000000099";
+  mocks.state.selectRows.push([{ id: neonUserId }]);
+  const { res, result } = response();
+
+  await identityContinuityHandler(request("POST"), res);
+
+  assert.equal(result.status, 200);
+  assert.deepEqual(result.body, { ok: true });
+  assert.deepEqual(mocks.adminAuth.getUser.mock.calls, [["firebase-uid-existing"]]);
+  assert.deepEqual(mocks.adminAuth.updateUser.mock.calls, [
+    ["firebase-uid-existing", { emailVerified: true }],
+  ]);
+  const query = sqlDatabase
+    .select({ id: users.id })
+    .from(users)
+    .where(mocks.state.whereClauses[0] as never)
+    .toSQL();
+  assert.deepEqual(query.params, ["firebase-uid-existing"]);
+  assert.match(query.sql, /"email_verified_at" is not null/);
+  assert.equal(mocks.db.insert.mock.calls.length, 0);
+  assert.equal(mocks.db.update.mock.calls.length, 0);
+});
+
+test("verified-password-link reconciliation rejects every missing proof without mutation", async () => {
+  const reject = async (configure: () => void, hasNeonQuery = false) => {
+    configure();
+    if (hasNeonQuery) mocks.state.selectRows.push([]);
+    const { res, result } = response();
+    await identityContinuityHandler(request("POST"), res);
+    assert.equal(result.status, 409);
+    assert.deepEqual(result.body, {
+      ok: false,
+      error: "Account setup unavailable",
+    });
+    assert.equal(mocks.adminAuth.updateUser.mock.calls.length, 0);
+    assert.equal(mocks.db.insert.mock.calls.length, 0);
+    assert.equal(mocks.db.update.mock.calls.length, 0);
+    vi.clearAllMocks();
+    mocks.verifyAuthHeader.mockResolvedValue({
+      uid: "firebase-uid-existing",
+      email: "verified-google@example.test",
+      email_verified: true,
+    });
+    mocks.adminAuth.getUser.mockResolvedValue({
+      uid: "firebase-uid-existing",
+      email: "verified-google@example.test",
+      emailVerified: false,
+      providerData: [
+        { providerId: "google.com" },
+        { providerId: "password" },
+      ],
+    });
+  };
+
+  await reject(() => mocks.verifyAuthHeader.mockRejectedValueOnce(new Error("expired")));
+  await reject(() => mocks.adminAuth.getUser.mockResolvedValueOnce({
+    uid: "different-firebase-uid",
+    email: "verified-google@example.test",
+    emailVerified: false,
+    providerData: [{ providerId: "google.com" }, { providerId: "password" }],
+  }));
+  await reject(() => mocks.adminAuth.getUser.mockResolvedValueOnce({
+    uid: "firebase-uid-existing",
+    email: "different@example.test",
+    emailVerified: false,
+    providerData: [{ providerId: "google.com" }, { providerId: "password" }],
+  }));
+  await reject(() => mocks.adminAuth.getUser.mockResolvedValueOnce({
+    uid: "firebase-uid-existing",
+    email: "verified-google@example.test",
+    emailVerified: false,
+    providerData: [{ providerId: "google.com" }],
+  }));
+  await reject(() => mocks.adminAuth.getUser.mockResolvedValueOnce({
+    uid: "firebase-uid-existing",
+    email: "verified-google@example.test",
+    emailVerified: false,
+    providerData: [{ providerId: "password" }],
+  }));
+  // The UID-only query requires a non-null historical email_verified_at; no
+  // matching row covers both a missing Neon identity and a null timestamp.
+  await reject(() => undefined, true);
 });
 
 test("API integration: unauthenticated requests stop before campaign or database access", async () => {
