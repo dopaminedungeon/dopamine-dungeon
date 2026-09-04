@@ -128,22 +128,26 @@ export const test = base.extend<{
       });
       page.on("pageerror", (error) => errors.push(error.message));
 
-      await use();
+      try {
+        await use();
 
-      for (const expectedError of expectedConsoleErrors) {
-        expect(
-          errors.some((error) => error.includes(expectedError)),
-          `expected browser console error containing: ${expectedError}`
-        ).toBe(true);
+        for (const expectedError of expectedConsoleErrors) {
+          expect(
+            errors.some((error) => error.includes(expectedError)),
+            `expected browser console error containing: ${expectedError}`
+          ).toBe(true);
+        }
+
+        const unexpectedErrors = errors.filter(
+          (error) =>
+            !expectedConsoleErrors.some((expectedError) =>
+              error.includes(expectedError)
+            )
+        );
+        expect(unexpectedErrors, "unexpected browser console and page errors").toEqual([]);
+      } finally {
+        expectedConsoleErrors.length = 0;
       }
-
-      const unexpectedErrors = errors.filter(
-        (error) =>
-          !expectedConsoleErrors.some((expectedError) =>
-            error.includes(expectedError)
-          )
-      );
-      expect(unexpectedErrors, "unexpected browser console and page errors").toEqual([]);
     },
     { auto: true },
   ],
