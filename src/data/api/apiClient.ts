@@ -168,6 +168,24 @@ export async function getIdentityContinuity() {
   );
 }
 
+/**
+ * Uses the verified Firebase ID token captured immediately before password
+ * linking. The token stays in memory and is the only identity proof accepted
+ * by the restricted server reconciliation branch.
+ */
+export async function restoreVerifiedPasswordLink(preLinkVerifiedToken: string) {
+  if (!preLinkVerifiedToken) {
+    throw new Error("A verified account token is required");
+  }
+
+  return apiFetch<{ ok: true }>("/api/auth/identity-continuity", {
+    method: "POST",
+    skipAuth: true,
+    skipSelectedMode: true,
+    headers: { Authorization: `Bearer ${preLinkVerifiedToken}` },
+  });
+}
+
 export async function getApiMe() {
   return apiFetch<{
     ok: true;

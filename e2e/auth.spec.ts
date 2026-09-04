@@ -3021,29 +3021,31 @@ test("@credential-migration keeps normal access available and optional setup loc
 
   await page.goto("/settings/profile");
   await expect(page.getByRole("heading", { name: "Profile Settings" })).toBeVisible();
-  await expect(page.getByRole("heading", { name: "Add another way to sign in" })).toBeVisible();
-  await expect(page.getByLabel("Email", { exact: true })).toHaveValue(email);
-  expect(apiCallLog.identityContinuity).toEqual(["/api/auth/identity-continuity"]);
+  await expect(page.getByRole("heading", { name: "Sign-in methods" })).toBeVisible();
+  await expect(page.getByText("No password configured", { exact: true })).toBeVisible();
+  expect(apiCallLog.identityContinuity).toEqual([]);
 
   await page.goto("/home");
   await expect(page.getByRole("heading", { name: "E2E Campaign" })).toBeVisible();
   await page.goto("/settings/profile");
-  await expect(page.getByRole("heading", { name: "Add another way to sign in" })).toBeVisible();
-  await expect.poll(() => apiCallLog.identityContinuity.length).toBe(2);
+  await expect(page.getByRole("heading", { name: "Sign-in methods" })).toBeVisible();
+  await page.getByRole("button", { name: "Set password" }).click();
+  await expect(page.getByText(`Account email: ${email}`, { exact: true })).toBeVisible();
 
   await page.getByLabel("New password", { exact: true }).fill("short");
-  await page.getByLabel("Confirm password", { exact: true }).fill("different");
+  await page.getByLabel("Confirm new password", { exact: true }).fill("different");
   await page.getByRole("button", { name: "Set password" }).click();
   await expect(page.getByRole("alert")).toHaveText("Passwords do not match.");
   expect(linkingRequests).toBe(0);
 
   await page.getByLabel("New password", { exact: true }).fill("short");
-  await page.getByLabel("Confirm password", { exact: true }).fill("short");
+  await page.getByLabel("Confirm new password", { exact: true }).fill("short");
   await page.getByRole("button", { name: "Set password" }).click();
   await expect(page.getByRole("alert")).toHaveText(
     "Your password does not meet the requirements."
   );
   expect(linkingRequests).toBe(0);
+
   await page.goto("/home");
   await expect(page.getByRole("heading", { name: "E2E Campaign" })).toBeVisible();
 });
@@ -3072,11 +3074,11 @@ test("@credential-migration resumes an already-linked setup without relinking an
   expect(apiCallLog.identityContinuity).toEqual([]);
   await page.goto("/settings/profile");
 
-  await expect(page.getByText("Password sign-in is ready", { exact: true })).toBeVisible();
-  await expect(page.getByRole("heading", { name: "Add another way to sign in" })).toHaveCount(0);
+  await expect(page.getByText("Password configured", { exact: true })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Set password" })).toHaveCount(0);
   await expect(page.getByText("Google", { exact: true })).toBeVisible();
-  await expect(page.getByText("Email / Password", { exact: true })).toBeVisible();
-  expect(apiCallLog.identityContinuity).toHaveLength(2);
+  await expect(page.getByText("Email & password", { exact: true })).toBeVisible();
+  expect(apiCallLog.identityContinuity).toEqual([]);
   expect(linkingRequests).toBe(0);
 
   const passwordAccount = await signInWithPassword(request, email, replacementPassword);
@@ -3146,9 +3148,9 @@ test("@credential-migration automatically verifies email before resuming pending
   await expect(page.getByRole("heading", { name: "E2E Campaign" })).toBeVisible();
   await expect.poll(() => apiCallLog.identityContinuity.length).toBe(1);
   await page.goto("/settings/profile");
-  await expect(page.getByRole("heading", { name: "Add another way to sign in" })).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "Set password" })).toHaveCount(0);
   await expect(page.getByText("Google", { exact: true })).toBeVisible();
-  await expect(page.getByText("Email / Password", { exact: true })).toBeVisible();
+  await expect(page.getByText("Email & password", { exact: true })).toBeVisible();
 
   const linkedAccount = await findAuthEmulatorAccountByEmail(request, email);
   expect(linkedAccount.localId).toBe(googleAccount.localId);
@@ -3247,12 +3249,14 @@ test("@credential-migration already-linked users do not receive optional cards",
 
   await expect(page.getByRole("heading", { name: "E2E Campaign" })).toBeVisible();
   await page.goto("/settings/profile");
-  await expect(page.getByRole("heading", { name: "Add another way to sign in" })).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "Set password" })).toHaveCount(0);
   expect(apiCallLog.identityContinuity).toEqual([]);
   expect(apiCallLog.apiMe.length).toBeGreaterThan(0);
 
   await page.getByRole("button").filter({ hasText: email }).click();
   await page.getByRole("banner").getByRole("button", { name: "Sign out" }).click();
+  await expect(page.getByTestId("public-home")).toBeVisible();
+  await page.getByRole("link", { name: "Log in" }).click();
   await expect(page.getByRole("heading", { name: "Sign in to your account" })).toBeVisible();
   const passwordOnlyEmail = generatedEmail();
   await createVerifiedUser(request, passwordOnlyEmail, password);
@@ -3262,8 +3266,75 @@ test("@credential-migration already-linked users do not receive optional cards",
   await page.getByRole("button", { name: "Sign in", exact: true }).click();
   await expect(page.getByRole("heading", { name: "E2E Campaign" })).toBeVisible();
   await page.goto("/settings/profile");
-  await expect(page.getByRole("heading", { name: "Add another way to sign in" })).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "Set password" })).toHaveCount(0);
   await expect(page.getByRole("heading", { name: "Connect Google sign-in" })).toBeVisible();
+});
+
+test("@password-management changes a password on the same password-only Firebase identity", async ({
+  page,
+  request,
+}) => {
+  const email = generatedEmail();
+  const account = await createVerifiedUser(request, email, password);
+
+  await openEmailSignIn(page);
+  await page.getByLabel("Email address").fill(email);
+  await page.getByLabel("Password", { exact: true }).fill(password);
+  await page.getByRole("button", { name: "Sign in", exact: true }).click();
+  await expect(page.getByRole("heading", { name: "E2E Campaign" })).toBeVisible();
+  await page.goto("/settings/profile");
+
+  await expect(page.getByText("Google", { exact: true })).toBeVisible();
+  await expect(page.getByText("Not connected", { exact: true })).toBeVisible();
+  await expect(page.getByText("Password configured", { exact: true })).toBeVisible();
+  await page.getByRole("button", { name: "Change password" }).click();
+  await page.getByLabel("Current password", { exact: true }).fill("wrong-password");
+  await page.getByLabel("New password", { exact: true }).fill(replacementPassword);
+  await page.getByLabel("Confirm new password", { exact: true }).fill(replacementPassword);
+  await page.getByRole("button", { name: "Change password" }).click();
+  await expect(page.getByRole("alert")).toContainText("current password could not be confirmed");
+  await expect(page.getByLabel("Current password", { exact: true })).toHaveValue("");
+
+  await page.getByLabel("Current password", { exact: true }).fill(password);
+  await page.getByLabel("New password", { exact: true }).fill(replacementPassword);
+  await page.getByLabel("Confirm new password", { exact: true }).fill(replacementPassword);
+  await page.getByRole("button", { name: "Change password" }).click();
+  await expect(page.getByRole("status")).toContainText("Password updated");
+
+  await expect(signInWithPassword(request, email, password)).rejects.toThrow();
+  const updatedAccount = await signInWithPassword(request, email, replacementPassword);
+  expect(updatedAccount.localId).toBe(account.localId);
+});
+
+test("@password-management changes a password without unlinking Google", async ({
+  page,
+  request,
+}) => {
+  const email = generatedEmail();
+  const googleAccount = await createGoogleOnlyUser(request, email);
+  await addPasswordProvider(request, googleAccount.idToken, email, password);
+
+  await signInWithEmulatedGoogle(page, email);
+  await expect(page.getByRole("heading", { name: "E2E Campaign" })).toBeVisible();
+  await page.goto("/settings/profile");
+  await expect(page.getByText("Connected", { exact: true })).toBeVisible();
+  await expect(page.getByText("Password configured", { exact: true })).toBeVisible();
+  await page.getByRole("button", { name: "Change password" }).click();
+  await page.getByLabel("Current password", { exact: true }).fill(password);
+  await page.getByLabel("New password", { exact: true }).fill(replacementPassword);
+  await page.getByLabel("Confirm new password", { exact: true }).fill(replacementPassword);
+  await page.getByRole("button", { name: "Change password" }).click();
+  await expect(page.getByRole("status")).toContainText("Password updated");
+
+  const updatedAccount = await signInWithPassword(request, email, replacementPassword);
+  expect(updatedAccount.localId).toBe(googleAccount.localId);
+  const authoritativeAccount = await findAuthEmulatorAccountByEmail(request, email);
+  expect(authoritativeAccount.localId).toBe(googleAccount.localId);
+  expect(
+    authoritativeAccount.providerUserInfo.map(
+      (provider: { providerId: string }) => provider.providerId
+    )
+  ).toEqual(expect.arrayContaining(["google.com", "password"]));
 });
 
 test("@google-linking password account can connect Google without changing Firebase UID or Neon continuity", async ({
@@ -3281,8 +3352,9 @@ test("@google-linking password account can connect Google without changing Fireb
 
   await page.goto("/settings/profile");
   await expect(page.getByRole("heading", { name: "Connect Google sign-in" })).toBeVisible();
-  await expect(page.getByText("Email / Password", { exact: true })).toBeVisible();
-  await expect(page.getByText("Google", { exact: true })).toHaveCount(0);
+  await expect(page.getByText("Email & password", { exact: true })).toBeVisible();
+  await expect(page.getByText("Google", { exact: true })).toBeVisible();
+  await expect(page.getByText("Not connected", { exact: true })).toBeVisible();
   expect(apiCallLog.identityContinuity).toEqual(["/api/auth/identity-continuity"]);
 
   const popupPromise = page.waitForEvent("popup");
@@ -3301,7 +3373,7 @@ test("@google-linking password account can connect Google without changing Fireb
   await expect(page.getByText("Google sign-in is connected", { exact: true })).toBeVisible();
   await expect.poll(() => apiCallLog.identityContinuity.length).toBe(2);
   await expect(page.getByText("Google", { exact: true })).toBeVisible();
-  await expect(page.getByText("Email / Password", { exact: true })).toBeVisible();
+  await expect(page.getByText("Email & password", { exact: true })).toBeVisible();
 
   const googleLinkedAccount = await findAuthEmulatorAccountByEmail(request, email);
   expect(googleLinkedAccount.localId).toBe(passwordAccount.localId);
@@ -3425,7 +3497,7 @@ test.describe("missing identity continuity", () => {
     ],
   });
 
-  test("@credential-migration unavailable setup remains retryable without blocking normal access", async ({
+  test("@password-management unavailable continuity remains recoverable without blocking normal access", async ({
     apiCallLog,
     page,
     request,
@@ -3436,9 +3508,14 @@ test.describe("missing identity continuity", () => {
     await expect(page.getByRole("heading", { name: "E2E Campaign" })).toBeVisible();
     expect(apiCallLog.apiMe.length).toBeGreaterThan(0);
     await page.goto("/settings/profile");
-    await expect(page.getByText("Account setup unavailable", { exact: true })).toBeVisible();
-    await page.getByRole("button", { name: "Try again" }).click();
-    await expect.poll(() => apiCallLog.identityContinuity.length).toBe(2);
+    await page.getByRole("button", { name: "Set password" }).click();
+    await page.getByLabel("New password", { exact: true }).fill(replacementPassword);
+    await page.getByLabel("Confirm new password", { exact: true }).fill(replacementPassword);
+    await page.getByRole("button", { name: "Set password" }).click();
+    await expect(page.getByRole("alert")).toContainText(
+      "sign-in method state is temporarily unavailable"
+    );
+    await expect.poll(() => apiCallLog.identityContinuity.length).toBe(1);
     await page.goto("/home");
     await expect(page.getByRole("heading", { name: "E2E Campaign" })).toBeVisible();
   });
@@ -3449,7 +3526,7 @@ test.describe("changed post-link identity continuity", () => {
     identityContinuityUserIds: ["e2e-user", "different-neon-user"],
   });
 
-  test("@credential-migration keeps continuity failure recoverable without blocking application providers", async ({
+  test("@password-management keeps post-change continuity failure recoverable without blocking application providers", async ({
     apiCallLog,
     page,
     request,
@@ -3467,12 +3544,19 @@ test.describe("changed post-link identity continuity", () => {
     await expect(page.getByRole("heading", { name: "E2E Campaign" })).toBeVisible();
     await page.goto("/settings/profile");
 
-    await expect(page.getByText(/could not verify account continuity/i)).toBeVisible();
+    await page.getByRole("button", { name: "Change password" }).click();
+    await page.getByLabel("Current password", { exact: true }).fill(replacementPassword);
+    await page.getByLabel("New password", { exact: true }).fill(password);
+    await page.getByLabel("Confirm new password", { exact: true }).fill(password);
+    await page.getByRole("button", { name: "Change password" }).click();
+    await expect(page.getByRole("alert")).toContainText(
+      "password changed, but account continuity could not be confirmed"
+    );
     expect(apiCallLog.apiMe.length).toBeGreaterThan(0);
     await page.goto("/home");
     await expect(page.getByRole("heading", { name: "E2E Campaign" })).toBeVisible();
     await page.goto("/settings/profile");
-    await expect(page.getByText("Account setup unavailable", { exact: true })).toBeVisible();
+    await expect(page.getByText("Password configured", { exact: true })).toBeVisible();
     const account = await findAuthEmulatorAccountByEmail(request, email);
     expect(
       account.providerUserInfo.map(

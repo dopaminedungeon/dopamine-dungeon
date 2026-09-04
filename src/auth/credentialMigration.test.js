@@ -4,11 +4,15 @@ import { afterEach, test, vi } from "vitest";
 import {
   classifyCredentialMigrationError,
   classifyGoogleLinkingError,
+  captureFirebaseCredentialState,
   getConnectedProviderIds,
+  getSignInMethodState,
   getConnectedProviderLabel,
   clearPendingCredentialMigration,
   isIdentityContinuityResponseValid,
   isOptionalGoogleLinkingCandidate,
+  isVerifiedGoogleFirstCredentialState,
+  preservesVerifiedGoogleFirstCredentialState,
   isOptionalCredentialSetupCandidate,
   markPendingCredentialVerificationRequested,
   readPendingCredentialMigration,
@@ -67,6 +71,61 @@ test("connected provider display de-duplicates and labels every provider", () =>
     "Google",
     "Email / Password",
   ]);
+});
+
+test("sign-in method state derives only from the Firebase provider snapshot", () => {
+  assert.deepEqual(getSignInMethodState(user(["google.com"])), {
+    hasGoogle: true,
+    hasPassword: false,
+  });
+  assert.deepEqual(getSignInMethodState(user(["password"])), {
+    hasGoogle: false,
+    hasPassword: true,
+  });
+  assert.deepEqual(getSignInMethodState(user(["google.com", "password"])), {
+    hasGoogle: true,
+    hasPassword: true,
+  });
+  assert.equal(getSignInMethodState({ uid: "firebase-uid" }), null);
+});
+
+test("verified Google-first password setup preserves the Firebase verification and provider state", () => {
+  const before = captureFirebaseCredentialState(
+    user(["google.com"], { email: "verified-google@example.test" })
+  );
+  const after = captureFirebaseCredentialState(
+    user(["google.com", "password"], { email: "verified-google@example.test" })
+  );
+
+  assert.equal(isVerifiedGoogleFirstCredentialState(before), true);
+  assert.equal(preservesVerifiedGoogleFirstCredentialState(before, after), true);
+});
+
+test("an unverified or post-link-unverified Google account cannot be treated as a verified password setup", () => {
+  const unverified = captureFirebaseCredentialState(
+    user(["google.com"], {
+      email: "unverified-google@example.test",
+      emailVerified: false,
+    })
+  );
+  const verifiedBefore = captureFirebaseCredentialState(
+    user(["google.com"], { email: "verified-google@example.test" })
+  );
+  const unexpectedlyUnverifiedAfter = captureFirebaseCredentialState(
+    user(["google.com", "password"], {
+      email: "verified-google@example.test",
+      emailVerified: false,
+    })
+  );
+
+  assert.equal(isVerifiedGoogleFirstCredentialState(unverified), false);
+  assert.equal(
+    preservesVerifiedGoogleFirstCredentialState(
+      verifiedBefore,
+      unexpectedlyUnverifiedAfter
+    ),
+    false
+  );
 });
 
 test("credential migration errors are classified without exposing Firebase messages", () => {
