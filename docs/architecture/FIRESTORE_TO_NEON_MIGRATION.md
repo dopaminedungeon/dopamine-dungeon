@@ -162,16 +162,15 @@ limiter persistence, browser Firestore retirement, and validated
 inventory/reconciliation tooling. Development and Preview validation are
 complete; no Production migration or cutover is implied.
 
-The future Production release must first run the temporary
-`productionReadOnlyAudit` path through the existing `api/worldbuilding`
-function. A controlled verified Firebase identity must receive the temporary
-`productionAudit: true` custom claim, the sanitized audit must be captured,
-then the claim and route/module must be removed and removal deployed. The
-Production release checklist must verify migrations `0015`–`0021`, snapshot and
-preserve the final 24-hour Firestore limiter horizon, import and reconcile
-opaque subjects/attempts into Neon, and retain Firestore source evidence for
-rollback. Trigger Email disablement, rules deny-all, and physical Firestore
-retirement are separate later operational windows.
+The one-time Production audit was completed through a temporary,
+claim-gated, read-only path in `api/worldbuilding`. Its sanitized evidence was
+captured, the temporary claim was removed, and the route/module were removed
+from the release source. The Production release checklist still requires
+snapshotting and preserving the final 24-hour Firestore limiter horizon,
+importing and reconciling opaque subjects/attempts into Neon, and retaining
+Firestore source evidence for rollback. Trigger Email disablement, rules
+deny-all, and physical Firestore retirement remain separate later operational
+windows.
 
 ## Related architecture records
 
