@@ -28,6 +28,13 @@ test("only Firebase-verified users may continue regardless of provider", () => {
     }),
     true
   );
+  assert.equal(
+    requiresEmailVerification({
+      emailVerified: true,
+      providerData: [{ providerId: "google.com" }],
+    }),
+    false
+  );
 });
 
 test("workspace onboarding remains gated until profile initialization succeeds", () => {
