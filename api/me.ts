@@ -1,10 +1,18 @@
 import type { VercelRequest, VercelResponse } from "@vercel/node";
 import { eq, inArray } from "drizzle-orm";
 
-import { verifyAuthHeader } from "../src/server/auth.js";
+import { getCurrentUser } from "../src/server/access.js";
+import {
+  getApiErrorMessage,
+  getApiErrorStatus,
+} from "../src/server/apiErrors.js";
 import { setCorsHeaders } from "../src/server/cors.js";
 import { db } from "../src/server/db.js";
-import { users } from "../db/schema/users.js";
+import {
+  toUserProfile,
+  updateUserProfile,
+  UserProfileInputError,
+} from "../src/server/userProfile.js";
 import { workspaces } from "../db/schema/workspaces.js";
 import { campaigns } from "../db/schema/campaigns.js";
 import {
@@ -13,52 +21,22 @@ import {
 } from "../db/schema/memberships.js";
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
-  setCorsHeaders(res, "GET, OPTIONS");
+  setCorsHeaders(res, "GET, PATCH, OPTIONS");
 
   if (req.method === "OPTIONS") {
     return res.status(204).end();
   }
 
+  if (!["GET", "PATCH"].includes(req.method || "")) {
+    return res.status(405).json({ ok: false, error: "Method not allowed" });
+  }
+
   try {
-    const decodedToken = await verifyAuthHeader(req.headers.authorization);
+    const user = await getCurrentUser(req);
 
-    const firebaseUid = decodedToken.uid;
-    const email = decodedToken.email ?? null;
-    const displayName =
-      typeof decodedToken.name === "string" && decodedToken.name.trim()
-        ? decodedToken.name.trim()
-        : null;
-
-    const existingUser = await db
-      .select()
-      .from(users)
-      .where(eq(users.firebaseUid, firebaseUid))
-      .limit(1);
-
-    let user = existingUser[0];
-
-    if (!user) {
-      const insertedUsers = await db
-        .insert(users)
-        .values({
-          firebaseUid,
-          email,
-          displayName,
-        })
-        .returning();
-
-      user = insertedUsers[0];
-    } else if (user.email !== email || user.displayName !== displayName) {
-      const updatedUsers = await db
-        .update(users)
-        .set({
-          email,
-          displayName,
-        })
-        .where(eq(users.id, user.id))
-        .returning();
-
-      user = updatedUsers[0] ?? user;
+    if (req.method === "PATCH") {
+      const profile = await updateUserProfile(user, req.body);
+      return res.status(200).json({ ok: true, profile });
     }
 
     const workspaceMembershipsData = await db
@@ -86,19 +64,31 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const campaignsData = campaignIds.length
       ? await db.select().from(campaigns).where(inArray(campaigns.id, campaignIds))
       : [];
+    const playerSafeCampaigns = campaignsData.map(({ gmNotes: _gmNotes, ...campaign }) => campaign);
+    const { reducedMotion: _reducedMotion, ...userResponse } = user;
 
     return res.status(200).json({
       ok: true,
-      user,
+      user: userResponse,
+      profile: toUserProfile(user),
       workspaces: workspacesData,
       workspaceMemberships: workspaceMembershipsData,
-      campaigns: campaignsData,
+      campaigns: playerSafeCampaigns,
       campaignMemberships: campaignMembershipsData,
     });
   } catch (error) {
-    return res.status(401).json({
+    if (error instanceof UserProfileInputError) {
+      return res.status(400).json({ ok: false, error: error.message });
+    }
+    const status = getApiErrorStatus(error);
+
+    if (status === 500) {
+      console.error("[api/me] Failed to provision authenticated user", error);
+    }
+
+    return res.status(status).json({
       ok: false,
-      error: error instanceof Error ? error.message : "Unauthorized",
+      error: getApiErrorMessage(error),
     });
   }
 }

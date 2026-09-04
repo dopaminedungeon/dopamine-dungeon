@@ -1,6 +1,6 @@
 # Dopamine Dungeon Roadmap
 
-Last updated: 2026-07-24
+Last updated: 2026-08-24
 Owner: Magda
 
 ## Product direction
@@ -27,6 +27,15 @@ The product currently supports core campaign-management foundations including:
 
 Some modules remain incomplete, transitional, or partially implemented.
 `CURRENT_STATE.md` is the authoritative operational snapshot.
+Iteration 2 is closed; its final retrospective and next-iteration handoff are
+in `docs/sprints/current.md`.
+
+## Iteration ownership
+
+Iteration 2 focused on code cleanup, automated testing and the DD Quality Gate,
+repository/CI administration, and backlog hygiene. Authentication work is
+present in the repository context, but authentication features and their
+remaining delivery remain assigned to Iteration 3.
 
 ## Near-term priorities
 
@@ -61,19 +70,20 @@ Expected outcome:
 
 Campaign information becomes an interconnected knowledge system.
 
-### 3. Relationship foundations
+### 3. Friendship Index foundations
 
-Potential scope:
+Potential future scope:
 
 - relationship scores;
 - relationship direction;
-- NPC-to-party and NPC-to-character relationships;
+- PC-NPC and NPC-NPC relationships;
 - relationship history;
 - faction relationships;
 - GM-controlled visibility.
 
 This work must not begin until the underlying NPC and persistence foundations
-are reliable.
+are reliable. It is not a standalone Relationships page; it builds on typed
+cross-links and their existing visibility boundaries.
 
 ### 4. Product consistency and quality
 

@@ -1,0 +1,136 @@
+name: Iteration closeout
+description: Create one retrospective and documentation-reconciliation task for an iteration
+title: "[Task]: Iteration "
+type: Task
+projects:
+  - dopaminedungeon/1
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Use one closeout task per iteration. Before submitting, search open and
+        closed issues for the canonical title:
+
+        `[Task]: Iteration N retrospective and documentation update`
+
+        This is repository and project administration work. Do not implement
+        product features discovered during the retrospective.
+
+        This form sets native Type to Task and adds Project 1 when you have
+        Project access. Set Iteration and Application Version manually after
+        creating the issue.
+
+  - type: input
+    id: iteration-number
+    attributes:
+      label: Iteration number
+      description: Use the numeric GitHub Project iteration number, for example 3.
+      placeholder: "3"
+    validations:
+      required: true
+
+  - type: input
+    id: iteration-name
+    attributes:
+      label: Iteration name
+      description: Copy the current name from the GitHub Project iteration field.
+      placeholder: Authentication and onboarding
+    validations:
+      required: true
+
+  - type: textarea
+    id: dependencies
+    attributes:
+      label: Major completion dependencies
+      description: Link the major iteration issues that must be complete before closeout begins.
+      placeholder: |
+        - #123
+        - #124
+    validations:
+      required: true
+
+  - type: textarea
+    id: intended-outcome
+    attributes:
+      label: Intended iteration outcome
+      description: State the outcome the iteration was meant to deliver.
+    validations:
+      required: true
+
+  - type: textarea
+    id: retrospective
+    attributes:
+      label: Retrospective
+      description: Complete this section during closeout with actionable evidence.
+      value: |
+        - Delivered outcome:
+        - What went well:
+        - Friction or rework:
+        - Assumptions corrected:
+        - Removed, retained, and deferred decisions:
+
+  - type: textarea
+    id: documentation-reconciliation
+    attributes:
+      label: Documentation reconciliation
+      description: Audit canonical documentation against the final repository state.
+      value: |
+        - [ ] Current State matches implemented behavior.
+        - [ ] Roadmap and iteration ownership match the Project.
+        - [ ] Architecture, persistence, identity, and authorization claims are reconciled where relevant.
+        - [ ] Testing, CI, branch, release, deployment, and environment guidance is reconciled where relevant.
+        - [ ] ADR statuses and links are accurate.
+        - [ ] Contradictory or obsolete documents are updated, superseded, or removed.
+        - [ ] Future or proposed behavior is not documented as current behavior.
+
+  - type: textarea
+    id: deferred-work
+    attributes:
+      label: Deferred work and follow-ups
+      description: Link existing follow-ups or explain why a focused new issue is needed.
+      value: |
+        - Existing follow-up issues:
+        - New focused issues required:
+        - Work intentionally not carried forward:
+
+  - type: textarea
+    id: final-handoff
+    attributes:
+      label: Final iteration state and handoff
+      description: Record the final state, remaining risks, and next-iteration inputs.
+      value: |
+        - Did the iteration meet its intended outcome?
+        - Final architecture and workflow state:
+        - Known remaining risks:
+        - Next-iteration inputs:
+
+  - type: textarea
+    id: acceptance-criteria
+    attributes:
+      label: Acceptance criteria
+      value: |
+        - [ ] Major iteration dependencies are complete before closeout begins.
+        - [ ] The retrospective captures actionable lessons rather than a PR diary.
+        - [ ] Canonical documentation is reconciled with the final repository state.
+        - [ ] Deferred work is linked to focused issues or explicitly declined.
+        - [ ] The final iteration state and next-iteration handoff are recorded.
+        - [ ] No future behavior is described as current behavior.
+        - [ ] No product behavior is changed as part of closeout administration.
+
+  - type: checkboxes
+    id: duplicate-check
+    attributes:
+      label: Duplicate and scope check
+      options:
+        - label: I searched open and closed issues and found no closeout task for this iteration.
+          required: true
+        - label: I will keep implementation work in focused follow-up issues rather than this closeout task.
+          required: true
+
+  - type: textarea
+    id: additional-context
+    attributes:
+      label: Additional context
+      description: Add Project links, milestone context, or special closeout constraints.
+    validations:
+      required: false

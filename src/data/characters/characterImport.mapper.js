@@ -87,39 +87,6 @@ function parseDefenses(value) {
     };
 }
 
-function parseFeatureList(values = []) {
-    if (!Array.isArray(values)) return [];
-
-    return values
-        .map((value) => {
-            if (typeof value === "string") {
-                const entry = value.trim();
-                return entry
-                    ? {
-                        name: entry,
-                        description: entry,
-                    }
-                    : null;
-            }
-
-            if (value && typeof value === "object") {
-                const name = String(value.name || value.title || value.label || value.description || "").trim();
-                const description = String(value.description || value.details || value.text || name).trim();
-
-                if (!name && !description) return null;
-
-                return {
-                    name: name || description,
-                    description: description || name,
-                };
-            }
-
-            return null;
-        })
-        .filter(Boolean);
-}
-
-
 function normalizeActionGroups(actionsInput) {
     if (Array.isArray(actionsInput)) {
         return {
@@ -250,10 +217,10 @@ function parseProficiencies(value = "") {
     };
 
     const patterns = {
-        armor: /armor\s*[:\-]\s*([^\n]+)/i,
-        weapons: /weapons?\s*[:\-]\s*([^\n]+)/i,
-        tools: /tools?\s*[:\-]\s*([^\n]+)/i,
-        languages: /languages?\s*[:\-]\s*([^\n]+)/i,
+        armor: /armor\s*[:-]\s*([^\n]+)/i,
+        weapons: /weapons?\s*[:-]\s*([^\n]+)/i,
+        tools: /tools?\s*[:-]\s*([^\n]+)/i,
+        languages: /languages?\s*[:-]\s*([^\n]+)/i,
     };
 
     Object.entries(patterns).forEach(([key, pattern]) => {
@@ -353,38 +320,6 @@ function parseWeapons(parsed = {}) {
     });
 
     return weapons;
-}
-
-function parseSpells(parsed = {}) {
-    const spells = [];
-    const spellcastingClasses = parseListFromDelimitedString(getField(parsed, "spellCastingClass0").replace(/\//g, ","));
-
-    for (let index = 0; index <= 99; index += 1) {
-        const name = getField(parsed, `spellName${index}`);
-        if (!name) continue;
-
-        const className =
-            spellcastingClasses.length === 1
-                ? spellcastingClasses[0]
-                : spellcastingClasses.length > 1
-                    ? spellcastingClasses[0]
-                    : "";
-
-        spells.push({
-            name: String(name).trim(),
-            className,
-            source: getField(parsed, `spellSource${index}`),
-            saveHit: getField(parsed, `spellSaveHit${index}`),
-            castingTime: getField(parsed, `spellCastingTime${index}`),
-            range: getField(parsed, `spellRange${index}`),
-            components: getField(parsed, `spellComponents${index}`),
-            duration: getField(parsed, `spellDuration${index}`),
-            page: getField(parsed, `spellPage${index}`),
-            notes: getField(parsed, `spellNotes${index}`),
-        });
-    }
-
-    return spells;
 }
 
 function normalizeImportedClassEntries(classLine = "", parsed = {}) {

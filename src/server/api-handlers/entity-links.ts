@@ -9,6 +9,8 @@ import {
 } from "../access.js";
 import { setCorsHeaders } from "../cors.js";
 import { db } from "../db.js";
+import { entityLinksReadWhere } from "../security-boundaries.js";
+import { canViewAsGm } from "../viewer-mode.js";
 import { entityLinks } from "../../../db/schema/entityLinks.js";
 import {
   assertAllowedEntityPair,
@@ -170,19 +172,18 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       campaignId: campaign.id,
       userId: currentUser.id,
     });
-    const isGm = membership.role === "gm";
+    const isGmMember = membership.role === "gm";
+    const isGmView = canViewAsGm(req, membership.role);
 
     if (req.method === "GET") {
       const rows = await db
         .select()
         .from(entityLinks)
         .where(
-          isGm
-            ? eq(entityLinks.campaignId, campaign.id)
-            : and(
-                eq(entityLinks.campaignId, campaign.id),
-                eq(entityLinks.visibility, "Player")
-              )
+          entityLinksReadWhere(entityLinks, {
+            campaignId: campaign.id,
+            isGm: isGmView,
+          })
         );
 
       return res.status(200).json({
@@ -208,7 +209,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         rawLink as Record<string, unknown>
       );
 
-      if (!isGm && !isBagItemLink(values.entityAType, values.entityBType)) {
+      if (!isGmMember && !isBagItemLink(values.entityAType, values.entityBType)) {
         await requireCampaignGm({ campaignId: campaign.id, userId: currentUser.id });
       }
 
@@ -259,7 +260,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       return res.status(200).json({ ok: true });
     }
 
-    if (!isGm && !isBagItemLink(link.entityAType, link.entityBType)) {
+    if (!isGmMember && !isBagItemLink(link.entityAType, link.entityBType)) {
       await requireCampaignGm({ campaignId: campaign.id, userId: currentUser.id });
     }
 

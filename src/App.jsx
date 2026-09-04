@@ -1,5 +1,12 @@
 // src/App.jsx
-import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
+import {
+  BrowserRouter,
+  Routes,
+  Route,
+  Navigate,
+  Link,
+  useNavigate,
+} from "react-router-dom";
 import AppLayout from "./layouts/AppLayout.jsx";
 import Dashboard from "./pages/DopamineDungeonDashboard.jsx";
 import Npcs from "./pages/Npcs";
@@ -13,14 +20,6 @@ import MapProfile from "./pages/MapProfile";
 import Settings from "./pages/Settings";
 import Lore from "./pages/Lore";
 import LoreProfile from "./pages/LoreProfile";
-import Arcs from "./pages/Arcs";
-import ArcProfile from "./pages/ArcProfile";
-import Quests from "./pages/Quests.jsx";
-import QuestProfile from "./pages/QuestProfile.jsx";
-import Relationships from "./pages/Relationships";
-import RelationshipProfile from "./pages/RelationshipProfile";
-import Conditions from "./pages/Conditions";
-import ConditionProfile from "./pages/ConditionProfile";
 import PCs from "./pages/PCs";
 import PCProfile from "./pages/PCProfile";
 import BagOfHolding from "./pages/BagOfHolding";
@@ -30,42 +29,178 @@ import BootstrapCampaign from "./pages/BootstrapCampaign.jsx";
 import { useAuth } from "./context/AuthContext.jsx";
 import { useTenant } from "./context/TenantContext.jsx";
 import { useCampaign } from "./context/CampaignContext.jsx";
-import AppProviders from "./context/AppProviders.jsx";
+import AppProviders, { useAccessResolution } from "./context/AppProviders.jsx";
 import { features } from "./config/features";
-import React from "react";
+import React, { useEffect } from "react";
 import Welcome from "./pages/Welcome";
+import AuthScreen from "./components/auth/AuthScreen.jsx";
+import VerificationScreen from "./components/auth/VerificationScreen.jsx";
+import VerificationActionScreen from "./components/auth/VerificationActionScreen.jsx";
+import PasswordRecoveryRequestScreen from "./components/auth/PasswordRecoveryRequestScreen.jsx";
+import PasswordResetActionScreen from "./components/auth/PasswordResetActionScreen.jsx";
+import PublicSiteShell, {
+  PublicComingSoonPage,
+  PublicFeatures,
+  PublicHome,
+  PublicSocialsPage,
+} from "./layouts/PublicSiteShell.jsx";
 
 function App() {
+  if (window.location.pathname === "/auth/recover") {
+    return <PasswordRecoveryRequestScreen />;
+  }
+
+  if (window.location.pathname === "/auth/reset-password") {
+    return <PasswordResetActionScreen />;
+  }
+
+  return (
+    <BrowserRouter>
+      <Routes>
+        <Route element={<PublicSiteShell />}>
+          <Route index element={<PublicEntryRoute />} />
+          <Route path="/about" element={<PublicComingSoonPage title="About Us" />} />
+          <Route path="/features" element={<PublicFeatures />} />
+          <Route path="/pricing" element={<PublicComingSoonPage title="Pricing" />} />
+          <Route path="/resources" element={<PublicComingSoonPage title="Resources" />} />
+          <Route path="/socials" element={<PublicSocialsPage />} />
+        </Route>
+        <Route path="/login" element={<PublicAuthEntry initialView="choices" />} />
+        <Route path="/get-started" element={<PublicAuthEntry initialView="register" />} />
+        <Route path="*" element={<ApplicationBoundary />} />
+      </Routes>
+    </BrowserRouter>
+  );
+}
+
+function PublicEntryRoute() {
+  const invited = new URLSearchParams(window.location.search).get("invited") === "true";
+
+  return invited ? (
+    <Navigate to="/welcome?invited=true" replace />
+  ) : (
+    <PublicHome />
+  );
+}
+
+function PublicAuthEntry({ initialView }) {
+  const navigate = useNavigate();
+  const {
+    authStatus,
+    user,
+    verificationUser,
+    profileInitializationFailed,
+    signInWithGoogle,
+    signInWithEmail,
+    registerWithEmail,
+  } = useAuth();
+
+  useEffect(() => {
+    if (user || verificationUser || profileInitializationFailed) {
+      navigate("/home", { replace: true });
+    }
+  }, [navigate, profileInitializationFailed, user, verificationUser]);
+
+  if (authStatus === "loading") {
+    return <LoadingScreen label="Loading…" />;
+  }
+
+  return (
+    <div className="relative min-h-screen bg-zinc-950">
+      <BackToPublicLink />
+      <AuthScreen
+        onGoogle={signInWithGoogle}
+        onEmailSignIn={signInWithEmail}
+        onEmailRegistration={registerWithEmail}
+        initialView={initialView}
+        reserveReturnSpace
+      />
+    </div>
+  );
+}
+
+function ApplicationBoundary() {
   return (
     <AppProviders>
-      <BrowserRouter>
-        <AppGate />
-      </BrowserRouter>
+      <AppGate />
     </AppProviders>
   );
 }
 
 function AppGate() {
-  const { authStatus, user, signInWithGoogle } = useAuth();
+  const {
+    authStatus,
+    user,
+    verificationUser,
+    profileInitializationFailed,
+    verificationEmailSentAt,
+    verificationEmailAutoError,
+    signInWithGoogle,
+    signInWithEmail,
+    registerWithEmail,
+    resendVerification,
+    checkEmailVerification,
+    continueVerifiedSession,
+    retryProfileInitialization,
+    logout,
+  } = useAuth();
   const tenantContext = useTenant();
   const campaignContext = useCampaign();
+  const { accessResolutionStatus, retryAccessResolution } = useAccessResolution();
+
+  if (window.location.pathname === "/auth/verify-email") {
+    return (
+      <VerificationActionScreen
+        accessResolutionStatus={accessResolutionStatus}
+        onContinueVerifiedSession={continueVerifiedSession}
+        onRetryAccessResolution={retryAccessResolution}
+        onSignOut={logout}
+      />
+    );
+  }
 
   if (!tenantContext || !campaignContext) {
     return <LoadingScreen label="Loading…" />;
   }
 
-  const { tenantStatus } = tenantContext;
+  const { tenantStatus, refreshTenants } = tenantContext;
   const { campaignStatus } = campaignContext;
 
   if (authStatus === "loading") return <LoadingScreen label="Loading…" />;
 
-  // v0.2: real auth (Firebase)
+  if (verificationUser) {
+    return (
+      <VerificationScreen
+        email={verificationUser.email ?? "your email address"}
+        onCheckVerification={checkEmailVerification}
+        onResendVerification={resendVerification}
+        onLogout={logout}
+        verificationEmailSentAt={verificationEmailSentAt}
+        initialError={verificationEmailAutoError}
+      />
+    );
+  }
+
+  if (profileInitializationFailed) {
+    return (
+      <ProfileInitializationErrorScreen
+        onRetry={retryProfileInitialization}
+        onLogout={logout}
+      />
+    );
+  }
+
   if (!user) {
     return (
-      <LoginScreen
-        onGoogle={() => signInWithGoogle?.()}
-        debug={{ authStatus, hasUser: false }}
-      />
+      <div className="relative min-h-screen bg-zinc-950">
+        <BackToPublicLink />
+        <AuthScreen
+          onGoogle={signInWithGoogle}
+          onEmailSignIn={signInWithEmail}
+          onEmailRegistration={registerWithEmail}
+          reserveReturnSpace
+        />
+      </div>
     );
   }
 
@@ -73,8 +208,28 @@ function AppGate() {
     return <LoadingScreen label="Loading workspaces…" />;
   }
 
+  if (tenantStatus === "error") {
+    return <IdentityProvisioningErrorScreen onRetry={refreshTenants} onLogout={logout} />;
+  }
+
+  if (accessResolutionStatus === "error") {
+    return (
+      <IdentityProvisioningErrorScreen
+        onRetry={retryAccessResolution}
+        onLogout={logout}
+      />
+    );
+  }
+
+  if (
+    accessResolutionStatus === "resolving" ||
+    accessResolutionStatus === "refreshingMemberships"
+  ) {
+    return <LoadingScreen label="Loading access…" />;
+  }
+
   if (tenantStatus === "empty") {
-    return <BootstrapWorkspace />;
+    return <BootstrapWorkspace onLogout={logout} />;
   }
 
   const hasTenant = tenantStatus === "ready";
@@ -88,7 +243,7 @@ function AppGate() {
   }
 
   if (campaignStatus === "empty") {
-    return <BootstrapCampaign />;
+    return <BootstrapCampaign onLogout={logout} />;
   }
 
   const hasCampaign = campaignStatus === "ready";
@@ -127,7 +282,6 @@ function AppGate() {
           </>
         )}
 
-        {/* Future modules (kept for later toggles) */}
         {features.npcs && (
           <>
             <Route path="/npcs" element={<Npcs />} />
@@ -149,34 +303,6 @@ function AppGate() {
           </>
         )}
 
-        {features.arcs && (
-          <>
-            <Route path="/arcs" element={<Arcs />} />
-            <Route path="/arcs/:id" element={<ArcProfile />} />
-          </>
-        )}
-
-        {features.quests && (
-          <>
-            <Route path="/quests" element={<Quests />} />
-            <Route path="/quests/:id" element={<QuestProfile />} />
-          </>
-        )}
-
-        {features.relationships && (
-          <>
-            <Route path="/relationships" element={<Relationships />} />
-            <Route path="/relationships/:id" element={<RelationshipProfile />} />
-          </>
-        )}
-
-        {features.conditions && (
-          <>
-            <Route path="/conditions" element={<Conditions />} />
-            <Route path="/conditions/:id" element={<ConditionProfile />} />
-          </>
-        )}
-
         <Route path="/settings/profile" element={<Settings />} />
         <Route path="/campaigns/settings" element={<CampaignSettings />} />
 
@@ -184,6 +310,18 @@ function AppGate() {
         <Route path="*" element={<NotFoundScreen />} />
       </Route>
     </Routes>
+  );
+}
+
+function BackToPublicLink() {
+  return (
+    <Link
+      to="/"
+      className="relative z-20 mx-4 mt-4 inline-flex min-h-[44px] items-center rounded-md border border-zinc-700 bg-zinc-900/80 px-4 text-sm font-semibold text-zinc-200 shadow-sm transition hover:border-zinc-500 hover:bg-zinc-800 hover:text-white focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-purple-300 sm:mx-6"
+      data-testid="back-to-public"
+    >
+      Back to public site
+    </Link>
   );
 }
 
@@ -199,42 +337,47 @@ function LoadingScreen({ label }) {
   return (
     <div style={{ padding: 24 }}>
       <div style={{ fontSize: 18, fontWeight: 600 }}>{label}</div>
+    </div>
+  );
+}
+
+function IdentityProvisioningErrorScreen({ onRetry, onLogout }) {
+  return (
+    <div style={{ padding: 24 }}>
+      <div style={{ fontSize: 18, fontWeight: 600 }}>Account setup unavailable</div>
       <div style={{ opacity: 0.7, marginTop: 8 }}>
-        (Temporary gate screen — we’ll replace this with proper pages + styling.)
+        We could not finish setting up your account. Try again before continuing.
+      </div>
+      <div style={{ display: "flex", gap: 12, marginTop: 16 }}>
+        <button type="button" onClick={onRetry}>
+          Try again
+        </button>
+        {onLogout && (
+          <button type="button" onClick={onLogout}>
+            Use a different account
+          </button>
+        )}
       </div>
     </div>
   );
 }
 
-function LoginScreen({ debug, onGoogle }) {
+function ProfileInitializationErrorScreen({ onRetry, onLogout }) {
   return (
-    <main className="min-h-screen flex items-center justify-center p-6 bg-black text-white">
-      <div className="w-full max-w-md bg-white/5 border border-white/10 rounded-2xl p-6">
-        <h1 className="text-2xl font-bold mb-2">Login</h1>
-        <p className="text-zinc-400 text-sm mb-4">
-          Sign in to access your campaign. Your data will sync across devices.
-        </p>
-
-        <div className="text-xs font-mono text-zinc-400 mb-4">
-          debug: authStatus={String(debug?.authStatus)} hasUser={String(debug?.hasUser)}
-        </div>
-
-        <button
-          onClick={onGoogle}
-          disabled={!onGoogle}
-          className="w-full px-4 py-3 rounded-xl bg-white/10 hover:bg-white/20 disabled:opacity-50"
-          title={!onGoogle ? "signInWithGoogle not wired in AuthContext yet" : ""}
-        >
-          Continue with Google
-        </button>
-
-        {!onGoogle && (
-          <div className="opacity-70 mt-2 text-xs font-mono">
-            Missing: useAuth().signInWithGoogle
-          </div>
-        )}
+    <div style={{ padding: 24 }}>
+      <div style={{ fontSize: 18, fontWeight: 600 }}>Account profile unavailable</div>
+      <div style={{ opacity: 0.7, marginTop: 8 }}>
+        We could not initialize your account profile. Try again before continuing.
       </div>
-    </main>
+      <div style={{ display: "flex", gap: 12, marginTop: 16 }}>
+        <button type="button" onClick={onRetry}>
+          Try again
+        </button>
+        <button type="button" onClick={onLogout}>
+          Use a different account
+        </button>
+      </div>
+    </div>
   );
 }
 

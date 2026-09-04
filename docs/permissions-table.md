@@ -1,5 +1,9 @@
 ## Permission Matrix (Campaign-scoped)
 
+> Intended permission contract. Server code and tests must enforce these rules;
+> the table does not prove every legacy route currently complies. Record known
+> implementation gaps in `docs/product/CURRENT_STATE.md`.
+
 Legend:
 - ✅ Allowed
 - 🚫 Blocked → NotAuthorized
@@ -24,29 +28,21 @@ Legend:
 | NPCs | NpcProfile | ✅ | ✅ | Read-only |
 | Sessions | Sessions | ✅ | ✅ | Read-only |
 | Sessions | SessionProfile | ✅ | ✅ | Read-only |
-| GM-only | Arcs | 🚫 | ✅ | Blocked for Player even if deep-linked |
-| GM-only | ArcProfile | 🚫 | ✅ | Same guard rule as Arcs |
 | GM-only | CampaignSettings | 🚫 | ✅ | Campaign-scoped settings |
-| GM-only | Conditions | 🚫 | ✅ | Hidden in Player sidebar; NotAuthorized if accessed via URL/mode switch |
-| GM-only | ConditionProfile | 🚫 | ✅ | Same as Conditions |
-| GM-only | Quests | 🚫 | ✅ | NotAuthorized for Player |
-| GM-only | QuestProfile | 🚫 | ✅ | NotAuthorized for Player |
-| GM-only | Relationships | 🚫 | ✅ | NotAuthorized for Player |
-| GM-only | RelationshipProfile | 🚫 | ✅ | NotAuthorized for Player |
 
 ### Actions
 
 | Action | CampaignPlayer | CampaignGM | Notes |
 |---|---:|---:|---|
 | Assign item to self (ItemProfile) | ✍️ | ✅ | Always available for Player (future toggle possible) |
-| Create/edit Arcs | 🚫 | ✅ | GM-only |
-| Create/edit Quests | 🚫 | ✅ | GM-only |
-| Create/edit Relationships | 🚫 | ✅ | GM-only |
-| Create/edit Conditions | 🚫 | ✅ | GM-only |
 | Create new PC | 🚫 | ✅ | GM-only |
 | Assign PC to player | 🚫 | ✅ | GM-only (campaign membership assignment) |
 | Mode toggle (GM ↔ Player preview) | 🚫 | ✅ | Only CampaignGM can toggle; switching to Player mode blocks GM-only routes |
 | Access GM-only routes while in Player mode | 🚫 | 🚫 | Even GM role is blocked in Player mode (NotAuthorized) |
+
+Arcs, Quests, and Conditions are reserved entity-link concepts, not active
+routes or persisted product modules. Their former mock-backed screens were
+retired by #319.
 
 ### Player PC edge cases (PCs → Characters tab)
 

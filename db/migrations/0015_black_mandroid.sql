@@ -1,0 +1,2 @@
+ALTER TABLE "workspaces" ADD COLUMN "creation_request_key" uuid;--> statement-breakpoint
+ALTER TABLE "workspaces" ADD CONSTRAINT "workspaces_owner_user_id_creation_request_key_unique" UNIQUE("owner_user_id","creation_request_key");

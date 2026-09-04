@@ -2,37 +2,33 @@ import React, { useEffect, useMemo, useState } from "react";
 import {
   User,
   Mail,
-  Shield,
   LogOut,
   Save,
   CheckCircle2,
   AlertCircle,
 } from "lucide-react";
 import { updateProfile } from "firebase/auth";
-import { doc, getDoc, setDoc } from "firebase/firestore";
 
 import { useAuth } from "../context/AuthContext.jsx";
 import { useMode } from "../context/ModeContext.jsx";
 import { useTenant } from "../context/TenantContext.jsx";
 import { useCampaign } from "../context/CampaignContext.jsx";
-import { auth, db } from "../firebase/firebase";
+import { auth } from "../firebase/firebase";
+import { isAuthTestMode } from "../config/firebase/firebase";
+import { getApiMe, updateApiProfile } from "../data/api/apiClient";
 import WorkspaceSettings from "./WorkspaceSettings.jsx";
+import PasswordManagement from "../components/auth/PasswordManagement.jsx";
 
 const EMPTY_PROFILE = {
   displayName: "",
   reducedMotion: false,
 };
 
-function getProviderLabel(user) {
-  const providerId = user?.providerData?.[0]?.providerId;
-  if (providerId === "google.com") return "Google";
-  if (providerId === "password") return "Email / Password";
-  if (providerId === "emailLink") return "Email Link";
-  return providerId || "Unknown";
-}
-
 export default function Settings() {
-  const { user, logout } = useAuth();
+  const {
+    user,
+    logout,
+  } = useAuth();
   const { mode } = useMode();
   const { tenants, selectedTenantId, workspaceRole } = useTenant();
   const { accessibleCampaigns, selectedCampaignId, campaignRole } = useCampaign();
@@ -81,15 +77,23 @@ export default function Settings() {
       return;
     }
 
+    if (isAuthTestMode) {
+      setProfile({
+        displayName: user.displayName || "",
+        reducedMotion: false,
+      });
+      setLoading(false);
+      return;
+    }
+
     async function loadProfile() {
       setLoading(true);
       try {
-        const snap = await getDoc(doc(db, "users", user.uid));
-        const profileDoc = snap.exists() ? snap.data() : {};
+        const apiMe = await getApiMe();
 
         setProfile({
-          displayName: profileDoc?.displayName || user.displayName || "",
-          reducedMotion: Boolean(profileDoc?.reducedMotion),
+          displayName: apiMe.user.displayName || user.displayName || "",
+          reducedMotion: apiMe.profile.reducedMotion,
         });
       } catch (error) {
         console.error("[Settings] Failed to load profile", error);
@@ -124,18 +128,16 @@ export default function Settings() {
         await updateProfile(auth.currentUser, {
           displayName: nextDisplayName || null,
         });
+        await auth.currentUser.getIdToken(true);
       }
 
-      await setDoc(
-        doc(db, "users", user.uid),
-        {
-          displayName: nextDisplayName,
-          reducedMotion: Boolean(profile.reducedMotion),
-          email: user.email || null,
-          updatedAt: Date.now(),
-        },
-        { merge: true }
-      );
+      const savedProfile = await updateApiProfile({
+        reducedMotion: Boolean(profile.reducedMotion),
+      });
+      setProfile({
+        displayName: auth.currentUser?.displayName || nextDisplayName,
+        reducedMotion: savedProfile.profile.reducedMotion,
+      });
 
       setSaveState({ type: "success", message: "Profile settings saved." });
     } catch (error) {
@@ -268,32 +270,9 @@ export default function Settings() {
             </section>
 
             <div className="space-y-4 sm:space-y-6">
-              <section className="bg-white/5 border border-white/10 rounded-xl sm:rounded-2xl p-4 sm:p-6 space-y-4">
-                <div>
-                  <h2 className="text-lg font-semibold text-white">Authentication</h2>
-                  <p className="text-zinc-500 text-sm mt-1">
-                    Your connected sign-in method and account status.
-                  </p>
-                </div>
-
-                <div className="space-y-3 text-sm">
-                  <div className="flex items-start gap-3">
-                    <Shield className="w-5 h-5 text-zinc-400 mt-0.5" />
-                    <div>
-                      <p className="text-white font-medium">Connected provider</p>
-                      <p className="text-zinc-400">{getProviderLabel(user)}</p>
-                    </div>
-                  </div>
-
-                  <div className="flex items-start gap-3">
-                    <Mail className="w-5 h-5 text-zinc-400 mt-0.5" />
-                    <div>
-                      <p className="text-white font-medium">Authentication email</p>
-                      <p className="text-zinc-400">{user?.email || "No email available"}</p>
-                    </div>
-                  </div>
-                </div>
-              </section>
+              <PasswordManagement
+                firebaseUser={user}
+              />
 
               <section className="bg-white/5 border border-white/10 rounded-xl sm:rounded-2xl p-4 sm:p-6 space-y-4">
                 <div>

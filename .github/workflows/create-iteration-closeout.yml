@@ -1,0 +1,497 @@
+name: Create Iteration Closeout Task
+
+on:
+  workflow_dispatch:
+    inputs:
+      iteration_number:
+        description: Numeric Project iteration number, for example 3
+        required: true
+        type: string
+      iteration_name:
+        description: Current Project iteration name
+        required: true
+        type: string
+      dependencies:
+        description: "Major completion issues, for example #315, #316"
+        required: true
+        type: string
+      intended_outcome:
+        description: Concise intended outcome for the iteration
+        required: true
+        type: string
+
+permissions:
+  issues: write
+
+jobs:
+  create-closeout-task:
+    name: Create closeout task
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Create or reuse closeout task
+        id: issue
+        uses: actions/github-script@v7
+        env:
+          ITERATION_NUMBER: ${{ inputs.iteration_number }}
+          ITERATION_NAME: ${{ inputs.iteration_name }}
+          DEPENDENCIES: ${{ inputs.dependencies }}
+          INTENDED_OUTCOME: ${{ inputs.intended_outcome }}
+        with:
+          script: |
+            const iterationNumber = process.env.ITERATION_NUMBER.trim();
+            const iterationName = process.env.ITERATION_NAME.trim();
+            const dependencies = process.env.DEPENDENCIES.trim();
+            const intendedOutcome = process.env.INTENDED_OUTCOME.trim();
+
+            if (!/^[1-9]\d*$/.test(iterationNumber)) {
+              core.setFailed("Iteration number must be a positive integer.");
+              return;
+            }
+
+            if (!iterationName || !dependencies || !intendedOutcome) {
+              core.setFailed("Iteration name, dependencies, and intended outcome are required.");
+              return;
+            }
+
+            const title = `[Task]: Iteration ${iterationNumber} retrospective and documentation update`;
+            const marker = `<!-- dd-iteration-closeout:${iterationNumber} -->`;
+            const issues = await github.paginate(github.rest.issues.listForRepo, {
+              ...context.repo,
+              state: "all",
+              per_page: 100,
+            });
+            const duplicate = issues.find(
+              (issue) =>
+                !issue.pull_request &&
+                (issue.body?.includes(marker) || issue.title.toLowerCase() === title.toLowerCase())
+            );
+
+            if (duplicate) {
+              core.notice(`Reusing closeout task: #${duplicate.number} ${duplicate.html_url}`);
+              core.setOutput("issue_number", duplicate.number);
+              core.setOutput("issue_node_id", duplicate.node_id);
+              core.setOutput("issue_title", duplicate.title);
+              core.setOutput("issue_url", duplicate.html_url);
+              core.setOutput("issue_created", "false");
+            } else {
+              const dependencyLines = dependencies
+                .split(/\r?\n|,\s*/)
+                .map((entry) => entry.trim())
+                .filter(Boolean)
+                .map((entry) => (entry.startsWith("- ") ? entry : `- ${entry}`))
+                .join("\n");
+
+              const body = `${marker}
+              ## Purpose
+
+              Close Iteration ${iterationNumber} deliberately after its major work is complete,
+              capture actionable learning, and reconcile canonical documentation with the final
+              repository and Project state.
+
+              ## Iteration
+
+              - Number: ${iterationNumber}
+              - Name: ${iterationName}
+              - Intended outcome: ${intendedOutcome}
+
+              ## Project metadata
+
+              The workflow attempts to assign Project 1, Type: Task, Priority: Low, Effort: Low,
+              Application version: n/a, and the matching Iteration. If optional Project automation
+              is unavailable, use the workflow summary's manual-completion checklist.
+
+              ## Dependencies
+
+              This task is blocked until the major iteration work below is complete:
+
+              ${dependencyLines}
+
+              Do not begin closeout while these dependencies are still changing the iteration's
+              architecture, workflow, or delivered behavior.
+
+              ## 1. Retrospective
+
+              Capture:
+
+              - what was delivered and whether the intended outcome was met;
+              - what went well;
+              - what caused friction or rework;
+              - which assumptions proved wrong;
+              - which temporary decisions were removed, retained, or deferred.
+
+              Keep this actionable rather than producing a diary of merged pull requests.
+
+              ## 2. Documentation reconciliation
+
+              Audit canonical documentation against the final repository state, including where
+              relevant:
+
+              - Current State and Roadmap;
+              - architecture, persistence, identity, authorization, and ADRs;
+              - testing, CI, branch, release, deployment, and environment guidance;
+              - iteration ownership and Project handoff.
+
+              Update, supersede, remove, or link stale documentation. Do not document proposed or
+              future behavior as current behavior.
+
+              ## 3. Deferred work and follow-ups
+
+              - Link existing focused issues for work that carries forward.
+              - Create a new focused issue only when no suitable issue exists.
+              - Do not implement newly discovered product work in this closeout task.
+
+              ## 4. Final iteration state and handoff
+
+              Record:
+
+              - the final delivered and architectural state;
+              - known remaining risks;
+              - deferred work;
+              - next-iteration inputs and ownership.
+
+              ## Acceptance criteria
+
+              - [ ] Major iteration dependencies are complete before closeout begins.
+              - [ ] The retrospective captures actionable lessons rather than a PR diary.
+              - [ ] Canonical documentation is reconciled with the final repository state.
+              - [ ] Contradictory or obsolete documentation is resolved explicitly.
+              - [ ] Deferred work is linked to focused issues or explicitly declined.
+              - [ ] The final iteration state and next-iteration handoff are recorded.
+              - [ ] Future or proposed behavior is not documented as current behavior.
+              - [ ] No product behavior is changed as part of closeout administration.
+
+              ## Constraints
+
+              - Keep the closeout proportionate to a primarily solo-developed project.
+              - Prefer canonical documents and links over duplicate summaries.
+              - Do not alter production data, deployment settings, branch protections, secrets,
+                schemas, migrations, or application behavior.
+              `
+                .split("\n")
+                .map((line) => line.replace(/^              /, ""))
+                .join("\n")
+                .trim();
+
+              const created = await github.rest.issues.create({
+                ...context.repo,
+                title,
+                body,
+                type: "Task",
+              });
+              const createdIssue = created.data;
+
+              core.setOutput("issue_number", createdIssue.number);
+              core.setOutput("issue_node_id", createdIssue.node_id);
+              core.setOutput("issue_title", createdIssue.title);
+              core.setOutput("issue_url", createdIssue.html_url);
+              core.setOutput("issue_created", "true");
+            }
+
+      - name: Detect optional Project token
+        id: project-token
+        env:
+          DD_PROJECTS_TOKEN: ${{ secrets.DD_PROJECTS_TOKEN }}
+        run: |
+          if [[ -n "$DD_PROJECTS_TOKEN" ]]; then
+            echo "configured=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "configured=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Warn when Project automation is unavailable
+        if: steps.project-token.outputs.configured != 'true'
+        uses: actions/github-script@v7
+        env:
+          ISSUE_NUMBER: ${{ steps.issue.outputs.issue_number }}
+          ISSUE_TITLE: ${{ steps.issue.outputs.issue_title }}
+          ISSUE_URL: ${{ steps.issue.outputs.issue_url }}
+          ITERATION_NUMBER: ${{ inputs.iteration_number }}
+          ITERATION_NAME: ${{ inputs.iteration_name }}
+        with:
+          script: |
+            core.warning(
+              "DD_PROJECTS_TOKEN is not configured; the closeout issue was kept, but Project metadata completion was skipped."
+            );
+
+            await core.summary
+              .addHeading("Iteration closeout issue ready for manual metadata")
+              .addLink(`#${process.env.ISSUE_NUMBER}: ${process.env.ISSUE_TITLE}`, process.env.ISSUE_URL)
+              .addRaw("\n\nDD_PROJECTS_TOKEN is not configured. Complete this checklist manually:\n")
+              .addList([
+                "Add the issue to organization Project 1: dopamine dungeon development.",
+                "Set native Type to Task.",
+                "Set native Priority to Low.",
+                "Set native Effort to Low.",
+                "Set Application version to n/a.",
+                `Set Iteration to Iteration ${process.env.ITERATION_NUMBER}: ${process.env.ITERATION_NAME}.`,
+              ], true)
+              .write();
+
+      - name: Complete Project and issue metadata
+        if: steps.project-token.outputs.configured == 'true'
+        uses: actions/github-script@v7
+        env:
+          ISSUE_NODE_ID: ${{ steps.issue.outputs.issue_node_id }}
+          ISSUE_NUMBER: ${{ steps.issue.outputs.issue_number }}
+          ISSUE_TITLE: ${{ steps.issue.outputs.issue_title }}
+          ISSUE_URL: ${{ steps.issue.outputs.issue_url }}
+          ITERATION_NUMBER: ${{ inputs.iteration_number }}
+          ITERATION_NAME: ${{ inputs.iteration_name }}
+        with:
+          github-token: ${{ secrets.DD_PROJECTS_TOKEN }}
+          script: |
+            const organization = "dopaminedungeon";
+            const projectNumber = 1;
+            const expectedProjectTitle = "dopamine dungeon development";
+            const issueId = process.env.ISSUE_NODE_ID;
+            const iterationNumber = process.env.ITERATION_NUMBER.trim();
+            const iterationName = process.env.ITERATION_NAME.trim();
+            const normalize = (value) => value.trim().replace(/\s+/g, " ").toLowerCase();
+
+            try {
+              const metadata = await github.graphql(
+                `query CloseoutMetadata($organization: String!, $projectNumber: Int!, $issueId: ID!) {
+                  organization(login: $organization) {
+                    issueTypes(first: 100) {
+                      nodes { id name isEnabled }
+                    }
+                    issueFields(first: 100) {
+                      nodes {
+                        __typename
+                        ... on IssueFieldSingleSelect {
+                          id
+                          name
+                          options { id name }
+                        }
+                      }
+                    }
+                    projectV2(number: $projectNumber) {
+                      id
+                      number
+                      title
+                      fields(first: 100) {
+                        nodes {
+                          __typename
+                          ... on ProjectV2Field { id name dataType }
+                          ... on ProjectV2IterationField {
+                            id
+                            name
+                            configuration {
+                              iterations { id title }
+                              completedIterations { id title }
+                            }
+                          }
+                        }
+                      }
+                    }
+                  }
+                  node(id: $issueId) {
+                    ... on Issue {
+                      projectItems(first: 100, includeArchived: true) {
+                        nodes {
+                          id
+                          isArchived
+                          project { id number title }
+                        }
+                      }
+                    }
+                  }
+                }`,
+                { organization, projectNumber, issueId }
+              );
+
+              const org = metadata.organization;
+              if (!org) {
+                throw new Error(`Organization ${organization} was not accessible.`);
+              }
+              if (!metadata.node) {
+                throw new Error(`Issue ${issueId} was not accessible to DD_PROJECTS_TOKEN.`);
+              }
+
+              const project = org.projectV2;
+              if (!project || normalize(project.title) !== normalize(expectedProjectTitle)) {
+                throw new Error(
+                  `Project ${projectNumber} must be titled "${expectedProjectTitle}"; discovered "${project?.title ?? "none"}".`
+                );
+              }
+
+              const taskType = org.issueTypes.nodes.find(
+                (type) => type.isEnabled && normalize(type.name) === "task"
+              );
+              if (!taskType) {
+                throw new Error("Enabled native issue type Task was not found.");
+              }
+
+              const findNativeLow = (fieldName) => {
+                const field = org.issueFields.nodes.find(
+                  (candidate) =>
+                    candidate.__typename === "IssueFieldSingleSelect" &&
+                    normalize(candidate.name) === normalize(fieldName)
+                );
+                const option = field?.options.find((candidate) => normalize(candidate.name) === "low");
+                if (!field || !option) {
+                  throw new Error(`Native issue field ${fieldName} with option Low was not found.`);
+                }
+                return { field, option };
+              };
+
+              const priority = findNativeLow("Priority");
+              const effort = findNativeLow("Effort");
+              const projectFields = project.fields.nodes;
+              const applicationVersionField = projectFields.find(
+                (field) =>
+                  field.__typename === "ProjectV2Field" &&
+                  normalize(field.name) === "application version" &&
+                  field.dataType === "TEXT"
+              );
+              const iterationField = projectFields.find(
+                (field) =>
+                  field.__typename === "ProjectV2IterationField" &&
+                  normalize(field.name) === "iteration"
+              );
+
+              if (!applicationVersionField) {
+                throw new Error("Project text field Application version was not found.");
+              }
+              if (!iterationField) {
+                throw new Error("Project iteration field Iteration was not found.");
+              }
+
+              const discoveredIterations = [
+                ...iterationField.configuration.iterations,
+                ...iterationField.configuration.completedIterations,
+              ].filter(
+                (iteration, index, all) =>
+                  all.findIndex((candidate) => candidate.id === iteration.id) === index
+              );
+              const numberedIterations = discoveredIterations.filter((iteration) => {
+                const match = iteration.title.match(/^Iteration\s+(\d+)(?:\b|\s*[-–—:])/i);
+                return match?.[1] === iterationNumber;
+              });
+              const normalizedInputName = normalize(iterationName);
+              const matchingIterations = numberedIterations.filter((iteration) => {
+                const normalizedTitle = normalize(iteration.title);
+                const suffix = normalize(
+                  iteration.title.replace(
+                    new RegExp(`^Iteration\\s+${iterationNumber}(?:\\s*[-–—:]\\s*)?`, "i"),
+                    ""
+                  )
+                );
+                return normalizedTitle === normalizedInputName || suffix === normalizedInputName;
+              });
+
+              if (matchingIterations.length !== 1) {
+                const discovered = discoveredIterations.map((iteration) => iteration.title).join("; ");
+                throw new Error(
+                  `Could not uniquely resolve Iteration ${iterationNumber} with name "${iterationName}". ` +
+                    `Discovered iterations: ${discovered || "none"}.`
+                );
+              }
+              const selectedIteration = matchingIterations[0];
+
+              await github.graphql(
+                `mutation SetCloseoutIssueMetadata(
+                  $issueId: ID!
+                  $taskTypeId: ID!
+                  $priorityFieldId: ID!
+                  $priorityOptionId: ID!
+                  $effortFieldId: ID!
+                  $effortOptionId: ID!
+                ) {
+                  updateIssue(input: { id: $issueId, issueTypeId: $taskTypeId }) {
+                    issue { id }
+                  }
+                  setIssueFieldValue(input: {
+                    issueId: $issueId
+                    issueFields: [
+                      { fieldId: $priorityFieldId, singleSelectOptionId: $priorityOptionId }
+                      { fieldId: $effortFieldId, singleSelectOptionId: $effortOptionId }
+                    ]
+                  }) {
+                    issue { id }
+                  }
+                }`,
+                {
+                  issueId,
+                  taskTypeId: taskType.id,
+                  priorityFieldId: priority.field.id,
+                  priorityOptionId: priority.option.id,
+                  effortFieldId: effort.field.id,
+                  effortOptionId: effort.option.id,
+                }
+              );
+
+              let projectItem = metadata.node.projectItems.nodes.find(
+                (item) => item.project.id === project.id
+              );
+              if (!projectItem) {
+                const added = await github.graphql(
+                  `mutation AddCloseoutToProject($projectId: ID!, $issueId: ID!) {
+                    addProjectV2ItemById(input: { projectId: $projectId, contentId: $issueId }) {
+                      item { id }
+                    }
+                  }`,
+                  { projectId: project.id, issueId }
+                );
+                projectItem = added.addProjectV2ItemById.item;
+              } else if (projectItem.isArchived) {
+                core.notice("Reusing the existing archived Project 1 item.");
+              }
+
+              await github.graphql(
+                `mutation SetCloseoutProjectMetadata(
+                  $projectId: ID!
+                  $itemId: ID!
+                  $applicationVersionFieldId: ID!
+                  $iterationFieldId: ID!
+                  $iterationId: String!
+                ) {
+                  applicationVersion: updateProjectV2ItemFieldValue(input: {
+                    projectId: $projectId
+                    itemId: $itemId
+                    fieldId: $applicationVersionFieldId
+                    value: { text: "n/a" }
+                  }) {
+                    projectV2Item { id }
+                  }
+                  iteration: updateProjectV2ItemFieldValue(input: {
+                    projectId: $projectId
+                    itemId: $itemId
+                    fieldId: $iterationFieldId
+                    value: { iterationId: $iterationId }
+                  }) {
+                    projectV2Item { id }
+                  }
+                }`,
+                {
+                  projectId: project.id,
+                  itemId: projectItem.id,
+                  applicationVersionFieldId: applicationVersionField.id,
+                  iterationFieldId: iterationField.id,
+                  iterationId: selectedIteration.id,
+                }
+              );
+
+              await core.summary
+                .addHeading("Iteration closeout metadata complete")
+                .addLink(`#${process.env.ISSUE_NUMBER}: ${process.env.ISSUE_TITLE}`, process.env.ISSUE_URL)
+                .addList([
+                  `Project: ${project.title}`,
+                  "Type: Task",
+                  "Priority: Low",
+                  "Effort: Low",
+                  "Application version: n/a",
+                  `Iteration: ${selectedIteration.title}`,
+                ])
+                .write();
+            } catch (error) {
+              await core.summary
+                .addHeading("Iteration closeout metadata incomplete")
+                .addLink(`#${process.env.ISSUE_NUMBER}: ${process.env.ISSUE_TITLE}`, process.env.ISSUE_URL)
+                .addRaw(
+                  `\n\nThe issue was preserved. Fix DD_PROJECTS_TOKEN access or the supplied iteration, then rerun to repair metadata without creating a duplicate.\n\nError: ${error.message}`
+                )
+                .write();
+              throw error;
+            }

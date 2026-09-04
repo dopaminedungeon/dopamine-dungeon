@@ -8,7 +8,7 @@ export function setCorsHeaders(
   res.setHeader("Access-Control-Allow-Methods", methods);
   res.setHeader(
     "Access-Control-Allow-Headers",
-    "Authorization, Content-Type, Cache-Control, Pragma"
+    "Authorization, Content-Type, Cache-Control, Pragma, X-DD-Mode"
   );
   res.setHeader("Cache-Control", "no-store, no-cache, max-age=0, must-revalidate");
   res.setHeader("CDN-Cache-Control", "no-store");

@@ -5,10 +5,21 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
+    "dev:auth-test": "vite --mode test --host 127.0.0.1 --port 4173",
     "build": "tsc -p tsconfig.api.json && vite build",
     "preview": "vite preview",
+    "test": "vitest run",
+    "test:unit": "vitest run src/auth src/data/api/selectedMode.test.js src/data/characters/characterImport.service.test.js src/firebase/browserFirestoreRetirement.test.ts src/server/apiErrors.test.js src/server/userIdentity.test.js src/server/authEmailRateLimit.test.ts src/server/verificationEmail.test.js src/server/passwordRecoveryEmail.test.ts src/server/transactionalMail.test.ts scripts/firestore-reconciliation.test.ts",
+    "test:api": "vitest run src/server/api-handlers.integration.test.ts src/server/api-handlers/workspace-create.test.ts src/server/api-handlers/campaign-create.test.ts src/server/api-handlers/campaign-content-router.test.ts src/server/api-handlers/campaign-settings.test.ts src/server/api-handlers/me-profile.test.ts src/server/userProfile.test.ts src/server/legacy-firestore-retirement.test.ts api/invitations/accept-pending.test.ts api/invitations/index.test.ts",
+    "test:boundary": "vitest run src/server/security-boundaries.test.js src/server/access-boundaries.test.ts src/server/viewer-mode.test.ts",
+    "test:e2e": "node scripts/auth-test-runner.mjs test",
+    "test:e2e:smoke": "node scripts/auth-test-runner.mjs test --grep @smoke",
+    "test:e2e:headed": "node scripts/auth-test-runner.mjs test --headed",
+    "quality": "pnpm lint && pnpm test:unit && pnpm test:api && pnpm test:boundary && pnpm typecheck:api && pnpm typecheck:e2e && pnpm build",
+    "firebase:emulators:auth": "node scripts/auth-test-runner.mjs emulator",
     "lint": "eslint .",
     "typecheck:api": "tsc -p tsconfig.api.json",
+    "typecheck:e2e": "tsc -p tsconfig.e2e.json",
     "db:generate": "dotenv -e .env.local -- drizzle-kit generate",
     "db:migrate": "dotenv -e .env.local -- drizzle-kit migrate"
   },
@@ -26,6 +37,7 @@
   },
   "devDependencies": {
     "@eslint/js": "^9.39.1",
+    "@playwright/test": "^1.62.1",
     "@tailwindcss/postcss": "^4.1.18",
     "@types/node": "^25.5.2",
     "@types/react": "^19.2.5",
@@ -38,19 +50,14 @@
     "eslint": "^9.39.1",
     "eslint-plugin-react-hooks": "^7.0.1",
     "eslint-plugin-react-refresh": "^0.4.24",
+    "firebase-tools": "^15.27.0",
     "globals": "^16.5.0",
     "postcss": "8",
     "tailwindcss": "4.1.18",
     "typescript": "^6.0.3",
     "vercel": "^50.42.0",
-    "vite": "^7.2.4"
+    "vite": "^7.2.4",
+    "vitest": "^4.1.11"
   },
-  "packageManager": "pnpm@11.9.0",
-  "pnpm": {
-    "onlyBuiltDependencies": [
-      "@firebase/util",
-      "esbuild",
-      "protobufjs"
-    ]
-  }
+  "packageManager": "pnpm@11.9.0"
 }

@@ -1,39 +1,66 @@
 // src/pages/CampaignSettings.jsx
-import React, { useMemo, useState, useEffect } from "react";
+import React, { useMemo, useState, useEffect, useRef } from "react";
 import InvitePlayerForm from "../components/invitations/InvitePlayerForm.jsx";
 import {
   Plus,
   CheckCircle2,
   AlertCircle,
   Trash2,
-  MoreHorizontal,
   UserMinus,
-  MailX,
 } from "lucide-react";
-import {
-  collection,
-  doc,
-  updateDoc,
-  deleteDoc,
-  getDocs,
-  writeBatch,
-} from "firebase/firestore";
 import { useMode } from "../context/ModeContext.jsx";
 import { useCampaign } from "../context/CampaignContext.jsx";
 import { useTenant } from "../context/TenantContext.jsx";
-import { db } from "../firebase/firebase";
 import {
+  ApiRequestError,
   assignApiCharacter,
   getApiCampaignPeople,
   getApiCharacterAssignments,
   removeApiCampaignMember,
-  revokeApiCampaignInvite,
+  resendApiInvitation,
+  revokeApiInvitation,
   unassignApiCharacter,
-  updateApiCampaign,
+  getApiCampaignSettings,
+  updateApiCampaignSettings,
 } from "../data/api/apiClient.ts";
 import { getAllCharacters } from "../data/characters/characters.repo";
 
 const STATUS = ["active", "paused", "completed"];
+
+function formatTimestamp(value) {
+  if (!value) return "—";
+  const timestamp = new Date(value);
+  return Number.isNaN(timestamp.getTime())
+    ? "—"
+    : timestamp.toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" });
+}
+
+function formatLifecycleTimestamp(value, label) {
+  const formatted = formatTimestamp(value);
+  return formatted === "—" ? `${label} date unavailable` : `${label} ${formatted}`;
+}
+
+function getInvitationHistorySummary(person) {
+  if (person.status === "revoked") {
+    return formatLifecycleTimestamp(person.revokedAt, "Revoked");
+  }
+
+  if (person.status === "expired") {
+    return formatLifecycleTimestamp(person.expiresAt, "Expired");
+  }
+
+  if (person.status === "accepted") {
+    return formatLifecycleTimestamp(person.acceptedAt, "Accepted");
+  }
+
+  return "Invitation history";
+}
+
+function invitationStatusClass(status) {
+  if (status === "accepted") return "border-emerald-400/20 bg-emerald-400/10 text-emerald-200";
+  if (status === "pending") return "border-amber-400/20 bg-amber-400/10 text-amber-200";
+  return "border-zinc-400/20 bg-zinc-400/10 text-zinc-300";
+}
 
 export default function CampaignSettings() {
   const { isGM } = useMode();
@@ -47,7 +74,7 @@ export default function CampaignSettings() {
     campaignRole,
     refreshCampaigns,
   } = useCampaign();
-  const { selectedTenantId } = useTenant();
+  const { selectedTenantId, workspaceRole } = useTenant();
 
   const activeCampaign = useMemo(() => {
     return (
@@ -63,7 +90,7 @@ export default function CampaignSettings() {
   const [showCreate, setShowCreate] = useState(false);
   const [creating, setCreating] = useState(false);
   const [saving, setSaving] = useState(false);
-  const [deleting, setDeleting] = useState(false);
+  const [settingsLoading, setSettingsLoading] = useState(false);
   const [saveState, setSaveState] = useState({ type: null, message: "" });
   const [createForm, setCreateForm] = useState({
     name: "",
@@ -73,13 +100,35 @@ export default function CampaignSettings() {
   });
   const [campaignPeople, setCampaignPeople] = useState([]);
   const [campaignPeopleLoading, setCampaignPeopleLoading] = useState(false);
-  const [openActionsId, setOpenActionsId] = useState(null);
   const [campaignPeopleVersion, setCampaignPeopleVersion] = useState(0);
   const [campaignCharacters, setCampaignCharacters] = useState([]);
   const [assignableCharacters, setAssignableCharacters] = useState([]);
   const [assignmentRows, setAssignmentRows] = useState([]);
   const [assignmentSelectionByUserId, setAssignmentSelectionByUserId] = useState({});
   const [peopleActionId, setPeopleActionId] = useState(null);
+  const [invitationActionError, setInvitationActionError] = useState("");
+  const [invitationActionNotice, setInvitationActionNotice] = useState("");
+  const [resendNow, setResendNow] = useState(() => Date.now());
+  const createIdempotencyKeyRef = useRef(null);
+  const canManageInvitations =
+    isGM && workspaceRole === "owner" && campaignRole === "gm";
+
+  useEffect(() => {
+    const hasActiveResendCooldown = campaignPeople.some((person) => {
+      if (person.type !== "invite" || person.status !== "pending" || !person.resendAvailableAt) {
+        return false;
+      }
+
+      const availableAt = new Date(person.resendAvailableAt).getTime();
+      return Number.isFinite(availableAt) && availableAt > Date.now();
+    });
+
+    if (!hasActiveResendCooldown) return undefined;
+
+    setResendNow(Date.now());
+    const intervalId = window.setInterval(() => setResendNow(Date.now()), 1_000);
+    return () => window.clearInterval(intervalId);
+  }, [campaignPeople]);
 
 	  const createCampaign = async (e) => {
 	    e?.preventDefault?.();
@@ -96,6 +145,7 @@ export default function CampaignSettings() {
         name,
         description: createForm.description || "",
         system: createForm.system || "",
+        idempotencyKey: (createIdempotencyKeyRef.current ??= crypto.randomUUID()),
       });
 
       const createdId = created?.campaignId || created?.id || null;
@@ -111,6 +161,7 @@ export default function CampaignSettings() {
       setDraft(created || null);
       setShowCreate(false);
       setCreateForm({ name: "", description: "", status: "active", system: "" });
+      createIdempotencyKeyRef.current = null;
       setSaveState({ type: "success", message: "Campaign created." });
 	    } catch (error) {
 	      console.error("[CampaignSettings] Failed to create campaign", error);
@@ -121,10 +172,36 @@ export default function CampaignSettings() {
 	  };
 
   useEffect(() => {
-    // Sync the draft whenever the active campaign changes.
-    // If there is no active campaign, keep whatever is in draft (e.g. right after creating).
-    if (activeCampaign) setDraft({ ...activeCampaign });
-  }, [selectedCampaignId, activeCampaign]);
+    let cancelled = false;
+
+    async function loadCampaignSettings() {
+      if (!activeCampaign || !selectedCampaignId) {
+        setDraft(null);
+        return;
+      }
+
+      try {
+        setDraft(null);
+        setSettingsLoading(true);
+        setSaveState({ type: null, message: "" });
+        const response = await getApiCampaignSettings(selectedCampaignId);
+        if (!cancelled) setDraft(response.campaign);
+      } catch (error) {
+        console.error("[CampaignSettings] Failed to load campaign settings", error);
+        if (!cancelled) {
+          setDraft(null);
+          setSaveState({ type: "error", message: "Could not load campaign settings." });
+        }
+      } finally {
+        if (!cancelled) setSettingsLoading(false);
+      }
+    }
+
+    loadCampaignSettings();
+    return () => {
+      cancelled = true;
+    };
+  }, [activeCampaign, selectedCampaignId]);
 
   useEffect(() => {
     const loadCampaignPeople = async () => {
@@ -180,13 +257,15 @@ export default function CampaignSettings() {
         <div className="flex items-center justify-between gap-3">
           <div>
             <h1 className="text-2xl font-bold">Campaign Settings</h1>
-            <p className="text-zinc-300/75 mt-2">No active campaign selected.</p>
+            <p className="text-zinc-300/75 mt-2">
+              {settingsLoading ? "Loading campaign settings…" : "No active campaign selected."}
+            </p>
           </div>
 
           {isGM && (
 	            <button
 	              type="button"
-	              disabled={saving || deleting || creating}
+              disabled={saving || creating}
 	              onClick={() => setShowCreate(true)}
 	              className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-linear-to-r from-indigo-500 to-purple-500 text-white font-medium hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
             >
@@ -276,74 +355,13 @@ export default function CampaignSettings() {
 
   const update = (key, value) => setDraft((p) => ({ ...p, [key]: value }));
 
-  async function deleteSubcollectionDocs(campaignId, subcollectionName) {
-    const snap = await getDocs(collection(db, "campaigns", campaignId, subcollectionName));
-    if (snap.empty) return;
-
-    const batch = writeBatch(db);
-    snap.docs.forEach((docSnap) => {
-      batch.delete(docSnap.ref);
-    });
-    await batch.commit();
-  }
-
-	  const onDeleteCampaign = async () => {
-	    const campaignId = draft?.campaignId || selectedCampaignId;
-	    if (saving || deleting || !campaignId) return;
-
-    const confirmed = window.confirm(
-      "Delete this campaign and all associated sessions, items, and bag data? This cannot be undone."
-    );
-    if (!confirmed) return;
-
-    try {
-      setDeleting(true);
-      setSaveState({ type: null, message: "" });
-
-      await deleteSubcollectionDocs(campaignId, "sessions");
-      await deleteSubcollectionDocs(campaignId, "items");
-      await deleteSubcollectionDocs(campaignId, "meta");
-      await deleteDoc(doc(db, "campaigns", campaignId));
-
-      if (typeof refreshCampaigns === "function") {
-        await refreshCampaigns();
-      }
-
-      setDraft(null);
-      setSaveState({ type: "success", message: "Campaign deleted." });
-    } catch (error) {
-      console.error("[CampaignSettings] Failed to delete campaign", error);
-      setSaveState({ type: "error", message: "Could not delete campaign." });
-    } finally {
-      setDeleting(false);
-    }
-  };
-
 	  const onSave = async () => {
 	    const campaignId = draft?.campaignId || selectedCampaignId;
-	    if (saving || deleting || !draft || !campaignId) return;
+	    if (saving || !draft || !campaignId) return;
 
     try {
       setSaving(true);
       setSaveState({ type: null, message: "" });
-
-      await updateDoc(doc(db, "campaigns", campaignId), {
-        name: draft.name || "",
-        description: draft.description || "",
-        status: draft.status || "active",
-        system: draft.system || "",
-        playerSummary: draft.playerSummary || "",
-        publicLore: draft.publicLore || "",
-        gmNotes: draft.gmNotes || "",
-        privateLore: draft.privateLore || "",
-        hiddenFactions: draft.hiddenFactions || "",
-        hiddenTimelines: draft.hiddenTimelines || "",
-        metaCommentary: draft.metaCommentary || "",
-        tags: draft.tags || "",
-        startDate: draft.startDate || "",
-        endDate: draft.endDate || "",
-        lastUpdated: Date.now(),
-      });
 
       const requestedUpdate = {
         campaignId,
@@ -351,9 +369,13 @@ export default function CampaignSettings() {
         description: draft.description || "",
         status: draft.status || "active",
         system: draft.system || "",
+        playerSummary: draft.playerSummary || "",
+        gmNotes: draft.gmNotes || "",
+        startDate: draft.startDate || "",
+        endDate: draft.endDate || "",
       };
 
-      const apiResponse = await updateApiCampaign(requestedUpdate);
+      const apiResponse = await updateApiCampaignSettings(requestedUpdate);
       const returnedCampaign =
         apiResponse?.campaign && typeof apiResponse.campaign === "object"
           ? apiResponse.campaign
@@ -379,6 +401,11 @@ export default function CampaignSettings() {
         description: returnedCampaign.description ?? requestedUpdate.description,
         status: returnedCampaign.status ?? requestedUpdate.status,
         system: returnedCampaign.system ?? requestedUpdate.system,
+        playerSummary: returnedCampaign.playerSummary ?? requestedUpdate.playerSummary,
+        gmNotes: returnedCampaign.gmNotes ?? requestedUpdate.gmNotes,
+        startDate: returnedCampaign.startDate ?? requestedUpdate.startDate,
+        endDate: returnedCampaign.endDate ?? requestedUpdate.endDate,
+        updatedAt: returnedCampaign.updatedAt ?? draft.updatedAt,
       };
 
       setDraft((current) => ({
@@ -387,7 +414,8 @@ export default function CampaignSettings() {
       }));
 
       if (typeof updateCampaignInContext === "function") {
-        updateCampaignInContext(campaignId, savedFields);
+        const { gmNotes: _gmNotes, ...playerSafeSavedFields } = savedFields;
+        updateCampaignInContext(campaignId, playerSafeSavedFields);
       }
 
       setSaveState({ type: "success", message: "Campaign settings saved." });
@@ -398,28 +426,6 @@ export default function CampaignSettings() {
       setSaving(false);
     }
   };
-
-	  const onRevokeInvite = async (inviteDocId) => {
-	    const campaignId = draft?.campaignId || selectedCampaignId;
-	    const actionId = `revoke-${inviteDocId}`;
-	    if (peopleActionId || !inviteDocId || !campaignId) return;
-
-    const confirmed = window.confirm("Revoke this pending invitation?");
-    if (!confirmed) return;
-
-	    try {
-      setPeopleActionId(actionId);
-	      await revokeApiCampaignInvite(campaignId, inviteDocId);
-      setOpenActionsId(null);
-      setCampaignPeopleVersion((value) => value + 1);
-      setSaveState({ type: "success", message: "Invitation revoked." });
-	    } catch (error) {
-	      console.error("[CampaignSettings] Failed to revoke invitation", error);
-	      setSaveState({ type: "error", message: "Could not revoke invitation." });
-    } finally {
-      setPeopleActionId(null);
-	    }
-	  };
 
 	  const onRemoveCampaignMember = async (memberDocId) => {
 	    const campaignId = draft?.campaignId || selectedCampaignId;
@@ -432,7 +438,6 @@ export default function CampaignSettings() {
 	    try {
       setPeopleActionId(actionId);
 	      await removeApiCampaignMember(campaignId, memberDocId);
-      setOpenActionsId(null);
       setCampaignPeopleVersion((value) => value + 1);
       setSaveState({ type: "success", message: "Campaign member removed." });
 	    } catch (error) {
@@ -442,6 +447,69 @@ export default function CampaignSettings() {
       setPeopleActionId(null);
 	    }
 	  };
+
+  const onInvitationAction = async (person, action) => {
+    const campaignId = draft?.campaignId || selectedCampaignId;
+    const invitationId = person?.docId;
+    if (
+      peopleActionId ||
+      !selectedTenantId ||
+      !campaignId ||
+      !invitationId ||
+      person?.status !== "pending"
+    ) {
+      return;
+    }
+
+    const actionId = `${action}-${invitationId}`;
+    try {
+      setPeopleActionId(actionId);
+      setInvitationActionError("");
+      setInvitationActionNotice("");
+      if (action === "resend") {
+        await resendApiInvitation({
+          tenantId: selectedTenantId,
+          campaignId,
+          invitationId,
+        });
+      } else {
+        await revokeApiInvitation({
+          tenantId: selectedTenantId,
+          campaignId,
+          invitationId,
+        });
+      }
+      setInvitationActionNotice(
+        action === "resend" ? "Invitation resent." : "Invitation revoked."
+      );
+      setCampaignPeopleVersion((value) => value + 1);
+    } catch (error) {
+      if (error instanceof ApiRequestError && error.retryAfterSeconds) {
+        const resendAvailableAt = new Date(
+          Date.now() + error.retryAfterSeconds * 1_000
+        ).toISOString();
+        setCampaignPeople((currentPeople) =>
+          currentPeople.map((currentPerson) =>
+            currentPerson.docId === invitationId
+              ? { ...currentPerson, resendAvailableAt }
+              : currentPerson
+          )
+        );
+        setResendNow(Date.now());
+        setInvitationActionError(
+          `Please wait ${error.retryAfterSeconds}s before resending this invitation.`
+        );
+      } else {
+        setInvitationActionError(
+          action === "resend"
+            ? "Could not resend this invitation."
+            : "Could not revoke this invitation."
+        );
+      }
+    } finally {
+      setPeopleActionId(null);
+    }
+  };
 
   const getAssignmentForCharacter = (characterId) =>
     assignmentRows.find((assignment) => assignment.characterId === characterId) || null;
@@ -489,6 +557,20 @@ export default function CampaignSettings() {
 	    }
 	  };
 
+  const memberPeople = campaignPeople.filter((person) => person.type === "member");
+  const invitationPeople = campaignPeople.filter((person) => person.type === "invite");
+  const pendingInvitationPeople = invitationPeople.filter(
+    (person) => person.status === "pending"
+  );
+  const invitationHistoryPeople = invitationPeople.filter(
+    (person) => person.status !== "pending"
+  );
+  const getResendSecondsRemaining = (person) => {
+    const availableAt = new Date(person.resendAvailableAt || "").getTime();
+    if (!Number.isFinite(availableAt)) return 0;
+    return Math.max(0, Math.ceil((availableAt - resendNow) / 1_000));
+  };
+
   return (
     <div className="w-full text-white">
       <main className="w-full px-6 py-5 md:px-8 md:py-6">
@@ -515,10 +597,21 @@ export default function CampaignSettings() {
 
             <button
 	              type="button"
-	              disabled={saving || deleting}
-	              onClick={() => {
-                setDraft(activeCampaign ? { ...activeCampaign } : null);
-                setSaveState({ type: null, message: "" });
+              disabled={saving}
+              onClick={() => {
+                if (activeCampaign && selectedCampaignId) {
+                  setSettingsLoading(true);
+                  getApiCampaignSettings(selectedCampaignId)
+                    .then((response) => {
+                      setDraft(response.campaign);
+                      setSaveState({ type: null, message: "" });
+                    })
+                    .catch((error) => {
+                      console.error("[CampaignSettings] Failed to reset campaign settings", error);
+                      setSaveState({ type: "error", message: "Could not reload campaign settings." });
+                    })
+                    .finally(() => setSettingsLoading(false));
+                }
               }}
 	              className="px-4 py-2 rounded-xl bg-white/5 text-zinc-300 hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-50"
             >
@@ -528,7 +621,7 @@ export default function CampaignSettings() {
             <button
               type="button"
               onClick={onSave}
-	              disabled={saving || deleting}
+              disabled={saving}
 	              className="px-4 py-2 rounded-xl bg-linear-to-r from-blue-500 to-cyan-500 text-white font-medium hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
             >
               {saving ? "Saving..." : "Save"}
@@ -536,13 +629,15 @@ export default function CampaignSettings() {
 
             <button
               type="button"
-              onClick={onDeleteCampaign}
-	              disabled={deleting || saving}
+	              disabled
 	              className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-red-500/15 border border-red-500/40 text-red-200 hover:bg-red-500/25 disabled:cursor-not-allowed disabled:opacity-50"
             >
               <Trash2 className="w-4 h-4" />
-              {deleting ? "Deleting..." : "Delete Campaign"}
+              Delete Campaign (temporarily unavailable)
             </button>
+            <p className="self-center text-xs text-zinc-300/70">
+              Campaign deletion is temporarily unavailable while #364 defines the safe lifecycle.
+            </p>
             {saveState.type === "success" && (
               <div className="mb-4 inline-flex items-center gap-2 rounded-full border border-emerald-400/20 bg-emerald-400/10 px-3 py-1.5 text-emerald-200 text-sm">
                 <CheckCircle2 className="w-4 h-4" />
@@ -630,16 +725,6 @@ export default function CampaignSettings() {
                   />
                 </div>
 
-                <div>
-                  <label className="block text-sm text-zinc-200/95 mb-1">High-level intro / lore</label>
-                  <textarea
-                    value={draft.publicLore || ""}
-                    onChange={(e) => update("publicLore", e.target.value)}
-                    rows={5}
-                    placeholder="Public-facing intro lore / campaign premise…"
-                    className="w-full rounded-xl border border-white/10 bg-white/[0.03] px-3.5 py-2.5 text-sm text-white placeholder:text-zinc-400/80 shadow-inner shadow-black/10 focus:outline-none focus:ring-2 focus:ring-fuchsia-400/20"
-                  />
-                </div>
               </div>
             </div>
 	          </section>
@@ -650,9 +735,7 @@ export default function CampaignSettings() {
           <section className="relative overflow-hidden rounded-3xl border border-fuchsia-500/22 bg-zinc-950/55 p-5 shadow-[0_0_0_1px_rgba(217,70,239,0.05),0_0_44px_rgba(168,85,247,0.10)] before:pointer-events-none before:absolute before:inset-0 before:bg-[radial-gradient(circle_at_top_left,rgba(217,70,239,0.15),transparent_34%),radial-gradient(circle_at_bottom_right,rgba(99,102,241,0.12),transparent_36%),radial-gradient(circle_at_center,rgba(168,85,247,0.07),transparent_42%)] before:opacity-100 before:content-['']">
             <div className="relative z-10">
               <h2 className="text-lg font-semibold mb-2">GM-only notes</h2>
-              <p className="mb-4 text-sm text-zinc-300/70">
-                Hidden campaign truth, prep notes, secret timelines, and anything the players are not supposed to see.
-              </p>
+              <p className="mb-4 text-sm text-zinc-300/70">Private prep notes and campaign truth that players must not receive.</p>
 
               <div className="space-y-3">
                 <div>
@@ -666,58 +749,6 @@ export default function CampaignSettings() {
                   />
                 </div>
 
-                <div>
-                  <label className="block text-sm text-zinc-200/95 mb-1">Private campaign lore</label>
-                  <textarea
-                    value={draft.privateLore || ""}
-                    onChange={(e) => update("privateLore", e.target.value)}
-                    rows={4}
-                    placeholder="Secrets, true history, hidden truths…"
-                    className="w-full rounded-xl border border-white/10 bg-white/[0.03] px-3.5 py-2.5 text-sm text-white placeholder:text-zinc-400/80 shadow-inner shadow-black/10 focus:outline-none focus:ring-2 focus:ring-fuchsia-400/20"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-sm text-zinc-200/95 mb-1">Hidden factions / arcs</label>
-                  <textarea
-                    value={draft.hiddenFactions || ""}
-                    onChange={(e) => update("hiddenFactions", e.target.value)}
-                    rows={3}
-                    placeholder="Who is pulling strings? Which arcs are actually happening?"
-                    className="w-full rounded-xl border border-white/10 bg-white/[0.03] px-3.5 py-2.5 text-sm text-white placeholder:text-zinc-400/80 shadow-inner shadow-black/10 focus:outline-none focus:ring-2 focus:ring-fuchsia-400/20"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-sm text-zinc-200/95 mb-1">Hidden timelines</label>
-                  <textarea
-                    value={draft.hiddenTimelines || ""}
-                    onChange={(e) => update("hiddenTimelines", e.target.value)}
-                    rows={3}
-                    placeholder="Off-screen events / clocks / what advances between sessions…"
-                    className="w-full rounded-xl border border-white/10 bg-white/[0.03] px-3.5 py-2.5 text-sm text-white placeholder:text-zinc-400/80 shadow-inner shadow-black/10 focus:outline-none focus:ring-2 focus:ring-fuchsia-400/20"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-sm text-zinc-200/95 mb-1">Meta commentary</label>
-                  <textarea
-                    value={draft.metaCommentary || ""}
-                    onChange={(e) => update("metaCommentary", e.target.value)}
-                    rows={3}
-                    placeholder="How you prep, themes, tone rules, pacing notes…"
-                    className="w-full rounded-xl border border-white/10 bg-white/[0.03] px-3.5 py-2.5 text-sm text-white placeholder:text-zinc-400/80 shadow-inner shadow-black/10 focus:outline-none focus:ring-2 focus:ring-fuchsia-400/20"
-                  />
-                </div>
-
-                <div className="rounded-2xl border border-white/10 bg-white/[0.035] p-4 shadow-[0_0_24px_rgba(168,85,247,0.05)]">
-                  <p className="text-sm text-zinc-300 font-medium mb-1">
-                    Visibility defaults (placeholder)
-                  </p>
-                  <p className="text-sm text-zinc-300/75">
-                    Later: default visibility rules for new Sessions / Lore / Items, etc.
-                  </p>
-                </div>
               </div>
             </div>
 	          </section>
@@ -731,47 +762,63 @@ export default function CampaignSettings() {
                 Invite players, review current campaign membership, track invite status, and manage character assignments.
               </p>
 
-              <div className="rounded-xl border border-white/10 bg-white/[0.025] p-3.5 mb-4 shadow-[0_0_20px_rgba(168,85,247,0.04)]">
-                <p className="text-sm text-zinc-200 font-medium mb-2">Invite player</p>
-                <p className="mb-3 text-xs text-zinc-300/70">
-                  Create a pending invitation for the active campaign. Character assignment support will live here.
-                </p>
-                <InvitePlayerForm
-                  availabilityVersion={campaignPeopleVersion}
-                  onInvitationCreated={() => {
-                    setCampaignPeopleVersion((value) => value + 1);
-                    setSaveState({ type: "success", message: "Invitation created." });
-                  }}
-                />
-              </div>
+              {canManageInvitations ? (
+                <>
+                  <div className="rounded-xl border border-white/10 bg-white/[0.025] p-3.5 mb-4 shadow-[0_0_20px_rgba(168,85,247,0.04)]">
+                    <p className="text-sm text-zinc-200 font-medium mb-2">Invite player</p>
+                    <p className="mb-3 text-xs text-zinc-300/70">
+                      Create a pending invitation for the active campaign and optionally reserve an available character.
+                    </p>
+                    <InvitePlayerForm
+                      availabilityVersion={campaignPeopleVersion}
+                      onInvitationCreated={() => {
+                        setCampaignPeopleVersion((value) => value + 1);
+                        setSaveState({ type: "success", message: "Invitation created." });
+                      }}
+                    />
+                  </div>
+                </>
+              ) : null}
 
               <div className="rounded-2xl border border-white/10 bg-white/[0.035] p-4 shadow-[0_0_24px_rgba(168,85,247,0.05)]">
                 <div className="mb-3 flex items-center justify-between gap-3">
-                  <p className="text-sm text-zinc-200 font-medium">Current campaign members & invites</p>
+                  <p className="text-sm text-zinc-200 font-medium">Campaign people</p>
                   <span className="text-xs text-zinc-300/70">
-                    {campaignPeopleLoading ? "Loading…" : `${campaignPeople.length} record${campaignPeople.length === 1 ? "" : "s"}`}
+                    {campaignPeopleLoading
+                      ? "Loading…"
+                      : `${memberPeople.length} member${memberPeople.length === 1 ? "" : "s"} · ${invitationPeople.length} invitation${invitationPeople.length === 1 ? "" : "s"}`}
                   </span>
                 </div>
 
+                {invitationActionError ? (
+                  <p role="alert" className="mb-3 rounded-xl border border-red-400/20 bg-red-400/10 px-3 py-2 text-sm text-red-100">
+                    {invitationActionError}
+                  </p>
+                ) : null}
+                {invitationActionNotice ? (
+                  <p role="status" className="mb-3 rounded-xl border border-emerald-400/20 bg-emerald-400/10 px-3 py-2 text-sm text-emerald-100">
+                    {invitationActionNotice}
+                  </p>
+                ) : null}
+
                 {campaignPeopleLoading ? (
-                  <p className="text-sm text-zinc-300/75">Loading campaign members and invitations…</p>
+                  <p className="text-sm text-zinc-300/75">Loading campaign people…</p>
                 ) : campaignPeople.length === 0 ? (
-                  <p className="text-sm text-zinc-300/75">No members or pending invites for this campaign yet.</p>
+                  <p className="text-sm text-zinc-300/75">No campaign people or invitations yet.</p>
                 ) : (
-                  <div className="overflow-x-auto overflow-y-visible pb-24">
-                    <table className="w-full min-w-[920px] border-separate border-spacing-y-2">
+                  <div className="overflow-x-auto overflow-y-visible">
+                    <table className="w-full min-w-[880px] border-separate border-spacing-y-2">
                       <thead>
                         <tr className="text-left text-xs uppercase tracking-[0.18em] text-zinc-400/80">
                           <th className="pb-2 pr-4 font-medium">Person</th>
-                          <th className="pb-2 pr-4 font-medium">Invite status</th>
-                          <th className="pb-2 pr-4 font-medium">Workspace role</th>
-                          <th className="pb-2 pr-4 font-medium">Campaign role</th>
+                          <th className="pb-2 pr-4 font-medium">Status</th>
+                          <th className="pb-2 pr-4 font-medium">Access</th>
                           <th className="pb-2 pr-4 font-medium">Assigned characters</th>
                           <th className="pb-2 font-medium">Actions</th>
                         </tr>
                       </thead>
                       <tbody>
-                        {campaignPeople.map((person) => (
+                        {memberPeople.map((person) => (
                           <tr key={person.id} className="align-top">
                             <td className="rounded-l-2xl border-y border-l border-white/10 bg-white/[0.025] px-4 py-3">
                               <div className="space-y-1">
@@ -783,19 +830,14 @@ export default function CampaignSettings() {
                             </td>
                             <td className="border-y border-white/10 bg-white/[0.025] py-3">
                               <span
-                                className={`inline-flex rounded-full border px-2.5 py-1 text-xs font-medium ${person.status === "accepted"
-                                  ? "border-emerald-400/20 bg-emerald-400/10 text-emerald-200"
-                                  : "border-amber-400/20 bg-amber-400/10 text-amber-200"
-                                  }`}
+                                className={`inline-flex rounded-full border px-2.5 py-1 text-xs font-medium ${invitationStatusClass(person.status)}`}
                               >
                                 {person.status}
                               </span>
                             </td>
                             <td className="border-y border-white/10 bg-white/[0.025] px-4 py-3 text-sm text-zinc-200">
-                              {person.workspaceRole}
-                            </td>
-                            <td className="border-y border-white/10 bg-white/[0.025] px-4 py-3 text-sm text-zinc-200">
-                              {person.campaignRole}
+                              <p>Workspace {person.workspaceRole}</p>
+                              <p className="mt-1 text-xs text-zinc-400">Campaign {person.campaignRole}</p>
                             </td>
                             <td className="border-y border-white/10 bg-white/[0.025] px-4 py-3">
                               {person.characterIds?.length ? (
@@ -856,61 +898,93 @@ export default function CampaignSettings() {
                               ) : null}
                             </td>
                             <td className="rounded-r-2xl border-y border-r border-white/10 bg-white/[0.025] px-4 py-3">
-                              <div className="relative flex justify-end overflow-visible">
+                              <div className="flex justify-end">
                                 <button
                                   type="button"
-	                                  onClick={() =>
-                                    setOpenActionsId((current) =>
-                                      current === person.id ? null : person.id
-                                    )
-                                  }
-	                                  disabled={Boolean(peopleActionId)}
-	                                  className="inline-flex h-9 w-9 items-center justify-center rounded-xl border border-white/10 bg-white/[0.03] text-zinc-200 transition hover:bg-white/[0.06] disabled:cursor-not-allowed disabled:opacity-50"
+                                  onClick={() => onRemoveCampaignMember(person.docId)}
+                                  disabled={Boolean(peopleActionId)}
+                                  className="inline-flex items-center gap-2 rounded-xl border border-red-400/20 bg-red-400/10 px-3 py-2 text-xs text-red-100 transition hover:bg-red-400/20 disabled:cursor-not-allowed disabled:opacity-50"
                                 >
-                                  <MoreHorizontal className="h-4 w-4" />
+                                  <UserMinus className="h-4 w-4" />
+                                  {peopleActionId === `remove-${person.docId}`
+                                    ? "Removing…"
+                                    : "Remove"}
                                 </button>
-
-                                {openActionsId === person.id ? (
-                                  <div className="absolute right-0 top-11 z-30 min-w-[200px] overflow-hidden rounded-2xl border border-white/10 bg-zinc-950/95 shadow-[0_12px_30px_rgba(0,0,0,0.35)] backdrop-blur-xl">
-                                    {person.type === "invite" ? (
-                                      <button
-                                        type="button"
-	                                        onClick={() => onRevokeInvite(person.docId)}
-	                                        disabled={Boolean(peopleActionId)}
-	                                        className="flex w-full items-center gap-2 px-3 py-2.5 text-left text-sm text-red-200 transition hover:bg-red-400/10 disabled:cursor-not-allowed disabled:opacity-50"
-                                      >
-                                        <MailX className="h-4 w-4" />
-                                        Revoke invite
-                                      </button>
-                                    ) : (
-                                      <>
-                                        <button
-                                          type="button"
-	                                          onClick={() => {
-                                            setOpenActionsId(null);
-                                            window.alert("Character assignment actions are next up in #84.");
-                                          }}
-	                                          disabled={Boolean(peopleActionId)}
-	                                          className="flex w-full items-center gap-2 px-3 py-2.5 text-left text-sm text-zinc-200 transition hover:bg-white/[0.06] disabled:cursor-not-allowed disabled:opacity-50"
-                                        >
-                                          <Plus className="h-4 w-4" />
-                                          Assign character
-                                        </button>
-                                        <button
-                                          type="button"
-	                                          onClick={() => onRemoveCampaignMember(person.docId)}
-	                                          disabled={Boolean(peopleActionId)}
-	                                          className="flex w-full items-center gap-2 px-3 py-2.5 text-left text-sm text-red-200 transition hover:bg-red-400/10 disabled:cursor-not-allowed disabled:opacity-50"
-                                        >
-                                          <UserMinus className="h-4 w-4" />
-                                          Remove from campaign
-                                        </button>
-                                      </>
-                                    )}
-                                  </div>
+                              </div>
+                            </td>
+                          </tr>
+                        ))}
+                        {pendingInvitationPeople.map((person) => (
+                          <tr key={person.id} className="align-top">
+                            <td className="rounded-l-2xl border-y border-l border-amber-400/15 bg-amber-400/[0.035] px-4 py-3">
+                              <div className="space-y-1">
+                                <p className="break-all text-sm font-medium text-zinc-100">{person.email}</p>
+                                <p className="text-xs text-zinc-400">Pending invitation · expires {formatTimestamp(person.expiresAt)}</p>
+                              </div>
+                            </td>
+                            <td className="border-y border-amber-400/15 bg-amber-400/[0.035] py-3">
+                              <span className={`inline-flex rounded-full border px-2.5 py-1 text-xs font-medium ${invitationStatusClass(person.status)}`}>{person.status}</span>
+                            </td>
+                            <td className="border-y border-amber-400/15 bg-amber-400/[0.035] px-4 py-3 text-sm text-zinc-200">
+                              <p>Workspace {person.workspaceRole}</p>
+                              <p className="mt-1 text-xs text-zinc-400">Campaign {person.campaignRole}</p>
+                            </td>
+                            <td className="border-y border-amber-400/15 bg-amber-400/[0.035] px-4 py-3">
+                              {person.characterIds?.length ? (
+                                <div className="flex flex-wrap gap-2">
+                                  {person.characterIds.map((characterId) => (
+                                    <span key={`${person.id}-${characterId}`} className="inline-flex rounded-full border border-cyan-400/20 bg-cyan-400/10 px-2.5 py-1 text-xs text-cyan-100">
+                                      Reserved: {getCharacterName(characterId)}
+                                    </span>
+                                  ))}
+                                </div>
+                              ) : <span className="text-xs text-zinc-500">No characters reserved</span>}
+                            </td>
+                            <td className="rounded-r-2xl border-y border-r border-amber-400/15 bg-amber-400/[0.035] px-4 py-3">
+                              {canManageInvitations ? (
+                                <div className="flex flex-wrap justify-end gap-2">
+                                  {(() => {
+                                    const resendSecondsRemaining = getResendSecondsRemaining(person);
+                                    const isResendCoolingDown = resendSecondsRemaining > 0;
+                                    const cooldownDescriptionId = `invitation-resend-${person.docId}`;
+                                    return (
+                                  <>
+                                    <button type="button" disabled={Boolean(peopleActionId) || isResendCoolingDown} onClick={() => onInvitationAction(person, "resend")} aria-describedby={isResendCoolingDown ? cooldownDescriptionId : undefined} className="rounded-lg border border-white/10 bg-white/[0.04] px-2.5 py-1.5 text-xs text-zinc-100 transition hover:bg-white/[0.08] disabled:cursor-not-allowed disabled:opacity-50">
+                                      {peopleActionId === `resend-${person.docId}` ? "Resending…" : isResendCoolingDown ? `Resend in ${resendSecondsRemaining}s` : "Resend"}
+                                    </button>
+                                    {isResendCoolingDown ? (
+                                      <span id={cooldownDescriptionId} className="sr-only">
+                                        Resend becomes available in {resendSecondsRemaining} seconds.
+                                      </span>
+                                    ) : null}
+                                  </>
+                                    );
+                                  })()}
+                                  <button type="button" disabled={Boolean(peopleActionId)} onClick={() => onInvitationAction(person, "revoke")} className="rounded-lg border border-red-400/20 bg-red-400/10 px-2.5 py-1.5 text-xs text-red-100 transition hover:bg-red-400/20 disabled:cursor-not-allowed disabled:opacity-50">
+                                    {peopleActionId === `revoke-${person.docId}` ? "Revoking…" : "Revoke"}
+                                  </button>
+                                </div>
+                              ) : <span className="text-xs text-zinc-500">—</span>}
+                            </td>
+                          </tr>
+                        ))}
+                        {invitationHistoryPeople.map((person) => (
+                          <tr key={person.id} className="align-top text-zinc-400">
+                            <td className="rounded-l-2xl border-y border-l border-white/8 bg-white/[0.015] px-4 py-3">
+                              <div className="space-y-1">
+                                <p className="break-all text-sm text-zinc-300">{person.email}</p>
+                                <p className="text-xs text-zinc-500">{getInvitationHistorySummary(person)}</p>
+                                {person.status === "accepted" ? (
+                                  <p className="text-xs text-zinc-500">No active campaign membership</p>
                                 ) : null}
                               </div>
                             </td>
+                            <td className="border-y border-white/8 bg-white/[0.015] py-3"><span className={`inline-flex rounded-full border px-2.5 py-1 text-xs font-medium ${invitationStatusClass(person.status)}`}>{person.status === "accepted" ? "Accepted invitation" : person.status}</span></td>
+                            <td className="border-y border-white/8 bg-white/[0.015] px-4 py-3 text-sm"><p>Workspace {person.workspaceRole}</p><p className="mt-1 text-xs text-zinc-500">Campaign {person.campaignRole}</p></td>
+                            <td className="border-y border-white/8 bg-white/[0.015] px-4 py-3">
+                              {person.characterIds?.length ? <span className="text-xs text-zinc-400">{person.characterIds.length} character{person.characterIds.length === 1 ? "" : "s"} reserved</span> : <span className="text-xs text-zinc-500">No characters reserved</span>}
+                            </td>
+                            <td className="rounded-r-2xl border-y border-r border-white/8 bg-white/[0.015] px-4 py-3 text-xs text-zinc-500">—</td>
                           </tr>
                         ))}
                       </tbody>
@@ -927,17 +1001,7 @@ export default function CampaignSettings() {
           <div className="relative z-10">
             <h3 className="text-base font-semibold text-white mb-2">Metadata</h3>
 
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-              <div>
-                <label className="block text-sm text-zinc-200/95 mb-1">Tags</label>
-                <input
-                  value={draft.tags || ""}
-                  onChange={(e) => update("tags", e.target.value)}
-                  placeholder="comma-separated (e.g. feywild, intrigue, horror)"
-                  className="w-full rounded-xl border border-white/10 bg-white/[0.03] px-3.5 py-2.5 text-sm text-white placeholder:text-zinc-400/80 shadow-inner shadow-black/10 focus:outline-none focus:ring-2 focus:ring-fuchsia-400/20"
-                />
-                <p className="mt-1 text-sm text-zinc-300/75">Placeholder: we’ll switch to chips later.</p>
-              </div>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
 
               <div>
                 <label className="block text-sm text-zinc-200/95 mb-1">Start date</label>
@@ -960,12 +1024,6 @@ export default function CampaignSettings() {
               </div>
             </div>
 
-            <div className="mt-3 rounded-xl border border-white/10 bg-white/[0.025] p-3.5 shadow-[0_0_20px_rgba(168,85,247,0.04)]">
-              <p className="text-sm text-zinc-300 font-medium mb-1">Cross-links (placeholder)</p>
-              <p className="text-sm text-zinc-300/75">
-                Later: Sessions / NPCs / Items / Maps / Lore / Arcs / Quests counts and links for this campaign.
-              </p>
-            </div>
           </div>
         </section>
 

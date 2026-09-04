@@ -1,17 +1,18 @@
 import type { VercelRequest, VercelResponse } from "@vercel/node";
-import { and, eq, inArray } from "drizzle-orm";
+import { and, eq, gt, inArray, isNull, or } from "drizzle-orm";
 
 import {
   getCurrentUser,
-  requireCampaignGm,
   requireCampaignMember,
   resolveCampaignBySlug,
 } from "../access.js";
 import { setCorsHeaders } from "../cors.js";
 import { db } from "../db.js";
+import { canViewAsGm } from "../viewer-mode.js";
 import { characterAssignments } from "../../../db/schema/characterAssignments.js";
 import { characters } from "../../../db/schema/characters.js";
 import { invitations } from "../../../db/schema/invitations.js";
+import { getInvitationCharacterIdsByInvitationId } from "../invitation-characters.js";
 
 function getQueryValue(value: string | string[] | undefined) {
   return Array.isArray(value) ? value[0] : value;
@@ -21,13 +22,6 @@ function getBodyString(req: VercelRequest, key: string) {
   if (!req.body || typeof req.body !== "object") return "";
   const value = (req.body as Record<string, unknown>)[key];
   return typeof value === "string" ? value.trim() : "";
-}
-
-function parseInvitationCharacterIds(value?: string | null) {
-  return String(value || "")
-    .split(",")
-    .map((id) => id.trim())
-    .filter(Boolean);
 }
 
 function stripGmOnlyCharacterFields(data: Record<string, unknown>) {
@@ -41,13 +35,19 @@ async function getPendingAssignedCharacterIds(campaignId: string) {
   const pendingInvitations = await db
     .select()
     .from(invitations)
-    .where(and(eq(invitations.campaignId, campaignId), eq(invitations.status, "pending")));
+    .where(
+      and(
+        eq(invitations.campaignId, campaignId),
+        eq(invitations.status, "pending"),
+        or(isNull(invitations.expiresAt), gt(invitations.expiresAt, new Date()))
+      )
+    );
 
-  return new Set(
-    pendingInvitations.flatMap((invitation) =>
-      parseInvitationCharacterIds(invitation.characterId)
-    )
+  const characterIdsByInvitationId = await getInvitationCharacterIdsByInvitationId(
+    db,
+    pendingInvitations
   );
+  return new Set(Array.from(characterIdsByInvitationId.values()).flat());
 }
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
@@ -74,7 +74,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       campaignId: campaign.id,
       userId: currentUser.id,
     });
-    const isGm = membership.role === "gm";
+    const isGm = canViewAsGm(req, membership.role);
 
     if (req.method === "GET") {
       const assignments = isGm
@@ -119,10 +119,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       });
     }
 
-    await requireCampaignGm({
-      campaignId: campaign.id,
-      userId: currentUser.id,
-    });
+    if (!isGm) {
+      throw new Error("Campaign GM mode required");
+    }
 
     if (req.method === "POST") {
       const userId = getBodyString(req, "userId");

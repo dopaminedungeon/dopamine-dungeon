@@ -1,8 +1,6 @@
 import { createContext, useCallback, useContext, useEffect, useState } from "react";
 import { useAuth } from "./AuthContext";
-import { getApiMe } from "../data/api/apiClient";
-import { createTenant as createTenantRepo } from "../data/tenants/tenant.repo";
-import { createTenantMember } from "../data/tenantMembers/tenantMembers.repo";
+import { createApiWorkspace, getApiMe } from "../data/api/apiClient";
 
 const TenantContext = createContext(null);
 const TENANT_STORAGE_KEY = "dd_selectedTenantId";
@@ -90,6 +88,10 @@ export function TenantProvider({ children }) {
           (m) => m.workspaceId === workspace.id
         );
 
+        if (!membership) {
+          return null;
+        }
+
         // Keep app state/localStorage on the legacy-safe slug, while retaining the PG UUID for joins.
         return {
           ...workspace,
@@ -97,7 +99,7 @@ export function TenantProvider({ children }) {
           postgresWorkspaceId: workspace.id,
           role: membership?.role ?? null,
         };
-      }).filter((workspace) => Boolean(workspace.tenantId));
+      }).filter((workspace) => Boolean(workspace?.tenantId));
 
       setTenants(loaded);
 
@@ -146,44 +148,31 @@ export function TenantProvider({ children }) {
     writeStoredTenantId(normalizedTenantId);
   };
 
-  const createTenant = async ({ name, description = "" }) => {
+  const createTenant = async ({ name, idempotencyKey }) => {
     if (!user) {
       throw new Error("You must be signed in to create a workspace.");
     }
 
     const trimmedName = String(name || "").trim();
-    const trimmedDescription = String(description || "").trim();
-
     if (!trimmedName) {
       throw new Error("Workspace name is required.");
     }
 
-    const created = await createTenantRepo({
-      name: trimmedName,
-      description: trimmedDescription,
-      createdBy: user.uid,
-    });
-
-    const tenantId = created?.tenantId || created?.id;
-    if (!tenantId) {
-      throw new Error("Workspace was created without an id.");
+    if (!idempotencyKey) {
+      throw new Error("Workspace creation request is invalid.");
     }
 
-    await createTenantMember({
-      tenantId,
-      userId: user.uid,
-      role: "owner",
-      email: user.email || "",
-      displayName: user.displayName || user.email || "",
-      createdAt: new Date().toISOString(),
-      addedBy: user.uid,
+    const created = await createApiWorkspace({
+      name: trimmedName,
+      idempotencyKey,
     });
+    const tenantId = created.workspace.slug;
 
     await loadTenants();
     selectTenant(tenantId);
 
     return {
-      ...created,
+      ...created.workspace,
       tenantId,
     };
   };

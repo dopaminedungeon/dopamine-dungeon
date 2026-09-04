@@ -1,5 +1,12 @@
 # User Flows
 
+> Intended UX contract. Verify implemented routing, authentication, and
+> persistence against `docs/product/CURRENT_STATE.md` and
+> `docs/architecture/SYSTEM_OVERVIEW.md`.
+>
+> Arcs, Quests, and Conditions flows in this document are future intended-state
+> references. Their former mock-backed pages are not mounted or visible.
+
 This document describes **all user journeys** in Dopamine Dungeon — both happy and unhappy paths.
 Every flow begins with **App Open** and builds on shared system guarantees.
 
@@ -126,7 +133,7 @@ Recovery:
 ### Unhappy Path — Network / Backend Failure During Entry
 
 Examples:
-- Firestore unavailable
+- application data service unavailable
 - Network offline
 - Timeout during campaign fetch
 
@@ -738,11 +745,9 @@ GM can:
 5. GM navigates freely between:
    - **Sessions** (upcoming / past)
    - **NPCs**
-   - **Arcs**
    - **Maps**
    - **Items**
-   - **Conditions**
-   - **Relationships**
+   - **Lore**
 
 6. GM opens relevant entities in **view mode by default**.
 7. GM selectively enters **edit mode** where needed.
@@ -760,8 +765,7 @@ GM can:
 11. GM may:
     - reference NPCs
     - check Maps
-    - inspect Conditions
-    - review Relationships
+    - review linked entities and cross-links
 
 12. GM switches between entities without losing session context.
 
@@ -771,9 +775,8 @@ GM can:
 
 13. GM updates:
     - session summary
-    - new conditions
     - item changes
-    - relationship changes
+    - cross-link changes
 14. GM saves changes.
 15. GM exits session context.
 
@@ -837,10 +840,9 @@ flowchart TB
     ROLE0 --> MODE0["[CTX] Mode=GM (default)<br>(toggle available)"]
     MODE0 --> SHELL["[L] AppShell"]
     SHELL --> SIDEBAR["[N] Sidebar (GM view)<br>(shows GM-only pages)"] & TOPBAR["[N] TopBar<br>(workspace/campaign + mode toggle)"] & HOME["[P] Dashboard (GM)"]
-    HOME --> CS["[P] CampaignSettings (GM-only)"] & ARCS["[P] Arcs (GM-only)"] & REL["[P] Relationships (GM-only)"] & QUESTS["[P] Quests (GM-only)"] & COND["[P] Conditions (GM-only)"] & PCS["[P] PCs (GM)"] & ITEMS["[P] Items"] & BAG["[P] Bag of Holding<br>(shared, campaign-scoped)"] & LORE["[P] Lore"] & MAPS["[P] Maps"] & NPCS["[P] NPCs"] & SESS["[P] Sessions"]
+    HOME --> CS["[P] CampaignSettings (GM-only)"] & ARCS["[P] Arcs (GM-only)"] & QUESTS["[P] Quests (GM-only)"] & COND["[P] Conditions (GM-only)"] & PCS["[P] PCs (GM)"] & ITEMS["[P] Items"] & BAG["[P] Bag of Holding<br>(shared, campaign-scoped)"] & LORE["[P] Lore"] & MAPS["[P] Maps"] & NPCS["[P] NPCs"] & SESS["[P] Sessions"]
     CS --> CS_SAVE["[S] Save settings<br>(success/fail handled inline)"]
     ARCS --> ARCP["[P] ArcProfile (:arcId)<br>(view/edit toggle)"]
-    REL --> RELP["[P] RelationshipProfile (:relId)"]
     QUESTS --> QUESTP["[P] QuestProfile (:questId)"]
     COND --> CONDP["[P] ConditionProfile (:conditionId)<br>(edit)"]
     PCS --> PC_CREATE["[A] Create New PC"] & PC_LIST["[P] PC Cards list<br>(all PCs in campaign)"]

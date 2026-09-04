@@ -34,7 +34,11 @@ A user may belong to **multiple tenants**.
 A **Campaign**:
 - always belongs to exactly **one tenant**
 - is the primary gameplay context
-- contains all gameplay entities (PCs, NPCs, Sessions, Items, Arcs, etc.)
+- contains active gameplay entities such as PCs, NPCs, Sessions, Items,
+  Locations, and Lore
+
+Arc, Quest, and Condition remain reserved entity-link concepts, not active
+standalone pages.
 
 Campaigns **never cross tenant boundaries**.
 
@@ -109,8 +113,8 @@ A **Campaign Role** defines what a user is allowed to do **within a specific cam
 
 Campaign roles answer questions like:
 - Can this user edit campaign content?
-- Can they see GM-only pages (Arcs, Quests, Relationships)?
-- Can they assign PCs, items, or conditions?
+- Can they see GM-only pages such as Campaign Settings?
+- Can they assign PCs or items?
 
 Campaign roles are:
 - assigned per **campaign**
@@ -127,7 +131,7 @@ A user has **exactly one role per campaign**.
 - Full campaign management permissions
 - Access to GM-only routes and features
 - Can create and edit all campaign content
-- Can assign PCs, items, conditions, etc.
+- Can assign PCs and items
 
 #### CampaignPlayer
 - Participates in the campaign

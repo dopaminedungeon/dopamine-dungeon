@@ -9,6 +9,8 @@ import locationsHandler from "../src/server/api-handlers/locations.js";
 import npcsHandler from "../src/server/api-handlers/npcs.js";
 import sessionsHandler from "../src/server/api-handlers/sessions.js";
 import { setCorsHeaders } from "../src/server/cors.js";
+import { verifyAuthHeader } from "../src/server/auth.js";
+import { hasProductionAuditClaim, runProductionReadOnlyAudit, validateProductionAuditTarget } from "../src/server/productionReadOnlyAudit.js";
 
 function getQueryValue(value: string | string[] | undefined) {
   return Array.isArray(value) ? value[0] : value;
@@ -37,6 +39,24 @@ function getResource(req: VercelRequest) {
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   const resource = getResource(req);
+
+  // Temporary #298 Production read-only audit — remove immediately after
+  // evidence capture. This branch intentionally precedes application routing.
+  if (resource === "productionReadOnlyAudit") {
+    if (req.method !== "GET") return res.status(405).json({ ok: false, error: "Method not allowed" });
+    if (!validateProductionAuditTarget(process.env).ok) {
+      return res.status(404).json({ ok: false, error: "Audit unavailable" });
+    }
+    try {
+      const token = await verifyAuthHeader(req.headers.authorization);
+      if (!hasProductionAuditClaim(token as Record<string, unknown>)) {
+        return res.status(403).json({ ok: false, error: "Audit authorization required" });
+      }
+      return res.status(200).json(await runProductionReadOnlyAudit());
+    } catch {
+      return res.status(403).json({ ok: false, error: "Production audit unavailable" });
+    }
+  }
 
   if (resource === "bag") {
     return bagHandler(req, res);

@@ -1,12 +1,12 @@
 # Current State
 
-Last updated: 2026-07-24
+Last updated: 2026-08-24
 Maintainer: Magda
 
 ## Current release
 
-Development version: v0.6
-Production version: v0.5
+- Development version: v0.6
+- Production version: v0.5
 
 ## Current product focus
 
@@ -18,12 +18,15 @@ Production version: v0.5
 
 - Multi-workspace and multi-campaign foundation
 - Firebase authentication
-- Neon-backed core data
+- Neon-backed core campaign entities; transitional Firebase/Firestore paths
+  remain for documented bootstrap, membership, invitation, settings, mail, and
+  legacy assignment flows
 - Sessions
 - Items and inventory
 - Campaign membership and invitations
 - Existing GM/player mode behaviour
 - Lore, Locations, NPCs
+- Typed entity links between active campaign entities
 
 Verify this list against the repository before relying on it.
 
@@ -31,9 +34,18 @@ Verify this list against the repository before relying on it.
 
 - Transitional upload of Location files
 - Non-persistent Campaign metadata
-- Placeholder links in multiple elements
-- Search engine
-- Quests & friendship meter (mocked)
+- Dashboard status signals are static guidance rather than activity-derived data
+- Global search is not implemented and no global search control is exposed
+- Friendship Index concepts (future; not implemented)
+
+The former standalone Relationships page and profile are retired. Relationship-
+like behavior remains available through typed entity cross-links, while future
+Friendship Index work will cover intentional PC-NPC and NPC-NPC relationship
+behavior.
+
+The former mock-backed Arcs, Quests, and Conditions screens are also retired.
+Their typed entity-link endpoints and allowed labels remain infrastructure for
+future, separately approved work.
 
 ## Current architecture risks
 
@@ -53,7 +65,8 @@ Verify this list against the repository before relying on it.
 
 ## Active iteration
 
-See `docs/sprints/current.md`.
+Iteration 2 is closed. The final retrospective and next-iteration handoff are
+in `docs/sprints/current.md`; roadmap priorities remain in `ROADMAP.md`.
 
 ## Do not change without an explicit decision
 

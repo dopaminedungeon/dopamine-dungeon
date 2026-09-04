@@ -459,15 +459,6 @@ function SelectInput({ value, onChange, disabled, children }) {
   );
 }
 
-function PlaceholderCard({ title, children }) {
-  return (
-    <section className="rounded-2xl border border-white/10 bg-white/5 p-5">
-      <h2 className="text-sm font-semibold uppercase tracking-wide text-zinc-300">{title}</h2>
-      <p className="mt-2 text-sm text-zinc-500">{children}</p>
-    </section>
-  );
-}
-
 function formatLinkLabel(label) {
   return String(label || "").replaceAll("_", " ");
 }
@@ -1967,8 +1958,6 @@ export default function NpcProfile() {
             onLinksChanged={setDraftLinks}
           />
 
-          <PlaceholderCard title="Relationships">Relationship links coming soon</PlaceholderCard>
-          <PlaceholderCard title="Quests">Quest links coming soon</PlaceholderCard>
         </div>
 
         {hasRightColumnContent ? (

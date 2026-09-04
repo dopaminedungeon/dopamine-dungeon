@@ -4,6 +4,13 @@ This document defines the **canonical, locked set of allowed entity link combina
 
 The goal of this system is to represent **narrative memory and mechanical state** across the campaign without introducing graph noise, ambiguity, or premature complexity.
 
+> **Implementation status:** Sessions, Lore, Maps/Locations, NPCs, Items, and
+> Bag of Holding currently use persisted typed links. PC remains a supported
+> endpoint with incomplete profile UI. Arc, Quest, and Condition remain
+> reserved endpoint and label contracts; their former mock-backed product
+> screens were retired by #319. Later UI sections in this document are
+> intended-state contracts, not claims that every page exists today.
+
 ---
 
 ## Entity Types
@@ -150,7 +157,7 @@ Player characters are actors with mechanical state.
 
 ### Not Allowed (v1)
 - 🚫 PC ↔ PC  
-  *(PC-to-PC social bonds may be handled by a dedicated Relationships module later.)*
+  *(PC-to-PC social bonds belong to future Friendship Index work, not a standalone page.)*
 
 ---
 
@@ -262,7 +269,8 @@ If a link exists, it is meaningful.
 - Each allowed entity pair has a **restricted label set**
 - Labels describe **function**, not flavor
 - UI wording may adapt per entity (e.g. “Appears in” vs “Includes”)
-- Labels are stable identifiers (safe for Firebase + filtering)
+- Labels are stable identifiers (safe for persisted filtering independent of
+  storage implementation)
 
 ---
 

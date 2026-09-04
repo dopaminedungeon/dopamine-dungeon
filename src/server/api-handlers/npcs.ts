@@ -9,6 +9,8 @@ import {
 } from "../access.js";
 import { setCorsHeaders } from "../cors.js";
 import { db } from "../db.js";
+import { npcReadWhere, stripGmOnlyNpcFields } from "../security-boundaries.js";
+import { canViewAsGm } from "../viewer-mode.js";
 import { npcs } from "../../../db/schema/npcs.js";
 
 type NpcRow = typeof npcs.$inferSelect;
@@ -38,12 +40,6 @@ function normalizeNpcType(value: unknown) {
 function normalizeNpcRole(value: unknown) {
   const role = normalizeString(value, "unknown").toLowerCase();
   return NPC_ROLE_VALUES.has(role) ? role : "unknown";
-}
-
-function stripGmOnlyNpcFields(data: Record<string, unknown>) {
-  const { gmNotes, ...safeData } = data;
-  void gmNotes;
-  return safeData;
 }
 
 function toNpcPayload(row: NpcRow, isGm: boolean) {
@@ -143,14 +139,13 @@ async function handleNpcs(req: VercelRequest, res: VercelResponse) {
       campaignId: campaign.id,
       userId: currentUser.id,
     });
-    const isGm = membership.role === "gm";
+    const isGm = canViewAsGm(req, membership.role);
 
-    const visibilityFilter = isGm
-      ? eq(npcs.campaignId, campaign.id)
-      : and(eq(npcs.campaignId, campaign.id), eq(npcs.visibility, "public"));
-    const whereClause = npcId
-      ? and(visibilityFilter, eq(npcs.id, npcId))
-      : visibilityFilter;
+    const whereClause = npcReadWhere(npcs, {
+      campaignId: campaign.id,
+      npcId,
+      isGm,
+    });
 
     const rows = await db.select().from(npcs).where(whereClause);
 

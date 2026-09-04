@@ -70,26 +70,6 @@ function formatList(values = []) {
   return values.filter(Boolean).join(", ");
 }
 
-function formatCurrencyLabel(currency = {}) {
-  if (!currency || typeof currency !== "object") return "—";
-
-  const summary = Object.entries(currency)
-    .filter(([, amount]) => Number(amount) > 0)
-    .map(([coin, amount]) => `${amount} ${coin}`)
-    .join(" • ");
-
-  return summary || "—";
-}
-
-function formatEntryPreview(value) {
-  if (!value) return "";
-  if (typeof value === "string") return value;
-  if (typeof value === "object") {
-    return value.name || value.description || value.label || "Unnamed entry";
-  }
-  return String(value);
-}
-
 function hasText(value) {
   return String(value ?? "").trim().length > 0;
 }
@@ -690,19 +670,11 @@ const PCProfile = () => {
   const abilities = stats.abilities || {};
   const saves = stats.saves || {};
   const rawSkills = stats.skills || {};
-  const defenses = stats.defenses || {};
   const identity = pc.identity || {};
   const narrative = pc.narrative || {};
   const proficiencies = pc.proficiencies || {};
   const inventory = pc.inventory || {};
   const equipment = Array.isArray(inventory.equipment) ? inventory.equipment : [];
-  const spells = Array.isArray(pc.spells) ? pc.spells : [];
-  const actions = pc.actions || {};
-  const weapons = Array.isArray(actions.weapons) ? actions.weapons : [];
-  const actionEntries = Array.isArray(actions.actions) ? actions.actions : [];
-  const bonusActionEntries = Array.isArray(actions.bonusActions) ? actions.bonusActions : [];
-  const reactionEntries = Array.isArray(actions.reactions) ? actions.reactions : [];
-  const otherActionEntries = Array.isArray(actions.other) ? actions.other : [];
   const features = Array.isArray(pc.features) ? pc.features : [];
   const feats = Array.isArray(pc.feats) ? pc.feats : [];
   const classes = Array.isArray(pc.classes) ? pc.classes : [];
@@ -781,7 +753,6 @@ const PCProfile = () => {
     .filter(Boolean)
     .join(" • ") || "—";
 
-  const currencySummary = formatCurrencyLabel(inventory.currency);
   const hasAbilityScores = Object.values(abilities).some((ability) =>
     hasNumber(ability?.score) || hasNumber(ability?.mod)
   );

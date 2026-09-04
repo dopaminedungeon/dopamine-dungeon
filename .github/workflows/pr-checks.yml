@@ -2,17 +2,22 @@ name: PR Checks
 
 on:
   push:
-    branches: [dev]
+    branches: [main, dev, 'release/**']
   pull_request:
-    branches: [main, dev]
+    branches: [main, dev, 'release/**']
 
 concurrency:
   group: pr-checks-${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
+permissions:
+  contents: read
+  pull-requests: write
+
 jobs:
-  checks:
-    runs-on: [self-hosted, macOS, X64]
+  trusted-quality-gate:
+    name: DD Quality Gate
+    runs-on: ubuntu-latest
 
     steps:
       - name: Checkout repository
@@ -27,7 +32,7 @@ jobs:
         run: corepack enable
 
       - name: Setup pnpm
-        run: corepack prepare pnpm@10.28.1 --activate
+        run: corepack prepare pnpm@11.9.0 --activate
 
       - name: Show versions
         run: |
@@ -42,12 +47,128 @@ jobs:
           pnpm config get onlyBuiltDependencies
 
       - name: Install dependencies
-        run: |
-          pnpm install --frozen-lockfile
-          pnpm approve-builds
+        run: pnpm install --frozen-lockfile
+
+      - name: Install Playwright Chromium
+        run: pnpm exec playwright install --with-deps chromium
 
       - name: Lint
-        run: pnpm lint || true
+        id: lint
+        run: pnpm lint
 
-      - name: Build
+      - name: Unit and domain tests
+        id: unit
+        if: always()
+        run: pnpm test:unit
+
+      - name: API integration tests
+        id: api
+        if: always()
+        run: pnpm test:api
+
+      - name: Boundary and security regression tests
+        id: boundary
+        if: always()
+        run: pnpm test:boundary
+
+      - name: API typecheck
+        id: api_typecheck
+        if: always()
+        run: pnpm typecheck:api
+
+      - name: E2E infrastructure typecheck
+        id: e2e_typecheck
+        if: always()
+        run: pnpm typecheck:e2e
+
+      - name: Production build
+        id: build
+        if: always()
         run: pnpm build
+
+      - name: Playwright PR smoke (advisory)
+        id: e2e_smoke
+        if: always()
+        continue-on-error: true
+        run: pnpm test:e2e:smoke
+
+      - name: Quality gate summary
+        if: always()
+        run: |
+          {
+            echo "## Dopamine Dungeon Quality Gate"
+            echo ""
+            echo "| Check | Result | Role |"
+            echo "|---|---|---|"
+            echo "| Lint | ${{ steps.lint.outcome }} | Blocking |"
+            echo "| Unit/domain tests | ${{ steps.unit.outcome }} | Blocking |"
+            echo "| API integration tests | ${{ steps.api.outcome }} | Blocking |"
+            echo "| Boundary/security tests | ${{ steps.boundary.outcome }} | Blocking |"
+            echo "| API typecheck | ${{ steps.api_typecheck.outcome }} | Blocking |"
+            echo "| E2E typecheck | ${{ steps.e2e_typecheck.outcome }} | Blocking |"
+            echo "| Production build | ${{ steps.build.outcome }} | Blocking |"
+            echo "| Playwright PR smoke | ${{ steps.e2e_smoke.outcome }} | Advisory |"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Update pull request quality gate comment
+        if: always() && github.event_name == 'pull_request'
+        continue-on-error: true
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const marker = "<!-- dd-quality-gate -->";
+            const blockingChecks = [
+              ["Lint", "${{ steps.lint.outcome }}"],
+              ["Unit/domain tests", "${{ steps.unit.outcome }}"],
+              ["API integration tests", "${{ steps.api.outcome }}"],
+              ["Boundary/security tests", "${{ steps.boundary.outcome }}"],
+              ["API typecheck", "${{ steps.api_typecheck.outcome }}"],
+              ["E2E typecheck", "${{ steps.e2e_typecheck.outcome }}"],
+              ["Production build", "${{ steps.build.outcome }}"],
+            ];
+            const smokeOutcome = "${{ steps.e2e_smoke.outcome }}";
+            const blockingPassed = blockingChecks.every(([, outcome]) => outcome === "success");
+            const blockingLines = blockingChecks.map(([name, outcome]) => {
+              const icon = outcome === "success" ? "✅" : outcome === "skipped" ? "⏭️" : "❌";
+              return `- ${icon} ${name}: \`${outcome}\``;
+            });
+            const smokeIcon =
+              smokeOutcome === "success" ? "✅" : smokeOutcome === "skipped" ? "⏭️" : "⚠️";
+            const runUrl = "${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}";
+            const body = [
+              marker,
+              "## DD Quality Gate",
+              "",
+              blockingPassed ? "✅ Blocking checks passed." : "❌ One or more blocking checks need attention.",
+              "",
+              "**Blocking**",
+              ...blockingLines,
+              "",
+              "**Advisory**",
+              `- ${smokeIcon} Playwright PR smoke: \`${smokeOutcome}\``,
+              "",
+              `[View workflow run](${runUrl})`,
+            ].join("\n");
+
+            const comments = await github.paginate(github.rest.issues.listComments, {
+              ...context.repo,
+              issue_number: context.issue.number,
+              per_page: 100,
+            });
+            const existingComment = comments.find(
+              (comment) => comment.user?.type === "Bot" && comment.body?.includes(marker)
+            );
+
+            if (existingComment) {
+              await github.rest.issues.updateComment({
+                ...context.repo,
+                comment_id: existingComment.id,
+                body,
+              });
+            } else {
+              await github.rest.issues.createComment({
+                ...context.repo,
+                issue_number: context.issue.number,
+                body,
+              });
+            }

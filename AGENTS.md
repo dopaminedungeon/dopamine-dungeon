@@ -55,6 +55,24 @@ Current core technologies include:
 
 Treat repository code as the source of truth when this list becomes stale.
 
+## Local development environments
+
+- Run the complete application with `pnpm vercel dev`. This is the canonical
+  local development command and serves both the Vite frontend and Vercel API
+  functions using the repository's local Vercel configuration.
+- Do not run a separate `pnpm dev` process beside `pnpm vercel dev`. Vercel uses
+  the repository `devCommand` to run the existing Vite script on its assigned
+  port and exposes one public local URL.
+- Use the full-stack command for authentication, protected API, persistence,
+  Neon-backed, and end-to-end manual verification. Confirm relevant `/api/*`
+  routes are served and inspect both browser and server errors.
+- `pnpm dev` starts only the Vite frontend. It is suitable for isolated frontend
+  work, but it is not evidence that authentication, API, database-backed, or
+  complete application workflows work.
+- Emulator-backed Playwright tests are a separate, fail-closed test environment.
+  Do not substitute development or production Firebase or Neon services for the
+  isolated test services configured by the test runner.
+
 ## Required validation
 
 Before completing a coding task:
@@ -69,6 +87,23 @@ Before completing a coding task:
 8. Review the final diff for unrelated changes.
 
 Use the commands documented in `docs/operations/TESTING.md`.
+
+## Browser and authentication testing
+
+- Run unit tests with `pnpm test`.
+- Run emulator-backed browser tests with `pnpm test:e2e`; do not invoke
+  Playwright directly because the wrapper supplies the guarded test environment.
+- Use `pnpm test:e2e:headed` for local visual debugging.
+- Use `pnpm firebase:emulators:auth` only when a persistent local Auth emulator
+  is needed. Emulator tests must use the `demo-dopamine-dungeon` project and
+  generated users; never point test mode at development, preview, or production.
+- Install the pinned browser once with `pnpm exec playwright install chromium`.
+- UI behaviour changes require relevant Playwright coverage where the workflow
+  can be exercised locally.
+- Authorization or visibility changes require explicit GM and player Playwright
+  coverage, including the denied or hidden case.
+- Do not weaken assertions, mark failing tests skipped/fixme, or bypass emulator
+  safety checks to make a test pass.
 
 ## Database safety
 

@@ -1,5 +1,9 @@
 import { auth } from "../../firebase/firebase";
 import { onAuthStateChanged } from "firebase/auth";
+import {
+  SELECTED_MODE_HEADER,
+  getStoredSelectedMode,
+} from "./selectedMode.js";
 
 function getApiBaseUrl() {
   const configuredUrl = import.meta.env.VITE_API_BASE_URL;
@@ -21,7 +25,37 @@ const API_BASE_URL = getApiBaseUrl();
 
 type ApiOptions = RequestInit & {
   skipAuth?: boolean;
+  skipSelectedMode?: boolean;
 };
+
+export class ApiRequestError extends Error {
+  status: number;
+  retryAfterSeconds?: number;
+
+  constructor(message: string, status: number, retryAfterSeconds?: number) {
+    super(message);
+    this.name = "ApiRequestError";
+    this.status = status;
+    this.retryAfterSeconds = retryAfterSeconds;
+  }
+}
+
+function readRetryAfterSeconds(response: Response, responseBody: unknown) {
+  const headerValue = response.headers.get("retry-after");
+  if (headerValue && /^\d+$/.test(headerValue) && Number(headerValue) > 0) {
+    return Number(headerValue);
+  }
+  if (
+    responseBody &&
+    typeof responseBody === "object" &&
+    "retryAfterSeconds" in responseBody &&
+    Number.isInteger(responseBody.retryAfterSeconds) &&
+    Number(responseBody.retryAfterSeconds) > 0
+  ) {
+    return Number(responseBody.retryAfterSeconds);
+  }
+  return undefined;
+}
 
 async function waitForAuthUser() {
   if (auth.currentUser) {
@@ -64,9 +98,12 @@ async function getAuthHeaders(skipAuth?: boolean): Promise<HeadersInit> {
 }
 
 export async function apiFetch<T>(path: string, options: ApiOptions = {}): Promise<T> {
-  const { skipAuth, headers, ...requestOptions } = options;
+  const { skipAuth, skipSelectedMode, headers, ...requestOptions } = options;
 
   const authHeaders = await getAuthHeaders(skipAuth);
+  const selectedModeHeaders = skipAuth || skipSelectedMode
+    ? {}
+    : { [SELECTED_MODE_HEADER]: getStoredSelectedMode() };
   const url = `${API_BASE_URL}${path}`;
   const method = String(requestOptions.method || "GET").toUpperCase();
 
@@ -82,6 +119,7 @@ export async function apiFetch<T>(path: string, options: ApiOptions = {}): Promi
           }
         : {}),
       ...authHeaders,
+      ...selectedModeHeaders,
       ...headers,
     },
   });
@@ -113,21 +151,120 @@ export async function apiFetch<T>(path: string, options: ApiOptions = {}): Promi
       errorMessage = responseBody.error;
     }
 
-    throw new Error(errorMessage);
+    throw new ApiRequestError(
+      errorMessage,
+      response.status,
+      readRetryAfterSeconds(response, responseBody)
+    );
   }
 
   return responseBody as T;
 }
 
+export async function getIdentityContinuity() {
+  return apiFetch<{ ok: true; neonUserId: string }>(
+    "/api/auth/identity-continuity",
+    { skipSelectedMode: true }
+  );
+}
+
+/**
+ * Uses the verified Firebase ID token captured immediately before password
+ * linking. The token stays in memory and is the only identity proof accepted
+ * by the restricted server reconciliation branch.
+ */
+export async function restoreVerifiedPasswordLink(preLinkVerifiedToken: string) {
+  if (!preLinkVerifiedToken) {
+    throw new Error("A verified account token is required");
+  }
+
+  return apiFetch<{ ok: true }>("/api/auth/identity-continuity", {
+    method: "POST",
+    skipAuth: true,
+    skipSelectedMode: true,
+    headers: { Authorization: `Bearer ${preLinkVerifiedToken}` },
+  });
+}
+
 export async function getApiMe() {
   return apiFetch<{
     ok: true;
-    user: unknown;
+    user: {
+      id: string;
+      displayName: string | null;
+    };
+    profile: {
+      reducedMotion: boolean;
+    };
     workspaces: unknown[];
     workspaceMemberships: unknown[];
     campaigns: unknown[];
     campaignMemberships: unknown[];
   }>("/api/me");
+}
+
+export async function updateApiProfile(input: { reducedMotion: boolean }) {
+  return apiFetch<{
+    ok: true;
+    profile: {
+      reducedMotion: boolean;
+    };
+  }>("/api/me", {
+    method: "PATCH",
+    body: JSON.stringify(input),
+  });
+}
+
+export async function createApiWorkspace(input: {
+  name: string;
+  idempotencyKey: string;
+}) {
+  return apiFetch<{
+    ok: true;
+    workspace: {
+      id: string;
+      name: string;
+      slug: string;
+    };
+  }>("/api/workspace", {
+    method: "POST",
+    body: JSON.stringify(input),
+  });
+}
+
+export async function createApiCampaign(input: {
+  workspaceId: string;
+  name: string;
+  description: string;
+  system?: string;
+  idempotencyKey: string;
+}) {
+  return apiFetch<{
+    ok: true;
+    campaign: {
+      id: string;
+      name: string;
+      slug: string;
+    };
+  }>("/api/campaign-content", {
+    method: "POST",
+    body: JSON.stringify(input),
+  });
+}
+
+export async function requestVerificationEmail(invited: boolean) {
+  return apiFetch<{ ok: true }>("/api/auth/send-verification-email", {
+    method: "POST",
+    body: JSON.stringify({ invited }),
+  });
+}
+
+export async function requestPasswordResetEmail(email: string) {
+  return apiFetch<{ ok: true }>("/api/auth/send-password-reset-email", {
+    method: "POST",
+    body: JSON.stringify({ email }),
+    skipAuth: true,
+  });
 }
 
 export async function createApiInvitation(input: {
@@ -147,12 +284,61 @@ export async function createApiInvitation(input: {
       campaignId: string;
       workspaceRole: string;
       campaignRole: string;
-      characterId: string | null;
+      characterIds: string[];
       status: string;
       createdAt: string;
+      expiresAt: string;
     };
   }>("/api/invitations", {
     method: "POST",
+    body: JSON.stringify(input),
+  });
+}
+
+export type ManagedInvitation = {
+  id: string;
+  email: string;
+  normalizedEmail: string;
+  workspaceRole: string;
+  campaignRole: string;
+  status: "pending" | "accepted" | "expired" | "revoked";
+  characterIds: string[];
+  createdAt: string | null;
+  expiresAt: string | null;
+  acceptedAt: string | null;
+  revokedAt: string | null;
+  lastSentAt: string | null;
+  resendAvailableAt: string | null;
+};
+
+function invitationScopeQuery(tenantId: string, campaignId: string) {
+  return `tenantId=${encodeURIComponent(tenantId)}&campaignId=${encodeURIComponent(campaignId)}`;
+}
+
+export async function getApiInvitations(tenantId: string, campaignId: string) {
+  return apiFetch<{ ok: true; invitations: ManagedInvitation[] }>(
+    `/api/invitations?${invitationScopeQuery(tenantId, campaignId)}`
+  );
+}
+
+export async function resendApiInvitation(input: {
+  tenantId: string;
+  campaignId: string;
+  invitationId: string;
+}) {
+  return apiFetch<{ ok: true; invitation: ManagedInvitation }>("/api/invitations", {
+    method: "PATCH",
+    body: JSON.stringify(input),
+  });
+}
+
+export async function revokeApiInvitation(input: {
+  tenantId: string;
+  campaignId: string;
+  invitationId: string;
+}) {
+  return apiFetch<{ ok: true; invitation: ManagedInvitation }>("/api/invitations", {
+    method: "DELETE",
     body: JSON.stringify(input),
   });
 }
@@ -191,6 +377,48 @@ export async function updateApiCampaign(input: {
   });
 }
 
+export type CampaignSettings = {
+  id: string;
+  campaignId: string;
+  workspaceId: string;
+  name: string;
+  description: string;
+  status: string;
+  system: string;
+  playerSummary: string;
+  startDate: string;
+  endDate: string;
+  updatedAt: string;
+  gmNotes?: string;
+};
+
+export type CampaignSettingsUpdate = Pick<
+  CampaignSettings,
+  | "name"
+  | "description"
+  | "status"
+  | "system"
+  | "playerSummary"
+  | "gmNotes"
+  | "startDate"
+  | "endDate"
+>;
+
+export async function getApiCampaignSettings(campaignId: string) {
+  return apiFetch<{ ok: true; campaign: CampaignSettings }>(
+    `/api/campaign-content?resource=campaignSettings&campaignId=${encodeURIComponent(campaignId)}`
+  );
+}
+
+export async function updateApiCampaignSettings(input: CampaignSettingsUpdate & {
+  campaignId: string;
+}) {
+  return apiFetch<{ ok: true; campaign: CampaignSettings }>(
+    "/api/campaign-content?resource=campaignSettings",
+    { method: "PATCH", body: JSON.stringify(input) }
+  );
+}
+
 export async function getApiCampaignPeople(campaignId: string) {
   return apiFetch<{
     ok: true;
@@ -207,21 +435,16 @@ export async function getApiCampaignPeople(campaignId: string) {
       workspaceRole: string;
       campaignRole: string;
       characterIds: string[];
+      createdAt: string | null;
+      expiresAt: string | null;
+      acceptedAt: string | null;
+      revokedAt: string | null;
+      lastSentAt: string | null;
+      resendAvailableAt: string | null;
     }>;
   }>(
     `/api/campaign-content?resource=campaignPeople&campaignId=${encodeURIComponent(campaignId)}`
   );
-}
-
-export async function revokeApiCampaignInvite(campaignId: string, inviteId: string) {
-  return apiFetch<{ ok: true }>("/api/campaign-content?resource=campaignPeople", {
-    method: "DELETE",
-    body: JSON.stringify({
-      campaignId,
-      personType: "invite",
-      personId: inviteId,
-    }),
-  });
 }
 
 export async function removeApiCampaignMember(campaignId: string, memberId: string) {

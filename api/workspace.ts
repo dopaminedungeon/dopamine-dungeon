@@ -1,5 +1,6 @@
 import type { VercelRequest, VercelResponse } from "@vercel/node";
 
+import workspaceCreateHandler from "../src/server/api-handlers/workspace-create.js";
 import workspacePeopleHandler from "../src/server/api-handlers/workspace-people.js";
 import { setCorsHeaders } from "../src/server/cors.js";
 
@@ -25,6 +26,13 @@ function getResource(req: VercelRequest) {
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   const resource = getResource(req);
+
+  if (
+    ["OPTIONS", "POST"].includes(req.method || "") &&
+    (!resource || resource === "workspaceCreate")
+  ) {
+    return workspaceCreateHandler(req, res);
+  }
 
   if (resource === "workspacePeople") {
     return workspacePeopleHandler(req, res);
