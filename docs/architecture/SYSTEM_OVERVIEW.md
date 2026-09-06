@@ -1,6 +1,6 @@
 # System Overview
 
-Last updated: 2026-08-24
+Last updated: 2026-09-05
 
 Dopamine Dungeon is a multi-tenant campaign-management application for game
 masters and players. This document is the current high-level architecture and
@@ -35,14 +35,14 @@ flowchart LR
     CTX[Application Contexts]
     API[Vercel API]
     AUTH[Firebase Auth]
-    CORE[(Neon PostgreSQL core data)]
-    TRANS[(Transitional Firestore paths)]
+    CORE[(Neon PostgreSQL application state)]
+    MAIL[Brevo transactional mail]
 
     UI --> CTX
     CTX --> API
     API --> AUTH
     API --> CORE
-    CTX --> TRANS
+    API --> MAIL
 ```
 
 The full local application is run with `pnpm vercel dev`, which serves the
@@ -78,7 +78,9 @@ and is not evidence that protected API or persistence workflows work.
 ## Persistence ownership
 
 Neon PostgreSQL, accessed through the Vercel API and Drizzle-backed
-repositories, is the primary store for core relational campaign entities:
+repositories, is the canonical store for application state, including users'
+profile preferences, workspaces, campaigns, memberships, invitations, settings,
+authentication-email limiter state, and core relational campaign entities:
 sessions, items, inventory, NPCs, locations, lore, PCs, and typed
 entity links. Campaign and workspace scoping is enforced at the API/data-access
 boundary.
@@ -87,8 +89,13 @@ Firestore has no active application-state, transactional-mail, or auth-email
 limiter runtime path. Historical migration/reconciliation scripts and retained
 operational Firestore configuration still require explicit decommission gates;
 Firebase Authentication and Firebase Storage remain intentional separate
-services. No new Firestore application data writes should be introduced. Do not
-remove historical inputs or operational configuration until replacement,
+services. The temporary, claim-gated Production audit reader remains in this
+`dev` snapshot (`api/worldbuilding.ts` and `src/server/productionReadOnlyAudit.ts`);
+[PR #373](https://github.com/dopaminedungeon/dopamine-dungeon/pull/373) removed it
+from `main`. This is an operational exception, not application-state ownership.
+See the [retrospective handoff](../sprints/iteration-3-retrospective-notes.md)
+for its integration follow-up. No new Firestore application data writes should
+be introduced. Do not remove historical inputs or operational configuration until replacement,
 production cutover, and rollback behavior are verified. ADR 0003 records the
 transition; the Neon decision is bounded by ADR 0001.
 

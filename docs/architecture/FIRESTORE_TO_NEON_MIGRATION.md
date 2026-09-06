@@ -1,6 +1,7 @@
 # Firestore to Neon Migration Inventory and Authorization Matrix
 
-Status: Development implementation complete; Production release operations pending
+Status: Development implementation complete; Production operational completion
+requires operator evidence (reviewed 2026-09-05)
 
 Date: 2026-08-28
 
@@ -132,8 +133,9 @@ archive checklist, and historical-script limitations.
   environment are still required.
 - Live collection inventory and document shapes may contain paths not found by
   static analysis.
-- The canonical destination and visibility policy for extended campaign
-  settings remain undefined.
+- Retained campaign settings use explicit Neon columns and a Player-safe API
+  projection that omits `gmNotes`. Any additional settings need a separate
+  product decision; they are not implicitly persisted.
 - Workspace-only Firestore invitations are explicitly retired historical input.
   Their export/reconciliation report must list unresolved records before
   destructive retirement.
@@ -162,16 +164,20 @@ limiter persistence, browser Firestore retirement, and validated
 inventory/reconciliation tooling. Development and Preview validation are
 complete; no Production migration or cutover is implied.
 
-The future Production release must first run the temporary
-`productionReadOnlyAudit` path through the existing `api/worldbuilding`
-function. A controlled verified Firebase identity must receive the temporary
-`productionAudit: true` custom claim, the sanitized audit must be captured,
-then the claim and route/module must be removed and removal deployed. The
-Production release checklist must verify migrations `0015`–`0021`, snapshot and
-preserve the final 24-hour Firestore limiter horizon, import and reconcile
-opaque subjects/attempts into Neon, and retain Firestore source evidence for
-rollback. Trigger Email disablement, rules deny-all, and physical Firestore
-retirement are separate later operational windows.
+[PR #372](https://github.com/dopaminedungeon/dopamine-dungeon/pull/372) merged the
+release to `main` on 2026-09-04 and records the full `0014`–`0022` migration
+sequence, including the invitation duplicate preflight. [PR #373](https://github.com/dopaminedungeon/dopamine-dungeon/pull/373)
+then removed the temporary Production audit route from `main`; its description
+reports approved evidence capture and claim revocation. Those private reports
+were not inspected during #328, and the removal remains absent from `dev`.
+Do not regrant the claim or rerun the retired audit from this historical plan.
+
+The release operator must reconcile completed operations with the remaining
+schema, final 24-hour limiter preservation/import, and parity evidence. Retain
+Firestore source evidence for rollback. Trigger Email disablement, rules
+deny-all, and physical Firestore retirement require separate operational
+windows. The [Iteration 3 handoff](../sprints/iteration-3-retrospective-notes.md)
+tracks the integration fix and focused operational follow-ups.
 
 ## Related architecture records
 

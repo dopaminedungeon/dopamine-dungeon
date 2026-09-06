@@ -50,7 +50,8 @@ authorization horizon for subjects it touches. `expires_at` is retained on both
 subject and attempt rows for later physical housekeeping. There is deliberately
 no cron or public cleanup endpoint in this slice: authorization never depends
 on physical deletion. Inactive expired rows require a separately approved
-database-maintenance process.
+database-maintenance process, tracked by
+[#376](https://github.com/dopaminedungeon/dopamine-dungeon/issues/376).
 
 ## Monitoring
 
@@ -71,7 +72,7 @@ accepted/rejected delivery, and sender reputation without exporting message
 secrets.
 
 Review thresholds after representative usage exists. Compare request,
-throttled, queue-accepted, and delivery-failure aggregates before changing a
+throttled, delivery-accepted, and delivery-failure aggregates before changing a
 value. Apply the same reviewed values independently to Preview and Production;
 do not lower controls to resolve an unrelated delivery outage.
 

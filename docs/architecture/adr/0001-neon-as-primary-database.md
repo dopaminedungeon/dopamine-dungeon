@@ -150,8 +150,9 @@ infrastructure, backup, patching, and availability responsibilities.
 
 - Firebase Authentication establishes identity.
 
-- Neon stores the core relational campaign data. ADR 0003 documents the
-  transitional Firestore paths that still require migration.
+- Neon stores canonical application state in the Iteration 3 implementation.
+  ADR 0003 distinguishes retired application paths from retained operational
+  Firestore inputs and unverified environment cutover gates.
 
 - Drizzle defines and accesses the relational schema.
 
@@ -161,9 +162,9 @@ infrastructure, backup, patching, and availability responsibilities.
 
 - Migration changes require validation and rollback or mitigation notes.
 
-The decision does not claim that every current application path has already
-been migrated. New Firestore application-data writes are prohibited while the
-remaining paths are retired module by module.
+Application migration is implemented in the repository; this is not proof of
+every deployed environment's schema or data cutover. New Firestore
+application-data writes remain prohibited.
 
 ## Revisit when
 

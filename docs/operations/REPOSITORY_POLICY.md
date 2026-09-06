@@ -68,7 +68,7 @@ steps match the local `pnpm quality` command:
 - `pnpm build`.
 
 The Playwright PR smoke suite runs in the same workflow as an advisory step
-until repeated self-hosted runner runs establish a stable signal. The full
+until repeated CI runs establish a stable signal. The full
 `pnpm test:e2e` suite remains release/manual. The #315 test strategy owns the
 meaning and boundaries of these commands; #316 only makes them coherent with
 repository policy.
@@ -83,10 +83,10 @@ Target branch settings are:
 
 Deletion and non-fast-forward updates should remain blocked on protected
 branches. `DD AI Review` is advisory and must not be required: it uses the
-self-hosted runner's local Ollama service and updates one marked review comment
+GitHub-hosted runner and the configured Mistral API, and updates one marked review comment
 instead of posting a new comment on every run.
 
-At the time of this audit, GitHub has an active `protect dev` ruleset with one
+At the earlier #316 audit, GitHub had an active `protect dev` ruleset with one
 approval, a required `Preview` deployment, deletion/non-fast-forward rules, and
 no required status-check rule. No active protection was reported for `main` or
 `release/*`. These repository settings are an explicit manual handoff in this
@@ -98,26 +98,27 @@ suite separate required checks.
 
 | Workflow | Classification | Trigger and purpose | Runner and access |
 |---|---|---|---|
-| `PR Checks` | Required and healthy after #316 cleanup | Pushes to `dev`, `main`, and `release/*`; pull requests targeting those branches; runs the DD Quality Gate and advisory smoke; PR runs update one marked summary comment | Self-hosted `macOS`, `X64`; `contents: read`, `pull-requests: write`; no secrets |
-| `DD AI Review` | Experimental/manual advisory | Opened, synchronized, or reopened pull requests targeting `main`, `dev`, or `release/*`; produces one concise review comment | Self-hosted `macOS`, `X64`; `contents: read`, `pull-requests: write`; `GITHUB_TOKEN` and local Ollama model |
-| `Create Iteration Closeout Task` | Manual repository administration | `workflow_dispatch`; creates one retrospective and documentation-reconciliation issue for a supplied iteration, stops when its marker or canonical title already exists, and leaves Project, Type, Iteration, and Application Version assignment manual | GitHub-hosted `ubuntu-latest`; `issues: write`; no checkout or secrets |
+| `PR Checks` | Blocking quality gate with advisory smoke | Pushes to `dev`, `main`, and `release/*`; pull requests targeting those branches; PR runs update one marked summary comment | GitHub-hosted `ubuntu-latest`; `contents: read`, `pull-requests: write`; isolated tests |
+| `DD AI Review` | Advisory | Opened, synchronized, or reopened pull requests targeting `main`, `dev`, or `release/*`; updates one review comment | GitHub-hosted `ubuntu-latest`; `contents: read`, `pull-requests: write`; `GITHUB_TOKEN` and server-side Mistral API key |
+| `Create Iteration Closeout Task` | Manual repository administration | `workflow_dispatch`; creates or reuses one closeout issue; optional Project metadata completion, with explicit manual fallback | GitHub-hosted `ubuntu-latest`; `issues: write`; optional `DD_PROJECTS_TOKEN`; no checkout |
+| `DD Documentation Reconciliation` | Read-only advisory audit | Manual dispatch or matching closeout issue label event; writes Step Summary for configured passes | GitHub-hosted `ubuntu-latest`; `contents: read`; Mistral API key; no repository or Project writes |
 | `Sync Application Version to Sub-Issue` | Obsolete and removed | Placeholder project automation with literal project and field IDs | Removed because it could not perform useful work safely |
 
 The repository has no GitHub Actions deployment workflow. Vercel remains the
 deployment system, with `main` as the production source and feature/`dev`
 branches eligible for preview validation.
 
-Iteration closeout issue creation and the manual organization Project boundary
-are documented in [`ITERATION_CLOSEOUT.md`](./ITERATION_CLOSEOUT.md). The
-repository workflow intentionally does not mutate Project V2 Iteration or
-Application Version fields.
+Iteration closeout issue creation, optional Project metadata completion, and
+its manual fallback are documented in
+[`ITERATION_CLOSEOUT.md`](./ITERATION_CLOSEOUT.md). The separate documentation
+reconciliation workflow remains read-only and does not alter Project fields.
 
 ## Build signal
 
 The original build emitted a warning because the initial JavaScript chunk was
 1.585 MB minified. Inspection traced a major portion to `pdfjs-dist`, which was
 statically imported through the PCs page. The PDF import service is now loaded
-only when a user selects a PDF. The inspected production build is:
+only when a user selects a PDF. The historical #316 inspected build was:
 
 | Output | Minified | Gzip | Load behavior |
 |---|---:|---:|---|
@@ -149,10 +150,12 @@ currently necessary.
 No lint command uses `|| true`, `continue-on-error`, or a global ignore to hide
 the result. A lint failure makes `DD Quality Gate` fail normally.
 
-## Self-hosted runner and failure diagnosis
+## CI runner and failure diagnosis
 
-The self-hosted `macOS`, `X64` runner is used because the repository's emulator
-smoke tests require Java and the AI review requires a local Ollama model. The
+The current `pr-checks.yml` and `dd-ai-review.yml` use GitHub-hosted
+`ubuntu-latest` runners. PR Checks installs pinned Chromium; emulator smoke
+still requires Java. AI review uses server-side `MISTRAL_API_KEY` and
+`mistral-small-latest`, not a local Ollama service. The
 blocking gate itself should remain deterministic and must not depend on
 production Firebase, Neon, Vercel, or campaign data.
 

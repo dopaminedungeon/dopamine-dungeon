@@ -1,6 +1,6 @@
 # Iteration Closeout Administration
 
-Last updated: 2026-08-24
+Last updated: 2026-09-05
 Owner: Magda
 
 ## Purpose
@@ -94,6 +94,13 @@ and a final count of retained documentation drift, implementation risks, and
 human-verification findings. Dropped-finding diagnostics remain in the job
 logs for debugging and are not included in the clean summary.
 
+Current coverage is limited to `security-auth` and `security-access` in
+`ai/documentation-manifest.json`. The script reads each pass's lists; top-level
+canonical/evidence lists do not expand that scope. A successful run is not a
+complete persistence, operations, or iteration audit. Continue the manual
+checklist below; [#377](https://github.com/dopaminedungeon/dopamine-dungeon/issues/377)
+tracks the coverage handoff.
+
 ## Duplicate prevention
 
 The workflow derives a stable marker from the numeric iteration:
@@ -165,13 +172,14 @@ will reuse that issue and repair its metadata.
 
 ## Existing iteration coverage
 
-Snapshot from organization Project 1 when #325 was implemented:
+Historical coverage from #325, with Iteration 3 refreshed from Project 1 on
+2026-09-05:
 
 | Project iteration | Closeout task | Handling |
-|---|---|---|
+| --- | --- | --- |
 | Iteration 1 - backlog refinement | None | Completed before the closeout process existed; the historical gap is documented rather than creating a low-value retroactive task. |
 | Iteration 2 - refinement + adding of functionalities | [#317](https://github.com/dopaminedungeon/dopamine-dungeon/issues/317) | Completed reference closeout. |
-| Iteration 3 | Not yet created | Create once its major work and dependencies are stable; preparation evidence already lives in `docs/sprints/iteration-3-retrospective-notes.md`. |
+| Iteration 3 | [#328](https://github.com/dopaminedungeon/dopamine-dungeon/issues/328) | In progress; all 14 listed dependencies are Done/closed. [Retrospective and handoff](../sprints/iteration-3-retrospective-notes.md). |
 | Iterations 4-9 | Not yet created | Future iterations; create one task per iteration when that iteration starts and its major dependencies are known. Do not precreate speculative backlog noise. |
 
 This table is an implementation snapshot, not a second source of truth for the

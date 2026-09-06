@@ -2,6 +2,7 @@
 
 This folder contains **Mermaid diagrams** documenting current contracts and
 intended UI behavior for Dopamine Dungeon:
+
 - navigation & routing
 - guards (auth / tenant / campaign / role / mode)
 - page flows + profile flows
@@ -11,7 +12,7 @@ intended UI behavior for Dopamine Dungeon:
 - multitenant / multirole foundational rules
 
 > Diagrams are designed visually (MermaidChart) and committed as Markdown so GitHub can render them.
-
+>
 > **Current-state boundary:** Arcs, Quests, and Conditions diagrams are retained
 > as intended-state references only. Their former mock-backed routes and pages
 > were retired by #319. Use `product/FEATURE_SURFACE_AUDIT.md`, Current State,
@@ -23,9 +24,10 @@ intended UI behavior for Dopamine Dungeon:
 
 All diagrams live here:
 
-- `src/docs/`
+- `docs/`
 
 Key entry points:
+
 - `masterflow.md` — compiled “whole app” view
 - `SYSTEMSDIAGRAMS.md` — this index
 
@@ -45,6 +47,7 @@ Key entry points:
 ## Diagram index
 
 ### Foundational architecture (read first)
+
 - **Multitenant & multirole spec** (tenant/workspace, campaign roles, permission levels, role vs mode invariants)  
   `multitenant-multirole-management.md`
 
@@ -54,6 +57,7 @@ Key entry points:
 ---
 
 ### Global system views
+
 - **Master Flow** (global navigation backbone + embedded subgraphs)  
   `masterflow.md`
 
@@ -63,6 +67,7 @@ Key entry points:
 ---
 
 ### Permissions
+
 - **Permission matrix (graph)** (GM vs Player; page-level capabilities & guard logic)  
   `permissions-graph.md`
 
@@ -72,6 +77,7 @@ Key entry points:
 ---
 
 ### Data layer
+
 - **System Overview** (current persistence ownership, identity, authorization,
   environments, and repository boundaries)
   `architecture/SYSTEM_OVERVIEW.md`
@@ -79,6 +85,7 @@ Key entry points:
 ---
 
 ### UX contracts
+
 - **User Flows** (happy + unhappy paths; recovery behaviours; invariants)  
   `userflows.md`
 
@@ -88,6 +95,7 @@ Key entry points:
 ---
 
 ## Page flows (list pages)
+>
 > Each page file documents the TO-BE gate(s) + list view behaviour + navigation to profile.
 
 - **Arcs** (GM-only; cards → profile)  
@@ -123,6 +131,7 @@ Key entry points:
 ---
 
 ## Profile flows (detail routes)
+>
 > Each profile file documents the TO-BE gate(s) + view/edit toggles + back navigation.
 
 - **Arc Profile**  
@@ -158,6 +167,7 @@ Key entry points:
 ---
 
 ## Navigation components
+
 - **TopBar** (campaign picker + mode switching entrypoint, per spec)  
   `topbar.md`
 
