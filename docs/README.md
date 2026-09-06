@@ -11,8 +11,12 @@ truth.
   keep, retire, and infrastructure-only decisions from #319.
 - [Roadmap](product/ROADMAP.md): product direction and dependency-aware
   priorities.
-- [Current Iteration](sprints/current.md): final Iteration 2 record and the
-  Iteration 3 handoff.
+- [Current iteration — Iteration 4](sprints/current.md): bugfixing goals,
+  sequencing, active dependencies, and non-goals.
+- [Iteration 2 retrospective](sprints/iteration-2-retrospective-notes.md):
+  historical code-quality, testing, and repository-hygiene closeout.
+- [Iteration 3 retrospective](sprints/iteration-3-retrospective-notes.md):
+  delivered state, evidence, unresolved operations, and next-iteration handoff.
 - [System Overview](architecture/SYSTEM_OVERVIEW.md): runtime, identity,
   authorization, persistence, and environment boundaries.
 - [Architecture Decisions](architecture/adr/README.md): durable decisions and
@@ -57,6 +61,6 @@ intended-state diagrams only. Their routes and product pages are not active.
 - Code, schema, and migrations override stale descriptive documents; record a
   conflict instead of silently choosing the desired interpretation.
 
-Authentication feature ownership remains assigned to Iteration 3. Documents
-describing #256 email verification are proposals or preparation notes unless
-they explicitly state that the behavior is current and verified on `dev`.
+Iteration 3 authentication and onboarding implementation is merged. Repository,
+historical Preview validation, and live Production evidence remain distinct;
+the retrospective records those limits explicitly.

@@ -38,10 +38,18 @@ Preview may use Vercel's injected process environment. The tool never falls
 back to `.env.local` or inherited credentials, and it rejects both or neither
 source selections.
 
-## Temporary Production audit path
+## Retired temporary Production audit path
+
+[PR #373](https://github.com/dopaminedungeon/dopamine-dungeon/pull/373) removed
+this path from `main` after its reported approved evidence capture and claim
+revocation. It remains in the audited `dev` snapshot; [#374](https://github.com/dopaminedungeon/dopamine-dungeon/issues/374)
+tracks integration of that removal. Do not regrant the claim or restore the
+reader from this historical description. Future evidence capture requires a
+new reviewed mechanism. [#375](https://github.com/dopaminedungeon/dopamine-dungeon/issues/375)
+owns reconciliation of the remaining operator evidence and retirement gates.
 
 For the one-time #298 Production baseline, a temporary `productionReadOnlyAudit`
-resource is branched through the existing `api/worldbuilding` function. It is
+resource was branched through the existing `api/worldbuilding` function. It is
 GET-only, requires a verified Firebase ID token with the explicit
 `productionAudit` custom claim, and fails closed unless `VERCEL_ENV` is
 `production`, Firebase is `dopamine-dungeon-prod`, and the parsed Neon endpoint

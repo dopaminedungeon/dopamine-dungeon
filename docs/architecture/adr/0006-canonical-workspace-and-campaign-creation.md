@@ -6,12 +6,11 @@ Date: 2026-08-24
 
 Decision owner: Magda
 
-Audit classification: Partially implemented; current code still has split
-Firestore write and Neon read paths
+Audit classification: Current in repository (2026-09-05); implemented by PR #365
 
 ## Context
 
-Workspace and campaign bootstrap still has transitional Firestore paths while
+At the time of the decision, workspace and campaign bootstrap had Firestore paths while
 `/api/me` and core authorization relationships are Neon-backed. A Firestore
 write can therefore succeed while the application reads no workspace or
 campaign from Neon. Issue #296 records the onboarding loop; #262 and #263 own
@@ -61,13 +60,20 @@ it with cross-store reads.
 
 ### Constraints
 
-- Existing Firestore code remains until #298 migration gates and reconciliation
-  are complete; this ADR does not authorize removing it.
+- Historical Firestore inputs remain until #298 migration gates and reconciliation
+  are complete; this ADR does not authorize destructive data retirement.
 - Creation APIs require explicit authorization, transaction, idempotency, and
   parity tests before replacing browser writes.
 - No implementation may bridge records by normalized email.
 
 ## Required validation and rollback
+
+`src/server/api-handlers/workspace-create.ts` and `campaign-create.ts` implement
+the transaction and caller-scoped idempotency rules. Their adjacent tests cover
+retry, membership insertion failure, and unauthorized/cross-workspace creation.
+The browser uses those APIs and refreshes the same Neon-backed access projection.
+Historical source data and operational configuration remain governed by #298's
+release gates, not by the completed browser implementation.
 
 Preview QA must cover success, retry, timeout, invited/uninvited routing, and
 same-email/different-UID isolation. Any implementation requires the #298

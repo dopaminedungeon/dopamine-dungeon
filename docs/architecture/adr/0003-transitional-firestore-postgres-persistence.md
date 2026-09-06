@@ -6,6 +6,9 @@ Decision owner: Magda
 
 ## Context
 
+Historical decision context follows. Implementation status was reconciled on
+2026-09-05; the current boundary is recorded below.
+
 Dopamine Dungeon is migrating application data from Firestore to Neon PostgreSQL.
 
 Neon PostgreSQL is the intended primary application database.
@@ -42,10 +45,17 @@ persistence path rather than assuming it already uses PostgreSQL.
 Core campaign entity repositories for sessions, items, inventory, NPCs,
 locations, lore, PCs, and typed entity links use the API and Neon. Arc, Quest,
 and Condition are reserved typed-link concepts without active standalone pages.
-Firebase Authentication remains the identity provider. Firestore is still
-used by the bootstrap and identity-adjacent paths listed above, and by
-migration tooling where it is an explicit source. This list is a current
-boundary, not permission to add new Firestore-backed features.
+Firebase Authentication remains the identity provider. Bootstrap, profile,
+membership, invitation, assignment, and campaign settings paths now use Neon
+through authenticated APIs. Authentication-email limiters use Neon and mail
+uses direct Brevo. The browser Firestore repositories and initialization are
+retired (PR #365).
+
+Firestore remains an explicit historical input for operational tooling and
+retention/recovery. The temporary Production audit reader remains on `dev`
+but was removed from `main` by PR #373. Environment exports, limiter cutover,
+deny-all canary, and physical retirement require separate evidence and authority;
+see the [migration inventory](../FIRESTORE_TO_NEON_MIGRATION.md).
 
 ## Consequences
 
@@ -56,13 +66,16 @@ boundary, not permission to add new Firestore-backed features.
 - Existing migration debt is visible.
 - Features can be migrated gradually.
 
-### Negative
+### Historical transition costs
 
 - The application temporarily has two persistence systems.
 - Some creation and loading paths may behave inconsistently.
 - Developers must verify each feature individually.
 
 ## Risks
+
+The following motivated the migration and remain regression risks when copying
+legacy code; they are not claims that bootstrap still uses split stores.
 
 - A record may be written to Firestore but loaded from PostgreSQL.
 - A feature may appear to save successfully but not appear after refresh.

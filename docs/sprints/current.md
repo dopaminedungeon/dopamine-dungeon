@@ -1,120 +1,75 @@
-# Iteration 2 - Code Quality, Testing, and Repository Hygiene
+# Iteration 4 — Bugfixing (v0.6.1)
 
-Status: Completed
+Status: Current iteration; assigned work is Backlog, not delivered
 Owner: Magda
-Period: 2026-07-24 to 2026-08-24
+Period: 2026-09-06 to 2026-09-19 (14 days)
+Planning snapshot: 2026-09-06
 
-This is the final Iteration 2 record. The earlier agent-workflow pilot record
-is superseded by this document; its implementation history remains in Git.
+## Focus and intended outcome
 
-## Intended outcome
+Stabilize existing campaign workflows after Iteration 3: reliable persistence,
+meaningful entity relationships, predictable navigation, and usable interfaces.
+Resolve the release and validation follow-ups without expanding product scope.
 
-Close the iteration by reducing repository noise, establishing a trustworthy
-automated testing and CI baseline, completing necessary administration and
-backlog hygiene, and reconciling documentation with the final repository.
+Scope comes from [GitHub Project 1](https://github.com/orgs/dopaminedungeon/projects/1),
+iteration “Iteration 4 - bugfixing (v0.6.1)”. All 14 assigned items were Backlog
+at this snapshot. The Project owns assignment/status; each issue owns acceptance
+criteria. Some older issue bodies still name v0.7+; the current iteration label
+is a planning target, not evidence that those fixes have shipped.
 
-## Delivered outcome
+## Goals and scoped work
 
-- Authentication work was included in the repository work reviewed during
-  Iteration 2, including verification and race-safe Firebase-UID-based profile
-  provisioning. Its
-  feature ownership and remaining work remain assigned to Iteration 3; this
-  retrospective does not move those backlog items into Iteration 2.
-- Neon is the primary store for core campaign entities. Transitional
-  Firestore paths are documented rather than treated as invisible exceptions.
-- Workspace and campaign boundaries, GM/player visibility, selected mode, and
-  hidden-link non-disclosure have explicit server-side and regression-test
-  coverage as inputs to the quality gate.
-- #315 established Vitest unit/API/boundary layers, Playwright PR smoke
-  coverage, the `pnpm quality` command, and the DD Quality Gate.
-- #316 made lint blocking and clean, investigated the Vite bundle signal,
-  removed obsolete workflows and dead feature surfaces, and documented branch,
-  release, hotfix, and runner policy.
+| Goal | Assigned issues |
+|---|---|
+| Restore trustworthy persistence and navigation | [#264](https://github.com/dopaminedungeon/dopamine-dungeon/issues/264) Campaign Settings save/reload; [#265](https://github.com/dopaminedungeon/dopamine-dungeon/issues/265) refresh/direct-route restoration; [#360](https://github.com/dopaminedungeon/dopamine-dungeon/issues/360) user-specific filter persistence |
+| Make existing content and relationships consistent | [#340](https://github.com/dopaminedungeon/dopamine-dungeon/issues/340) NPC–Location relationship lookup/search; [#266](https://github.com/dopaminedungeon/dopamine-dungeon/issues/266) Markdown rendering and saved-content preservation |
+| Improve usability from measured evidence | [#268](https://github.com/dopaminedungeon/dopamine-dungeon/issues/268) performance/loading baseline; [#267](https://github.com/dopaminedungeon/dopamine-dungeon/issues/267) NPC modal stacking; [#342](https://github.com/dopaminedungeon/dopamine-dungeon/issues/342) Profile Settings width; [#271](https://github.com/dopaminedungeon/dopamine-dungeon/issues/271) mobile/tablet pass |
+| Close release and maintenance gaps | [#374](https://github.com/dopaminedungeon/dopamine-dungeon/issues/374) return retired audit removal to dev; [#375](https://github.com/dopaminedungeon/dopamine-dungeon/issues/375) reconcile cutover/Firestore retirement evidence; [#376](https://github.com/dopaminedungeon/dopamine-dungeon/issues/376) expired limiter housekeeping |
+| Make validation coverage explicit | [#378](https://github.com/dopaminedungeon/dopamine-dungeon/issues/378) discover the existing browser retirement regression; [#377](https://github.com/dopaminedungeon/dopamine-dungeon/issues/377) documentation audit coverage |
 
-## Significant decisions
+## Sequencing and active dependencies
 
-- Firebase Authentication remains the identity provider. The Firebase UID is
-  the identity boundary; email is not an identity merge key.
-- Neon owns core relational campaign data. Firebase/Firestore remains only on
-  documented transitional paths such as bootstrap, membership, invitations,
-  settings, mail, and legacy assignments. See ADR 0001 and ADR 0003.
-- A dual-role account's selected mode is part of the server request contract;
-  GM visibility is fail-closed and cannot be inferred from capability alone.
-- The standalone Relationships module and DebugPanel wiring were retired.
-  Typed entity links remain, with future relationship behavior belonging to
-  cross-linking and Friendship Index work.
-- `dev` is the integration/preview branch and `main` remains the production
-  deployment source. Optional release branches are short-lived stabilization
-  branches, not a full GitFlow process.
+This is a suggested execution sequence based on the issue scopes, not a new
+Project priority order or a claim that every item blocks the next.
 
-## Retrospective
+1. Establish release and test safety: address #374 before another release can
+   restore the retired reader, and #378 so the intended regression is executed.
+   Start #375 by locating existing operator evidence rather than repeating
+   completed operations.
+2. Reproduce and measure before implementation: use #268's baseline to guide
+   loading work in #265. Revalidate #264 against the Campaign Settings API
+   already delivered in Iteration 3 before deciding what remains to fix.
+   Diagnose #340's canonical relationship lookup before changing stored links.
+3. Make focused fixes to persistence, route/filter restoration, Markdown, and
+   layout. Coordinate #267/#342 with #271's broader viewport checks; preserve
+   saved content and test GM/Player and cross-scope behavior where affected.
+4. Complete the maintenance and documentation handoff: #376 depends on an
+   agreed retention policy and maintenance owner; #375's remaining operations
+   depend on environment-specific evidence and approval. #377 improves the
+   next closeout audit. Record actual results and remaining work at closeout.
 
-### What went well
+The [Iteration 3 retrospective](iteration-3-retrospective-notes.md) supplies the
+handoff evidence. Its completion record does not authorize Production changes.
+Use [Testing](../operations/TESTING.md) and the
+[migration inventory](../architecture/FIRESTORE_TO_NEON_MIGRATION.md) for
+validation and operational gates. No implementation success is claimed here.
 
-- Deterministic emulator-backed browser tests and isolated Vitest suites made
-  authorization failures inspectable without production services or data.
-- A focused audit exposed dead workflows, stale mocks, the obsolete
-  Relationships surface, and the oversized PDF import path before they became
-  ongoing CI or bundle noise.
-- The final local commands and branch policy are now documented in one place
-  and referenced by the testing and deployment documentation.
+## Explicit non-goals
 
-### Friction and rework
+- New Arcs, Quests, Friendship Index, AI, payment, or other product modules.
+- A general relationship redesign, duplicate directional relationship records,
+  router rewrite, or rich-text editor replacement without issue-specific need.
+- Changing Firebase UID identity, tenant/campaign isolation, or GM/player secrecy.
+- Treating UI preferences as authorization, or replacing API persistence with
+  mock/local-only state.
+- Production deployment, destructive retirement, or provider/configuration
+  changes without their separate operational authority.
+- Pulling unassigned Iteration 3 follow-ups into scope automatically.
 
-- The historical Node test runner could not provide useful coverage for the
-  current TypeScript API boundaries, so the focused suites moved to Vitest.
-- The lint baseline, self-hosted emulator environment, Java/port prerequisites,
-  and initial Vite chunk warning required repository-level cleanup before the
-  quality signal could be trusted.
-- The persistence migration and dual-role mode contract were easy to describe
-  too broadly. Source and handler audits were needed to distinguish capability
-  from selected visibility mode and Neon ownership from transitional Firestore.
+## Historical records
 
-### Assumptions corrected
+- [Iteration 2 retrospective](iteration-2-retrospective-notes.md)
+- [Iteration 3 retrospective](iteration-3-retrospective-notes.md)
 
-- "Neon stores all application data" was too broad while legacy Firestore paths
-  remain active.
-- UI mode selection alone is not an authorization boundary; the server must
-  receive and validate the selected mode.
-- Full Playwright E2E is valuable regression evidence but is not a stable PR
-  blocking signal for this solo-developed repository.
-- Unused mocks and disabled feature surfaces still have maintenance cost and
-  should not be preserved without an active owner.
-
-## Removed, retained, and deferred decisions
-
-Removed: the standalone Relationships page/profile, DebugPanel wiring, dead
-workflows, obsolete mocks, and the static PDF import that caused avoidable
-initial-load pressure.
-
-Retained: Firebase's transitional persistence paths until their replacements
-are verified; advisory PR smoke tests; full E2E as release/manual evidence; and
-manual branch-ruleset configuration documented in
-`docs/operations/REPOSITORY_POLICY.md`. The Arcs, Conditions, and Quests
-dev/demo seeds retained at Iteration 2 close were subsequently audited and
-retired by #319; their typed link infrastructure remains.
-
-Deferred: React Testing Library until a useful component/provider behavior
-exists; full E2E as a required PR check; completion of the Firestore-to-Neon
-  retirement tracked by [#298](https://github.com/dopaminedungeon/dopamine-dungeon/issues/298);
-  and Friendship Index behavior built on stable typed cross-links and entity
-  persistence.
-
-## Outcome and next-iteration inputs
-
-Iteration 2 met its intended outcome: repository cleanup, automated testing,
-CI administration, and backlog/documentation hygiene are materially more
-reviewable. Authentication remains a documented repository dependency, but
-authentication feature work remains assigned to Iteration 3. The persistence
-migration and product relationship model are also explicit follow-up work
-rather than hidden assumptions.
-
-Iteration 3 should retain ownership of the [#256 authentication feature
-backlog](https://github.com/dopaminedungeon/dopamine-dungeon/issues/256),
-prioritize the [#298 persistence retirement](https://github.com/dopaminedungeon/dopamine-dungeon/issues/298) with a module-by-module cutover and
-rollback plan, and complete the active feature-surface and narrative-value
-audit in [#319](https://github.com/dopaminedungeon/dopamine-dungeon/issues/319).
-It should also verify the documented GitHub branch rules in repository settings
-and continue core entity reliability before starting Friendship Index work.
-Keep the quality gate small and add component tests only when they cover real
-provider or UI behavior.
+This file always describes current iteration focus. Completed iteration
+evidence belongs in its dedicated retrospective.

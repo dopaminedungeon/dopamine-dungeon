@@ -1,6 +1,6 @@
 # Deployment
 
-Last updated: 2026-07-24
+Last updated: 2026-09-05
 
 Owner: Magda
 
@@ -73,11 +73,11 @@ environment, confirm all of the following:
   prefix;
 - the documented `AUTH_EMAIL_*` rolling limits are configured or intentionally
   use their reviewed defaults;
-- Firestore TTL policies for all three authentication-email limiter collection
-  groups are active with the configured retention offset;
+- the Neon limiter schema is present and the preserved Production limiter
+  horizon has been reconciled before making Neon authoritative;
 - Vercel supplies `x-vercel-forwarded-for` directly to the recovery function;
 - the sanitized recovery-request alert is configured at 50 requests per hour;
-- the Firebase Trigger Email extension and SMTP provider accept
+- `BREVO_API_KEY` is configured server-side and Brevo accepts
   `Dopamine Dungeon <no-reply@dopamine-dungeon.com>`;
 - `dopamine-dungeon.com` is verified with the configured transport;
 - required SPF and DKIM DNS records are valid;
@@ -86,11 +86,11 @@ environment, confirm all of the following:
 - invitation delivery still uses the independent `INVITE_EMAIL_*` settings.
 
 Use [`AUTH_EMAIL_RATE_LIMITING.md`](./AUTH_EMAIL_RATE_LIMITING.md) for the exact
-TTL, monitoring, threshold-review, secret-rotation, and rollback checks. A Ready
+retention, monitoring, threshold-review, secret-rotation, and rollback checks. A Ready
 deployment does not prove those external controls are active.
 
 Repository code and environment variable names do not prove sender
-authorization or successful production delivery. DNS, SMTP, Trigger Email, and
+authorization or successful production delivery. DNS, Brevo, historical Trigger Email, and
 live production configuration changes require explicit authorization and must
 be verified outside the repository.
 
@@ -157,6 +157,20 @@ At minimum verify:
 Select non-destructive records for production verification.
 
 ## Database migrations
+
+For the Iteration 3 release, [PR #372](https://github.com/dopaminedungeon/dopamine-dungeon/pull/372)
+records the ordered `0014`–`0022` sequence, including the `0022` invitation
+duplicate preflight. Inspect the target ledger before any action; a merged PR
+does not establish that these migrations were applied. Preserve the final
+24-hour limiter horizon as described in [AUTH_EMAIL_RATE_LIMITING.md](AUTH_EMAIL_RATE_LIMITING.md).
+
+[PR #373](https://github.com/dopaminedungeon/dopamine-dungeon/pull/373) reports
+sanitized Production audit capture and claim revocation and removes the audit
+route from `main`. Do not follow older instructions to grant that claim or
+rerun the retired route. The `dev` removal and outstanding operational evidence
+are tracked in the [Iteration 3 handoff](../sprints/iteration-3-retrospective-notes.md).
+Provider configuration, data cutover, canary, and physical retirement are not
+certified by this documentation audit.
 
 A release containing a migration must document:
 

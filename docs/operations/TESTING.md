@@ -1,6 +1,6 @@
 # Testing and Validation
 
-Last updated: 2026-08-24
+Last updated: 2026-09-05
 Owner: Magda
 
 ## Purpose
@@ -65,7 +65,8 @@ component state would be unnecessarily slow.
 
 ### Runner decision
 
-#315 adopts Vitest as the single unit, API, and boundary test runner. Its Node
+- #315 adopts Vitest as the single unit, API, and boundary test runner. Its Node
+
 environment preserves the existing deterministic assertions while adding the
 TypeScript resolution and ESM module mocking needed to execute real API handler
 modules with isolated dependencies. The migration does not add snapshots,
@@ -80,16 +81,23 @@ Playwright. Do not add it only to establish an empty convention.
 ## Retained test layers
 
 | Layer | Purpose and ownership | Command | Data source | CI role | Do not test here |
-|---|---|---|---|---|---|
+| --- | --- | --- | --- | --- | --- |
 | Unit/domain | Pure auth, identity, normalization, domain rules, and small utilities | `pnpm test:unit` | In-process fixtures; no services | Blocking | HTTP handler orchestration, DOM behavior, or database round trips |
 | API/integration | Real Vercel handlers with controlled auth/access/database adapters; authorization calls, response projection, and create/update/link persistence intent | `pnpm test:api` | Deterministic module mocks plus Drizzle SQL generation; no network | Blocking | Browser behavior, production services, or claims about a real Neon commit |
 | Boundary/security regression | Workspace and campaign scoping, membership predicates, GM denial, player-visible queries, and hidden entity/relationship non-disclosure | `pnpm test:boundary` | Actual access functions, query helpers, lightweight Drizzle schemas, and fixed payloads | Blocking | General feature breadth, visual UI, or exhaustive CRUD permutations |
-| Playwright PR smoke | A minimal auth journey set across the browser and Firebase Auth emulator | `pnpm test:e2e:smoke` | Generated emulator users and deterministic intercepted API fixtures | Advisory until repeated self-hosted runner runs are trusted | Detailed layout checks, lower-level authorization logic, Vercel APIs, or Neon persistence |
+| Playwright PR smoke | A minimal auth journey set across the browser and Firebase Auth emulator | `pnpm test:e2e:smoke` | Generated emulator users and deterministic intercepted API fixtures | Advisory until repeated CI runs are trusted | Detailed layout checks, lower-level authorization logic, Vercel APIs, or Neon persistence |
 | Release/regression E2E | The broader authentication, accessibility, onboarding, error, and browser-history regression set | `pnpm test:e2e` | Same isolated Auth emulator and API fixtures | Manual/release; deferred from PR CI | Logic already owned by Vitest or any production/development data |
 
-`pnpm test` runs all Vitest files for convenience. Use the focused commands
+`pnpm test` runs files discovered by the Vitest configuration. Use the focused commands
 while iterating so failures identify the owning layer. Every command used by CI
 also exists as a package script.
+
+Known discovery gap from #328: `test:unit` names
+`src/firebase/browserFirestoreRetirement.test.ts`, but the current Vitest
+include patterns exclude TypeScript tests outside `src/server`, `api`, and
+`scripts`. Targeted execution finds no tests. Do not count this browser
+retirement regression as executed until
+[#378](https://github.com/dopaminedungeon/dopamine-dungeon/issues/378) is resolved.
 
 The current API suite executes item, lore, location, NPC, relationship, session,
 character, and character-assignment handlers. It proves unauthenticated early
@@ -136,7 +144,7 @@ requests.
 ## Repository scripts
 
 | Purpose | Command | Required |
-|---|---|---|
+| --- | --- | --- |
 | Install dependencies | `pnpm install --frozen-lockfile` | Clean environments |
 | All Vitest layers | `pnpm test` | General local validation |
 | Unit/domain tests | `pnpm test:unit` | Relevant unit or domain changes |
@@ -177,11 +185,19 @@ The PR smoke tag currently owns exactly these journeys:
 - registration, blocked unverified access, emulator verification, and protected entry;
 - switching an authenticated GM-capable account between GM and Player UI modes;
 - sign-out followed by denied protected-route entry.
+- public homepage access without application bootstrap.
 
 The full `pnpm test:e2e` command also retains layout, reduced-motion,
 accessibility, history, credential-error, sign-in, onboarding, and retry
 regressions. It is intentionally deferred from PR CI while the small smoke
-subset establishes a stable self-hosted runner signal.
+subset establishes a stable CI signal on the configured GitHub-hosted runner.
+
+The current broader suite also covers optional password setup, password changes,
+Google linking, invited/uninvited onboarding, and invitation management. These
+remain browser/Auth-emulator tests with intercepted APIs, even when test names
+mention Neon-backed state. Successful Google-only-to-password linking has a
+provider compatibility limitation in the Auth Emulator; PR #370 records a
+real Preview check. Repeat that provider scenario during relevant release QA.
 
 ### Full-stack manual verification
 
@@ -229,7 +245,7 @@ runs, in order:
 6. `pnpm typecheck:e2e`;
 7. `pnpm build`.
 
-Run `pnpm test:e2e:smoke` separately. It remains advisory until the self-hosted
+Run `pnpm test:e2e:smoke` separately. It remains advisory until the CI
 runner has demonstrated a stable signal across repeated PR runs.
 
 ## GitHub quality gate
@@ -263,7 +279,8 @@ build-signal decisions are maintained in
 [`REPOSITORY_POLICY.md`](./REPOSITORY_POLICY.md). The larger E2E suite remains
 release/manual until its cost and stability justify a CI role.
 
-#315 owns the automated test layers, commands, smoke selection, and test-result
+- #315 owns the automated test layers, commands, smoke selection, and test-result
+
 contribution to the quality gate. #316 owns the repository policy around those
 inputs, makes the clean lint result blocking, and records the inspected build
 threshold without hiding an unresolved warning.
