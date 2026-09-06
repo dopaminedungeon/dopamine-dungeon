@@ -79,4 +79,4 @@ verification authority after the migration.
   [#296](https://github.com/dopaminedungeon/dopamine-dungeon/issues/296)
 - [System Overview](../SYSTEM_OVERVIEW.md)
 - [Environment](../../operations/ENVIRONMENT.md)
-- [Iteration 3 preparation](../../sprints/iteration-3-retrospective-notes.md)
+- [Iteration 3 retrospective](../../sprints/iteration-3-retrospective-notes.md)

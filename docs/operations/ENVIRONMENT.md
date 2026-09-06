@@ -1,6 +1,6 @@
 # Environment Configuration
 
-Last verified: 2026-08-24
+Repository configuration reviewed: 2026-09-05 (live values not verified)
 
 ## Purpose
 
@@ -71,8 +71,8 @@ create Neon records.
 ## Authentication transactional email
 
 Email verification and password recovery both use Firebase Admin to generate
-Firebase-managed action links, Dopamine Dungeon HTML templates, and the existing
-Firebase Trigger Email `mail` collection. Firebase still owns each one-time
+Firebase-managed action links, Dopamine Dungeon HTML templates, and direct
+Brevo delivery through `src/server/transactionalMail.ts`. Firebase still owns each one-time
 code, expiry, validation, and account action. The application does not create or
 persist custom verification or reset tokens.
 
@@ -118,7 +118,8 @@ The `AUTH_EMAIL_*` rate-limit values above are the default #332 policy. They
 must be positive integers where applicable. Invalid values fail closed. Setting
 `AUTH_EMAIL_EXTENDED_RATE_LIMITS_ENABLED=false` is the bounded rollback: it
 disables hourly, daily, and IP policies while preserving both 60-second email
-cooldowns. Keep the TTL setting aligned with the deployed Firestore TTL offset.
+cooldowns. Neon stores expiry metadata; inactive expired rows need separate
+physical housekeeping rather than Firestore TTL configuration.
 See [`AUTH_EMAIL_RATE_LIMITING.md`](./AUTH_EMAIL_RATE_LIMITING.md) for storage,
 trusted-IP, monitoring, rotation, and rollback operations.
 
@@ -128,14 +129,17 @@ request host. Keep development, Preview, and production origins aligned with
 their corresponding Firebase projects. The origin must be present in Firebase
 Authentication authorized domains when required by that project.
 
-The Firebase Trigger Email extension and its SMTP provider must permit the
+The Brevo transactional API and verified sender configuration must permit the
 exact sender `Dopamine Dungeon <no-reply@dopamine-dungeon.com>`.
 `dopamine-dungeon.com` must be verified with that email transport. Required DNS
 authentication, including SPF and DKIM, is configured outside this repository.
 Setting `AUTH_EMAIL_FROM` in application code does not prove that production
 delivery is authorized.
 
-Do not change live Firebase, Trigger Email, SMTP, DNS, or production environment
+Historical Trigger Email configuration is retained only for approved cutover,
+archive, and rollback operations; it is not the current application mail path.
+
+Do not change live Firebase, Brevo, Trigger Email, DNS, or production environment
 configuration without explicit authorization. None of these variables may use
 the `VITE_` prefix when they contain secrets.
 

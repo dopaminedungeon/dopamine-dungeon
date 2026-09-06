@@ -1,6 +1,7 @@
 # Firestore to Neon Migration Inventory and Authorization Matrix
 
-Status: Development implementation complete; Production release operations pending
+Status: Development implementation complete; Production operational completion
+requires operator evidence (reviewed 2026-09-05)
 
 Date: 2026-08-28
 
@@ -132,8 +133,9 @@ archive checklist, and historical-script limitations.
   environment are still required.
 - Live collection inventory and document shapes may contain paths not found by
   static analysis.
-- The canonical destination and visibility policy for extended campaign
-  settings remain undefined.
+- Retained campaign settings use explicit Neon columns and a Player-safe API
+  projection that omits `gmNotes`. Any additional settings need a separate
+  product decision; they are not implicitly persisted.
 - Workspace-only Firestore invitations are explicitly retired historical input.
   Their export/reconciliation report must list unresolved records before
   destructive retirement.

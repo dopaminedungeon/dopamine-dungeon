@@ -7,18 +7,20 @@
 > Arcs, Quests, and Conditions flows in this document are future intended-state
 > references. Their former mock-backed pages are not mounted or visible.
 
-This document describes **all user journeys** in Dopamine Dungeon — both happy and unhappy paths.
-Every flow begins with **App Open** and builds on shared system guarantees.
+This document describes intended application journeys, including happy and
+unhappy paths. It is not an exhaustive current route inventory; the implemented
+public/authentication/onboarding entry is in [routing-map.md](routing-map.md).
 
-The foundational order is always:
+The conceptual application flow is:
 
-**Authentication → Mode (GM / Player) → Campaign Context → App Shell → Route/Page**
+`**Authentication → Mode (GM / Player) → Campaign Context → App Shell → Route/Page**`
 
 ---
 
 ## Flow 1 — App Open → Stable Entry
 
 ### Purpose
+
 Establish a **stable, recoverable starting point** for every user, regardless of role, permissions, or campaign state.
 
 This flow is the root of **all other flows** in the system.
@@ -26,11 +28,13 @@ This flow is the root of **all other flows** in the system.
 ---
 
 ### Actors
+
 - Any user (GM or Player)
 
 ---
 
 ### System Guarantees After This Flow
+
 After Flow 1 completes, the system guarantees:
 
 - User identity is known (or explicitly not authenticated)
@@ -59,6 +63,7 @@ After Flow 1 completes, the system guarantees:
    - Dashboard / Home (campaign-scoped).
 
 Result:
+
 - User is fully inside the app and can navigate freely within their permissions.
 
 ---
@@ -70,11 +75,13 @@ Result:
 3. App renders **Login page only**.
 
 Result:
+
 - No AppShell
 - No campaign context
 - Clear CTA to authenticate
 
 Recovery:
+
 - After successful login, resume Flow 1 at Mode resolution.
 
 ---
@@ -86,10 +93,12 @@ Recovery:
 3. App renders **full-page loading state**.
 
 Rules:
+
 - No Login flicker
 - No AppShell until auth resolves
 
 Recovery:
+
 - On resolve → continue Flow 1 normally.
 
 ---
@@ -103,11 +112,13 @@ Recovery:
 5. Main content shows **Campaign Required state**.
 
 Result:
+
 - Sidebar visible (navigation allowed but guarded)
 - TopBar campaign selector highlighted
 - Optional GM-only CTA: “Create campaign”
 
 Recovery:
+
 - User selects a campaign → continue to landing page.
 
 ---
@@ -120,11 +131,13 @@ Recovery:
 4. App renders **Campaign Access Error state**.
 
 Result:
+
 - AppShell remains visible
 - Clear message explaining the issue
 - Campaign selector available
 
 Recovery:
+
 - User selects another campaign
 - System clears invalid campaign reference if needed
 
@@ -133,6 +146,7 @@ Recovery:
 ### Unhappy Path — Network / Backend Failure During Entry
 
 Examples:
+
 - application data service unavailable
 - Network offline
 - Timeout during campaign fetch
@@ -143,11 +157,13 @@ Examples:
 4. App shows **Non-destructive error state**.
 
 Result:
+
 - AppShell remains visible (if auth succeeded)
 - Error banner or page-level error shown
 - Retry action available
 
 Recovery:
+
 - Retry campaign fetch
 - Continue flow once data is available
 
@@ -207,21 +223,26 @@ flowchart TB
 #### Clarifications for your bullet points (so the diagram is “self-explaining”)
 
 ##### 1) “Auth failed” — what is it?
+
 That’s when:
+
 - Firebase/Auth provider errors out
 - token refresh fails
 - auth request returns an error
 - user session is corrupted
 
 We show **AuthError** with:
+
 - Retry
 - Re-login
 - (optional) log-out cleanup
 
 ##### 2) What replaced “fallback/default” for mode?
+
 Instead of “fallback/default” arrows, we made it explicit:
 
 **ModeContext resolves mode**:
+
 - if user has a stored `lastMode` → use it
 - else derive from role:
   - GM → GM mode
@@ -230,12 +251,15 @@ Instead of “fallback/default” arrows, we made it explicit:
 So Mode resolve always succeeds unless the app is truly broken.
 
 ##### 3) Campaign list assumption fixed
+
 We now have a proper split:
+
 - **0 accessible campaigns** → NoCampaignAccess
 - **1 accessible campaign** → Auto-select (no picker)
 - **2+ campaigns** → CampaignPicker
 
 ##### 4) Picker shows only campaigns you can access
+
 This is now baked in as a rule via:
 > `Load accessible campaigns`
 
@@ -250,6 +274,7 @@ Same rule for GM: a GM sees only campaigns they’re a member/owner of.
 You’re not crazy for thinking about this now — but we should **treat it as a requirement stub**, not a design rabbit hole.
 
 ##### What we do *now* (lightweight, correct)
+
 We add one concept into requirements:
 
 - **Tenant / Workspace boundary**
@@ -258,14 +283,17 @@ We add one concept into requirements:
   - campaign listing is filtered by tenant membership
 
 This prevents:
+
 - GM A seeing GM B’s campaigns
 - cross-party leakage
 - accidental “global admin” assumptions
 
 ##### When do we fully design it?
+
 During **Architecture design / Data ownership map deep dive**, not during userflows.
 
 So: **yes, we include a Tenant node in Flow #1 (done)**, and later we’ll formalize it in:
+
 - Data model
 - Security rules
 - Query patterns
@@ -318,11 +346,13 @@ flowchart TB
 ### Key Rules (these matter later)
 
 #### Campaign switching **never**
+
 - preserves the current page blindly
 - assumes permissions stay the same
 - keeps edit state alive
 
 #### Campaign switching **always**
+
 - resets routing to a safe landing page
 - re-evaluates permissions
 - re-renders page content
@@ -333,6 +363,7 @@ flowchart TB
 ### Unhappy / Edge Paths (Explicit)
 
 #### Campaign deleted while user is inside it
+
 - CampaignContext fails validation
 - User is redirected into Flow 2 automatically
 - CampaignAccessError is shown
@@ -341,6 +372,7 @@ flowchart TB
 ---
 
 #### Access revoked mid-session
+
 - Same behavior as deletion
 - No silent failures
 - No stale data shown
@@ -348,6 +380,7 @@ flowchart TB
 ---
 
 #### Network failure during switch
+
 - AppShell remains visible
 - Current campaign context is **not destroyed**
 - Retry does not force logout or reload
@@ -355,6 +388,7 @@ flowchart TB
 ---
 
 #### GM vs Player differences
+
 - GM may see “Create campaign” CTA when count = 0
 - Player never sees campaigns they don’t belong to
 - Picker contents are always filtered by access
@@ -362,6 +396,7 @@ flowchart TB
 ---
 
 ### Invariants Established by Flow 2
+
 - CampaignContext is **the single source of truth**
 - Route safety beats convenience
 - No page owns campaign state
@@ -372,7 +407,9 @@ flowchart TB
 ## Flow 3 — Route Access & Guarding
 
 ### Purpose
+
 Define what happens when a user navigates to any route:
+
 - via Sidebar
 - via URL/deep link
 - via refresh
@@ -380,6 +417,7 @@ Define what happens when a user navigates to any route:
 - after switching campaign
 
 This flow ensures:
+
 - no forbidden content leaks
 - users always land somewhere safe
 - errors are recoverable (not dead ends)
@@ -387,6 +425,7 @@ This flow ensures:
 ---
 
 ### Core Inputs (what guards decide with)
+
 - **Auth state** (authenticated / not authenticated / failed)
 - **Mode** (GM / Player)
 - **CampaignContext** (selected / missing / invalid)
@@ -397,6 +436,7 @@ This flow ensures:
 ---
 
 ### Route Policies (TO-BE)
+
 Routes declare their policy explicitly:
 
 - **Public**: no auth required (Login only)
@@ -462,6 +502,7 @@ flowchart TB
 ### Unhappy Paths (Explicit Behaviours)
 
 #### Player opens a GM-only page (URL or sidebar glitch)
+
 - Route guard blocks access
 - **NotAuthorized** page is shown with GM-only messaging
 - Clear CTA provided: **“Go Home”** (Dashboard)
@@ -469,6 +510,7 @@ flowchart TB
 ---
 
 #### Player opens PCs page but has no assigned character
+
 - If the route is **PlayerScoped**:
   - Access is blocked
   - **NotAuthorized** is shown
@@ -480,6 +522,7 @@ flowchart TB
 ---
 
 #### User deep-links to an entity that doesn’t exist
+
 - **NotFound** page is shown
 - CTAs provided:
   - **“Go Home”**
@@ -488,6 +531,7 @@ flowchart TB
 ---
 
 #### User switches to Player mode while on a GM-only route
+
 - Route policy is re-evaluated immediately on mode change
 - User is:
   - blocked with **NotAuthorized**, or
@@ -497,6 +541,7 @@ flowchart TB
 ---
 
 #### Campaign missing or invalid during navigation
+
 - Guard blocks navigation with:
   - **CampaignRequired**, or
   - **CampaignAccessError**
@@ -506,6 +551,7 @@ flowchart TB
 ---
 
 #### Network failure during entity fetch
+
 - **NetworkError** is shown (non-destructive)
 - AppShell remains visible
 - **Retry** action re-attempts the fetch
@@ -526,9 +572,11 @@ flowchart TB
 ## Flow 4 — Player Happy Path (Session Night)
 
 ### Purpose
+
 Describe the ideal, low-friction experience for a **Player** during a game session.
 
 This flow prioritizes:
+
 - clarity over power
 - reading over editing
 - zero permission anxiety
@@ -537,11 +585,13 @@ This flow prioritizes:
 ---
 
 ### Actor
+
 - Player (authenticated, non-GM)
 
 ---
 
 ### Preconditions
+
 - User is authenticated
 - Player mode is active
 - Campaign is selected and accessible
@@ -550,7 +600,9 @@ This flow prioritizes:
 ---
 
 ### Success Result
+
 Player can:
+
 - immediately see their character
 - access shared party resources
 - read session-related information
@@ -569,10 +621,11 @@ Player can:
 
 ### Characters & Inventory
 
-5. Player navigates to **PCs**.
-6. PCs page loads in **Player view**.
+1. Player navigates to **PCs**.
+2. PCs page loads in **Player view**.
 
 #### Characters tab behaviour
+
 - If player has **exactly one assigned character**:
   - Character profile loads automatically
   - No card selection required
@@ -580,51 +633,52 @@ Player can:
   - Character cards are shown
   - Player selects one to view
 
-7. Character profile is shown:
+1. Character profile is shown:
    - All fields are **read-only**
    - No edit actions are visible
 
 #### Bag of Holding tab
-8. Player switches to **Bag of Holding** tab.
-9. Shared party inventory is displayed.
-10. Player may:
+
+1. Player switches to **Bag of Holding** tab.
+2. Shared party inventory is displayed.
+3. Player may:
     - view items
     - (optionally) assign items to themselves if allowed
-11. No destructive actions are available.
+4. No destructive actions are available.
 
 ---
 
 ### Session Awareness
 
-12. Player navigates to **Sessions**.
-13. Sessions list is displayed (read-only).
-14. Player opens the **current or most recent session**.
-15. Session details are shown:
+ 1. Player navigates to **Sessions**.
+ 2. Sessions list is displayed (read-only).
+ 3. Player opens the **current or most recent session**.
+ 4. Session details are shown:
     - notes
     - summary
     - outcomes
-16. No editing or GM-only controls are visible.
+ 5. No editing or GM-only controls are visible.
 
 ---
 
 ### World Reference (Optional)
 
-17. Player may navigate to:
+ 1. Player may navigate to:
     - **Maps**
     - **Lore**
     - **Items**
     - **NPCs**
 
-18. All content is displayed in **read-only mode**.
-19. Navigation between these pages does not change context or permissions.
+ 2. All content is displayed in **read-only mode**.
+ 3. Navigation between these pages does not change context or permissions.
 
 ---
 
 ### Exit
 
-20. Player closes the app or navigates away.
-21. No unsaved changes exist.
-22. No confirmation dialogs are required.
+ 1. Player closes the app or navigates away.
+ 2. No unsaved changes exist.
+ 3. No confirmation dialogs are required.
 
 ---
 
@@ -699,14 +753,17 @@ flowchart TB
     GMTRY --> NA["[P] NotAuthorized<br>(CTA: Go Home)"]
     NA --> HOME
 ```
+
 ---
 
 ## Flow 5 — GM Happy Path (Prep + In-Session)
 
 ### Purpose
+
 Describe the ideal experience for a **GM** preparing a session and running it live.
 
 This flow prioritizes:
+
 - fast scanning over deep editing
 - intentional edits (no accidental changes)
 - smooth switching between prep and play
@@ -715,11 +772,13 @@ This flow prioritizes:
 ---
 
 ### Actor
+
 - GM (authenticated, GM mode active)
 
 ---
 
 ### Preconditions
+
 - User is authenticated
 - GM mode is active
 - Campaign is selected and accessible
@@ -727,7 +786,9 @@ This flow prioritizes:
 ---
 
 ### Success Result
+
 GM can:
+
 - prepare content efficiently
 - run a live session without UI friction
 - update outcomes after the session
@@ -757,28 +818,28 @@ GM can:
 
 ### Happy Path — In-Session Use
 
-9. GM opens the **current Session**.
-10. Session profile is visible:
+1. GM opens the **current Session**.
+2. Session profile is visible:
     - notes
     - participants
     - outcomes
-11. GM may:
+3. GM may:
     - reference NPCs
     - check Maps
     - review linked entities and cross-links
 
-12. GM switches between entities without losing session context.
+4. GM switches between entities without losing session context.
 
 ---
 
 ### Happy Path — After Session
 
-13. GM updates:
+ 1. GM updates:
     - session summary
     - item changes
     - cross-link changes
-14. GM saves changes.
-15. GM exits session context.
+ 2. GM saves changes.
+ 3. GM exits session context.
 
 ---
 
@@ -863,7 +924,6 @@ flowchart TB
 ```
 
 ---
-
 
 ## Flow 6 - Operational Failure Mini-Flows
 

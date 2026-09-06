@@ -1,10 +1,14 @@
 # Context and Persistence Architecture
 
-This diagram describes the current context composition. Core campaign data is
-served through the Vercel API and Neon repositories; a limited set of
-bootstrap, membership, invitation, settings, mail, and legacy assignment paths
-remain transitional Firestore integrations. See
-`docs/architecture/SYSTEM_OVERVIEW.md` and ADR 0003 for ownership details.
+Application state, including bootstrap and membership resolution, is served
+through authenticated Vercel APIs and Neon. Mail uses direct Brevo. See
+[System Overview](architecture/SYSTEM_OVERVIEW.md) for operational exceptions.
+
+The diagrams below are conceptual context/permission contracts, not a literal
+component inventory. Current composition is `AuthProvider` in `src/main.jsx`,
+then `TenantProvider`, `CampaignProvider`, invitation resolution and `ModeProvider`
+under `AppProviders` on application routes. The public shell is outside those
+application providers; see [routing-map.md](routing-map.md).
 
 ```mermaid
 ---
@@ -18,13 +22,13 @@ flowchart TB
     A2 --> A1
     A1 -- Yes --> CTX_AUTH["[CTX] AuthContext</br>(userId, email)"]
     CTX_AUTH --> WS_LIST{"[G] Workspaces accessible?</br>(memberships)"}
-    WS_LIST -- No --> WS_NONE["[P] NoWorkspace</br>(CTA later)"]
+    WS_LIST -- No --> WS_NONE["[P] BootstrapWorkspace"]
     WS_LIST -- Yes --> WS_ONE{"[G] Exactly 1 workspace?"}
     WS_ONE -- Yes --> CTX_WS["[CTX] WorkspaceContext</br>(activeWorkspaceId)"]
     WS_ONE -- No --> TOPBAR_PICK["[N] TopBar</br>(WorkspacePicker + CampaignPicker)"]
     TOPBAR_PICK -- select workspace --> CTX_WS
     CTX_WS --> CAMP_LIST{"[G] Campaigns accessible</br>in workspace?"} & CTX_WSPERM["[CTX] WorkspacePermissionContext</br>(WorkspaceAdmin | WorkspaceMember)"]
-    CAMP_LIST -- No --> CAMP_NONE["[P] NoCampaign</br>(CTA later)"]
+    CAMP_LIST -- No --> CAMP_NONE["[P] BootstrapCampaign</br>(creation requires workspace owner)"]
     CAMP_LIST -- Yes --> CAMP_ONE{"[G] Exactly 1 campaign?"}
     CAMP_ONE -- Yes --> CTX_CAMP["[CTX] CampaignContext</br>(activeCampaignId)"]
     CAMP_ONE -- No --> TOPBAR_PICK
@@ -36,7 +40,7 @@ flowchart TB
     CTX_MODE_P --> SHELL["[L] AppShell"]
     CTX_MODE_GM --> SHELL
     SHELL --> SIDEBAR["[N] Sidebar</br>(mode-filtered navigation)"] & ROUTES["[L] Routes</br>(guarded)"]
-    ROUTES --> DATA["[DATA] API + persistence adapters</br>(Neon core; transitional Firestore)"]
+    ROUTES --> DATA["[DATA] Authenticated API + Neon repositories"]
 
      A1:::guard
      A2:::page
@@ -204,7 +208,7 @@ class RouteGuard {
 
 class PersistenceAdapters {
   +Neon API repositories
-  +transitional Firestore adapters
+  +server-side membership and visibility checks
 }
 
 class DataScope {

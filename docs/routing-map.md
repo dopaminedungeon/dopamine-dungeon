@@ -1,3 +1,33 @@
+# Routing Map
+
+## Current entry boundary (2026-09-05)
+
+`src/App.jsx` separates public routes from `ApplicationBoundary`; `src/main.jsx`
+provides Firebase authentication globally. Public browsing does not require a
+workspace or campaign and does not grant access to application data.
+
+| Entry | Current behavior |
+|---|---|
+| `/`, `/about`, `/features`, `/pricing`, `/resources`, `/socials` | PublicSiteShell; About, Pricing, and Resources are coming-soon pages |
+| `/login`, `/get-started` | Authentication entry; established sessions continue through `/home` access resolution |
+| `/auth/recover`, `/auth/reset-password` | Standalone Firebase-owned recovery/action flow |
+| `/auth/verify-email` | Verification result and safe continuation; action code is not a login credential |
+| Other routes | Application providers and AppGate resolve verified identity, invitation acceptance, workspace, then campaign |
+| No accessible workspace / campaign | BootstrapWorkspace / BootstrapCampaign; campaign creation requires persisted workspace ownership server-side |
+| `/home`, entity routes, `/settings/profile`, `/campaigns/settings` | AppLayout after access resolution; Campaign Settings additionally gates GM UI |
+
+Pending invite acceptance and membership refresh block bootstrap until resolved.
+Failure offers recovery rather than inferred membership. Selected Player mode
+cannot elevate capability or expose GM-only responses; protected APIs validate
+identity and persisted scope independently of this navigation flow.
+
+## Conceptual application route contract
+
+The older diagram below describes intended application-route guards and page
+buckets, not the public entry path or literal React component names. Current
+entry behavior is the table above. Mode defaults in this conceptual UI diagram
+do not override the server's fail-closed Player response policy.
+
 ```mermaid
 ---
 config:
@@ -200,3 +230,4 @@ J_CAMP((Campaign routes))
 J_PLAYER((Player routes))
 J_GM((GM routes))
 J_ERR((Errors))
+```

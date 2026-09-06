@@ -25,7 +25,8 @@ Audit classification: Current
 - Isolated auth browser tests do not access Neon or real Firebase; application
   APIs are intercepted with deterministic fixtures. Full-stack local and
   Preview QA remain necessary for Vercel routing, server credentials, Neon,
-  Firestore transitional paths, and provider settings.
+  mail delivery, and provider settings. Historical Firestore reconciliation is
+  a separate operational verification task.
 
 ## Consequences
 

@@ -1,6 +1,6 @@
 # Dopamine Dungeon Roadmap
 
-Last updated: 2026-08-24
+Last updated: 2026-09-05
 Owner: Magda
 
 ## Product direction
@@ -27,15 +27,20 @@ The product currently supports core campaign-management foundations including:
 
 Some modules remain incomplete, transitional, or partially implemented.
 `CURRENT_STATE.md` is the authoritative operational snapshot.
-Iteration 2 is closed; its final retrospective and next-iteration handoff are
-in `docs/sprints/current.md`.
+Iteration 3's implementation is merged; its evidence and next-iteration inputs
+are in [the retrospective](../sprints/iteration-3-retrospective-notes.md).
 
 ## Iteration ownership
 
 Iteration 2 focused on code cleanup, automated testing and the DD Quality Gate,
 repository/CI administration, and backlog hygiene. Authentication work is
-present in the repository context, but authentication features and their
-remaining delivery remain assigned to Iteration 3.
+present in that historical context. Iteration 3 delivered authentication,
+onboarding, public/app separation, and application Firestore retirement.
+Release operations and live readiness are separate from merged implementation.
+Iteration 4 focuses on bugfixing (v0.6.1); its current goals, sequencing and
+dependencies are in [current.md](../sprints/current.md). Magda owns
+prioritization, and the Project owns iteration assignment; this roadmap does
+not imply that planned work is delivered.
 
 ## Near-term priorities
 
@@ -109,7 +114,7 @@ These are directional opportunities, not committed scope:
 - encounter preparation;
 - quest and clue tracking;
 - session recap tooling;
-- structured campaign onboarding;
+- richer campaign onboarding beyond the implemented creation flow;
 - import and export;
 - audit history;
 - improved player-facing views.
