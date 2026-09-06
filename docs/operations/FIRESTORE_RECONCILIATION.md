@@ -38,26 +38,19 @@ Preview may use Vercel's injected process environment. The tool never falls
 back to `.env.local` or inherited credentials, and it rejects both or neither
 source selections.
 
-## Retired temporary Production audit path
+## Temporary Production audit path (retired)
 
-[PR #373](https://github.com/dopaminedungeon/dopamine-dungeon/pull/373) removed
-this path from `main` after its reported approved evidence capture and claim
-revocation. It remains in the audited `dev` snapshot; [#374](https://github.com/dopaminedungeon/dopamine-dungeon/issues/374)
-tracks integration of that removal. Do not regrant the claim or restore the
-reader from this historical description. Future evidence capture requires a
-new reviewed mechanism. [#375](https://github.com/dopaminedungeon/dopamine-dungeon/issues/375)
-owns reconciliation of the remaining operator evidence and retirement gates.
+The one-time #298 Production baseline was captured through a temporary,
+GET-only `productionReadOnlyAudit` resource in the existing
+`api/worldbuilding` function. It required a verified Firebase ID token with
+the temporary `productionAudit` claim and validated the Production Firebase
+project and Neon target before performing Firestore reads and PostgreSQL
+`SELECT` queries.
 
-For the one-time #298 Production baseline, a temporary `productionReadOnlyAudit`
-resource was branched through the existing `api/worldbuilding` function. It is
-GET-only, requires a verified Firebase ID token with the explicit
-`productionAudit` custom claim, and fails closed unless `VERCEL_ENV` is
-`production`, Firebase is `dopamine-dungeon-prod`, and the parsed Neon endpoint
-and database match the owner-approved Production target. It performs only
-Firestore reads and PostgreSQL `SELECT` queries and returns aggregate,
-sanitized evidence. It does not send mail, reserve limits, mutate Auth, write
-reports, or persist results. Remove this branch and module immediately after
-the reviewed Production evidence capture; it is not a permanent product API.
+The sanitized evidence was captured and the temporary claim was removed. The
+route, implementation module, and dedicated tests have now been removed from
+the release source. Future audits must use a newly reviewed, explicitly
+approved mechanism; this resource is no longer available.
 
 ## Vercel Preview process mode
 
