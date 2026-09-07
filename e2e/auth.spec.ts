@@ -2493,11 +2493,9 @@ test("keeps retired feature and placeholder controls out of authenticated naviga
 });
 
 test("consolidates scoped invitation lifecycle rows into Campaign people for owner GM mode", async ({
-  expectedConsoleErrors,
   page,
   request,
 }) => {
-  expectedConsoleErrors.push("Failed to load resource");
   const resendAvailableAt = new Date(Date.now() + 1_250).toISOString();
   await page.route("**/api/campaign-content?resource=campaignSettings**", async (route) => {
     await route.fulfill({
@@ -2737,6 +2735,123 @@ test("consolidates scoped invitation lifecycle rows into Campaign people for own
   await page.getByRole("button", { name: "Player", exact: true }).click();
   await expect(page.getByRole("button", { name: "Invite player", exact: true })).toHaveCount(0);
   await expect(page.getByText("Campaign people", { exact: true })).toHaveCount(0);
+});
+
+test("prevents self-removal and keeps Campaign Settings in authorized GM mode", async ({
+  page,
+  request,
+}) => {
+  const protectedRequestModes: string[] = [];
+  const recordMode = (headers: Record<string, string>) => {
+    protectedRequestModes.push(headers["x-dd-mode"] || "missing");
+  };
+
+  await page.route("**/api/campaign-content?resource=campaignSettings**", async (route) => {
+    recordMode(route.request().headers());
+    await route.fulfill({
+      status: 200,
+      json: {
+        ok: true,
+        campaign: {
+          id: readyCampaignId,
+          campaignId: "e2e-campaign",
+          workspaceId: readyWorkspaceId,
+          name: "E2E Campaign",
+          description: "Authentication emulator test campaign",
+          status: "active",
+          system: "",
+          playerSummary: "",
+          gmNotes: "",
+          startDate: "",
+          endDate: "",
+        },
+      },
+    });
+  });
+  await page.route("**/api/campaign-content?resource=campaignPeople**", async (route) => {
+    recordMode(route.request().headers());
+    await route.fulfill({
+      status: 200,
+      json: {
+        ok: true,
+        campaignId: "e2e-campaign",
+        people: [
+          {
+            id: "member-current",
+            docId: "membership-current",
+            type: "member",
+            status: "accepted",
+            email: "current@example.test",
+            displayName: "Current GM",
+            label: "Current GM",
+            userId: "e2e-user",
+            workspaceRole: "owner",
+            campaignRole: "gm",
+            characterIds: [],
+          },
+          {
+            id: "member-other",
+            docId: "membership-other",
+            type: "member",
+            status: "accepted",
+            email: "other@example.test",
+            displayName: "Other Member",
+            label: "Other Member",
+            userId: "other-user",
+            workspaceRole: "member",
+            campaignRole: "player",
+            characterIds: [],
+          },
+        ],
+      },
+    });
+  });
+  await page.route("**/api/campaign-content?resource=characterAssignments**", async (route) => {
+    recordMode(route.request().headers());
+    await route.fulfill({
+      status: 200,
+      json: {
+        ok: true,
+        assignments: [],
+        assignedCharacterIds: [],
+        pendingAssignedCharacterIds: [],
+        characters: [],
+      },
+    });
+  });
+  await page.route("**/api/worldbuilding?resource=characters**", async (route) => {
+    recordMode(route.request().headers());
+    await route.fulfill({ status: 200, json: { ok: true, characters: [] } });
+  });
+
+  await signInVerifiedUser(page, request);
+  await expect(page.getByRole("heading", { name: "E2E Campaign" })).toBeVisible();
+  await page.getByRole("button", { name: "GM", exact: true }).click();
+  await page.goto("/campaigns/settings");
+
+  const currentUserRow = page
+    .getByText("current@example.test", { exact: true })
+    .locator("xpath=ancestor::tr");
+  const otherMemberRow = page
+    .getByText("other@example.test", { exact: true })
+    .locator("xpath=ancestor::tr");
+  await expect(currentUserRow.getByRole("button", { name: "Remove", exact: true })).toHaveCount(0);
+  await expect(otherMemberRow.getByRole("button", { name: "Remove", exact: true })).toBeVisible();
+  expect(protectedRequestModes.length).toBeGreaterThan(0);
+  expect(protectedRequestModes.every((mode) => mode === "gm")).toBe(true);
+
+  await page.getByRole("button", { name: "Player", exact: true }).click();
+  await expect(
+    page.getByRole("link", { name: "Campaign Settings", exact: true })
+  ).toHaveCount(0);
+  await expect(page.getByText("Campaign people", { exact: true })).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "Remove", exact: true })).toHaveCount(0);
+  await expect(page.getByText("GM-only. Nice try though 😈", { exact: true })).toBeVisible();
+
+  await page.goto("/home");
+  await page.goto("/campaigns/settings");
+  await expect(page.getByText("GM-only. Nice try though 😈", { exact: true })).toBeVisible();
+  expect(protectedRequestModes).not.toContain("player");
 });
 
 test("shows a generic error for incorrect credentials", async ({ page }) => {

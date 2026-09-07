@@ -74,7 +74,7 @@ export default function CampaignSettings() {
     campaignRole,
     refreshCampaigns,
   } = useCampaign();
-  const { selectedTenantId, workspaceRole } = useTenant();
+  const { selectedTenantId, workspaceRole, accessSnapshot } = useTenant();
 
   const activeCampaign = useMemo(() => {
     return (
@@ -110,8 +110,10 @@ export default function CampaignSettings() {
   const [invitationActionNotice, setInvitationActionNotice] = useState("");
   const [resendNow, setResendNow] = useState(() => Date.now());
   const createIdempotencyKeyRef = useRef(null);
+  const canManageCampaign = isGM && campaignRole === "gm";
   const canManageInvitations =
-    isGM && workspaceRole === "owner" && campaignRole === "gm";
+    canManageCampaign && workspaceRole === "owner";
+  const currentUserId = accessSnapshot?.user?.id ?? null;
 
   useEffect(() => {
     const hasActiveResendCooldown = campaignPeople.some((person) => {
@@ -175,7 +177,7 @@ export default function CampaignSettings() {
     let cancelled = false;
 
     async function loadCampaignSettings() {
-      if (!activeCampaign || !selectedCampaignId) {
+      if (!canManageCampaign || !activeCampaign || !selectedCampaignId) {
         setDraft(null);
         return;
       }
@@ -201,12 +203,15 @@ export default function CampaignSettings() {
     return () => {
       cancelled = true;
     };
-  }, [activeCampaign, selectedCampaignId]);
+  }, [activeCampaign, canManageCampaign, selectedCampaignId]);
 
   useEffect(() => {
     const loadCampaignPeople = async () => {
-      if (!selectedCampaignId) {
+      if (!canManageCampaign || !selectedCampaignId) {
         setCampaignPeople([]);
+        setAssignmentRows([]);
+        setCampaignCharacters([]);
+        setAssignableCharacters([]);
         return;
       }
 
@@ -240,9 +245,15 @@ export default function CampaignSettings() {
     };
 
     loadCampaignPeople();
-  }, [selectedCampaignId, saveState.type, saveState.message, campaignPeopleVersion]);
+  }, [
+    canManageCampaign,
+    selectedCampaignId,
+    saveState.type,
+    saveState.message,
+    campaignPeopleVersion,
+  ]);
 
-  if (!isGM || (campaignRole && campaignRole !== "owner" && campaignRole !== "gm")) {
+  if (!canManageCampaign) {
     return (
       <div className="text-white p-6">
         <h1 className="text-2xl font-bold">Campaign Settings</h1>
@@ -898,19 +909,23 @@ export default function CampaignSettings() {
                               ) : null}
                             </td>
                             <td className="rounded-r-2xl border-y border-r border-white/10 bg-white/[0.025] px-4 py-3">
-                              <div className="flex justify-end">
-                                <button
-                                  type="button"
-                                  onClick={() => onRemoveCampaignMember(person.docId)}
-                                  disabled={Boolean(peopleActionId)}
-                                  className="inline-flex items-center gap-2 rounded-xl border border-red-400/20 bg-red-400/10 px-3 py-2 text-xs text-red-100 transition hover:bg-red-400/20 disabled:cursor-not-allowed disabled:opacity-50"
-                                >
-                                  <UserMinus className="h-4 w-4" />
-                                  {peopleActionId === `remove-${person.docId}`
-                                    ? "Removing…"
-                                    : "Remove"}
-                                </button>
-                              </div>
+                              {currentUserId && person.userId !== currentUserId ? (
+                                <div className="flex justify-end">
+                                  <button
+                                    type="button"
+                                    onClick={() => onRemoveCampaignMember(person.docId)}
+                                    disabled={Boolean(peopleActionId)}
+                                    className="inline-flex items-center gap-2 rounded-xl border border-red-400/20 bg-red-400/10 px-3 py-2 text-xs text-red-100 transition hover:bg-red-400/20 disabled:cursor-not-allowed disabled:opacity-50"
+                                  >
+                                    <UserMinus className="h-4 w-4" />
+                                    {peopleActionId === `remove-${person.docId}`
+                                      ? "Removing…"
+                                      : "Remove"}
+                                  </button>
+                                </div>
+                              ) : (
+                                <span className="text-xs text-zinc-500">—</span>
+                              )}
                             </td>
                           </tr>
                         ))}
