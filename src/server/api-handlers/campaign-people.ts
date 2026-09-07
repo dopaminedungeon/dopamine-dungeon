@@ -3,7 +3,7 @@ import { and, eq, inArray, isNotNull, lte } from "drizzle-orm";
 
 import {
   getCurrentUser,
-  requireCampaignGmOrWorkspaceOwner,
+  requireCampaignMember,
   resolveCampaignBySlug,
 } from "../access.js";
 import { setCorsHeaders } from "../cors.js";
@@ -18,6 +18,7 @@ import { characterAssignments } from "../../../db/schema/characterAssignments.js
 import { users } from "../../../db/schema/users.js";
 import { getInvitationCharacterIdsByInvitationId } from "../invitation-characters.js";
 import { getInvitationResendAvailableAt } from "../invitationLifecycle.js";
+import { canViewAsGm } from "../viewer-mode.js";
 
 type User = typeof users.$inferSelect;
 
@@ -97,6 +98,7 @@ async function removeCampaignMember(params: {
   campaignId: string;
   workspaceId: string;
   membershipId: string;
+  currentUserId: string;
 }) {
   const targetRows = await db
     .select()
@@ -112,6 +114,10 @@ async function removeCampaignMember(params: {
 
   if (!targetMembership) {
     throw new Error("Campaign member not found");
+  }
+
+  if (targetMembership.userId === params.currentUserId) {
+    throw new Error("You cannot remove yourself from the campaign");
   }
 
   const memberships = await db
@@ -167,11 +173,13 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const currentUser = await getCurrentUser(req);
     const campaign = await resolveCampaignBySlug(getCampaignIdParam(req) || "");
 
-    await requireCampaignGmOrWorkspaceOwner({
+    const currentMembership = await requireCampaignMember({
       campaignId: campaign.id,
-      workspaceId: campaign.workspaceId,
       userId: currentUser.id,
     });
+    if (!canViewAsGm(req, currentMembership.role)) {
+      throw new Error("Campaign GM mode required");
+    }
 
     if (req.method === "PATCH") {
       const updatedRows = await db
@@ -214,6 +222,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           campaignId: campaign.id,
           workspaceId: campaign.workspaceId,
           membershipId: personId,
+          currentUserId: currentUser.id,
         });
 
         return res.status(200).json({ ok: true });

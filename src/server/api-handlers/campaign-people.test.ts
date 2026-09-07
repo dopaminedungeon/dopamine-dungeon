@@ -7,25 +7,43 @@ const mocks = vi.hoisted(() => {
     selectRows: [] as unknown[][],
     updateValues: [] as Array<Record<string, unknown>>,
     invitationRows: [] as Array<Record<string, unknown>>,
+    deleteCalls: [] as unknown[],
+  };
+
+  const whereResult = () => {
+    const rows = state.selectRows.shift() ?? [];
+    const result = Promise.resolve(rows) as Promise<unknown[]> & {
+      limit: ReturnType<typeof vi.fn>;
+    };
+    result.limit = vi.fn().mockResolvedValue(rows);
+    return result;
+  };
+
+  const db = {
+    select: vi.fn(() => ({
+      from: vi.fn(() => ({
+        where: vi.fn(whereResult),
+      })),
+    })),
+    update: vi.fn(() => ({
+      set: vi.fn((values: Record<string, unknown>) => {
+        state.updateValues.push(values);
+        return { where: vi.fn().mockResolvedValue([]) };
+      }),
+    })),
+    delete: vi.fn((table: unknown) => ({
+      where: vi.fn(async () => {
+        state.deleteCalls.push(table);
+      }),
+    })),
+    transaction: vi.fn(async (callback: (tx: unknown) => Promise<void>) => callback(db)),
   };
 
   return {
     state,
-    db: {
-      select: vi.fn(() => ({
-        from: vi.fn(() => ({
-          where: vi.fn(() => Promise.resolve(state.selectRows.shift() ?? [])),
-        })),
-      })),
-      update: vi.fn(() => ({
-        set: vi.fn((values: Record<string, unknown>) => {
-          state.updateValues.push(values);
-          return { where: vi.fn().mockResolvedValue([]) };
-        }),
-      })),
-    },
+    db,
     getCurrentUser: vi.fn(),
-    requireCampaignGmOrWorkspaceOwner: vi.fn(),
+    requireCampaignMember: vi.fn(),
     resolveCampaignBySlug: vi.fn(),
     setCorsHeaders: vi.fn(),
     getInvitationCharacterIdsByInvitationId: vi.fn(),
@@ -34,7 +52,7 @@ const mocks = vi.hoisted(() => {
 
 vi.mock("../access.js", () => ({
   getCurrentUser: mocks.getCurrentUser,
-  requireCampaignGmOrWorkspaceOwner: mocks.requireCampaignGmOrWorkspaceOwner,
+  requireCampaignMember: mocks.requireCampaignMember,
   resolveCampaignBySlug: mocks.resolveCampaignBySlug,
 }));
 vi.mock("../db.js", () => ({ db: mocks.db }));
@@ -51,11 +69,21 @@ const campaign = {
   workspaceId: "00000000-0000-4000-8000-000000000004",
 };
 
-function request() {
+function request(params: {
+  method?: "GET" | "DELETE";
+  mode?: "gm" | "player";
+  memberId?: string;
+} = {}) {
   return {
-    method: "GET",
+    method: params.method ?? "GET",
     query: { campaignId: campaign.slug },
-    headers: { authorization: "Bearer emulator-token", "x-dd-mode": "gm" },
+    headers: {
+      authorization: "Bearer emulator-token",
+      "x-dd-mode": params.mode ?? "gm",
+    },
+    body: params.memberId
+      ? { campaignId: campaign.slug, personType: "member", personId: params.memberId }
+      : undefined,
   } as unknown as VercelRequest;
 }
 
@@ -104,9 +132,15 @@ beforeEach(() => {
   mocks.state.selectRows.length = 0;
   mocks.state.updateValues.length = 0;
   mocks.state.invitationRows.length = 0;
+  mocks.state.deleteCalls.length = 0;
   mocks.getCurrentUser.mockResolvedValue({ id: "user-owner" });
   mocks.resolveCampaignBySlug.mockResolvedValue(campaign);
-  mocks.requireCampaignGmOrWorkspaceOwner.mockResolvedValue(undefined);
+  mocks.requireCampaignMember.mockResolvedValue({
+    id: "membership-owner",
+    campaignId: campaign.id,
+    userId: "user-owner",
+    role: "gm",
+  });
   mocks.getInvitationCharacterIdsByInvitationId.mockImplementation(
     async (_db: unknown, invitations: Array<{ id: string }>) =>
       new Map(
@@ -163,9 +197,9 @@ test("projects members, pending invitations, and terminal history without duplic
   assert.equal(people[4].status, "revoked");
 });
 
-test("preserves the server GM-or-owner guard before any people projection query", async () => {
-  mocks.requireCampaignGmOrWorkspaceOwner.mockRejectedValue(
-    new Error("Campaign GM or workspace owner permission required")
+test("requires persisted campaign membership before any people projection query", async () => {
+  mocks.requireCampaignMember.mockRejectedValue(
+    new Error("Campaign membership required")
   );
   const { res, result } = response();
 
@@ -174,4 +208,112 @@ test("preserves the server GM-or-owner guard before any people projection query"
   assert.equal(result.status, 401);
   assert.equal(mocks.db.update.mock.calls.length, 0);
   assert.equal(mocks.db.select.mock.calls.length, 0);
+});
+
+test.each([
+  ["sole GM", [{ id: "membership-owner", userId: "user-owner", role: "gm" }]],
+  [
+    "one of multiple GMs",
+    [
+      { id: "membership-owner", userId: "user-owner", role: "gm" },
+      { id: "membership-other-gm", userId: "user-other-gm", role: "gm" },
+    ],
+  ],
+])("rejects self-removal for %s without mutating membership", async (_label, memberships) => {
+  mocks.state.selectRows.push([memberships[0]], memberships);
+  const { res, result } = response();
+
+  await campaignPeopleHandler(
+    request({ method: "DELETE", memberId: "membership-owner" }),
+    res
+  );
+
+  assert.equal(result.status, 401);
+  assert.deepEqual(result.body, {
+    ok: false,
+    error: "You cannot remove yourself from the campaign",
+  });
+  assert.equal(mocks.db.transaction.mock.calls.length, 0);
+  assert.equal(mocks.state.deleteCalls.length, 0);
+  assert.equal(mocks.db.select.mock.calls.length, 1);
+  assert.equal(mocks.state.selectRows.length, 1);
+});
+
+test.each([
+  ["selected Player mode", "gm", "player"],
+  ["non-GM campaign membership", "player", "gm"],
+] as const)("rejects member removal for %s before reading the target", async (_label, role, mode) => {
+  mocks.requireCampaignMember.mockResolvedValue({
+    id: "membership-owner",
+    campaignId: campaign.id,
+    userId: "user-owner",
+    role,
+  });
+  const { res, result } = response();
+
+  await campaignPeopleHandler(
+    request({ method: "DELETE", mode, memberId: "membership-other" }),
+    res
+  );
+
+  assert.equal(result.status, 401);
+  assert.deepEqual(result.body, { ok: false, error: "Campaign GM mode required" });
+  assert.equal(mocks.db.select.mock.calls.length, 0);
+  assert.equal(mocks.db.transaction.mock.calls.length, 0);
+  assert.equal(mocks.state.deleteCalls.length, 0);
+});
+
+test("allows an authenticated campaign GM in GM mode to remove another scoped member", async () => {
+  const targetMembership = {
+    id: "membership-other",
+    campaignId: campaign.id,
+    userId: "user-other",
+    role: "player",
+  };
+  mocks.state.selectRows.push(
+    [targetMembership],
+    [
+      {
+        id: "membership-owner",
+        campaignId: campaign.id,
+        userId: "user-owner",
+        role: "gm",
+      },
+      targetMembership,
+    ],
+    [
+      { workspaceId: campaign.workspaceId, userId: "user-owner", role: "member" },
+      { workspaceId: campaign.workspaceId, userId: "user-other", role: "member" },
+    ]
+  );
+  const { res, result } = response();
+
+  await campaignPeopleHandler(
+    request({ method: "DELETE", memberId: targetMembership.id }),
+    res
+  );
+
+  assert.equal(result.status, 200);
+  assert.deepEqual(result.body, { ok: true });
+  assert.deepEqual(mocks.requireCampaignMember.mock.calls[0]?.[0], {
+    campaignId: campaign.id,
+    userId: "user-owner",
+  });
+  assert.equal(mocks.db.transaction.mock.calls.length, 1);
+  assert.equal(mocks.state.deleteCalls.length, 2);
+});
+
+test("rejects a member id outside the resolved campaign without mutation", async () => {
+  mocks.state.selectRows.push([]);
+  const { res, result } = response();
+
+  await campaignPeopleHandler(
+    request({ method: "DELETE", memberId: "membership-other-campaign" }),
+    res
+  );
+
+  assert.equal(result.status, 401);
+  assert.deepEqual(result.body, { ok: false, error: "Campaign member not found" });
+  assert.equal(mocks.db.transaction.mock.calls.length, 0);
+  assert.equal(mocks.state.deleteCalls.length, 0);
 });
