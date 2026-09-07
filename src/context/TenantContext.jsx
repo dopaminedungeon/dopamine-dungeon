@@ -29,6 +29,7 @@ function writeStoredTenantId(tenantId) {
 export function TenantProvider({ children }) {
   const { user } = useAuth();
   const [tenants, setTenants] = useState([]);
+  const [accessSnapshot, setAccessSnapshot] = useState(null);
   const [tenantStatus, setTenantStatus] = useState("loading");
   const [workspaceRole, setWorkspaceRole] = useState(null);
   const [membershipVersion, setMembershipVersion] = useState(0);
@@ -59,6 +60,7 @@ export function TenantProvider({ children }) {
   const loadTenants = useCallback(async () => {
     if (!user) {
       setTenants([]);
+      setAccessSnapshot(null);
       setSelectedTenantId(null);
       setTenantStatus("unknown");
       setWorkspaceRole(null);
@@ -75,6 +77,7 @@ export function TenantProvider({ children }) {
 
       if (memberships.length === 0 || workspaces.length === 0) {
         setTenants([]);
+        setAccessSnapshot(apiMe);
         setSelectedTenantId(null);
         setTenantStatus("empty");
         setWorkspaceRole(null);
@@ -102,6 +105,7 @@ export function TenantProvider({ children }) {
       }).filter((workspace) => Boolean(workspace?.tenantId));
 
       setTenants(loaded);
+      setAccessSnapshot(apiMe);
 
       if (loaded.length === 0) {
         setSelectedTenantId(null);
@@ -130,6 +134,7 @@ export function TenantProvider({ children }) {
       setMembershipVersion((version) => version + 1);
     } catch (error) {
       console.error("[TenantContext] Failed to load tenants", error);
+      setAccessSnapshot(null);
       setWorkspaceRole(null);
       setTenantStatus("error");
     }
@@ -181,6 +186,7 @@ export function TenantProvider({ children }) {
     <TenantContext.Provider
       value={{
         tenants,
+        accessSnapshot,
         tenantStatus,
         selectedTenantId,
         workspaceRole,

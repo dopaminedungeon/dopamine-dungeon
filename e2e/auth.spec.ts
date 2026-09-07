@@ -2779,6 +2779,110 @@ test("@smoke signs out and keeps protected routes behind authentication", async 
   await expect(page.getByText("E2E Campaign", { exact: true })).toHaveCount(0);
 });
 
+test("restores an authorized nested route after refresh and in a new tab", async ({ page, request }) => {
+  await signInVerifiedUser(page, request);
+  await expect(page.getByRole("heading", { name: "E2E Campaign" })).toBeVisible();
+
+  await page.getByRole("button", { name: "Player", exact: true }).click();
+  await page.goto("/settings/profile");
+  await expect(page.getByRole("heading", { name: "Profile Settings" })).toBeVisible();
+
+  await page.reload();
+  await expect(page).toHaveURL(/\/settings\/profile$/);
+  await expect(page.getByRole("heading", { name: "Profile Settings" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Player", exact: true })).toHaveClass(/border-indigo-500/);
+  const newTab = await page.context().newPage();
+  try {
+    await newTab.route("**/api/**", async (route) => {
+      const requestUrl = new URL(route.request().url());
+      expect(route.request().headers().authorization).toMatch(/^Bearer /);
+      expect(route.request().headers()["x-dd-mode"]).toBe("player");
+
+      if (requestUrl.pathname === "/api/me") {
+        await route.fulfill({
+          status: 200,
+          json: {
+            ok: true,
+            user: { id: "e2e-user" },
+            workspaces: [
+              {
+                id: "00000000-0000-4000-8000-000000000001",
+                slug: "e2e-workspace",
+                name: "E2E Workspace",
+              },
+            ],
+            workspaceMemberships: [
+              {
+                workspaceId: "00000000-0000-4000-8000-000000000001",
+                userId: "e2e-user",
+                role: "owner",
+              },
+            ],
+            campaigns: [
+              {
+                id: "00000000-0000-4000-8000-000000000002",
+                workspaceId: "00000000-0000-4000-8000-000000000001",
+                slug: "e2e-campaign",
+                name: "E2E Campaign",
+                description: "Authentication emulator test campaign",
+              },
+            ],
+            campaignMemberships: [
+              {
+                campaignId: "00000000-0000-4000-8000-000000000002",
+                userId: "e2e-user",
+                role: "gm",
+              },
+            ],
+          },
+        });
+        return;
+      }
+
+      if (requestUrl.pathname === "/api/invitations/accept-pending") {
+        await route.fulfill({ status: 200, json: { ok: true, acceptedInvitations: [] } });
+        return;
+      }
+
+      await route.abort();
+    });
+    await newTab.goto("/settings/profile");
+    await expect(newTab).toHaveURL(/\/settings\/profile$/);
+    await expect(newTab.getByRole("heading", { name: "Profile Settings" })).toBeVisible();
+    await expect(newTab.getByRole("button", { name: "Player", exact: true })).toHaveClass(/border-indigo-500/);
+  } finally {
+    await newTab.close();
+  }
+});
+
+test("repairs stale persisted workspace and campaign selections without creating data", async ({
+  apiCallLog,
+  page,
+  request,
+}) => {
+  await signInVerifiedUser(page, request);
+  await expect(page.getByRole("heading", { name: "E2E Campaign" })).toBeVisible();
+
+  await page.evaluate(() => {
+    localStorage.setItem("dd_selectedTenantId", "stale-workspace");
+    localStorage.setItem("dd_selectedCampaignId", "stale-campaign");
+    localStorage.setItem("dd:mode:stale-workspace:stale-campaign", "gm");
+  });
+  const workspaceCreatesBeforeReload = apiCallLog.workspaceCreate.length;
+  const campaignCreatesBeforeReload = apiCallLog.campaignCreate.length;
+
+  await page.goto("/settings/profile");
+  await expect(page.getByRole("heading", { name: "Profile Settings" })).toBeVisible();
+  await expect
+    .poll(() => page.evaluate(() => localStorage.getItem("dd_selectedTenantId")))
+    .toBe("e2e-workspace");
+  await expect
+    .poll(() => page.evaluate(() => localStorage.getItem("dd_selectedCampaignId")))
+    .toBe("e2e-campaign");
+  expect(apiCallLog.workspaceCreate).toHaveLength(workspaceCreatesBeforeReload);
+  expect(apiCallLog.campaignCreate).toHaveLength(campaignCreatesBeforeReload);
+});
+
 test("@smoke keeps the public homepage outside application bootstrap", async ({
   apiCallLog,
   page,
