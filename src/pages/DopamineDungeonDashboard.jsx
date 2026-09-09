@@ -4,6 +4,7 @@ import { Home, ScrollText, Package, Users, Settings, Sparkles } from "lucide-rea
 import { useCampaign } from "../context/CampaignContext";
 import { useTenant } from "../context/TenantContext";
 import { useMode } from "../context/ModeContext";
+import { MarkdownContent } from "../components/MarkdownContent.jsx";
 
 export default function DopamineDungeonDashboard() {
   const campaignContext = useCampaign();
@@ -33,7 +34,8 @@ export default function DopamineDungeonDashboard() {
 
   const playerSummary =
     activeCampaign?.playerSummary?.trim() ||
-    activeCampaign?.description?.trim() ||
+    activeCampaign?.description?.trim() || "";
+  const playerSummaryPlaceholder =
     "No player-facing campaign summary yet. Your party has entered the dungeon beautifully underprepared.";
 
   const gmStatusMessage =
@@ -153,7 +155,11 @@ export default function DopamineDungeonDashboard() {
             <h1 className={`text-3xl font-bold tracking-tight bg-linear-to-r bg-clip-text text-transparent ${modeTheme.heroTitle}`}>
               {campaignName !== "No campaign selected" ? campaignName : "Dopamine Dungeon"}
             </h1>
-            <p className="mt-3 max-w-3xl text-sm leading-6 text-zinc-200">{playerSummary}</p>
+            <MarkdownContent
+              content={playerSummary}
+              placeholder={playerSummaryPlaceholder}
+              className="mt-3 max-w-3xl text-zinc-200"
+            />
             <div className="mt-4 flex flex-wrap items-center gap-3 text-xs text-zinc-400">
               <span className={`rounded-full border backdrop-blur-md px-3 py-1 ${modeTheme.workspaceChip}`}>
                 Workspace: {workspaceName}
@@ -242,9 +248,11 @@ export default function DopamineDungeonDashboard() {
       <section className="grid grid-cols-1 gap-6 lg:grid-cols-2">
         <div className={`rounded-3xl border bg-linear-to-br backdrop-blur-xl p-6 shadow-xl shadow-violet-950/15 transition-colors duration-500 ${modeTheme.leftBottomBorder} ${modeTheme.leftBottomBg}`}>
           <h2 className={`text-lg font-semibold bg-linear-to-r bg-clip-text text-transparent ${modeTheme.leftBottomTitle}`}>Latest player-safe context</h2>
-          <p className="mt-4 text-sm leading-6 text-zinc-200">
-            {playerSummary}
-          </p>
+          <MarkdownContent
+            content={playerSummary}
+            placeholder={playerSummaryPlaceholder}
+            className="mt-4 text-zinc-200"
+          />
         </div>
 
         <div className={`relative overflow-hidden rounded-3xl border bg-linear-to-br backdrop-blur-xl p-6 shadow-xl shadow-cyan-950/20 transition-colors duration-500 ${modeTheme.rightBottomBorder} ${modeTheme.rightBottomBg}`}>

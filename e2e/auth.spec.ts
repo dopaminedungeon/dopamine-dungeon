@@ -3102,6 +3102,76 @@ test("keeps failed Campaign Settings metadata saves recoverable and blocks dupli
   await expect(overview.getByLabel("System / ruleset (optional)")).toHaveValue("Recovered Rules");
 });
 
+test("renders saved player-facing Markdown after reload while keeping GM settings out of Player mode", async ({
+  apiMeResponse,
+  apiMeResponseController,
+  page,
+  request,
+}) => {
+  const markdown = "## The Broken Gate\n\nThe party arrives at **dawn**.\n\n---\n\nBring _torches_.";
+  let playerSummary = "Initial player summary";
+  let settingsRequests = 0;
+
+  await page.route("**/api/campaign-content?resource=campaignSettings**", async (route) => {
+    settingsRequests += 1;
+    if (route.request().method() === "PATCH") {
+      const body = route.request().postDataJSON() as { playerSummary?: string };
+      playerSummary = body.playerSummary || "";
+    }
+    await route.fulfill({
+      status: 200,
+      json: {
+        ok: true,
+        campaign: {
+          id: readyCampaignId, campaignId: "e2e-campaign", workspaceId: readyWorkspaceId,
+          name: "E2E Campaign", description: "Authentication emulator test campaign", status: "active",
+          system: "", playerSummary, gmNotes: "GM-only prep", startDate: "", endDate: "",
+        },
+      },
+    });
+  });
+  await page.route("**/api/campaign-content?resource=campaignPeople**", async (route) => {
+    await route.fulfill({ status: 200, json: { ok: true, people: [] } });
+  });
+  await page.route("**/api/campaign-content?resource=characterAssignments**", async (route) => {
+    await route.fulfill({ status: 200, json: { ok: true, assignments: [], assignedCharacterIds: [], pendingAssignedCharacterIds: [], characters: [] } });
+  });
+  await page.route("**/api/worldbuilding?resource=characters**", async (route) => {
+    await route.fulfill({ status: 200, json: { ok: true, characters: [] } });
+  });
+
+  await signInVerifiedUser(page, request);
+  await page.getByRole("button", { name: "GM", exact: true }).click();
+  await page.goto("/campaigns/settings");
+  await page.getByPlaceholder("What players generally know / the elevator pitch…").fill(markdown);
+  await page.getByRole("button", { name: "Save", exact: true }).click();
+  await expect(page.getByRole("status")).toHaveText("Campaign settings saved.");
+
+  apiMeResponseController.current = {
+    ...apiMeResponse,
+    campaigns: apiMeResponse.campaigns.map((campaign) =>
+      campaign.slug === "e2e-campaign" ? { ...campaign, playerSummary } : campaign
+    ),
+  };
+  await page.reload();
+  await expect(page.getByPlaceholder("What players generally know / the elevator pitch…")).toHaveValue(markdown);
+  await page.goto("/home");
+  await expect(page.getByRole("heading", { name: "The Broken Gate", exact: true }).first()).toBeVisible();
+  await expect(page.locator("strong", { hasText: "dawn" }).first()).toBeVisible();
+  await expect(page.locator("hr").first()).toBeVisible();
+
+  await page.goto("/campaigns/settings");
+  await expect(page.getByPlaceholder("What players generally know / the elevator pitch…")).toHaveValue(markdown);
+  const gmSettingsRequests = settingsRequests;
+  await page.getByRole("button", { name: "Player", exact: true }).click();
+  await page.goto("/campaigns/settings");
+  await expect(page.getByText("GM-only. Nice try though 😈", { exact: true })).toBeVisible();
+  expect(settingsRequests).toBe(gmSettingsRequests);
+  await page.goto("/home");
+  await expect(page.getByRole("heading", { name: "The Broken Gate", exact: true }).first()).toBeVisible();
+  await expect(page.getByText("GM-only prep", { exact: true })).toHaveCount(0);
+});
+
 test("shows a generic error for incorrect credentials", async ({ page }) => {
   const email = generatedEmail();
 

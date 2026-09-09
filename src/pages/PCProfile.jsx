@@ -5,6 +5,7 @@ import { useAuth } from "../context/AuthContext";
 import { useCampaign } from "../context/CampaignContext";
 import { getCharacterById, removeCharacter, upsertCharacter } from "../data/characters/characters.repo";
 import { getApiCharacterAssignments, unassignApiCharacter } from "../data/api/apiClient";
+import { MarkdownContent } from "../components/MarkdownContent.jsx";
 
 const abilityLabels = {
   str: "STR",
@@ -885,9 +886,11 @@ const PCProfile = () => {
                 {classSummary !== "—" ? ` ${classSummary}` : ""}
               </span>
             </h1>
-            <p className="text-xs md:text-sm text-zinc-400 max-w-2xl">
-              {pc.background || pc.publicNotes || "A brave disaster waiting to happen."}
-            </p>
+            <MarkdownContent
+              content={pc.background || pc.publicNotes}
+              placeholder="A brave disaster waiting to happen."
+              className="max-w-2xl text-xs md:text-sm text-zinc-400"
+            />
           </div>
 
           <div className="flex flex-col items-end gap-2 text-right">
@@ -1781,35 +1784,35 @@ const PCProfile = () => {
                   {pc.publicNotes ? (
                   <div>
                     <div className="text-[10px] uppercase tracking-wide text-zinc-500 mb-1">Public Notes</div>
-                    <p className="whitespace-pre-wrap">{pc.publicNotes}</p>
+                    <MarkdownContent content={pc.publicNotes} />
                   </div>
                   ) : null}
 
                   {narrative.personalityTraits ? (
                   <div>
                     <div className="text-[10px] uppercase tracking-wide text-zinc-500 mb-1">Personality Traits</div>
-                    <p className="whitespace-pre-wrap">{narrative.personalityTraits}</p>
+                    <MarkdownContent content={narrative.personalityTraits} />
                   </div>
                   ) : null}
 
                   {narrative.ideals ? (
                   <div>
                     <div className="text-[10px] uppercase tracking-wide text-zinc-500 mb-1">Ideals</div>
-                    <p className="whitespace-pre-wrap">{narrative.ideals}</p>
+                    <MarkdownContent content={narrative.ideals} />
                   </div>
                   ) : null}
 
                   {narrative.bonds ? (
                   <div>
                     <div className="text-[10px] uppercase tracking-wide text-zinc-500 mb-1">Bonds</div>
-                    <p className="whitespace-pre-wrap">{narrative.bonds}</p>
+                    <MarkdownContent content={narrative.bonds} />
                   </div>
                   ) : null}
 
                   {narrative.flaws ? (
                   <div>
                     <div className="text-[10px] uppercase tracking-wide text-zinc-500 mb-1">Flaws</div>
-                    <p className="whitespace-pre-wrap">{narrative.flaws}</p>
+                    <MarkdownContent content={narrative.flaws} />
                   </div>
                   ) : null}
                 </div>
@@ -1831,16 +1834,14 @@ const PCProfile = () => {
                 {isGMMode ? (
                   <>
                     {pc.gmNotes ? (
-                      <p className="text-[11px] md:text-xs text-zinc-200 whitespace-pre-wrap">
-                        {pc.gmNotes}
-                      </p>
+                      <MarkdownContent content={pc.gmNotes} className="text-[11px] md:text-xs text-zinc-200" />
                     ) : null}
                     {pc.secrets ? (
                       <div className="mt-2 rounded-lg bg-black/60 border border-rose-500/40 px-3 py-2 text-[11px] md:text-xs text-rose-100">
                         <div className="text-[10px] uppercase tracking-wide text-rose-300 mb-1">
                           Secrets
                         </div>
-                        <p className="whitespace-pre-wrap">{pc.secrets}</p>
+                        <MarkdownContent content={pc.secrets} />
                       </div>
                     ) : null}
                   </>

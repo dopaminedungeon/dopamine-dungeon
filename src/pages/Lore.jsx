@@ -14,6 +14,7 @@ import {
 import { useMode } from "../context/ModeContext.jsx";
 import { useCampaign } from "../context/CampaignContext";
 import { loreRepo } from "../data/lore/lore.repo";
+import { MarkdownContent } from "../components/MarkdownContent.jsx";
 import {
   compareCreatedAt,
   compareEntityNames,
@@ -109,21 +110,6 @@ function normalizeAliases(value) {
         .filter(Boolean)
     )
   );
-}
-
-function getPlainTextPreview(value, fallback = "No player-facing details added yet.") {
-  const text = String(value || "")
-    .replace(/^#{1,6}\s+/gm, "")
-    .replace(/^\s*[-*]\s+/gm, "")
-    .replace(/\*\*([^*]+)\*\*/g, "$1")
-    .replace(/(^|[^*])\*([^*]+)\*/g, "$1$2")
-    .replace(/_([^_]+)_/g, "$1")
-    .replace(/`([^`]+)`/g, "$1")
-    .replace(/\s+/g, " ")
-    .trim();
-
-  if (!text) return fallback;
-  return text.length > 180 ? `${text.slice(0, 177).trim()}...` : text;
 }
 
 function visibilityPill(visibility) {
@@ -456,9 +442,11 @@ export default function Lore() {
                           </p>
                         ) : null}
 
-                        <p className="line-clamp-4 text-sm leading-6 text-zinc-400">
-                          {getPlainTextPreview(entry.summary || entry.content)}
-                        </p>
+                        <MarkdownContent
+                          content={entry.summary || entry.content}
+                          placeholder="No player-facing details added yet."
+                          className="line-clamp-4 text-zinc-400"
+                        />
                       </Link>
                     );
                   })}

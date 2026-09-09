@@ -4,6 +4,7 @@ import { Link, useNavigate } from "react-router-dom";
 import { useMode } from "../context/ModeContext.jsx";
 import { useCampaign } from "../context/CampaignContext";
 import { itemsRepo } from "../data/items/items.repo";
+import { MarkdownContent } from "../components/MarkdownContent.jsx";
 import {
   compareCreatedAt,
   compareEntityNames,
@@ -388,9 +389,7 @@ export default function Items() {
             </div>
 
             <p className="text-zinc-500 text-sm mb-3">{item.type}</p>
-            <p className="text-zinc-400 text-sm mb-4 line-clamp-2">
-              {item.description}
-            </p>
+            <MarkdownContent content={item.description} className="mb-4 line-clamp-2 text-zinc-400" />
 
             <div className="flex items-center justify-between pt-3 border-t border-white/10">
               <div className="flex gap-2">
