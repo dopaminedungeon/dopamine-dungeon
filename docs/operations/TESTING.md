@@ -180,6 +180,26 @@ Firebase Local Emulator Suite requires Java 11 or newer. The test environment
 must fail closed instead of falling back to development, preview, or production
 Firebase. It must not create Neon records.
 
+The runner resolves the locally installed Firebase Tools and Playwright CLIs; it
+does not invoke pnpm, Corepack, installation, cleanup, or dependency repair.
+Firebase Tools 15.27.0 requires Node 20 or later, and the repository uses pnpm
+11.9.0 through its `packageManager` field. The runner creates one
+temporary Firebase configuration directory per run and passes its
+`XDG_CONFIG_HOME` only to the Firebase and Playwright child processes. It also
+sets Firebase Tools' supported `NO_UPDATE_NOTIFIER` environment switch for
+those children. This avoids user-level Firebase configstore writes and removes
+the temporary directory after emulator startup failure, test completion, or a
+signal.
+
+Do not set `CI=1` or `XDG_CONFIG_HOME` around a `pnpm test:e2e*` command. The
+runner creates its own child-only Firebase configuration directory. pnpm 11.9
+uses different default `enableGlobalVirtualStore` settings locally and in CI;
+the workspace therefore uses `verifyDepsBeforeRun: prompt` to fail before it
+tries to repair an out-of-sync installation. If a human-controlled environment
+receives that error, run `pnpm install --frozen-lockfile` in the normal shell
+environment before retrying. The auth test runner will report a missing local
+CLI but will never attempt to repair dependencies itself.
+
 The PR smoke tag currently owns exactly these journeys:
 
 - registration, blocked unverified access, emulator verification, and protected entry;
