@@ -1,6 +1,8 @@
 packages:
   - '.'
 
+verifyDepsBeforeRun: prompt
+
 allowBuilds:
   '@firebase/util': true
   esbuild: true
