@@ -87,6 +87,20 @@ test("GM updates and receives a canonical retained-field read-back with server-o
   });
 });
 
+test("rejects malformed and impossible calendar dates before updating the campaign", async () => {
+  for (const startDate of ["2026-02-30", "2026-13-01", "2026-01-01T00:00:00.000Z"]) {
+    allow("gm");
+    const rejected = response();
+    await campaignSettingsHandler(
+      request("PATCH", { campaignId: campaign.slug, name: campaign.name, startDate }),
+      rejected.res
+    );
+    assert.equal(rejected.result.status, 400);
+  }
+
+  assert.equal(mocks.db.update.mock.calls.length, 0);
+});
+
 test("Player mode, non-members, and cross-workspace callers cannot mutate or read settings", async () => {
   allow("gm"); const playerMode = response();
   await campaignSettingsHandler(request("PATCH", { campaignId: campaign.slug, name: "Nope" }, "player"), playerMode.res);
