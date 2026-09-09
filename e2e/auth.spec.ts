@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import type { APIRequestContext, Locator, Page } from "@playwright/test";
+import type { APIRequestContext, Locator, Page, Route } from "@playwright/test";
 
 import { verifyAuthHeader } from "../src/server/auth";
 import { test, expect } from "./auth.fixture";
@@ -2852,6 +2852,254 @@ test("prevents self-removal and keeps Campaign Settings in authorized GM mode", 
   await page.goto("/campaigns/settings");
   await expect(page.getByText("GM-only. Nice try though 😈", { exact: true })).toBeVisible();
   expect(protectedRequestModes).not.toContain("player");
+});
+
+test("persists canonical Campaign overview metadata across campaigns, reloads, and a new tab", async ({
+  page,
+  request,
+}) => {
+  const workspaceId = "00000000-0000-4000-8000-000000000031";
+  const campaignAId = "00000000-0000-4000-8000-000000000032";
+  const campaignBId = "00000000-0000-4000-8000-000000000033";
+  const apiMeResponse = {
+    ok: true,
+    user: { id: "e2e-user" },
+    workspaces: [{ id: workspaceId, slug: "metadata-workspace", name: "Metadata Workspace" }],
+    workspaceMemberships: [{ workspaceId, userId: "e2e-user", role: "owner" }],
+    campaigns: [
+      { id: campaignAId, workspaceId, slug: "metadata-campaign-a", name: "Campaign A", description: "Campaign A description" },
+      { id: campaignBId, workspaceId, slug: "metadata-campaign-b", name: "Campaign B", description: "Campaign B description" },
+    ],
+    campaignMemberships: [
+      { campaignId: campaignAId, userId: "e2e-user", role: "gm" },
+      { campaignId: campaignBId, userId: "e2e-user", role: "gm" },
+    ],
+  };
+  const settingsByCampaign = new Map([
+    ["metadata-campaign-a", {
+      id: campaignAId, campaignId: "metadata-campaign-a", workspaceId, name: "Campaign A", description: "Campaign A description",
+      status: "active", system: "Rules A", playerSummary: "", gmNotes: "", startDate: "2026-01-03", endDate: "2026-12-31",
+    }],
+    ["metadata-campaign-b", {
+      id: campaignBId, campaignId: "metadata-campaign-b", workspaceId, name: "Campaign B", description: "Campaign B description",
+      status: "completed", system: "Rules B", playerSummary: "", gmNotes: "", startDate: "2025-01-03", endDate: "2025-12-31",
+    }],
+  ]);
+  const patches: Array<Record<string, unknown>> = [];
+
+  const fulfillCampaignContent = async (route: Route) => {
+    const requestUrl = new URL(route.request().url());
+    const resource = requestUrl.searchParams.get("resource");
+    if (resource === "campaignSettings") {
+      const campaignId =
+        requestUrl.searchParams.get("campaignId") ||
+        String(route.request().postDataJSON()?.campaignId || "");
+      const current = settingsByCampaign.get(campaignId);
+      expect(current).toBeTruthy();
+      if (route.request().method() === "PATCH") {
+        const update = route.request().postDataJSON() as Record<string, unknown>;
+        patches.push(update);
+        const canonical = {
+          ...current!,
+          ...update,
+          system: "Canonical Rules",
+          updatedAt: "2026-02-01T00:00:00.000Z",
+        };
+        settingsByCampaign.set(campaignId, canonical);
+        await route.fulfill({ status: 200, json: { ok: true, campaign: canonical } });
+        return;
+      }
+      await route.fulfill({ status: 200, json: { ok: true, campaign: current } });
+      return;
+    }
+
+    if (resource === "campaignPeople") {
+      await route.fulfill({ status: 200, json: { ok: true, people: [] } });
+      return;
+    }
+    if (resource === "characterAssignments") {
+      await route.fulfill({ status: 200, json: { ok: true, assignments: [], assignedCharacterIds: [], pendingAssignedCharacterIds: [], characters: [] } });
+      return;
+    }
+    await route.abort();
+  };
+
+  await page.route("**/api/me", async (route) => {
+    await route.fulfill({ status: 200, json: apiMeResponse });
+  });
+  await page.route("**/api/campaign-content?**", fulfillCampaignContent);
+  await page.route("**/api/worldbuilding?resource=characters**", async (route) => {
+    await route.fulfill({ status: 200, json: { ok: true, characters: [] } });
+  });
+
+  const email = generatedEmail();
+  await createVerifiedUser(request, email, password);
+  await openEmailSignIn(page);
+  await page.getByLabel("Email address").fill(email);
+  await page.getByLabel("Password", { exact: true }).fill(password);
+  await page.getByRole("button", { name: "Sign in", exact: true }).click();
+  await page.getByRole("button", { name: "GM", exact: true }).click();
+  await page.goto("/campaigns/settings");
+
+  const overview = page
+    .getByRole("heading", { name: "Campaign overview", exact: true })
+    .locator("xpath=ancestor::section");
+  await expect(overview.getByLabel("Start date")).toHaveValue("2026-01-03");
+  await expect(overview.getByLabel("End date")).toHaveValue("2026-12-31");
+  await expect(page.getByRole("heading", { name: "Metadata", exact: true })).toHaveCount(0);
+
+  await overview.getByLabel("Status").selectOption("paused");
+  await overview.getByLabel("System / ruleset (optional)").fill("Draft rules");
+  await overview.getByLabel("Start date").fill("2026-02-03");
+  await overview.getByLabel("End date").fill("2027-01-04");
+  await page.getByRole("button", { name: "Save", exact: true }).click();
+  await expect(page.getByRole("status")).toHaveText("Campaign settings saved.");
+  expect(patches).toHaveLength(1);
+  expect(patches[0]).toMatchObject({
+    campaignId: "metadata-campaign-a",
+    status: "paused",
+    system: "Draft rules",
+    startDate: "2026-02-03",
+    endDate: "2027-01-04",
+  });
+  await expect(overview.getByLabel("Status")).toHaveValue("paused");
+  await expect(overview.getByLabel("System / ruleset (optional)")).toHaveValue("Canonical Rules");
+
+  await page.goto("/home");
+  await page.goto("/campaigns/settings");
+  await expect(overview.getByLabel("System / ruleset (optional)")).toHaveValue("Canonical Rules");
+  await page.reload();
+  await expect(overview.getByLabel("Start date")).toHaveValue("2026-02-03");
+  await expect(overview.getByLabel("End date")).toHaveValue("2027-01-04");
+
+  await page.locator("header select").nth(1).selectOption("metadata-campaign-b");
+  await expect(overview.getByLabel("System / ruleset (optional)")).toHaveValue("Rules B");
+  await expect(overview.getByLabel("Start date")).toHaveValue("2025-01-03");
+  await page.locator("header select").nth(1).selectOption("metadata-campaign-a");
+  await expect(overview.getByLabel("System / ruleset (optional)")).toHaveValue("Canonical Rules");
+
+  const newPage = await page.context().newPage();
+  try {
+    await newPage.route("http://127.0.0.1:4173/api/**", async (route) => {
+      const requestUrl = new URL(route.request().url());
+      if (requestUrl.pathname === "/api/auth/identity-continuity") {
+        await route.fulfill({ status: 200, json: { ok: true, neonUserId: "e2e-user" } });
+        return;
+      }
+      if (requestUrl.pathname === "/api/me") {
+        await route.fulfill({ status: 200, json: apiMeResponse });
+        return;
+      }
+      if (requestUrl.pathname === "/api/invitations/accept-pending") {
+        await route.fulfill({ status: 200, json: { ok: true, acceptedInvitations: [] } });
+        return;
+      }
+      if (requestUrl.pathname === "/api/campaign-content") {
+        await fulfillCampaignContent(route);
+        return;
+      }
+      if (requestUrl.pathname === "/api/worldbuilding") {
+        await route.fulfill({ status: 200, json: { ok: true, characters: [] } });
+        return;
+      }
+      await route.abort();
+    });
+    await newPage.goto("/campaigns/settings");
+    const reloadedOverview = newPage
+      .getByRole("heading", { name: "Campaign overview", exact: true })
+      .locator("xpath=ancestor::section");
+    await expect(reloadedOverview.getByLabel("Status")).toHaveValue("paused");
+    await expect(reloadedOverview.getByLabel("System / ruleset (optional)")).toHaveValue("Canonical Rules");
+    await expect(reloadedOverview.getByLabel("Start date")).toHaveValue("2026-02-03");
+    await expect(reloadedOverview.getByLabel("End date")).toHaveValue("2027-01-04");
+  } finally {
+    await newPage.close();
+  }
+});
+
+test("keeps failed Campaign Settings metadata saves recoverable and blocks duplicate submissions", async ({
+  expectedConsoleErrors,
+  page,
+  request,
+}) => {
+  let patchAttempts = 0;
+  let releaseSave: () => void = () => {};
+  const saveBlocked = new Promise<void>((resolve) => {
+    releaseSave = resolve;
+  });
+  expectedConsoleErrors.push("500 (Internal Server Error)");
+  expectedConsoleErrors.push("[CampaignSettings] Failed to save campaign");
+
+  await page.route("**/api/campaign-content?resource=campaignSettings**", async (route) => {
+    if (route.request().method() === "PATCH") {
+      patchAttempts += 1;
+      if (patchAttempts === 1) {
+        await saveBlocked;
+        await route.fulfill({ status: 500, json: { ok: false, error: "Settings unavailable" } });
+        return;
+      }
+      await route.fulfill({
+        status: 200,
+        json: {
+          ok: true,
+          campaign: {
+            id: readyCampaignId, campaignId: "e2e-campaign", workspaceId: readyWorkspaceId, name: "E2E Campaign",
+            description: "Authentication emulator test campaign", status: "paused", system: "Recovered Rules",
+            playerSummary: "", gmNotes: "", startDate: "2026-02-03", endDate: "2027-01-04",
+          },
+        },
+      });
+      return;
+    }
+    await route.fulfill({
+      status: 200,
+      json: {
+        ok: true,
+        campaign: {
+          id: readyCampaignId, campaignId: "e2e-campaign", workspaceId: readyWorkspaceId, name: "E2E Campaign",
+          description: "Authentication emulator test campaign", status: "active", system: "Initial Rules",
+          playerSummary: "", gmNotes: "", startDate: "2026-01-03", endDate: "2026-12-31",
+        },
+      },
+    });
+  });
+  await page.route("**/api/campaign-content?resource=campaignPeople**", async (route) => {
+    await route.fulfill({ status: 200, json: { ok: true, people: [] } });
+  });
+  await page.route("**/api/campaign-content?resource=characterAssignments**", async (route) => {
+    await route.fulfill({ status: 200, json: { ok: true, assignments: [], assignedCharacterIds: [], pendingAssignedCharacterIds: [], characters: [] } });
+  });
+  await page.route("**/api/worldbuilding?resource=characters**", async (route) => {
+    await route.fulfill({ status: 200, json: { ok: true, characters: [] } });
+  });
+
+  await signInVerifiedUser(page, request);
+  await page.getByRole("button", { name: "GM", exact: true }).click();
+  await page.goto("/campaigns/settings");
+  const overview = page
+    .getByRole("heading", { name: "Campaign overview", exact: true })
+    .locator("xpath=ancestor::section");
+  await overview.getByLabel("Status").selectOption("paused");
+  await overview.getByLabel("System / ruleset (optional)").fill("Retry Rules");
+  await overview.getByLabel("Start date").fill("2026-02-03");
+  await overview.getByLabel("End date").fill("2027-01-04");
+  const saveButton = page.getByRole("button", { name: "Save", exact: true });
+  await saveButton.click();
+  await expect(page.getByRole("button", { name: "Saving...", exact: true })).toBeDisabled();
+  expect(patchAttempts).toBe(1);
+
+  releaseSave();
+  await expect(page.getByRole("alert")).toHaveText("Could not save campaign settings.");
+  await expect(page.getByRole("status")).toHaveCount(0);
+  await expect(overview.getByLabel("Status")).toHaveValue("paused");
+  await expect(overview.getByLabel("System / ruleset (optional)")).toHaveValue("Retry Rules");
+  await expect(overview.getByLabel("Start date")).toHaveValue("2026-02-03");
+  await expect(overview.getByLabel("End date")).toHaveValue("2027-01-04");
+
+  await page.getByRole("button", { name: "Save", exact: true }).click();
+  await expect(page.getByRole("status")).toHaveText("Campaign settings saved.");
+  expect(patchAttempts).toBe(2);
+  await expect(overview.getByLabel("System / ruleset (optional)")).toHaveValue("Recovered Rules");
 });
 
 test("shows a generic error for incorrect credentials", async ({ page }) => {

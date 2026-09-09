@@ -177,7 +177,7 @@ export default function CampaignSettings() {
     let cancelled = false;
 
     async function loadCampaignSettings() {
-      if (!canManageCampaign || !activeCampaign || !selectedCampaignId) {
+      if (!canManageCampaign || !selectedCampaignId) {
         setDraft(null);
         return;
       }
@@ -203,7 +203,7 @@ export default function CampaignSettings() {
     return () => {
       cancelled = true;
     };
-  }, [activeCampaign, canManageCampaign, selectedCampaignId]);
+  }, [canManageCampaign, selectedCampaignId]);
 
   useEffect(() => {
     const loadCampaignPeople = async () => {
@@ -650,14 +650,20 @@ export default function CampaignSettings() {
               Campaign deletion is temporarily unavailable while #364 defines the safe lifecycle.
             </p>
             {saveState.type === "success" && (
-              <div className="mb-4 inline-flex items-center gap-2 rounded-full border border-emerald-400/20 bg-emerald-400/10 px-3 py-1.5 text-emerald-200 text-sm">
+              <div
+                role="status"
+                className="mb-4 inline-flex items-center gap-2 rounded-full border border-emerald-400/20 bg-emerald-400/10 px-3 py-1.5 text-emerald-200 text-sm"
+              >
                 <CheckCircle2 className="w-4 h-4" />
                 {saveState.message}
               </div>
             )}
 
             {saveState.type === "error" && (
-              <div className="mb-4 inline-flex items-center gap-2 rounded-full border border-red-400/20 bg-red-400/10 px-3 py-1.5 text-red-200 text-sm">
+              <div
+                role="alert"
+                className="mb-4 inline-flex items-center gap-2 rounded-full border border-red-400/20 bg-red-400/10 px-3 py-1.5 text-red-200 text-sm"
+              >
                 <AlertCircle className="w-4 h-4" />
                 {saveState.message}
               </div>
@@ -698,8 +704,9 @@ export default function CampaignSettings() {
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                   <div>
-                    <label className="block text-sm text-zinc-200/95 mb-1">Status</label>
+                    <label htmlFor="campaign-status" className="block text-sm text-zinc-200/95 mb-1">Status</label>
                     <select
+                      id="campaign-status"
                       value={draft.status || "active"}
                       onChange={(e) => update("status", e.target.value)}
                       className="w-full rounded-xl border border-white/10 bg-white/[0.03] px-3.5 py-2.5 text-sm text-white shadow-inner shadow-black/10 focus:outline-none focus:ring-2 focus:ring-fuchsia-400/20"
@@ -713,14 +720,39 @@ export default function CampaignSettings() {
                   </div>
 
                   <div>
-                    <label className="block text-sm text-zinc-200/95 mb-1">
+                    <label htmlFor="campaign-system" className="block text-sm text-zinc-200/95 mb-1">
                       System / ruleset (optional)
                     </label>
                     <input
+                      id="campaign-system"
                       value={draft.system || ""}
                       onChange={(e) => update("system", e.target.value)}
                       placeholder="e.g. D&D 5e, Pathfinder 2e…"
                       className="w-full rounded-xl border border-white/10 bg-white/[0.03] px-3.5 py-2.5 text-sm text-white placeholder:text-zinc-400/80 shadow-inner shadow-black/10 focus:outline-none focus:ring-2 focus:ring-fuchsia-400/20"
+                    />
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                  <div>
+                    <label htmlFor="campaign-start-date" className="block text-sm text-zinc-200/95 mb-1">Start date</label>
+                    <input
+                      id="campaign-start-date"
+                      type="date"
+                      value={draft.startDate || ""}
+                      onChange={(e) => update("startDate", e.target.value)}
+                      className="w-full rounded-xl border border-white/10 bg-white/[0.03] px-3.5 py-2.5 text-sm text-white shadow-inner shadow-black/10 focus:outline-none focus:ring-2 focus:ring-fuchsia-400/20"
+                    />
+                  </div>
+
+                  <div>
+                    <label htmlFor="campaign-end-date" className="block text-sm text-zinc-200/95 mb-1">End date</label>
+                    <input
+                      id="campaign-end-date"
+                      type="date"
+                      value={draft.endDate || ""}
+                      onChange={(e) => update("endDate", e.target.value)}
+                      className="w-full rounded-xl border border-white/10 bg-white/[0.03] px-3.5 py-2.5 text-sm text-white shadow-inner shadow-black/10 focus:outline-none focus:ring-2 focus:ring-fuchsia-400/20"
                     />
                   </div>
                 </div>
@@ -1010,37 +1042,6 @@ export default function CampaignSettings() {
             </div>
           </section>
         </div>
-
-        {/* Bottom metadata strip */}
-        <section className="relative mt-4 overflow-hidden rounded-3xl border border-fuchsia-500/16 bg-zinc-950/55 p-5 shadow-[0_0_0_1px_rgba(168,85,247,0.04),0_0_36px_rgba(99,102,241,0.08)] before:pointer-events-none before:absolute before:inset-0 before:bg-[radial-gradient(circle_at_bottom_left,rgba(168,85,247,0.12),transparent_34%),radial-gradient(circle_at_right,rgba(59,130,246,0.08),transparent_30%)] before:opacity-100 before:content-['']">
-          <div className="relative z-10">
-            <h3 className="text-base font-semibold text-white mb-2">Metadata</h3>
-
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-
-              <div>
-                <label className="block text-sm text-zinc-200/95 mb-1">Start date</label>
-                <input
-                  type="date"
-                  value={draft.startDate || ""}
-                  onChange={(e) => update("startDate", e.target.value)}
-                  className="w-full rounded-xl border border-white/10 bg-white/[0.03] px-3.5 py-2.5 text-sm text-white shadow-inner shadow-black/10 focus:outline-none focus:ring-2 focus:ring-fuchsia-400/20"
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm text-zinc-200/95 mb-1">End date</label>
-                <input
-                  type="date"
-                  value={draft.endDate || ""}
-                  onChange={(e) => update("endDate", e.target.value)}
-                  className="w-full rounded-xl border border-white/10 bg-white/[0.03] px-3.5 py-2.5 text-sm text-white shadow-inner shadow-black/10 focus:outline-none focus:ring-2 focus:ring-fuchsia-400/20"
-                />
-              </div>
-            </div>
-
-          </div>
-        </section>
 
         {/* Create campaign modal */}
 	        {showCreate && (
