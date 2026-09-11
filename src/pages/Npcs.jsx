@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { Link } from "react-router-dom";
 import { useMode } from "../context/ModeContext.jsx";
 import { useCampaign } from "../context/CampaignContext";
@@ -132,7 +133,11 @@ export default function Npcs() {
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [formData, setFormData] = useState(createNpcDraft());
   const [isSaving, setIsSaving] = useState(false);
+  const [modalError, setModalError] = useState("");
   const isSavingRef = useRef(false);
+  const addNpcTriggerRef = useRef(null);
+  const createNpcDialogRef = useRef(null);
+  const createNpcNameRef = useRef(null);
   const hasActiveFilters =
     searchQuery.trim() ||
     selectedType !== "All" ||
@@ -172,6 +177,59 @@ export default function Npcs() {
       cancelled = true;
     };
   }, [selectedCampaignId]);
+
+  useEffect(() => {
+    if (!showCreateModal) return undefined;
+
+    const previousBodyOverflow = document.body.style.overflow;
+    const previousDocumentOverflow = document.documentElement.style.overflow;
+    const trigger = addNpcTriggerRef.current;
+    document.body.style.overflow = "hidden";
+    document.documentElement.style.overflow = "hidden";
+    const focusTimer = window.setTimeout(() => createNpcNameRef.current?.focus(), 0);
+
+    return () => {
+      window.clearTimeout(focusTimer);
+      document.body.style.overflow = previousBodyOverflow;
+      document.documentElement.style.overflow = previousDocumentOverflow;
+      trigger?.focus();
+    };
+  }, [showCreateModal]);
+
+  useEffect(() => {
+    if (!showCreateModal) return undefined;
+
+    const handleKeyDown = (event) => {
+      if (event.key === "Escape" && !isSavingRef.current) {
+        event.preventDefault();
+        setShowCreateModal(false);
+        setFormData(createNpcDraft());
+        setModalError("");
+        return;
+      }
+
+      if (event.key !== "Tab" || !createNpcDialogRef.current) return;
+      const focusable = Array.from(
+        createNpcDialogRef.current.querySelectorAll(
+          'button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [href]'
+        )
+      ).filter((element) => element.getClientRects().length > 0);
+      if (focusable.length === 0) return;
+
+      const first = focusable[0];
+      const last = focusable[focusable.length - 1];
+      if (event.shiftKey && document.activeElement === first) {
+        event.preventDefault();
+        last.focus();
+      } else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault();
+        first.focus();
+      }
+    };
+
+    document.addEventListener("keydown", handleKeyDown);
+    return () => document.removeEventListener("keydown", handleKeyDown);
+  }, [showCreateModal]);
 
   const filteredNpcs = useMemo(() => {
     return npcs.filter((npc) => {
@@ -239,9 +297,10 @@ export default function Npcs() {
       setNpcs((current) => [savedNpc, ...current]);
       setShowCreateModal(false);
       setFormData(createNpcDraft());
+      setModalError("");
     } catch (saveError) {
       console.error("[Npcs] Failed to create NPC", saveError);
-      setError("Unable to save NPC right now.");
+      setModalError("Unable to save NPC right now.");
     } finally {
       isSavingRef.current = false;
       setIsSaving(false);
@@ -287,8 +346,12 @@ export default function Npcs() {
             {isGM ? (
               <button
                 type="button"
+                ref={addNpcTriggerRef}
                 className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-linear-to-r from-indigo-500 to-purple-500 px-5 py-3 text-sm font-medium text-white transition-opacity hover:opacity-90 sm:w-auto"
-                onClick={() => setShowCreateModal(true)}
+                onClick={() => {
+                  setModalError("");
+                  setShowCreateModal(true);
+                }}
               >
                 <Plus className="w-4 h-4" />
                 Add NPC
@@ -472,13 +535,20 @@ export default function Npcs() {
         </div>
       )}
 
-      {showCreateModal && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/70 backdrop-blur-sm p-4">
-          <div className="w-full max-w-3xl max-h-[calc(100dvh-1rem)] overflow-hidden bg-zinc-950 border border-white/10 rounded-2xl shadow-xl">
-            <form className="flex max-h-[calc(100dvh-1rem)] flex-col" onSubmit={handleCreate}>
+      {showCreateModal && typeof document !== "undefined" ? createPortal((
+        <div className="fixed inset-0 z-[100] flex items-start justify-center overflow-hidden bg-black/70 p-3 pt-4 backdrop-blur-sm sm:items-center sm:p-4">
+          <div
+            ref={createNpcDialogRef}
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="create-npc-title"
+            aria-describedby="create-npc-description"
+            className="flex max-h-[calc(100dvh-1.5rem)] w-full max-w-3xl flex-col overflow-hidden rounded-2xl border border-white/10 bg-zinc-950 shadow-xl sm:max-h-[calc(100dvh-2rem)]"
+          >
+            <form className="flex min-h-0 flex-1 flex-col" onSubmit={handleCreate}>
               <div className="shrink-0 border-b border-white/10 p-6">
-                <h2 className="text-xl font-bold text-white mb-1">Add NPC</h2>
-                <p className="text-xs text-zinc-500">
+                <h2 id="create-npc-title" className="text-xl font-bold text-white mb-1">Add NPC</h2>
+                <p id="create-npc-description" className="text-xs text-zinc-500">
                   Capture a campaign-scoped NPC. GM notes stay hidden from players.
                 </p>
               </div>
@@ -493,6 +563,7 @@ export default function Npcs() {
                       <label className="block text-sm text-zinc-400">
                         <span className="mb-1 block">Name</span>
                         <input
+                          ref={createNpcNameRef}
                           type="text"
                           required
                           value={formData.name}
@@ -647,24 +718,30 @@ export default function Npcs() {
                     </label>
                   </section>
                 </fieldset>
+                {modalError ? (
+                  <p role="alert" className="rounded-xl border border-rose-500/30 bg-rose-500/10 px-4 py-3 text-sm text-rose-100">
+                    {modalError}
+                  </p>
+                ) : null}
               </div>
 
-              <div className="shrink-0 flex justify-end gap-3 border-t border-white/10 p-6">
+              <div className="flex shrink-0 flex-col-reverse gap-3 border-t border-white/10 p-4 sm:flex-row sm:justify-end sm:p-6">
                 <button
                   type="button"
                   disabled={isSaving}
                   onClick={() => {
                     setShowCreateModal(false);
                     setFormData(createNpcDraft());
+                    setModalError("");
                   }}
-                  className="px-4 py-2 rounded-xl bg-white/5 text-zinc-300 hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-50"
+                  className="w-full rounded-xl bg-white/5 px-4 py-2 text-zinc-300 hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-50 sm:w-auto"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
                   disabled={isSaving}
-                  className="px-4 py-2 rounded-xl bg-linear-to-r from-purple-500 to-pink-500 text-white font-medium hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
+                  className="w-full rounded-xl bg-linear-to-r from-purple-500 to-pink-500 px-4 py-2 text-white font-medium hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50 sm:w-auto"
                 >
                   {isSaving ? "Saving..." : "Save NPC"}
                 </button>
@@ -672,7 +749,7 @@ export default function Npcs() {
             </form>
           </div>
         </div>
-      )}
+      ), document.body) : null}
     </div>
   );
 }

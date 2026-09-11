@@ -3195,6 +3195,127 @@ test("renders saved player-facing Markdown after reload while keeping GM setting
   await expect(page.getByText("GM-only prep", { exact: true })).toHaveCount(0);
 });
 
+test("keeps the Create NPC modal above app chrome and contained across viewports", async ({
+  expectedConsoleErrors,
+  page,
+  request,
+}) => {
+  let upsertAttempts = 0;
+  const upsertCampaignIds: string[] = [];
+  let releaseFailedSave: () => void = () => {};
+  const failedSave = new Promise<void>((resolve) => {
+    releaseFailedSave = resolve;
+  });
+  const savedNpcs: Array<Record<string, unknown>> = [];
+  expectedConsoleErrors.push("Failed to load resource");
+  expectedConsoleErrors.push("[Npcs] Failed to create NPC");
+
+  await page.route("**/api/worldbuilding**", async (route) => {
+    const url = new URL(route.request().url());
+    if (url.searchParams.get("entity") !== "npcs") {
+      await route.abort();
+      return;
+    }
+
+    if (route.request().method() === "GET") {
+      await route.fulfill({ status: 200, json: { ok: true, npcs: savedNpcs } });
+      return;
+    }
+
+    upsertAttempts += 1;
+    upsertCampaignIds.push(url.searchParams.get("campaignId") || "");
+    if (upsertAttempts === 1) {
+      await failedSave;
+      await route.fulfill({ status: 500, json: { ok: false, error: "NPC save unavailable" } });
+      return;
+    }
+
+    const npc = route.request().postDataJSON().npc as Record<string, unknown>;
+    savedNpcs.unshift(npc);
+    await route.fulfill({ status: 200, json: { ok: true, npc } });
+  });
+
+  await signInVerifiedUser(page, request);
+  await page.getByRole("button", { name: "GM", exact: true }).click();
+  await page.goto("/npcs");
+  const addNpc = page.getByRole("button", { name: "Add NPC", exact: true });
+  await expect(addNpc).toBeVisible();
+
+  await addNpc.click();
+  const dialog = page.getByRole("dialog", { name: "Add NPC", exact: true });
+  const name = dialog.getByLabel("Name", { exact: true });
+  const save = dialog.getByRole("button", { name: "Save NPC", exact: true });
+  const cancel = dialog.getByRole("button", { name: "Cancel", exact: true });
+  await expect(dialog).toBeVisible();
+  await expect(name).toBeFocused();
+  await expect(page.locator("body")).toHaveCSS("overflow", "hidden");
+
+  for (const viewport of [
+    { width: 1440, height: 900 },
+    { width: 768, height: 1024 },
+    { width: 375, height: 667 },
+  ]) {
+    await page.setViewportSize(viewport);
+    const metrics = await dialog.evaluate((element) => {
+      const rect = element.getBoundingClientRect();
+      const topmost = document.elementFromPoint(rect.left + 16, rect.top + 16);
+      return {
+        insideViewport: rect.top >= 0 && rect.left >= 0 && rect.right <= window.innerWidth && rect.bottom <= window.innerHeight,
+        isTopmost: element.contains(topmost),
+      };
+    });
+    expect(metrics.insideViewport).toBe(true);
+    expect(metrics.isTopmost).toBe(true);
+    await expect(save).toBeVisible();
+    await expect(cancel).toBeVisible();
+  }
+  await page.setViewportSize({ width: 1440, height: 900 });
+
+  await name.press("Shift+Tab");
+  await expect(save).toBeFocused();
+  await save.press("Tab");
+  await expect(name).toBeFocused();
+  await cancel.click();
+  await expect(dialog).toHaveCount(0);
+  await expect(addNpc).toBeFocused();
+  await expect(page.locator("body")).not.toHaveCSS("overflow", "hidden");
+
+  await addNpc.click();
+  await page.keyboard.press("Escape");
+  await expect(dialog).toHaveCount(0);
+  await expect(addNpc).toBeFocused();
+  await expect(page.locator("body")).not.toHaveCSS("overflow", "hidden");
+
+  await addNpc.click();
+  await expect(name).toBeFocused();
+  await save.click();
+  expect(upsertAttempts).toBe(0);
+  await name.fill("Retry NPC");
+  await dialog.getByLabel("Description", { exact: true }).fill("A saved campaign NPC.");
+  await save.click();
+  await expect(dialog.getByRole("button", { name: "Saving...", exact: true })).toBeDisabled();
+  expect(upsertAttempts).toBe(1);
+  releaseFailedSave();
+  await expect(dialog.getByRole("alert")).toHaveText("Unable to save NPC right now.");
+  await expect(name).toHaveValue("Retry NPC");
+  await expect(dialog).toBeVisible();
+
+  const scrollArea = dialog.locator("div.overflow-y-auto").first();
+  expect(await scrollArea.evaluate((element) => element.scrollHeight > element.clientHeight)).toBe(true);
+  await scrollArea.evaluate((element) => { element.scrollTop = element.scrollHeight; });
+  await expect(save).toBeVisible();
+  await save.click();
+  await expect(dialog).toHaveCount(0);
+  expect(upsertAttempts).toBe(2);
+  expect(upsertCampaignIds).toEqual(["e2e-campaign", "e2e-campaign"]);
+  expect(savedNpcs).toHaveLength(1);
+  await expect(page.getByText("Retry NPC", { exact: true })).toBeVisible();
+
+  await page.getByRole("button", { name: "Player", exact: true }).click();
+  await expect(addNpc).toHaveCount(0);
+  expect(upsertAttempts).toBe(2);
+});
+
 test("shows a generic error for incorrect credentials", async ({ page }) => {
   const email = generatedEmail();
 
