@@ -47,11 +47,50 @@ request is allowed.
 
 The limiter transaction ignores and prunes attempts outside the 24-hour rolling
 authorization horizon for subjects it touches. `expires_at` is retained on both
-subject and attempt rows for later physical housekeeping. There is deliberately
-no cron or public cleanup endpoint in this slice: authorization never depends
-on physical deletion. Inactive expired rows require a separately approved
-database-maintenance process, tracked by
-[#376](https://github.com/dopaminedungeon/dopamine-dungeon/issues/376).
+subject and attempt rows for later physical housekeeping. A row is eligible for
+physical cleanup only when its stored `expires_at` is strictly earlier than the
+maintenance transaction's PostgreSQL `transaction_timestamp()`. Rows at the
+exact boundary, and all future-expiring rows, are retained. This does not
+shorten the 48-hour default record TTL or change a rate-limit threshold.
+
+Maintainers run the operator-only command against an approved environment with
+its `DATABASE_URL` supplied out of band. It has no HTTP route, browser control,
+or application role. It defaults to a count-only dry run:
+
+```sh
+pnpm auth-email-rate-limit:housekeep -- --batch-size 100
+```
+
+Deletion requires an explicit flag and remains capped at 500 expired subjects
+per transaction:
+
+```sh
+pnpm auth-email-rate-limit:housekeep -- --apply --batch-size 100
+```
+
+The command selects expired parent subjects in expiry/ID order with `FOR UPDATE
+SKIP LOCKED`, deletes their attempt rows, then deletes only those locked parent
+rows in one transaction. Concurrent reservations either hold the parent lock so
+cleanup skips it, or safely reserve a replacement after cleanup commits. Repeat
+the bounded command until `moreEligible` is false. Output contains aggregate
+counts and safe limiter scopes only; never capture subject keys, Firebase UIDs,
+HMACs, emails, IPs, database URLs, or raw database errors.
+
+Repository maintainers own this task. Run a dry run at least daily and an
+approved apply run at the same cadence when backlog is present. Monitor the
+exit status, `eligibleSubjectCount`, `deletedSubjectCount`, and `moreEligible`;
+retry a failed run only after correcting the operator environment. The operation
+is idempotent: a retry processes only remaining expired rows. Automated
+scheduling is intentionally disabled: this repository has no protected
+environment-scoped database-secret workflow for cleanup. Before adding one,
+maintainers must approve the environment, secret ownership, cadence, overlap
+protection, and dry-run/apply separation.
+
+To disable housekeeping, stop invoking `--apply` or disable a future protected
+operator workflow. No application rollback is needed because authorization
+never consults physical cleanup. Restoring this code stops future deletion;
+already deleted expired limiter rows are intentionally not reconstructed and do
+not represent active rate-limit state.
 
 ## Monitoring
 
