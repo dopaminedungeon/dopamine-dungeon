@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useRef, useState } from "react";
 import { Link, NavLink, useNavigate } from "react-router-dom";
 import { getAllCharacters, upsertCharacter } from "../data/characters/characters.repo";
 import { useCampaign } from "../context/CampaignContext";
+import { MarkdownContent } from "../components/MarkdownContent.jsx";
 import { useMode } from "../context/ModeContext";
 import { useAuth } from "../context/AuthContext";
 
@@ -1058,9 +1059,11 @@ const PCs = () => {
                     </span>
                   </div>
 
-                  <p className="text-[11px] md:text-xs text-zinc-200 line-clamp-2 min-h-[2.2em]">
-                    {pc.background || pc.publicNotes || "No background yet."}
-                  </p>
+                  <MarkdownContent
+                    content={pc.background || pc.publicNotes}
+                    placeholder="No background yet."
+                    className="min-h-[2.2em] line-clamp-2 text-[11px] text-zinc-200 md:text-xs"
+                  />
 
                   <div className="pt-0.5 flex flex-wrap items-center gap-1.5 text-[10px] md:text-[11px] text-zinc-200">
                     <span className="inline-flex items-center rounded-full border border-pink-400/60 bg-pink-500/15 px-2 py-0.5">

@@ -12,6 +12,7 @@ import { createLink } from "../domain/links/link.service";
 import { addLink, getLinksForEntity, loadLinks, removeLink } from "../data/links/links.repo";
 import { getApiCampaignPeople, getApiCharacterAssignments } from "../data/api/apiClient";
 import { getAllCharacters } from "../data/characters/characters.repo";
+import { MarkdownContent } from "../components/MarkdownContent.jsx";
 
 const ITEM_TYPES = [
   "Weapon",
@@ -960,7 +961,7 @@ export default function ItemProfile() {
                 onChange={(e) => handleFieldChange("description", e.target.value)}
               />
             ) : (
-              <p className="text-zinc-400">{formData.description || ""}</p>
+              <MarkdownContent content={formData.description} className="text-zinc-400" />
             )}
           </section>
 
@@ -1191,10 +1192,11 @@ export default function ItemProfile() {
                   onChange={(e) => handleFieldChange("hiddenEffects", e.target.value)}
                 />
               ) : (
-                <p className="text-zinc-400">
-                  {formData.hiddenEffects ||
-                    "Space for secret mechanics, extra damage riders, or conditional bonuses the players haven't discovered yet."}
-                </p>
+                <MarkdownContent
+                  content={formData.hiddenEffects}
+                  placeholder="Space for secret mechanics, extra damage riders, or conditional bonuses the players haven't discovered yet."
+                  className="text-zinc-400"
+                />
               )}
             </section>
 
@@ -1207,11 +1209,11 @@ export default function ItemProfile() {
                   onChange={(e) => handleFieldChange("curse", e.target.value)}
                 />
               ) : (
-                <p className="text-zinc-400">
-                  {formData.curse && formData.curse !== "—"
-                    ? formData.curse
-                    : "If this item has a curse or downside, park it here so you remember to actually use it at the table."}
-                </p>
+                <MarkdownContent
+                  content={formData.curse === "—" ? "" : formData.curse}
+                  placeholder="If this item has a curse or downside, park it here so you remember to actually use it at the table."
+                  className="text-zinc-400"
+                />
               )}
             </section>
 
@@ -1224,10 +1226,11 @@ export default function ItemProfile() {
                   onChange={(e) => handleFieldChange("upgradePath", e.target.value)}
                 />
               ) : (
-                <p className="text-zinc-400">
-                  {formData.upgradePath ||
-                    "Ideas for how this item can grow with the party: reforging, absorbing shards, unlocking attunement tiers, etc."}
-                </p>
+                <MarkdownContent
+                  content={formData.upgradePath}
+                  placeholder="Ideas for how this item can grow with the party: reforging, absorbing shards, unlocking attunement tiers, etc."
+                  className="text-zinc-400"
+                />
               )}
             </section>
 
@@ -1240,10 +1243,11 @@ export default function ItemProfile() {
                   onChange={(e) => handleFieldChange("storyHooks", e.target.value)}
                 />
               ) : (
-                <p className="text-zinc-400 mb-2">
-                  {formData.storyHooks ||
-                    "Notes on which NPCs, factions, locations or future sessions this item is tied to."}
-                </p>
+                <MarkdownContent
+                  content={formData.storyHooks}
+                  placeholder="Notes on which NPCs, factions, locations or future sessions this item is tied to."
+                  className="mb-2 text-zinc-400"
+                />
               )}
             </section>
           </div>

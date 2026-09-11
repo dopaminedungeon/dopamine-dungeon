@@ -7,6 +7,7 @@ import {
   Plus,
 } from "lucide-react";
 import { npcsRepo } from "../data/npcs/npcs.repo";
+import { MarkdownContent } from "../components/MarkdownContent.jsx";
 import {
   getNpcTypeIcon,
   normalizeNpcType,
@@ -438,9 +439,11 @@ export default function Npcs() {
                   )}
                 </h3>
                 {npc.title ? <p className="text-zinc-500 text-sm mb-2">{npc.title}</p> : null}
-                <p className="text-zinc-400 text-sm mb-4 line-clamp-2">
-                  {npc.description || "No NPC description added yet."}
-                </p>
+                <MarkdownContent
+                  content={npc.description}
+                  placeholder="No NPC description added yet."
+                  className="mb-4 line-clamp-2 text-zinc-400"
+                />
 
                 <div className="flex flex-wrap items-center gap-2 pt-4 border-t border-white/10">
                   <span className="rounded-full bg-white/5 px-2.5 py-1 text-xs text-zinc-300">

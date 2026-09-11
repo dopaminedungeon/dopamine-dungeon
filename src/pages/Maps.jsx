@@ -14,6 +14,7 @@ import {
 import { useMode } from "../context/ModeContext.jsx";
 import { useCampaign } from "../context/CampaignContext";
 import { locationsRepo } from "../data/maps/locations.repo";
+import { MarkdownContent } from "../components/MarkdownContent.jsx";
 import {
   compareCreatedAt,
   compareEntityNames,
@@ -94,21 +95,6 @@ function visibilityPill(visibility) {
       GM-only
     </span>
   );
-}
-
-function getPlainTextPreview(value, fallback = "No player-facing details added yet.") {
-  const text = String(value || "")
-    .replace(/^#{1,6}\s+/gm, "")
-    .replace(/^\s*[-*]\s+/gm, "")
-    .replace(/\*\*([^*]+)\*\*/g, "$1")
-    .replace(/(^|[^*])\*([^*]+)\*/g, "$1$2")
-    .replace(/_([^_]+)_/g, "$1")
-    .replace(/`([^`]+)`/g, "$1")
-    .replace(/\s+/g, " ")
-    .trim();
-
-  if (!text) return fallback;
-  return text.length > 180 ? `${text.slice(0, 177).trim()}...` : text;
 }
 
 function readImageAsDataUrl(file) {
@@ -446,9 +432,11 @@ export default function Maps() {
                     </p>
                   ) : null}
 
-                  <p className="line-clamp-4 text-sm leading-6 text-zinc-400">
-                    {getPlainTextPreview(location.summary || location.description)}
-                  </p>
+                  <MarkdownContent
+                    content={location.summary || location.description}
+                    placeholder="No player-facing details added yet."
+                    className="line-clamp-4 text-zinc-400"
+                  />
                 </div>
               </Link>
             );
