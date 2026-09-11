@@ -11,13 +11,28 @@ describe("MarkdownContent", () => {
   it("renders CommonMark, GFM, and visible single-line breaks without changing source", () => {
     const source = "# Heading\n\n**bold** and ~~gone~~\n\n---\n\n- [x] task\n\n| A | B |\n| - | - |\n| 1 | 2 |";
     const html = render(source);
-    expect(html).toContain("<h1>Heading</h1>");
-    expect(html).toContain("<strong>bold</strong>");
-    expect(html).toContain("<del>gone</del>");
+    expect(html).toContain("<h1 ");
+    expect(html).toContain(">Heading</h1>");
+    expect(html).toContain("<strong ");
+    expect(html).toContain(">bold</strong>");
+    expect(html).toContain("<del ");
+    expect(html).toContain(">gone</del>");
     expect(html).toContain('<hr class="border-white/15"/>');
     expect(html).toContain("type=\"checkbox\"");
     expect(html).toContain("<table");
     expect(source).toBe("# Heading\n\n**bold** and ~~gone~~\n\n---\n\n- [x] task\n\n| A | B |\n| - | - |\n| 1 | 2 |");
+  });
+
+  it("gives every semantic heading level a distinct, contained hierarchy", () => {
+    const html = render("# One\n\n## Two\n\n### Three\n\n#### Four\n\n##### Five\n\n###### Six");
+
+    expect(html).toContain('<h1 class="mt-6 break-words text-[1.0625rem]');
+    expect(html).toContain('<h2 class="mt-5 break-words text-base');
+    expect(html).toContain('<h3 class="mt-4 break-words text-[0.9375rem]');
+    expect(html).toContain('<h4 class="mt-4 break-words text-sm');
+    expect(html).toContain('<h5 class="mt-3 break-words text-[0.8125rem]');
+    expect(html).toContain('<h6 class="mt-3 break-words text-xs');
+    expect(html.match(/<h[1-6] /g)).toHaveLength(6);
   });
 
   it("renders prose, code, links, images, and escaped Markdown semantically", () => {
@@ -25,8 +40,10 @@ describe("MarkdownContent", () => {
     const html = render(source);
 
     expect(html).toContain("<blockquote");
-    expect(html).toContain("<ol>");
+    expect(html).toContain('class="list-decimal space-y-1 pl-5 marker:text-zinc-500"');
+    expect(html).toContain('class="list-disc space-y-1 pl-5 marker:text-zinc-500"');
     expect(html).toContain("<br/>");
+    expect(html).toContain('class="overflow-x-auto rounded-lg bg-black/30 p-3 text-xs leading-5"');
     expect(html).toContain("const value = 1;");
     expect(html).toContain('href="https://example.test"');
     expect(html).toContain('src="https://example.test/map.png"');
