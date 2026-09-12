@@ -9,6 +9,7 @@ import {
 } from "./auth-email-rate-limit-housekeeping-core.mjs";
 import {
   formatAuthEmailRateLimitHousekeepingCliError,
+  runAuthEmailRateLimitHousekeepingEntrypoint,
   runAuthEmailRateLimitHousekeepingCli,
 } from "./auth-email-rate-limit-housekeeping.mjs";
 
@@ -139,4 +140,22 @@ test("CLI emits aggregate-only output, closes its connection, and fails closed w
     formatAuthEmailRateLimitHousekeepingCliError(new Error("driver failure with connection details")),
     "Authentication email limiter housekeeping failed."
   );
+});
+
+test("executable entrypoint forwards the operator environment and CLI arguments to the runner", async () => {
+  const environment = { DATABASE_URL: "postgres://opaque", OPERATOR_MARKER: "present" };
+  const argv = ["--batch-size", "100"];
+  let received;
+  const errors = [];
+  const exitCode = await runAuthEmailRateLimitHousekeepingEntrypoint({
+    argv,
+    environment,
+    runCli: async (options) => {
+      received = options;
+    },
+    writeError: (line) => errors.push(line),
+  });
+  assert.equal(exitCode, 0);
+  assert.deepEqual(received, { argv, environment });
+  assert.deepEqual(errors, []);
 });

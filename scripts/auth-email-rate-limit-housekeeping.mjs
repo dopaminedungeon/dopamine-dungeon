@@ -10,7 +10,7 @@ export async function runAuthEmailRateLimitHousekeepingCli({
   environment = process.env,
   createSql = postgres,
   write = (line) => console.log(line),
-}) {
+} = {}) {
   const options = parseAuthEmailRateLimitHousekeepingArguments(argv);
   const databaseUrl = String(environment.DATABASE_URL ?? "").trim();
   if (!databaseUrl) {
@@ -40,16 +40,31 @@ export function formatAuthEmailRateLimitHousekeepingCliError(error) {
   return "Authentication email limiter housekeeping failed.";
 }
 
-if (process.argv[1] && import.meta.url === new URL(`file://${process.argv[1]}`).href) {
-  const databaseUrl = String(process.env.DATABASE_URL ?? "").trim();
+export async function runAuthEmailRateLimitHousekeepingEntrypoint({
+  argv = process.argv.slice(2),
+  environment = process.env,
+  runCli = runAuthEmailRateLimitHousekeepingCli,
+  writeError = (line) => console.error(line),
+} = {}) {
+  const databaseUrl = String(environment.DATABASE_URL ?? "").trim();
   if (!databaseUrl) {
-    console.error(
+    writeError(
       "Authentication email limiter housekeeping failed: DATABASE_URL is required in the approved operator environment"
     );
-    process.exitCode = 1;
-  } else runAuthEmailRateLimitHousekeepingCli().catch((error) => {
+    return 1;
+  }
+  try {
+    await runCli({ argv, environment });
+    return 0;
+  } catch (error) {
     // Database driver errors may include query parameters or connection data.
-    console.error(formatAuthEmailRateLimitHousekeepingCliError(error));
-    process.exitCode = 1;
+    writeError(formatAuthEmailRateLimitHousekeepingCliError(error));
+    return 1;
+  }
+}
+
+if (process.argv[1] && import.meta.url === new URL(`file://${process.argv[1]}`).href) {
+  runAuthEmailRateLimitHousekeepingEntrypoint().then((exitCode) => {
+    process.exitCode = exitCode;
   });
 }
