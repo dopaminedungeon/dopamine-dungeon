@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { test, expect } from "./auth.fixture";
-import { createVerifiedUser } from "./auth-emulator";
+import { createVerifiedUser, lookupAuthEmulatorAccount } from "./auth-emulator";
 
 const npc = { id: "archivist", name: "Archivist", visibility: "public", type: "NPC", status: "active" };
 const harbor = { id: "harbor", name: "Harbor", aliases: ["Safe Haven"], visibility: "public", category: "District" };
@@ -14,10 +14,47 @@ test("Location and NPC profiles share one link and NPC search keeps linked name 
   ];
   const writes: string[] = [];
 
-  await page.route("**/api/worldbuilding?**", async (route) => {
+  await page.route("**/api/**", async (route) => {
     const url = new URL(route.request().url());
     const mode = route.request().headers()["x-dd-mode"];
     const method = route.request().method();
+    const authorization = route.request().headers().authorization;
+
+    if (url.pathname === "/api/auth/identity-continuity") {
+      expect(authorization).toMatch(/^Bearer /);
+      expect(mode).toBeUndefined();
+      const account = await lookupAuthEmulatorAccount(request, authorization!.slice("Bearer ".length));
+      expect(account.emailVerified).toBe(true);
+      await route.fulfill({ json: { ok: true, neonUserId: "e2e-user" } });
+      return;
+    }
+
+    if (url.pathname === "/api/me") {
+      expect(authorization).toMatch(/^Bearer /);
+      expect(mode).toMatch(/^(gm|player)$/);
+      await route.fulfill({ json: {
+        ok: true,
+        user: { id: "e2e-user" },
+        workspaces: [{ id: "00000000-0000-4000-8000-000000000001", slug: "e2e-workspace", name: "E2E Workspace" }],
+        workspaceMemberships: [{ workspaceId: "00000000-0000-4000-8000-000000000001", userId: "e2e-user", role: "owner" }],
+        campaigns: [{ id: "00000000-0000-4000-8000-000000000002", workspaceId: "00000000-0000-4000-8000-000000000001", slug: "e2e-campaign", name: "E2E Campaign", description: "Authentication emulator test campaign" }],
+        campaignMemberships: [{ campaignId: "00000000-0000-4000-8000-000000000002", userId: "e2e-user", role: "gm" }],
+      } });
+      return;
+    }
+
+    if (url.pathname === "/api/invitations/accept-pending") {
+      expect(authorization).toMatch(/^Bearer /);
+      expect(mode).toMatch(/^(gm|player)$/);
+      await route.fulfill({ json: { ok: true, acceptedInvitations: [] } });
+      return;
+    }
+
+    if (url.pathname !== "/api/worldbuilding") {
+      await route.fallback();
+      return;
+    }
+
     const entity = url.searchParams.get("entity");
     const resource = url.searchParams.get("resource");
     const visibleLocations = mode === "gm" ? [harbor, lookout, hidden] : [harbor, lookout];
