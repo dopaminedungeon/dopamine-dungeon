@@ -908,7 +908,7 @@ const PCs = () => {
   }, [pcs, query]);
 
   return (
-    <div className="w-full text-white">
+    <div className="app-page-wide text-white">
       {/* Page */}
       <main className="w-full px-6 py-6 md:px-10 md:py-8">
         {/* Subsection nav */}

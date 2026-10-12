@@ -618,7 +618,7 @@ const PCProfile = () => {
   // unless the character is explicitly theirs.
   if (!canPlayerViewPc && pc) {
     return (
-      <main className="flex-1 p-8 overflow-auto">
+      <main className="app-page-wide flex-1 overflow-auto p-4 sm:p-6 lg:p-8">
         <div className="max-w-xl mx-auto bg-white/5 border border-white/10 rounded-2xl p-8 text-center">
           <h1 className="text-2xl font-bold text-white mb-2">DM Eyes Only</h1>
           <p className="text-zinc-400 text-sm mb-4">
@@ -637,7 +637,7 @@ const PCProfile = () => {
 
   if (isLoading) {
     return (
-      <div className="p-8 text-white">
+      <div className="app-page-wide p-4 text-white sm:p-6 lg:p-8">
         <div className="max-w-md space-y-3">
           <h1 className="text-xl font-semibold">Loading PC…</h1>
           <p className="text-sm text-zinc-400">
@@ -650,7 +650,7 @@ const PCProfile = () => {
 
   if (!pc) {
     return (
-      <div className="p-8 text-white">
+      <div className="app-page-wide p-4 text-white sm:p-6 lg:p-8">
         <div className="max-w-md space-y-3">
           <h1 className="text-xl font-semibold">PC not found</h1>
           <p className="text-sm text-zinc-400">
@@ -842,7 +842,7 @@ const PCProfile = () => {
   // Modal-based edit UI removed in favor of inline editor.
 
   return (
-    <div className="p-6 md:p-8 text-white">
+    <div className="app-page-wide p-4 text-white sm:p-6 md:p-8">
       <div className="space-y-6">
         {!isGMMode ? (
           <div className="mb-4 flex items-center gap-2">
@@ -878,7 +878,7 @@ const PCProfile = () => {
                 <span>Back to PCs</span>
               </Link>
             </div>
-            <h1 className="text-2xl md:text-3xl font-semibold tracking-tight flex items-center gap-3">
+            <h1 className="min-w-0 [overflow-wrap:anywhere] text-2xl md:text-3xl font-semibold tracking-tight flex flex-wrap items-center gap-3">
               {pc.name}
               <span className="inline-flex items-center rounded-full bg-indigo-500/20 border border-indigo-400/40 px-3 py-1 text-[11px] font-medium text-indigo-100">
                 {pc.level ? `Level ${pc.level} ` : ""}

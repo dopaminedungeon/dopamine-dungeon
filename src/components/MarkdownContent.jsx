@@ -19,7 +19,7 @@ export function MarkdownContent({ content, placeholder = "", className = "" }) {
   }
 
   return (
-    <div className={`markdown-content space-y-3 text-sm leading-6 text-zinc-300 ${className}`}>
+    <div className={`markdown-content min-w-0 space-y-3 text-sm leading-6 text-zinc-300 ${className}`}>
       <ReactMarkdown
         remarkPlugins={[remarkGfm, remarkBreaks]}
         urlTransform={safeUrl}
@@ -30,9 +30,9 @@ export function MarkdownContent({ content, placeholder = "", className = "" }) {
           h4: ({ children }) => <h4 className="mt-4 break-words text-sm font-medium leading-5 text-zinc-200 first:mt-0">{children}</h4>,
           h5: ({ children }) => <h5 className="mt-3 break-words text-[0.8125rem] font-medium leading-5 text-zinc-300 first:mt-0">{children}</h5>,
           h6: ({ children }) => <h6 className="mt-3 break-words text-xs font-medium leading-5 text-zinc-400 first:mt-0">{children}</h6>,
-          p: ({ children }) => <p>{children}</p>,
-          ul: ({ children }) => <ul className="list-disc space-y-1 pl-5 marker:text-zinc-500">{children}</ul>,
-          ol: ({ children }) => <ol className="list-decimal space-y-1 pl-5 marker:text-zinc-500">{children}</ol>,
+          p: ({ children }) => <p className="app-reading-width [overflow-wrap:anywhere]">{children}</p>,
+          ul: ({ children }) => <ul className="app-reading-width list-disc space-y-1 pl-5 marker:text-zinc-500 [overflow-wrap:anywhere]">{children}</ul>,
+          ol: ({ children }) => <ol className="app-reading-width list-decimal space-y-1 pl-5 marker:text-zinc-500 [overflow-wrap:anywhere]">{children}</ol>,
           li: ({ children }) => <li className="break-words pl-0.5">{children}</li>,
           strong: ({ children }) => <strong className="font-semibold text-zinc-100">{children}</strong>,
           em: ({ children }) => <em className="italic text-zinc-200">{children}</em>,
@@ -44,7 +44,7 @@ export function MarkdownContent({ content, placeholder = "", className = "" }) {
           td: ({ children }) => <td className="border border-white/10 px-3 py-2 align-top">{children}</td>,
           pre: ({ children }) => <pre className="overflow-x-auto rounded-lg bg-black/30 p-3 text-xs leading-5">{children}</pre>,
           code: ({ className: codeClassName, children, ...props }) => codeClassName ? <code className={`font-mono ${codeClassName}`} {...props}>{children}</code> : <code className="rounded bg-black/30 px-1 font-mono text-xs">{children}</code>,
-          blockquote: ({ children }) => <blockquote className="border-l-2 border-cyan-400/60 pl-3 italic text-zinc-300">{children}</blockquote>,
+          blockquote: ({ children }) => <blockquote className="app-reading-width border-l-2 border-cyan-400/60 pl-3 italic text-zinc-300">{children}</blockquote>,
           hr: () => <hr className="border-white/15" />,
         }}
       >

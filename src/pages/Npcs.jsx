@@ -328,7 +328,7 @@ export default function Npcs() {
 
   if (!selectedCampaignId) {
     return (
-      <main className="flex-1 overflow-auto flex items-center justify-center p-8">
+      <main className="app-page-wide flex-1 overflow-auto flex items-center justify-center p-4 sm:p-6 lg:p-8">
         <div className="max-w-md rounded-2xl border border-white/10 bg-white/5 p-6 text-center">
           <h1 className="text-xl font-semibold text-white">Select a campaign</h1>
           <p className="mt-2 text-sm text-zinc-400">
@@ -340,7 +340,7 @@ export default function Npcs() {
   }
 
   return (
-    <div className="p-8 overflow-auto">
+    <div className="app-page-wide overflow-auto p-4 sm:p-6 lg:p-8">
       <div className="flex flex-col gap-4 mb-8">
         <div className="rounded-2xl border border-white/10 bg-white/5 p-4 backdrop-blur-sm">
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center">

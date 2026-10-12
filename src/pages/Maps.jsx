@@ -267,7 +267,7 @@ export default function Maps() {
 
   if (!selectedCampaignId) {
     return (
-      <main className="flex-1 overflow-auto p-8">
+      <main className="app-page-wide flex-1 overflow-auto p-4 sm:p-6 lg:p-8">
         <div className="rounded-2xl border border-white/10 bg-white/5 p-6 text-sm text-zinc-300">
           Select a campaign to view Locations.
         </div>
@@ -276,7 +276,7 @@ export default function Maps() {
   }
 
   return (
-    <main className="flex-1 overflow-auto p-4 sm:p-6 lg:p-8">
+    <main className="app-page-wide flex-1 overflow-auto p-4 sm:p-6 lg:p-8">
       <div className="mb-6 flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
         <div>
           <h1 className="flex items-center gap-3 text-3xl font-bold text-white">
@@ -430,7 +430,7 @@ export default function Maps() {
                           </span>
                           {isGM && visibilityPill(location.visibility)}
                         </div>
-                        <h2 className="mt-2 line-clamp-2 text-base font-semibold text-white">
+                        <h2 className="mt-2 line-clamp-2 break-words text-base font-semibold text-white [overflow-wrap:anywhere]">
                           {location.name || "Untitled Location"}
                         </h2>
                       </div>
@@ -438,7 +438,7 @@ export default function Maps() {
                   </div>
 
                   {location.aliases?.length ? (
-                    <p className="mb-3 text-xs text-zinc-500">
+                    <p className="mb-3 break-words text-xs text-zinc-500 [overflow-wrap:anywhere]">
                       Aliases: {location.aliases.slice(0, 4).join(" • ")}
                     </p>
                   ) : null}

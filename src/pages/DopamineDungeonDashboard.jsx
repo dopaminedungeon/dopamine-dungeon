@@ -140,7 +140,7 @@ export default function DopamineDungeonDashboard() {
       };
 
   return (
-    <div className="space-y-8">
+    <div className="app-page-standard space-y-8">
       <section
         className={`relative overflow-hidden rounded-3xl border bg-linear-to-br backdrop-blur-xl p-8 shadow-2xl shadow-violet-950/40 transition-colors duration-500 ${modeTheme.heroBorder} ${modeTheme.heroBg}`}
       >
