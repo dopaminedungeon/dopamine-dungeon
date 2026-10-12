@@ -6,7 +6,7 @@ Date: 2026-08-24
 
 Decision owner: Magda
 
-Audit classification: Current in repository (2026-09-05); implemented by PR #365
+Audit classification: Current in repository (2026-10-12); implemented by PR #365
 
 ## Context
 
@@ -35,7 +35,10 @@ Subsequent workspace and campaign resolution reads those same Neon records.
 Authorization is performed server-side from the authenticated Firebase UID,
 the resolved Neon user, workspace/campaign membership, and GM/Player visibility
 rules. The server API is the data access boundary; this decision does not adopt
-direct browser access to PostgreSQL or PostgreSQL RLS.
+direct browser access to PostgreSQL or PostgreSQL RLS. This ADR does not imply
+that every route uses identical membership or mode predicates; see the
+[implementation-grounded role guide](../../multitenant-multirole-management.md)
+and the authorization refinement tracked by [#284](https://github.com/dopaminedungeon/dopamine-dungeon/issues/284).
 
 Existing Firestore bootstrap records are migration input, not an identity
 bridge. Records must be reconciled using Firebase UID where identity mapping is

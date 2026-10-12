@@ -1,6 +1,6 @@
 # Repository and CI Policy
 
-Last updated: 2026-08-24
+Last reviewed: 2026-10-12
 Owner: Magda
 
 This is the lightweight repository policy for Dopamine Dungeon. It complements
@@ -89,10 +89,11 @@ instead of posting a new comment on every run.
 At the earlier #316 audit, GitHub had an active `protect dev` ruleset with one
 approval, a required `Preview` deployment, deletion/non-fast-forward rules, and
 no required status-check rule. No active protection was reported for `main` or
-`release/*`. These repository settings are an explicit manual handoff in this
-branch: configure the target settings above in GitHub Rulesets, then verify the
-resulting ruleset. Do not make lint, the smoke suite, AI review, or the full E2E
-suite separate required checks.
+`release/*`. This is a dated historical observation, not a verified snapshot of
+the current live rulesets. The closeout did not inspect or change branch
+protections. Before changing policy or relying on a specific live protection,
+inspect GitHub Rulesets directly. Do not make lint, smoke, AI review, or the
+full E2E suite separate required checks without a deliberate policy decision.
 
 ## Workflow inventory
 

@@ -1,6 +1,6 @@
 # Testing and Validation
 
-Last updated: 2026-09-05
+Last updated: 2026-10-12
 Owner: Magda
 
 ## Purpose
@@ -92,12 +92,15 @@ Playwright. Do not add it only to establish an empty convention.
 while iterating so failures identify the owning layer. Every command used by CI
 also exists as a package script.
 
-Known discovery gap from #328: `test:unit` names
-`src/firebase/browserFirestoreRetirement.test.ts`, but the current Vitest
-include patterns exclude TypeScript tests outside `src/server`, `api`, and
-`scripts`. Targeted execution finds no tests. Do not count this browser
-retirement regression as executed until
-[#378](https://github.com/dopaminedungeon/dopamine-dungeon/issues/378) is resolved.
+The discovery gap recorded during #328 was fixed by
+[#378](https://github.com/dopaminedungeon/dopamine-dungeon/issues/378) and
+[PR #406](https://github.com/dopaminedungeon/dopamine-dungeon/pull/406). Vitest
+includes the exact `src/firebase/browserFirestoreRetirement.test.ts` path, not
+a broad TypeScript glob. The named regression is now in `pnpm test:unit` and
+`pnpm quality`; it asserts retired browser Firestore repositories and
+initialization remain absent. This does not claim that Firestore is fully
+retired operationally; see the #375 ledger in the
+[migration inventory](../architecture/FIRESTORE_TO_NEON_MIGRATION.md).
 
 The current API suite executes item, lore, location, NPC, relationship, session,
 character, and character-assignment handlers. It proves unauthenticated early
@@ -109,24 +112,33 @@ the repository has a disposable, isolated Neon-compatible test database with
 deterministic reset and no route to development or production data.
 
 The boundary suite covers workspace lookup, campaign lookup within a workspace,
-campaign-plus-user membership, Player-role GM denial, selected-mode fail-closed
-behavior, public-only entity reads, Player-visible relationships, and GM-only
-payload stripping. Keep this suite small and add cases when an access predicate
-or spoiler projection changes.
+campaign-plus-user membership, Player-role GM denial for tested predicates,
+selected-mode fail-closed behavior in projection helpers, public-only entity
+reads, Player-visible relationships, and GM-only payload stripping. These tests
+prove their specific predicates, not a uniform policy for every endpoint. Keep
+the suite small and add cases when an access predicate or spoiler projection
+changes.
 
 ### Selected mode security contract
 
-Authenticated requests through the central API client send the selected
-workspace-and-campaign mode in `X-DD-Mode`. Spoiler-bearing GET handlers grant
-GM visibility only when both conditions hold:
+Authenticated requests through the central API client send selected mode in
+`X-DD-Mode`. A handler that uses `canViewAsGm` grants GM projection only when
+both conditions hold:
 
 1. persisted campaign membership is `gm`;
 2. `X-DD-Mode` explicitly contains `gm`.
 
-Player mode, a missing header, an invalid header, or unreadable client storage
-all use Player visibility. The header is downgrade-only: it cannot elevate a
-Player membership to GM. Membership remains the authority for mutations, so
-this change does not broaden or replace existing write authorization.
+Player mode or a missing or invalid header resolves to Player mode for this
+projection helper. Client mode-storage failure behavior is client-context
+specific and is not inferred by the API helper. The helper is conjunctive:
+the request header alone cannot elevate a `player` campaign membership. This is
+not a global middleware contract. Several write handlers use
+`requireCampaignGm`, which checks campaign role but not selected mode; other
+paths, including Campaign Settings and invitation creation, explicitly check
+both. Treat write authorization as endpoint-specific, not as uniformly revoked
+by Player mode. The implementation and observed gaps are recorded in the
+[role/mode guide](../multitenant-multirole-management.md) and
+[authorization table](../permissions-table.md).
 
 API regressions execute the real item, lore, location, NPC, relationship,
 session, character, and assignment handlers with a GM membership and an
@@ -135,11 +147,13 @@ and responses with no GM notes, hidden item fields, GM session prep/secrets, or
 hidden relationships. The browser fixture also rejects authenticated API
 requests that omit a valid mode header.
 
-This contract protects each server response at request time. Client-side data
-stores must still refetch or invalidate GM-derived cached data when switching
-to Player mode; manual dual-role verification should include switching modes
-without a page reload and inspecting the visible state and subsequent network
-requests.
+For handlers using the projection helper, the check protects the server
+response at request time. Client-side data stores must still refetch or
+invalidate GM-derived cached data when switching to Player mode. Manual
+dual-role verification should include a no-reload mode switch and inspect the
+visible state and subsequent network requests. This does not establish safety
+for an endpoint that omits the relevant check; route-specific coverage remains
+important.
 
 ## Repository scripts
 
