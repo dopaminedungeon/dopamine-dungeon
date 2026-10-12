@@ -583,7 +583,7 @@ export default function CampaignSettings() {
   };
 
   return (
-    <div className="w-full text-white">
+    <div className="app-page-wide text-white">
       <main className="w-full px-6 py-5 md:px-8 md:py-6">
         {/* Header */}
         <div className="mb-5 flex flex-col gap-2 md:flex-row md:items-end md:justify-between">

@@ -40,8 +40,8 @@ describe("MarkdownContent", () => {
     const html = render(source);
 
     expect(html).toContain("<blockquote");
-    expect(html).toContain('class="list-decimal space-y-1 pl-5 marker:text-zinc-500"');
-    expect(html).toContain('class="list-disc space-y-1 pl-5 marker:text-zinc-500"');
+    expect(html).toContain('class="app-reading-width list-decimal space-y-1 pl-5 marker:text-zinc-500 [overflow-wrap:anywhere]"');
+    expect(html).toContain('class="app-reading-width list-disc space-y-1 pl-5 marker:text-zinc-500 [overflow-wrap:anywhere]"');
     expect(html).toContain("<br/>");
     expect(html).toContain('class="overflow-x-auto rounded-lg bg-black/30 p-3 text-xs leading-5"');
     expect(html).toContain("const value = 1;");

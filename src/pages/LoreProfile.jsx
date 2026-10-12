@@ -771,7 +771,7 @@ export default function LoreProfile() {
 
   if (isLoading) {
     return (
-      <main className="flex-1 overflow-auto p-8">
+      <main className="app-page-wide flex-1 overflow-auto p-4 sm:p-6 lg:p-8">
         <div className="rounded-2xl border border-white/10 bg-white/5 p-6 text-sm text-zinc-300">
           Loading Lore...
         </div>
@@ -781,7 +781,7 @@ export default function LoreProfile() {
 
   if (!canView) {
     return (
-      <main className="flex-1 overflow-auto p-8">
+      <main className="app-page-wide flex-1 overflow-auto p-4 sm:p-6 lg:p-8">
         <button
           type="button"
           onClick={() => navigate("/lore")}
@@ -801,7 +801,7 @@ export default function LoreProfile() {
   }
 
   return (
-    <main className="flex-1 overflow-auto p-4 sm:p-6 lg:p-8">
+    <main className="app-page-wide flex-1 overflow-auto p-4 sm:p-6 lg:p-8">
       <button
         type="button"
         disabled={isSaving || isDeleting}
@@ -914,11 +914,11 @@ export default function LoreProfile() {
                       {viewLore.visibility === "public" ? "Player-visible" : "GM-only"}
                     </span>
                   </div>
-                  <h1 className="text-3xl font-bold text-white">{viewLore.name || "Untitled Lore"}</h1>
+                  <h1 className="break-words text-3xl font-bold text-white">{viewLore.name || "Untitled Lore"}</h1>
                   {viewLore.aliases?.length ? (
                     <div className="mt-3 text-sm">
                       <p className="font-medium text-zinc-300">Aliases:</p>
-                      <p className="mt-1 text-zinc-400">{viewLore.aliases.join(" • ")}</p>
+                      <p className="mt-1 break-words [overflow-wrap:anywhere] text-zinc-400">{viewLore.aliases.join(" • ")}</p>
                     </div>
                   ) : null}
                 </>

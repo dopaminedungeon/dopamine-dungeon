@@ -758,7 +758,7 @@ export default function MapProfile() {
 
   if (isLoading) {
     return (
-      <main className="flex-1 overflow-auto p-8">
+      <main className="app-page-wide flex-1 overflow-auto p-4 sm:p-6 lg:p-8">
         <div className="rounded-2xl border border-white/10 bg-white/5 p-6 text-sm text-zinc-300">
           Loading Location...
         </div>
@@ -768,7 +768,7 @@ export default function MapProfile() {
 
   if (!canView) {
     return (
-      <main className="flex-1 overflow-auto p-8">
+      <main className="app-page-wide flex-1 overflow-auto p-4 sm:p-6 lg:p-8">
         <button
           type="button"
           onClick={() => navigate("/maps")}
@@ -788,7 +788,7 @@ export default function MapProfile() {
   }
 
   return (
-    <main className="flex-1 overflow-auto p-4 sm:p-6 lg:p-8">
+    <main className="app-page-wide flex-1 overflow-auto p-4 sm:p-6 lg:p-8">
       <button
         type="button"
         disabled={isSaving || isDeleting}
@@ -903,13 +903,13 @@ export default function MapProfile() {
                       </span>
                     ) : null}
                   </div>
-                  <h1 className="text-3xl font-bold text-white">
+                  <h1 className="break-words text-3xl font-bold text-white">
                     {viewLocation.name || "Untitled Location"}
                   </h1>
                   {viewLocation.aliases?.length ? (
                     <div className="mt-3 text-sm">
                       <p className="font-medium text-zinc-300">Aliases:</p>
-                      <p className="mt-1 text-zinc-400">{viewLocation.aliases.join(" • ")}</p>
+                      <p className="mt-1 break-words [overflow-wrap:anywhere] text-zinc-400">{viewLocation.aliases.join(" • ")}</p>
                     </div>
                   ) : null}
                 </>

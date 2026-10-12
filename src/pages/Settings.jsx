@@ -166,7 +166,7 @@ export default function Settings() {
 
   return (
     <main className="flex-1 overflow-auto p-4 sm:p-6 lg:p-8">
-      <div className="mx-auto w-full max-w-7xl space-y-6">
+      <div className="app-page-wide space-y-6">
         <div className="bg-white/5 border border-white/10 rounded-xl sm:rounded-2xl p-4 sm:p-6">
           <div>
             <h1 className="text-2xl sm:text-3xl font-bold text-white">Profile Settings</h1>

@@ -191,7 +191,7 @@ export default function Items() {
 
   if (!selectedCampaignId) {
     return (
-      <main className="flex-1 overflow-auto flex items-center justify-center">
+      <main className="app-page-wide flex-1 overflow-auto flex items-center justify-center">
         <div className="text-zinc-400">Select a campaign to view items.</div>
       </main>
     );
@@ -199,14 +199,14 @@ export default function Items() {
 
   if (loading) {
     return (
-      <main className="flex-1 overflow-auto flex items-center justify-center">
+      <main className="app-page-wide flex-1 overflow-auto flex items-center justify-center">
         <div className="text-zinc-400">Loading items...</div>
       </main>
     );
   }
 
   return (
-  <>
+  <div className="app-page-wide">
 {/* Header Actions */}
 <div className="space-y-4 mb-8">
   <div className="flex flex-col xl:flex-row gap-4 xl:items-center">
@@ -602,6 +602,6 @@ export default function Items() {
         </div>
       </div>
     ), document.body) : null}
-  </>
+  </div>
 );
 }

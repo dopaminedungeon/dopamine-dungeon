@@ -520,7 +520,7 @@ export default function BagOfHolding() {
 
   if (!selectedCampaignId) {
     return (
-      <main className="flex-1 overflow-auto flex items-center justify-center">
+      <main className="app-page-wide flex-1 overflow-auto flex items-center justify-center">
         <div className="text-zinc-400">Select a campaign to view the Bag of Holding.</div>
       </main>
     );
@@ -528,14 +528,14 @@ export default function BagOfHolding() {
 
   if (loading) {
     return (
-      <main className="flex-1 overflow-auto flex items-center justify-center">
+      <main className="app-page-wide flex-1 overflow-auto flex items-center justify-center">
         <div className="text-zinc-400">Loading Bag of Holding...</div>
       </main>
     );
   }
 
   return (
-    <main className="flex-1 overflow-auto">
+    <main className="app-page-wide flex-1 overflow-auto">
       {/* Subsection nav */}
       <div className="mb-4 flex flex-wrap items-center gap-2 overflow-x-auto whitespace-nowrap pr-1 [-webkit-overflow-scrolling:touch]">
         <NavLink

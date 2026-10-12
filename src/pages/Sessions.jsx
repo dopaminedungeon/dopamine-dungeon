@@ -273,7 +273,7 @@ useEffect(() => {
   const selectedLocation = formData.map ? allLocationsById.get(String(formData.map)) : null;
 if (!selectedCampaignId) {
   return (
-    <main className="flex-1 overflow-auto flex items-center justify-center">
+    <main className="app-page-wide flex-1 overflow-auto flex items-center justify-center">
       <div className="text-zinc-400">Select a campaign to view sessions.</div>
     </main>
   );
@@ -281,14 +281,14 @@ if (!selectedCampaignId) {
 
 if (loading) {
   return (
-    <main className="flex-1 overflow-auto flex items-center justify-center">
+    <main className="app-page-wide flex-1 overflow-auto flex items-center justify-center">
       <div className="text-zinc-400">Loading sessions...</div>
     </main>
   );
 }
 
   return (
-    <main className="flex-1 overflow-auto">
+    <main className="app-page-wide flex-1 overflow-auto">
       {/* Header Actions */}
       <div className="flex flex-col md:flex-row gap-4 mb-8">
         {/* Search */}
@@ -387,7 +387,7 @@ if (loading) {
                       <p className="text-xs font-medium uppercase tracking-wide text-zinc-500">
                         {sessionNumber}
                       </p>
-                      <h3 className="mt-0.5 text-lg font-bold leading-tight text-white transition-colors group-hover:text-emerald-300 sm:text-xl">
+                      <h3 className="mt-0.5 break-words text-lg font-bold leading-tight text-white transition-colors group-hover:text-emerald-300 sm:text-xl">
                         {session.name || "Untitled session"}
                       </h3>
                     </div>
@@ -427,7 +427,7 @@ if (loading) {
                     )}
                   </div>
 
-                  <p className="line-clamp-2 text-sm leading-6 text-zinc-400">
+                  <p className="line-clamp-2 break-words text-sm leading-6 text-zinc-400">
                     {getSessionPreview(session)}
                   </p>
                 </div>

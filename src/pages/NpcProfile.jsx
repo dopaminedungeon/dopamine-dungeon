@@ -1468,7 +1468,7 @@ export default function NpcProfile() {
 
   if (!selectedCampaignId) {
     return (
-      <main className="flex-1 overflow-auto flex items-center justify-center p-8">
+      <main className="app-page-wide flex-1 overflow-auto flex items-center justify-center p-4 sm:p-6 lg:p-8">
         <div className="max-w-md rounded-2xl border border-white/10 bg-white/5 p-6 text-center">
           <h1 className="text-xl font-semibold text-white">Select a campaign</h1>
           <p className="mt-2 text-sm text-zinc-400">
@@ -1480,12 +1480,12 @@ export default function NpcProfile() {
   }
 
   if (isLoading || loadedScope !== scopeKey) {
-    return <main className="p-8 text-zinc-400" role="status">Loading NPC profile for this campaign...</main>;
+    return <main className="app-page-wide p-4 text-zinc-400 sm:p-6 lg:p-8" role="status">Loading NPC profile for this campaign...</main>;
   }
 
   if (!npc) {
     return (
-      <main className="p-8 text-white">
+      <main className="app-page-wide p-4 text-white sm:p-6 lg:p-8">
         <div className="max-w-xl bg-white/5 border border-white/10 rounded-2xl p-8">
           <h1 className="text-2xl font-bold">{error ? "Unable to load NPC" : "NPC not found"}</h1>
           <p className="mt-2 text-sm text-zinc-400">
@@ -1507,7 +1507,7 @@ export default function NpcProfile() {
 
   if (!isGM && npc.visibility === "gm-only") {
     return (
-      <main className="flex-1 p-8 overflow-auto">
+      <main className="app-page-wide flex-1 overflow-auto p-4 sm:p-6 lg:p-8">
         <div className="max-w-xl mx-auto bg-white/5 border border-white/10 rounded-2xl p-8 text-center">
           <h1 className="text-2xl font-bold text-white mb-2">DM Eyes Only</h1>
           <p className="text-zinc-400 text-sm mb-4">This NPC is marked GM-only.</p>
@@ -1531,7 +1531,7 @@ export default function NpcProfile() {
   const TypeIcon = getNpcTypeIcon(viewNpc.type);
 
   return (
-    <main className="flex-1 overflow-auto p-4 sm:p-6 lg:p-8">
+    <main className="app-page-wide flex-1 overflow-auto p-4 sm:p-6 lg:p-8">
       <div className="mb-6 flex flex-col gap-4">
         <button
           type="button"
@@ -1647,8 +1647,8 @@ export default function NpcProfile() {
                   </div>
                 ) : (
                   <>
-                    <h1 className="text-3xl font-bold text-white">{viewNpc.name || "Unnamed NPC"}</h1>
-                    {viewNpc.title ? <p className="mt-1 text-sm text-zinc-400">{viewNpc.title}</p> : null}
+                    <h1 className="break-words [overflow-wrap:anywhere] text-3xl font-bold text-white">{viewNpc.name || "Unnamed NPC"}</h1>
+                    {viewNpc.title ? <p className="mt-1 break-words [overflow-wrap:anywhere] text-sm text-zinc-400">{viewNpc.title}</p> : null}
                     {normalizeAliases(viewNpc.aliases).length > 0 ? (
                       <div className="mt-4">
                         <p className="text-xs font-medium uppercase tracking-wide text-zinc-500">
