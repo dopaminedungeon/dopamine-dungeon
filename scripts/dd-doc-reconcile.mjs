@@ -5,12 +5,78 @@ import { fileURLToPath } from "node:url";
 const AI_MODEL = process.env.AI_MODEL || "mistral-small-latest";
 const AI_REASONING_EFFORT = process.env.AI_REASONING_EFFORT || "high";
 const REPOSITORY_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
+const INVENTORY_KINDS = ["canonical", "evidence"];
 const FINDING_TYPES = new Set(["DOCUMENTATION_DRIFT", "IMPLEMENTATION_RISK", "UNVERIFIED"]);
 const RELATIONSHIPS = new Set(["CONTRADICTS", "MAY_VIOLATE_INVARIANT", "INSUFFICIENT_EVIDENCE", "AGREES", "OMISSION_ONLY"]);
 const CONFIDENCES = new Set(["HIGH", "MEDIUM", "LOW"]);
 const ACTIONS = new Set(["UPDATE_EXISTING_DOCUMENTATION", "HUMAN_VERIFICATION", "IMPLEMENTATION_REVIEW"]);
 const CLAIM_KINDS = new Set(["EXPLICIT_CURRENT_STATE", "EXPLICIT_NOT_CURRENT", "EXPLICIT_INVARIANT", "EXPLICIT_ABSENCE", "OMISSION"]);
 const CAPABILITY_EFFECTS = new Set(["GRANTS", "RESTRICTS", "FILTERS", "UNKNOWN", "NOT_APPLICABLE"]);
+
+function assertPathList(value, label) {
+  if (!Array.isArray(value) || value.some((item) => typeof item !== "string" || !item.trim())) {
+    throw new Error(`${label} must be an array of non-empty paths.`);
+  }
+  if (new Set(value).size !== value.length) throw new Error(`${label} contains duplicate paths.`);
+}
+
+export function validateManifestCoverage(manifest) {
+  if (!manifest || typeof manifest !== "object") throw new Error("Documentation manifest must be an object.");
+  for (const kind of INVENTORY_KINDS) assertPathList(manifest[kind], `Top-level ${kind} inventory`);
+  if (!manifest.passes || typeof manifest.passes !== "object" || Array.isArray(manifest.passes) || !Object.keys(manifest.passes).length) {
+    throw new Error("Documentation manifest must define at least one explicit pass.");
+  }
+
+  for (const kind of INVENTORY_KINDS) {
+    const declared = new Set(manifest[kind]);
+    const covered = new Set();
+    for (const [passName, pass] of Object.entries(manifest.passes)) {
+      if (!pass || typeof pass !== "object" || Array.isArray(pass)) throw new Error(`Pass ${passName} must be an object.`);
+      for (const field of ["scope", "outOfScope"]) {
+        if (!Array.isArray(pass[field]) || !pass[field].length || pass[field].some((item) => typeof item !== "string" || !item.trim())) {
+          throw new Error(`Pass ${passName} must define a non-empty ${field} list.`);
+        }
+      }
+      const files = pass[kind];
+      assertPathList(files, `Pass ${passName} ${kind}`);
+      if (!files.length) throw new Error(`Pass ${passName} must define at least one ${kind} input.`);
+      for (const file of files) {
+        if (!declared.has(file)) throw new Error(`Pass ${passName} ${kind} input is missing from the top-level inventory: ${file}`);
+        covered.add(file);
+      }
+    }
+    const unassigned = manifest[kind].filter((file) => !covered.has(file));
+    if (unassigned.length) {
+      throw new Error(`Documentation manifest ${kind} inventory is not covered by any pass:\n${unassigned.map((file) => `- ${file}`).join("\n")}`);
+    }
+  }
+  return manifest;
+}
+
+export function selectPassInputs(manifest) {
+  validateManifestCoverage(manifest);
+  return Object.entries(manifest.passes).map(([passName, pass]) => ({
+    passName,
+    pass: {
+      ...pass,
+      canonical: [...pass.canonical],
+      evidence: [...pass.evidence],
+    },
+  }));
+}
+
+export async function validateManifestFiles(manifest, root = REPOSITORY_ROOT) {
+  const files = new Set([...manifest.canonical, ...manifest.evidence]);
+  const missing = [];
+  for (const file of files) {
+    try {
+      await fs.access(path.resolve(root, file));
+    } catch {
+      missing.push(file);
+    }
+  }
+  if (missing.length) throw new Error(`Documentation manifest references missing files:\n${missing.map((file) => `- ${file}`).join("\n")}`);
+}
 
 const STRUCTURED_RESPONSE_FORMAT = {
   type: "json_schema",
@@ -219,6 +285,20 @@ function buildPrompt(rubric, passName, pass, canonicalDocuments, evidenceDocumen
   return `${rubric}\n\nYou are performing one isolated documentation reconciliation pass.\nCURRENT PASS: ${passName}\n\nPASS SCOPE (audit only these subjects):\n${(pass.scope || []).map((item) => `- ${item}`).join("\n")}\n\nOUT OF SCOPE (do not report these subjects):\n${(pass.outOfScope || []).map((item) => `- ${item}`).join("\n")}\n\nCanonical documentation:\n${formatDocuments(canonicalDocuments)}\n\nAUTHORIZED REPOSITORY EVIDENCE FILES:\n${evidenceDocuments.map(({ filePath }) => `- ${filePath}`).join("\n")}\n\nRepository evidence:\n${formatDocuments(evidenceDocuments)}\n\nReturn a JSON object with a findings array matching the response schema. Omit agreements and omission-only observations. Do not infer absence from a file not containing a control. Treat role capability and selected mode as separate: mode may restrict representation but never grants capability. Use only authorized files. Zero findings is valid.`;
 }
 
+export function renderScopeSummary(results) {
+  const passNames = results.map(({ passName }) => `\`${passName}\``).join(", ");
+  const passSections = results.map(({ passName, pass }) => [
+    `### ${passName}`,
+    `Scope: ${(pass.scope || []).join("; ")}`,
+    `Out of scope: ${(pass.outOfScope || []).join("; ")}`,
+    `Canonical documents inspected (${pass.canonical.length}):`,
+    ...pass.canonical.map((file) => `- ${file}`),
+    `Repository evidence inspected (${pass.evidence.length}):`,
+    ...pass.evidence.map((file) => `- ${file}`),
+  ].join("\n")).join("\n\n");
+  return `## Inspected scope\n\nPasses executed (${results.length}): ${passNames}\n\n${passSections}\n\nThis is a scoped reconciliation of the declared manifest inventory, not a whole-repository audit. Files outside that inventory, including ignored/generated artifacts, private reports, secrets, and live environment state, were not inspected.`;
+}
+
 async function writeStepSummary(results) {
   if (!process.env.GITHUB_STEP_SUMMARY) return;
   const eventName = process.env.GITHUB_EVENT_NAME || "unknown";
@@ -229,8 +309,8 @@ async function writeStepSummary(results) {
   const allFindings = results.flatMap(({ result }) => result.findings);
   const counts = Object.fromEntries([...FINDING_TYPES].map((type) => [type, allFindings.filter((finding) => finding.type === type).length]));
   const emptyPasses = results.filter(({ result }) => result.findings.length === 0).length;
-  const sections = results.map(({ passName, result }) => `## ${passName}\n\n${renderMarkdown(result.findings) || "No material findings."}`).join("\n\n");
-  const summary = `# Dopamine Dungeon Documentation Reconciliation\n\nRun context:\n${context}\n- Model: ${AI_MODEL}\n- Reasoning effort: ${AI_REASONING_EFFORT}\n\n${sections}\n\n## Reconciliation Summary\n\n- Documentation drift: ${counts.DOCUMENTATION_DRIFT}\n- Implementation risks: ${counts.IMPLEMENTATION_RISK}\n- Human verification required: ${counts.UNVERIFIED}\n- Passes with no findings: ${emptyPasses}\n`;
+  const sections = results.map(({ passName, result }) => `## Findings: ${passName}\n\n${renderMarkdown(result.findings) || "No material findings."}`).join("\n\n");
+  const summary = `# Dopamine Dungeon Documentation Reconciliation\n\nRun context:\n${context}\n- Model: ${AI_MODEL}\n- Reasoning effort: ${AI_REASONING_EFFORT}\n\n${renderScopeSummary(results)}\n\n${sections}\n\n## Reconciliation Summary\n\n- Documentation drift: ${counts.DOCUMENTATION_DRIFT}\n- Implementation risks: ${counts.IMPLEMENTATION_RISK}\n- Human verification required: ${counts.UNVERIFIED}\n- Passes with no findings: ${emptyPasses}\n`;
   await fs.appendFile(process.env.GITHUB_STEP_SUMMARY, summary);
 }
 
@@ -251,12 +331,14 @@ export async function runPass(passName, pass, rubric) {
 }
 
 export async function main() {
+  const manifest = JSON.parse(await fs.readFile(path.resolve(REPOSITORY_ROOT, "ai/documentation-manifest.json"), "utf8"));
+  const selectedPasses = selectPassInputs(manifest);
+  await validateManifestFiles(manifest);
   if (!process.env.MISTRAL_API_KEY) throw new Error("Missing MISTRAL_API_KEY.");
   const rubric = await fs.readFile(path.resolve(REPOSITORY_ROOT, "ai/dopamine-dungeon-doc-reconciliation-rubric.md"), "utf8");
-  const manifest = JSON.parse(await fs.readFile(path.resolve(REPOSITORY_ROOT, "ai/documentation-manifest.json"), "utf8"));
   const results = [];
-  for (const [passName, pass] of Object.entries(manifest.passes || {})) {
-    results.push({ passName, result: await runPass(passName, pass, rubric) });
+  for (const { passName, pass } of selectedPasses) {
+    results.push({ passName, pass, result: await runPass(passName, pass, rubric) });
   }
   await writeStepSummary(results);
 }

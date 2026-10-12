@@ -1,6 +1,9 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { askAI, parseStructuredReport, renderMarkdown, validateStructuredReport } from "./dd-doc-reconcile.mjs";
+import { readFileSync } from "node:fs";
+import { askAI, parseStructuredReport, renderMarkdown, renderScopeSummary, selectPassInputs, validateManifestCoverage, validateManifestFiles, validateStructuredReport } from "./dd-doc-reconcile.mjs";
+
+const manifest = JSON.parse(readFileSync(new URL("../ai/documentation-manifest.json", import.meta.url), "utf8"));
 
 const allowed = {
   canonicalFiles: ["docs/architecture/adr/0004-firebase-identity-and-email-verification.md", "docs/permissions-table.md"],
@@ -87,4 +90,63 @@ test("sends the configured reasoning effort with native structured output", asyn
   }
   assert.equal(request.reasoning_effort, "high");
   assert.equal(request.response_format.type, "json_schema");
+});
+
+test("declared documentation inventory is fully assigned to explicit passes", async () => {
+  assert.equal(validateManifestCoverage(manifest), manifest);
+  await validateManifestFiles(manifest);
+  const selected = selectPassInputs(manifest);
+  assert.deepEqual(selected.map(({ passName }) => passName), [
+    "security-auth",
+    "security-access",
+    "architecture-persistence",
+    "operations-ci",
+    "iteration-handoff",
+  ]);
+  for (const kind of ["canonical", "evidence"]) {
+    const declared = new Set(manifest[kind]);
+    const supplied = new Set(selected.flatMap(({ pass }) => pass[kind]));
+    assert.deepEqual(supplied, declared);
+  }
+});
+
+test("coverage validation fails when an inventory item is omitted or a pass adds an undeclared path", () => {
+  const fixture = {
+    canonical: ["docs/a.md", "docs/b.md"],
+    evidence: ["src/a.js"],
+    passes: { alpha: { scope: ["topic"], outOfScope: ["other"], canonical: ["docs/a.md"], evidence: ["src/a.js"] } },
+  };
+  assert.throws(() => validateManifestCoverage(fixture), /canonical inventory is not covered[\s\S]*docs\/b\.md/);
+  fixture.passes.alpha.canonical.push("docs/b.md");
+  assert.equal(validateManifestCoverage(fixture), fixture);
+  fixture.passes.alpha.evidence.push("src/undeclared.js");
+  assert.throws(() => validateManifestCoverage(fixture), /missing from the top-level inventory: src\/undeclared\.js/);
+});
+
+test("pass selection returns only its explicit inputs and never falls back to top-level lists", () => {
+  const fixture = {
+    canonical: ["docs/a.md", "docs/b.md"],
+    evidence: ["src/a.js", "src/b.js"],
+    passes: {
+      alpha: { scope: ["alpha"], outOfScope: ["beta"], canonical: ["docs/a.md"], evidence: ["src/a.js"] },
+      beta: { scope: ["beta"], outOfScope: ["alpha"], canonical: ["docs/b.md"], evidence: ["src/b.js"] },
+    },
+  };
+  assert.deepEqual(selectPassInputs(fixture).map(({ passName, pass }) => ({ passName, canonical: pass.canonical, evidence: pass.evidence })), [
+    { passName: "alpha", canonical: ["docs/a.md"], evidence: ["src/a.js"] },
+    { passName: "beta", canonical: ["docs/b.md"], evidence: ["src/b.js"] },
+  ]);
+});
+
+test("summary scope names exact passes and inputs without claiming a whole-repository audit", () => {
+  const summary = renderScopeSummary([{
+    passName: "sample-pass",
+    pass: { scope: ["sample subject"], canonical: ["docs/sample.md"], evidence: ["src/sample.js"] },
+  }]);
+  assert.match(summary, /Passes executed \(1\): `sample-pass`/);
+  assert.match(summary, /Scope: sample subject/);
+  assert.match(summary, /Out of scope:/);
+  assert.match(summary, /Canonical documents inspected \(1\):[\s\S]*docs\/sample\.md/);
+  assert.match(summary, /Repository evidence inspected \(1\):[\s\S]*src\/sample\.js/);
+  assert.match(summary, /not a whole-repository audit/);
 });
