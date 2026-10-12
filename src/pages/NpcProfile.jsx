@@ -16,6 +16,7 @@ import {
   getLinksForEntity,
   loadLinks,
   removeLink,
+  updateLink,
 } from "../data/links/links.repo";
 import {
   getNpcTypeIcon,
@@ -29,7 +30,7 @@ const NPC_STATUSES = ["active", "missing", "dead", "unknown"];
 const NPC_SESSION_LABELS = ["present", "mentioned", "ally", "antagonist"];
 const NPC_ITEM_LABELS = ["owns", "uses"];
 const NPC_LORE_LABELS = ["connected"];
-const NPC_LOCATION_LABELS = ["connected"];
+const NPC_LOCATION_LABELS = ["connected", "resides_in", "controls"];
 const ABILITIES = ["str", "dex", "con", "int", "wis", "cha"];
 const SIZE_OPTIONS = ["Tiny", "Small", "Medium", "Large", "Huge", "Gargantuan"];
 const CREATURE_TYPE_OPTIONS = [
@@ -447,26 +448,19 @@ function NpcLinkSection({
     return entityList
       .filter((entity) => {
         const label = getEntityLabel(entity);
-        if (normalizedQuery && !String(label || "").toLowerCase().includes(normalizedQuery)) {
+        const aliases = entityType === "Map" && Array.isArray(entity.aliases) ? entity.aliases : [];
+        if (normalizedQuery && ![label, ...aliases].some((value) =>
+          String(value || "").toLowerCase().includes(normalizedQuery)
+        )) {
           return false;
         }
-
-        return !links.some((link) => {
-          const other = getOtherEndpoint(link, "NPC", npcId);
-
-          return (
-            other.type === entityType &&
-            String(other.id) === String(entity.id)
-          );
-        });
+        return true;
       })
       .slice(0, 30);
   }, [
     entityList,
     entityType,
     getEntityLabel,
-    links,
-    npcId,
     query,
   ]);
 
@@ -608,17 +602,21 @@ function NpcLinkSection({
             {candidateEntities.length === 0 ? (
               <p className="px-3 py-2 text-sm text-zinc-500">No results.</p>
             ) : (
-              candidateEntities.map((entity) => (
-                <button
+              candidateEntities.map((entity) => {
+                const alreadyLinked = links.some((link) => {
+                  const other = getOtherEndpoint(link, "NPC", npcId);
+                  return other.type === entityType && String(other.id) === String(entity.id);
+                });
+                return <button
                   key={entity.id}
                   type="button"
-                  disabled={isDisabled}
+                  disabled={isDisabled || alreadyLinked}
                   onClick={() => handleAdd(entity.id)}
                   className="block w-full px-3 py-2 text-left text-sm text-zinc-200 hover:bg-white/5 disabled:cursor-not-allowed disabled:opacity-50"
                 >
-                  {busyId === `add-${entity.id}` ? "Linking..." : getEntityLabel(entity)}
-                </button>
-              ))
+                  {getEntityLabel(entity)}{alreadyLinked ? " — Already linked" : ""}
+                </button>;
+              })
             )}
           </div>
         </div>
@@ -1246,8 +1244,7 @@ export default function NpcProfile() {
       }
 
       if (getLinkSignature(originalLink) !== getLinkSignature(nextLink)) {
-        await removeLink(originalLink.id, selectedCampaignId);
-        await addLink(nextLink, selectedCampaignId);
+        await updateLink(nextLink, selectedCampaignId);
       }
     }
 
