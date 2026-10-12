@@ -15,6 +15,7 @@ import { useMode } from "../context/ModeContext.jsx";
 import { useCampaign } from "../context/CampaignContext";
 import { useTenant } from "../context/TenantContext.jsx";
 import { locationsRepo } from "../data/maps/locations.repo";
+import { useFilterPreferences } from "../data/preferences/useFilterPreferences.jsx";
 import { MarkdownContent } from "../components/MarkdownContent.jsx";
 import {
   compareCreatedAt,
@@ -111,19 +112,25 @@ export default function Maps() {
   const navigate = useNavigate();
   const { isGM } = useMode();
   const { selectedCampaignId } = useCampaign();
-  const { selectedTenantId } = useTenant();
+  const { selectedTenantId, accessSnapshotUserUid } = useTenant();
+  const filterDefinitions = useMemo(() => ({
+    category: { defaultValue: "All", options: ["All", ...LOCATION_CATEGORIES] },
+    ...(isGM ? { visibility: { defaultValue: "All", options: ["All", "public", "gm-only"] } } : {}),
+  }), [isGM]);
+  const { values: filters, setValue: setFilter, saveValues: saveFilters, isReady: filtersReady } =
+    useFilterPreferences("locations", filterDefinitions);
 
   const [locations, setLocations] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState("");
   const [loadedScope, setLoadedScope] = useState("");
   const [loadVersion, setLoadVersion] = useState(0);
-  const scopeKey = `${selectedTenantId}:${selectedCampaignId}:${isGM ? "gm" : "player"}`;
-  const isCurrentLoading = isLoading || loadedScope !== scopeKey;
+  const scopeKey = `${accessSnapshotUserUid}:${selectedTenantId}:${selectedCampaignId}:${isGM ? "gm" : "player"}`;
+  const isCurrentLoading = isLoading || loadedScope !== scopeKey || !filtersReady;
   const [imageError, setImageError] = useState("");
   const [searchQuery, setSearchQuery] = useState("");
-  const [selectedCategory, setSelectedCategory] = useState("All");
-  const [selectedVisibility, setSelectedVisibility] = useState("All");
+  const selectedCategory = filters.category || "All";
+  const selectedVisibility = filters.visibility || "All";
   const [sortMode, setSortMode] = useState("name-asc");
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [formData, setFormData] = useState(createDraft());
@@ -320,7 +327,7 @@ export default function Maps() {
             Category
             <select
               value={selectedCategory}
-              onChange={(event) => setSelectedCategory(event.target.value)}
+              onChange={(event) => setFilter("category", event.target.value)}
               className="rounded-lg border border-white/10 bg-black/30 px-2.5 py-1.5 text-xs text-zinc-200 outline-none focus:border-indigo-300"
             >
               <option>All</option>
@@ -334,7 +341,7 @@ export default function Maps() {
               Visibility
               <select
                 value={selectedVisibility}
-                onChange={(event) => setSelectedVisibility(event.target.value)}
+                onChange={(event) => setFilter("visibility", event.target.value)}
                 className="rounded-lg border border-white/10 bg-black/30 px-2.5 py-1.5 text-xs text-zinc-200 outline-none focus:border-indigo-300"
               >
                 <option>All</option>
@@ -364,8 +371,7 @@ export default function Maps() {
               type="button"
               onClick={() => {
                 setSearchQuery("");
-                setSelectedCategory("All");
-                setSelectedVisibility("All");
+                saveFilters({ category: "All", ...(isGM ? { visibility: "All" } : {}) });
               }}
               className="rounded-lg border border-white/10 px-2.5 py-1.5 text-xs text-zinc-300 hover:bg-white/10"
             >
