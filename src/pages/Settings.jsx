@@ -166,11 +166,11 @@ export default function Settings() {
 
   return (
     <main className="flex-1 overflow-auto p-4 sm:p-6 lg:p-8">
-      <div className="max-w-5xl mx-auto space-y-6">
+      <div className="mx-auto w-full max-w-7xl space-y-6">
         <div className="bg-white/5 border border-white/10 rounded-xl sm:rounded-2xl p-4 sm:p-6">
           <div>
             <h1 className="text-2xl sm:text-3xl font-bold text-white">Profile Settings</h1>
-            <p className="text-zinc-500 mt-1">
+            <p className="mt-1 max-w-prose text-zinc-500">
               Manage your account, connected login, and personal preferences.
             </p>
           </div>
@@ -199,21 +199,22 @@ export default function Settings() {
         {activeTab === "workspace" ? (
           <WorkspaceSettings />
         ) : (
-          <div className="grid grid-cols-1 xl:grid-cols-[1.2fr_0.8fr] gap-4 sm:gap-6">
-            <section className="bg-white/5 border border-white/10 rounded-xl sm:rounded-2xl p-4 sm:p-6 space-y-6">
+          <div className="grid min-w-0 grid-cols-1 gap-4 sm:gap-6 2xl:grid-cols-[minmax(0,1.2fr)_minmax(0,0.8fr)]">
+            <section className="min-w-0 self-start space-y-6 rounded-xl border border-white/10 bg-white/5 p-4 sm:rounded-2xl sm:p-6">
               <div>
                 <h2 className="text-lg font-semibold text-white">Account</h2>
-                <p className="text-zinc-500 text-sm mt-1">
+                <p className="mt-1 max-w-prose text-sm text-zinc-500">
                   These settings belong to you, not to the campaign.
                 </p>
               </div>
 
-	              <fieldset disabled={saving} className="grid grid-cols-1 gap-4 disabled:opacity-60">
-	                <div>
-                  <label className="block text-zinc-400 text-sm mb-2">Display name</label>
+	              <fieldset disabled={saving} className="grid min-w-0 grid-cols-1 gap-4 disabled:opacity-60 lg:grid-cols-2">
+	                <div className="min-w-0">
+                  <label htmlFor="profile-display-name" className="block text-zinc-400 text-sm mb-2">Display name</label>
                   <div className="relative">
                     <User className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-zinc-500" />
                     <input
+                      id="profile-display-name"
                       type="text"
                       value={profile.displayName}
                       onChange={(e) =>
@@ -225,18 +226,19 @@ export default function Settings() {
 	                  </div>
 	                </div>
 
-	                <div>
-                  <label className="block text-zinc-400 text-sm mb-2">Email</label>
+	                <div className="min-w-0">
+                  <label htmlFor="profile-email" className="block text-zinc-400 text-sm mb-2">Email</label>
                   <div className="relative">
                     <Mail className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-zinc-500" />
                     <input
+                      id="profile-email"
                       type="email"
                       value={user?.email || ""}
                       readOnly
                       className="w-full pl-12 pr-4 py-3 bg-white/5 border border-white/10 rounded-xl text-zinc-300 cursor-not-allowed"
                     />
                   </div>
-                  <p className="text-zinc-500 text-xs mt-2">
+                  <p className="mt-2 max-w-prose text-xs text-zinc-500">
                     Email is managed by your connected authentication provider.
                   </p>
 	                </div>
@@ -254,14 +256,14 @@ export default function Settings() {
                 </button>
 
                 {saveState.type === "success" && (
-                  <div className="inline-flex items-center gap-2 text-emerald-300 text-sm">
+                  <div className="inline-flex min-w-0 items-center gap-2 break-words text-sm text-emerald-300">
                     <CheckCircle2 className="w-4 h-4" />
                     {saveState.message}
                   </div>
                 )}
 
                 {saveState.type === "error" && (
-                  <div className="inline-flex items-center gap-2 text-red-300 text-sm">
+                  <div className="inline-flex min-w-0 items-center gap-2 break-words text-sm text-red-300">
                     <AlertCircle className="w-4 h-4" />
                     {saveState.message}
                   </div>
@@ -269,23 +271,23 @@ export default function Settings() {
               </div>
             </section>
 
-            <div className="space-y-4 sm:space-y-6">
+            <div className="min-w-0 space-y-4 sm:space-y-6">
               <PasswordManagement
                 firebaseUser={user}
               />
 
-              <section className="bg-white/5 border border-white/10 rounded-xl sm:rounded-2xl p-4 sm:p-6 space-y-4">
+              <section className="min-w-0 space-y-4 rounded-xl border border-white/10 bg-white/5 p-4 sm:rounded-2xl sm:p-6">
                 <div>
                   <h2 className="text-lg font-semibold text-white">Current Role</h2>
-                  <p className="text-zinc-500 text-sm mt-1">
+                  <p className="mt-1 max-w-prose text-sm text-zinc-500">
                     Your current context in the selected workspace and campaign.
                   </p>
                 </div>
 
-                <div className="space-y-3 text-sm">
+                <div className="grid grid-cols-1 gap-3 text-sm lg:grid-cols-2 2xl:grid-cols-1">
                   <div>
                     <p className="text-zinc-500">Workspace</p>
-                    <p className="text-white font-medium">{selectedTenant?.name || "No workspace selected"}</p>
+                    <p className="break-words font-medium text-white [overflow-wrap:anywhere]">{selectedTenant?.name || "No workspace selected"}</p>
                   </div>
 
                   <div>
@@ -295,7 +297,7 @@ export default function Settings() {
 
                   <div>
                     <p className="text-zinc-500">Campaign</p>
-                    <p className="text-white font-medium">{selectedCampaign?.name || "No campaign selected"}</p>
+                    <p className="break-words font-medium text-white [overflow-wrap:anywhere]">{selectedCampaign?.name || "No campaign selected"}</p>
                   </div>
 
                   <div>
@@ -310,10 +312,10 @@ export default function Settings() {
                 </div>
               </section>
 
-              <section className="bg-white/5 border border-white/10 rounded-xl sm:rounded-2xl p-4 sm:p-6 space-y-4">
+              <section className="min-w-0 space-y-4 rounded-xl border border-white/10 bg-white/5 p-4 sm:rounded-2xl sm:p-6">
                 <div>
                   <h2 className="text-lg font-semibold text-white">Session</h2>
-                  <p className="text-zinc-500 text-sm mt-1">
+                  <p className="mt-1 max-w-prose text-sm text-zinc-500">
                     Sign out of this device when you are done.
                   </p>
                 </div>
@@ -321,7 +323,7 @@ export default function Settings() {
                 <button
                   type="button"
                   onClick={handleLogout}
-                  className="w-full inline-flex items-center justify-center gap-2 px-4 py-3 rounded-xl bg-red-500/10 text-red-300 hover:bg-red-500/20 transition-colors"
+                  className="inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-xl bg-red-500/10 px-4 py-3 text-red-300 transition-colors hover:bg-red-500/20 sm:w-auto"
                 >
                   <LogOut className="w-4 h-4" />
                   Sign out
