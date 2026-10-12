@@ -52,10 +52,11 @@ uses direct Brevo. The browser Firestore repositories and initialization are
 retired (PR #365).
 
 Firestore remains an explicit historical input for operational tooling and
-retention/recovery. The temporary Production audit reader remains on `dev`
-but was removed from `main` by PR #373. Environment exports, limiter cutover,
-deny-all canary, and physical retirement require separate evidence and authority;
-see the [migration inventory](../FIRESTORE_TO_NEON_MIGRATION.md).
+retention/recovery. The temporary Production audit reader was removed from
+both `dev` and `main` by PR #373 after its one-time evidence capture; it is not
+an available API resource. Environment exports, limiter cutover, deny-all
+canary, and physical retirement require separate evidence and authority; see
+the [migration inventory](../FIRESTORE_TO_NEON_MIGRATION.md).
 
 ## Consequences
 
