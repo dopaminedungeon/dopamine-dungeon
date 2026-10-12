@@ -5,6 +5,7 @@ import { Link, useParams, useNavigate } from "react-router-dom";
 import { ArrowLeft, Eye, Lock, Plus, Trash2 } from "lucide-react";
 import { useMode } from "../context/ModeContext.jsx";
 import { useCampaign } from "../context/CampaignContext";
+import { useTenant } from "../context/TenantContext.jsx";
 import { npcsRepo } from "../data/npcs/npcs.repo";
 import { sessionsRepo } from "../data/sessions/sessions.repo";
 import { itemsRepo } from "../data/items/items.repo";
@@ -1118,11 +1119,17 @@ export default function NpcProfile() {
   const navigate = useNavigate();
   const { isGM } = useMode();
   const { selectedCampaignId } = useCampaign();
+  const { selectedTenantId } = useTenant();
 
   const [npc, setNpc] = useState(null);
   const [draft, setDraft] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState("");
+  const [relatedError, setRelatedError] = useState("");
+  const [loadedScope, setLoadedScope] = useState("");
+  const [relatedScope, setRelatedScope] = useState("");
+  const [loadVersion, setLoadVersion] = useState(0);
+  const scopeKey = `${selectedTenantId}:${selectedCampaignId}:${isGM ? "gm" : "player"}:${id}`;
   const [isEditing, setIsEditing] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
@@ -1145,30 +1152,47 @@ export default function NpcProfile() {
         setItems([]);
         setLoreEntries([]);
         setLocations([]);
+        setLoadedScope(scopeKey);
+        setRelatedScope(scopeKey);
         setIsLoading(false);
         return;
       }
 
-      try {
-        setIsLoading(true);
-        setError("");
-        const [data, sessionData, itemData, loreData, locationData] = await Promise.all([
-          npcsRepo.getById(selectedCampaignId, id),
-          sessionsRepo.getAll(selectedCampaignId),
-          itemsRepo.getAll(selectedCampaignId),
-          loreRepo.getAll(selectedCampaignId),
-          locationsRepo.getAll(selectedCampaignId),
-          loadLinks(selectedCampaignId),
-        ]);
-        if (!cancelled) {
-          setNpc(data);
-          setDraft(data ? buildDraft(data) : null);
-          setIsStatBlockCollapsed(data ? isStatBlockEmpty(data.statBlock) : true);
+      setIsLoading(true);
+      setError("");
+      setRelatedError("");
+      setRelatedScope("");
+      setIsEditing(false);
+      setDraftLinks(null);
+      const relatedRequest = Promise.all([
+        sessionsRepo.getAll(selectedCampaignId),
+        itemsRepo.getAll(selectedCampaignId),
+        loreRepo.getAll(selectedCampaignId),
+        locationsRepo.getAll(selectedCampaignId),
+        loadLinks(selectedCampaignId),
+      ]);
+      relatedRequest.then(
+        ([sessionData, itemData, loreData, locationData]) => {
+          if (cancelled) return;
           setSessions(Array.isArray(sessionData) ? sessionData : []);
           setItems(Array.isArray(itemData) ? itemData : []);
           setLoreEntries(Array.isArray(loreData) ? loreData : []);
           setLocations(Array.isArray(locationData) ? locationData : []);
           setLinksVersion((version) => version + 1);
+          setRelatedScope(scopeKey);
+        },
+        (loadError) => {
+          console.error("[NpcProfile] Failed to load linked details", loadError);
+          if (!cancelled) setRelatedError("Unable to load linked campaign details right now.");
+        }
+      );
+      try {
+        const data = await npcsRepo.getById(selectedCampaignId, id);
+        if (!cancelled) {
+          setNpc(data);
+          setDraft(data ? buildDraft(data) : null);
+          setIsStatBlockCollapsed(data ? isStatBlockEmpty(data.statBlock) : true);
+          setLoadedScope(scopeKey);
         }
       } catch (loadError) {
         console.error("[NpcProfile] Failed to load NPC", loadError);
@@ -1179,6 +1203,7 @@ export default function NpcProfile() {
           setLoreEntries([]);
           setLocations([]);
           setError("Unable to load this NPC right now.");
+          setLoadedScope(scopeKey);
         }
       } finally {
         if (!cancelled) setIsLoading(false);
@@ -1190,7 +1215,7 @@ export default function NpcProfile() {
     return () => {
       cancelled = true;
     };
-  }, [selectedCampaignId, id]);
+  }, [scopeKey, selectedCampaignId, id, loadVersion]);
 
   const npcLinks = useMemo(() => {
     void linksVersion;
@@ -1454,19 +1479,20 @@ export default function NpcProfile() {
     );
   }
 
-  if (isLoading) {
-    return <main className="p-8 text-zinc-400">Loading NPC...</main>;
+  if (isLoading || loadedScope !== scopeKey) {
+    return <main className="p-8 text-zinc-400" role="status">Loading NPC profile for this campaign...</main>;
   }
 
   if (!npc) {
     return (
       <main className="p-8 text-white">
         <div className="max-w-xl bg-white/5 border border-white/10 rounded-2xl p-8">
-          <h1 className="text-2xl font-bold">NPC not found</h1>
+          <h1 className="text-2xl font-bold">{error ? "Unable to load NPC" : "NPC not found"}</h1>
           <p className="mt-2 text-sm text-zinc-400">
             This NPC does not exist in the active campaign, or it is not visible in the current mode.
           </p>
           {error ? <p className="mt-3 text-sm text-rose-300">{error}</p> : null}
+          {error ? <button type="button" onClick={() => setLoadVersion((version) => version + 1)} className="mt-3 text-sm text-white underline">Retry</button> : null}
           <button
             type="button"
             onClick={() => navigate("/npcs")}
@@ -1759,6 +1785,13 @@ export default function NpcProfile() {
             )}
           </section>
 
+          {relatedScope !== scopeKey ? (
+            <section className="rounded-2xl border border-white/10 bg-white/5 p-6 text-sm text-zinc-300" role="status">
+              {relatedError ? (
+                <>{relatedError} <button type="button" onClick={() => setLoadVersion((version) => version + 1)} className="ml-2 underline hover:text-white">Retry</button></>
+              ) : "Loading linked campaign details..."}
+            </section>
+          ) : <>
           <NpcLinkSection
             key={`npc-sessions-${linkDraftKey}`}
             title="Sessions"
@@ -1848,6 +1881,8 @@ export default function NpcProfile() {
             getEntityPath={(location) => `/maps/${location.id}`}
             onLinksChanged={setDraftLinks}
           />
+
+          </>}
 
         </div>
 

@@ -13,6 +13,7 @@ import {
 } from "lucide-react";
 import { useMode } from "../context/ModeContext.jsx";
 import { useCampaign } from "../context/CampaignContext";
+import { useTenant } from "../context/TenantContext.jsx";
 import { locationsRepo } from "../data/maps/locations.repo";
 import { MarkdownContent } from "../components/MarkdownContent.jsx";
 import {
@@ -110,10 +111,15 @@ export default function Maps() {
   const navigate = useNavigate();
   const { isGM } = useMode();
   const { selectedCampaignId } = useCampaign();
+  const { selectedTenantId } = useTenant();
 
   const [locations, setLocations] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState("");
+  const [loadedScope, setLoadedScope] = useState("");
+  const [loadVersion, setLoadVersion] = useState(0);
+  const scopeKey = `${selectedTenantId}:${selectedCampaignId}:${isGM ? "gm" : "player"}`;
+  const isCurrentLoading = isLoading || loadedScope !== scopeKey;
   const [imageError, setImageError] = useState("");
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedCategory, setSelectedCategory] = useState("All");
@@ -130,6 +136,7 @@ export default function Maps() {
     async function loadLocations() {
       if (!selectedCampaignId) {
         setLocations([]);
+        setLoadedScope(scopeKey);
         setIsLoading(false);
         return;
       }
@@ -138,12 +145,16 @@ export default function Maps() {
         setIsLoading(true);
         setError("");
         const data = await locationsRepo.getAll(selectedCampaignId);
-        if (!cancelled) setLocations(data);
+        if (!cancelled) {
+          setLocations(data);
+          setLoadedScope(scopeKey);
+        }
       } catch (loadError) {
         console.error("[Locations] Failed to load locations", loadError);
         if (!cancelled) {
           setLocations([]);
           setError("Unable to load Locations right now.");
+          setLoadedScope(scopeKey);
         }
       } finally {
         if (!cancelled) setIsLoading(false);
@@ -155,7 +166,7 @@ export default function Maps() {
     return () => {
       cancelled = true;
     };
-  }, [selectedCampaignId]);
+  }, [scopeKey, selectedCampaignId, loadVersion]);
 
   const filteredLocations = useMemo(() => {
     const query = searchQuery.trim().toLowerCase();
@@ -364,17 +375,17 @@ export default function Maps() {
         </div>
       </section>
 
-      {error && (
+      {error && !isCurrentLoading && (
         <div className="mb-4 rounded-xl border border-red-400/20 bg-red-500/10 p-3 text-sm text-red-200">
-          {error}
+          {error} <button type="button" onClick={() => setLoadVersion((version) => version + 1)} className="ml-2 underline hover:text-white">Retry</button>
         </div>
       )}
 
-      {isLoading ? (
+      {isCurrentLoading ? (
         <div className="rounded-2xl border border-white/10 bg-white/5 p-6 text-sm text-zinc-300">
-          Loading Locations...
+          Loading Locations for this campaign...
         </div>
-      ) : sortedLocations.length === 0 ? (
+      ) : error ? null : sortedLocations.length === 0 ? (
         <div className="rounded-2xl border border-white/10 bg-white/5 p-8 text-center">
           <Map className="mx-auto mb-3 h-8 w-8 text-zinc-500" />
           <h2 className="text-base font-semibold text-white">No Locations yet</h2>
