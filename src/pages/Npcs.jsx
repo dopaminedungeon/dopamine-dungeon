@@ -3,6 +3,7 @@ import { createPortal } from "react-dom";
 import { Link } from "react-router-dom";
 import { useMode } from "../context/ModeContext.jsx";
 import { useCampaign } from "../context/CampaignContext";
+import { useTenant } from "../context/TenantContext.jsx";
 import {
   Search,
   Plus,
@@ -120,10 +121,15 @@ function createNpcDraft() {
 export default function Npcs() {
   const { isGM } = useMode();
   const { selectedCampaignId } = useCampaign();
+  const { selectedTenantId } = useTenant();
 
   const [npcs, setNpcs] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState("");
+  const [loadedScope, setLoadedScope] = useState("");
+  const [loadVersion, setLoadVersion] = useState(0);
+  const scopeKey = `${selectedTenantId}:${selectedCampaignId}:${isGM ? "gm" : "player"}`;
+  const isCurrentLoading = isLoading || loadedScope !== scopeKey;
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedType, setSelectedType] = useState("All");
   const [selectedRole, setSelectedRole] = useState("All");
@@ -151,6 +157,7 @@ export default function Npcs() {
     async function loadNpcs() {
       if (!selectedCampaignId) {
         setNpcs([]);
+        setLoadedScope(scopeKey);
         setIsLoading(false);
         return;
       }
@@ -159,12 +166,16 @@ export default function Npcs() {
         setIsLoading(true);
         setError("");
         const data = await npcsRepo.getAll(selectedCampaignId);
-        if (!cancelled) setNpcs(data);
+        if (!cancelled) {
+          setNpcs(data);
+          setLoadedScope(scopeKey);
+        }
       } catch (loadError) {
         console.error("[Npcs] Failed to load NPCs", loadError);
         if (!cancelled) {
           setNpcs([]);
           setError("Unable to load NPCs right now.");
+          setLoadedScope(scopeKey);
         }
       } finally {
         if (!cancelled) setIsLoading(false);
@@ -176,7 +187,7 @@ export default function Npcs() {
     return () => {
       cancelled = true;
     };
-  }, [selectedCampaignId]);
+  }, [scopeKey, selectedCampaignId, loadVersion]);
 
   useEffect(() => {
     if (!showCreateModal) return undefined;
@@ -451,18 +462,18 @@ export default function Npcs() {
           </div>
         </div>
 
-        {error ? (
+        {error && !isCurrentLoading ? (
           <div className="rounded-xl border border-rose-500/30 bg-rose-500/10 px-4 py-3 text-sm text-rose-100">
-            {error}
+            {error} <button type="button" onClick={() => setLoadVersion((version) => version + 1)} className="ml-2 underline hover:text-white">Retry</button>
           </div>
         ) : null}
       </div>
 
-      {isLoading ? (
+      {isCurrentLoading ? (
         <div className="rounded-2xl border border-white/10 bg-white/5 p-6 text-zinc-400">
-          Loading NPCs...
+          Loading NPCs for this campaign...
         </div>
-      ) : sortedNpcs.length > 0 ? (
+      ) : error ? null : sortedNpcs.length > 0 ? (
         <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
           {sortedNpcs.map((npc) => {
             const npcType = normalizeNpcType(npc.type);

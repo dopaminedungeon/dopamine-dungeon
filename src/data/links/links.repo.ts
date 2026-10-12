@@ -6,6 +6,7 @@ import { Link } from "../../domain/links/link.types";
 let links: Link[] = [];
 let linkKeys = new Set<string>();
 let loadedCampaignId: string | null = null;
+let latestLoad = 0;
 
 function getSelectedCampaignId(): string {
   try {
@@ -32,6 +33,7 @@ function getLinkKey(link: {
 }
 
 export async function loadLinks(campaignId = getSelectedCampaignId()): Promise<Link[]> {
+  const loadId = ++latestLoad;
   if (!campaignId) {
     links = [];
     loadedCampaignId = null;
@@ -43,10 +45,15 @@ export async function loadLinks(campaignId = getSelectedCampaignId()): Promise<L
     `/api/worldbuilding?resource=entityLinks&campaignId=${encodeURIComponent(campaignId)}`
   );
 
-  links = Array.isArray(response.links) ? response.links : [];
-  loadedCampaignId = campaignId;
-  rebuildKeys(links);
-  return [...links];
+  const nextLinks = Array.isArray(response.links) ? response.links : [];
+  // A slower response from a prior campaign or selected mode must not replace
+  // the active view's links after a switch.
+  if (loadId === latestLoad) {
+    links = nextLinks;
+    loadedCampaignId = campaignId;
+    rebuildKeys(links);
+  }
+  return [...nextLinks];
 }
 
 async function ensureLoaded(campaignId = getSelectedCampaignId()) {
