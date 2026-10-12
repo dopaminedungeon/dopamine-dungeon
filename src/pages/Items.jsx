@@ -3,7 +3,9 @@ import { createPortal } from "react-dom";
 import { Link, useNavigate } from "react-router-dom";
 import { useMode } from "../context/ModeContext.jsx";
 import { useCampaign } from "../context/CampaignContext";
+import { useTenant } from "../context/TenantContext.jsx";
 import { itemsRepo } from "../data/items/items.repo";
+import { useFilterPreferences } from "../data/preferences/useFilterPreferences.jsx";
 import { MarkdownContent } from "../components/MarkdownContent.jsx";
 import {
   compareCreatedAt,
@@ -107,33 +109,46 @@ function safeArray(value) {
 export default function Items() {
   const [showCreateModal, setShowCreateModal] = useState(false);
   const { selectedCampaignId } = useCampaign();
+  const { selectedTenantId, accessSnapshotUserUid } = useTenant();
+  const { isGM } = useMode();
+  const filterDefinitions = useMemo(() => ({
+    type: { defaultValue: "All", options: ITEM_TYPE_FILTERS },
+    rarity: { defaultValue: "All", options: ["All", ...Object.keys(rarityConfig)] },
+  }), []);
+  const { values: filters, setValue: setFilter, isReady: filtersReady } =
+    useFilterPreferences("items", filterDefinitions);
+  const scopeKey = `${accessSnapshotUserUid}:${selectedTenantId}:${selectedCampaignId}:${isGM ? "gm" : "player"}`;
   const [items, setItems] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [loadedScope, setLoadedScope] = useState("");
   const [isCreatingItem, setIsCreatingItem] = useState(false);
   const isCreatingItemRef = useRef(false);
 
   useEffect(() => {
+    let cancelled = false;
     if (!selectedCampaignId) {
       setItems([]);
+      setLoadedScope(scopeKey);
       setLoading(false);
-      return;
+      return () => { cancelled = true; };
     }
 
     async function load() {
       setLoading(true);
       try {
         const data = await itemsRepo.getAll(selectedCampaignId);
-        setItems(safeArray(data));
+        if (!cancelled) { setItems(safeArray(data)); setLoadedScope(scopeKey); }
       } catch (error) {
         console.error("[Items] Failed to load items", error);
-        setItems([]);
+        if (!cancelled) { setItems([]); setLoadedScope(scopeKey); }
       } finally {
-        setLoading(false);
+        if (!cancelled) setLoading(false);
       }
     }
 
     load();
-  }, [selectedCampaignId]);
+    return () => { cancelled = true; };
+  }, [scopeKey, selectedCampaignId]);
 
   useEffect(() => {
     if (!showCreateModal) return undefined;
@@ -159,11 +174,10 @@ export default function Items() {
   });
   const navigate = useNavigate();
   const [searchQuery, setSearchQuery] = useState("");
-  const [selectedType, setSelectedType] = useState('All');
-  const [selectedRarity, setSelectedRarity] = useState('All');
+  const selectedType = filters.type || "All";
+  const selectedRarity = filters.rarity || "All";
   const [viewMode, setViewMode] = useState('grid');
   const [sortMode, setSortMode] = useState("name-asc");
-  const { isGM } = useMode();
 
   const filteredItems = useMemo(() => {
     return items.filter((item) => {
@@ -197,7 +211,7 @@ export default function Items() {
     );
   }
 
-  if (loading) {
+  if (loading || loadedScope !== scopeKey || !filtersReady) {
     return (
       <main className="flex-1 overflow-auto flex items-center justify-center">
         <div className="text-zinc-400">Loading items...</div>
@@ -226,7 +240,7 @@ export default function Items() {
       {/* Rarity Filter */}
       <select
         value={selectedRarity}
-        onChange={(e) => setSelectedRarity(e.target.value)}
+        onChange={(e) => setFilter("rarity", e.target.value)}
         className="px-4 py-3 bg-white/5 border border-white/10 rounded-xl text-white focus:outline-none focus:border-blue-500/50 min-w-[180px]"
       >
         <option value="All">All Rarities</option>
@@ -291,7 +305,7 @@ export default function Items() {
       {ITEM_TYPE_FILTERS.map((type) => (
         <button
           key={type}
-          onClick={() => setSelectedType(type)}
+          onClick={() => setFilter("type", type)}
           className={`px-3 py-2 rounded-xl text-sm font-medium whitespace-nowrap transition-all ${
             selectedType === type
               ? "bg-blue-500 text-white"

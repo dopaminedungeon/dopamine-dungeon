@@ -1,4 +1,4 @@
-import { createContext, useCallback, useContext, useEffect, useState } from "react";
+import { createContext, useCallback, useContext, useEffect, useRef, useState } from "react";
 import { useAuth } from "./AuthContext";
 import { createApiWorkspace, getApiMe } from "../data/api/apiClient";
 
@@ -30,9 +30,11 @@ export function TenantProvider({ children }) {
   const { user } = useAuth();
   const [tenants, setTenants] = useState([]);
   const [accessSnapshot, setAccessSnapshot] = useState(null);
+  const [accessSnapshotUserUid, setAccessSnapshotUserUid] = useState(null);
   const [tenantStatus, setTenantStatus] = useState("loading");
   const [workspaceRole, setWorkspaceRole] = useState(null);
   const [membershipVersion, setMembershipVersion] = useState(0);
+  const loadRequestVersionRef = useRef(0);
   const [selectedTenantId, setSelectedTenantId] = useState(() => {
     try {
       return localStorage.getItem(TENANT_STORAGE_KEY) || null;
@@ -58,9 +60,11 @@ export function TenantProvider({ children }) {
   );
 
   const loadTenants = useCallback(async () => {
+    const requestVersion = ++loadRequestVersionRef.current;
     if (!user) {
       setTenants([]);
       setAccessSnapshot(null);
+      setAccessSnapshotUserUid(null);
       setSelectedTenantId(null);
       setTenantStatus("unknown");
       setWorkspaceRole(null);
@@ -71,13 +75,15 @@ export function TenantProvider({ children }) {
 
     try {
       const apiMe = await getApiMe();
+      if (loadRequestVersionRef.current !== requestVersion) return;
+      setAccessSnapshot(apiMe);
+      setAccessSnapshotUserUid(user.uid);
 
       const memberships = apiMe.workspaceMemberships ?? [];
       const workspaces = apiMe.workspaces ?? [];
 
       if (memberships.length === 0 || workspaces.length === 0) {
         setTenants([]);
-        setAccessSnapshot(apiMe);
         setSelectedTenantId(null);
         setTenantStatus("empty");
         setWorkspaceRole(null);
@@ -105,7 +111,6 @@ export function TenantProvider({ children }) {
       }).filter((workspace) => Boolean(workspace?.tenantId));
 
       setTenants(loaded);
-      setAccessSnapshot(apiMe);
 
       if (loaded.length === 0) {
         setSelectedTenantId(null);
@@ -133,8 +138,10 @@ export function TenantProvider({ children }) {
       setTenantStatus("ready");
       setMembershipVersion((version) => version + 1);
     } catch (error) {
+      if (loadRequestVersionRef.current !== requestVersion) return;
       console.error("[TenantContext] Failed to load tenants", error);
       setAccessSnapshot(null);
+      setAccessSnapshotUserUid(null);
       setWorkspaceRole(null);
       setTenantStatus("error");
     }
@@ -142,6 +149,9 @@ export function TenantProvider({ children }) {
 
   useEffect(() => {
     loadTenants();
+    return () => {
+      loadRequestVersionRef.current += 1;
+    };
   }, [loadTenants]);
 
   const selectTenant = (tenantId) => {
@@ -187,6 +197,7 @@ export function TenantProvider({ children }) {
       value={{
         tenants,
         accessSnapshot,
+        accessSnapshotUserUid,
         tenantStatus,
         selectedTenantId,
         workspaceRole,

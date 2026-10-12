@@ -1,6 +1,8 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { useMode } from "../context/ModeContext.jsx";
+import { useTenant } from "../context/TenantContext.jsx";
+import { useFilterPreferences } from "../data/preferences/useFilterPreferences.jsx";
 import {
   Search,
   Plus,
@@ -177,17 +179,29 @@ export default function Sessions() {
   const [showCreateModal, setShowCreateModal] = useState(false);
 
   const { selectedCampaignId } = useCampaign();
+  const { selectedTenantId, accessSnapshotUserUid } = useTenant();
+  const { isGM } = useMode();
+  const filterDefinitions = useMemo(() => ({
+    status: { defaultValue: "All", options: ["All", "Active", "Paused", "Scheduled", "Completed"] },
+  }), []);
+  const { values: filters, setValue: setFilter, isReady: filtersReady } =
+    useFilterPreferences("sessions", filterDefinitions);
+  const selectedStatus = filters.status || "All";
+  const scopeKey = `${accessSnapshotUserUid}:${selectedTenantId}:${selectedCampaignId}:${isGM ? "gm" : "player"}`;
   const [sessions, setSessions] = useState([]);
   const [locations, setLocations] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [loadedScope, setLoadedScope] = useState("");
   const [isSaving, setIsSaving] = useState(false);
   const [locationQuery, setLocationQuery] = useState("");
 
 useEffect(() => {
+  let cancelled = false;
   if (!selectedCampaignId) {
     setSessions([]);
+    setLoadedScope(scopeKey);
     setLoading(false);
-    return;
+    return () => { cancelled = true; };
   }
 
   async function load() {
@@ -197,19 +211,26 @@ useEffect(() => {
         sessionsRepo.getAll(selectedCampaignId),
         locationsRepo.getAll(selectedCampaignId),
       ]);
-      setSessions(safeArray(sessionData));
-      setLocations(safeArray(locationData));
+      if (!cancelled) {
+        setSessions(safeArray(sessionData));
+        setLocations(safeArray(locationData));
+        setLoadedScope(scopeKey);
+      }
     } catch (error) {
       console.error("[Sessions] Failed to load sessions", error);
-      setSessions([]);
-      setLocations([]);
+      if (!cancelled) {
+        setSessions([]);
+        setLocations([]);
+        setLoadedScope(scopeKey);
+      }
     } finally {
-      setLoading(false);
+      if (!cancelled) setLoading(false);
     }
   }
 
   load();
-}, [selectedCampaignId]);
+  return () => { cancelled = true; };
+}, [scopeKey, selectedCampaignId]);
 
   const [formData, setFormData] = useState({
     name: "",
@@ -221,9 +242,7 @@ useEffect(() => {
     gmNotes: "",
   });
   const navigate = useNavigate();
-  const { isGM } = useMode();
   const [searchQuery, setSearchQuery] = useState("");
-  const [selectedStatus, setSelectedStatus] = useState('All');
   const [sortMode, setSortMode] = useState("date-desc");
 
   const filteredSessions = sessions.filter((session) => {
@@ -279,7 +298,7 @@ if (!selectedCampaignId) {
   );
 }
 
-if (loading) {
+if (loading || loadedScope !== scopeKey || !filtersReady) {
   return (
     <main className="flex-1 overflow-auto flex items-center justify-center">
       <div className="text-zinc-400">Loading sessions...</div>
@@ -308,7 +327,7 @@ if (loading) {
           {['All', 'Active', 'Paused', 'Scheduled', 'Completed'].map((status) => (
             <button
               key={status}
-              onClick={() => setSelectedStatus(status)}
+              onClick={() => setFilter("status", status)}
               className={`shrink-0 px-3 py-2.5 sm:px-4 sm:py-3 rounded-xl font-medium transition-all ${selectedStatus === status
                   ? 'bg-emerald-500 text-white'
                   : 'bg-white/5 text-zinc-400 hover:bg-white/10 hover:text-white'

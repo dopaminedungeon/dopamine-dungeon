@@ -13,6 +13,8 @@ import {
 } from "lucide-react";
 import { useMode } from "../context/ModeContext.jsx";
 import { useCampaign } from "../context/CampaignContext";
+import { useTenant } from "../context/TenantContext.jsx";
+import { useFilterPreferences } from "../data/preferences/useFilterPreferences.jsx";
 import { loreRepo } from "../data/lore/lore.repo";
 import { MarkdownContent } from "../components/MarkdownContent.jsx";
 import {
@@ -136,13 +138,23 @@ export default function Lore() {
   const navigate = useNavigate();
   const { isGM } = useMode();
   const { selectedCampaignId } = useCampaign();
+  const { selectedTenantId, accessSnapshotUserUid } = useTenant();
+  const filterDefinitions = useMemo(() => ({
+    type: { defaultValue: "All", options: ["All", ...LORE_TYPES] },
+    ...(isGM ? { visibility: { defaultValue: "All", options: ["All", "public", "gm-only"] } } : {}),
+  }), [isGM]);
+  const { values: filters, setValue: setFilter, saveValues: saveFilters, isReady: filtersReady } =
+    useFilterPreferences("lore", filterDefinitions);
+  const scopeKey = `${accessSnapshotUserUid}:${selectedTenantId}:${selectedCampaignId}:${isGM ? "gm" : "player"}`;
 
   const [entries, setEntries] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState("");
+  const [loadedScope, setLoadedScope] = useState("");
+  const isCurrentLoading = isLoading || loadedScope !== scopeKey || !filtersReady;
   const [searchQuery, setSearchQuery] = useState("");
-  const [selectedType, setSelectedType] = useState("All");
-  const [selectedVisibility, setSelectedVisibility] = useState("All");
+  const selectedType = filters.type || "All";
+  const selectedVisibility = filters.visibility || "All";
   const [sortMode, setSortMode] = useState("name-asc");
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [formData, setFormData] = useState(createLoreDraft());
@@ -155,6 +167,7 @@ export default function Lore() {
     async function loadLore() {
       if (!selectedCampaignId) {
         setEntries([]);
+        setLoadedScope(scopeKey);
         setIsLoading(false);
         return;
       }
@@ -163,12 +176,13 @@ export default function Lore() {
         setIsLoading(true);
         setError("");
         const data = await loreRepo.getAll(selectedCampaignId);
-        if (!cancelled) setEntries(data);
+        if (!cancelled) { setEntries(data); setLoadedScope(scopeKey); }
       } catch (loadError) {
         console.error("[Lore] Failed to load lore", loadError);
         if (!cancelled) {
           setEntries([]);
           setError("Unable to load Lore right now.");
+          setLoadedScope(scopeKey);
         }
       } finally {
         if (!cancelled) setIsLoading(false);
@@ -180,7 +194,7 @@ export default function Lore() {
     return () => {
       cancelled = true;
     };
-  }, [selectedCampaignId]);
+  }, [scopeKey, selectedCampaignId]);
 
   const filteredEntries = useMemo(() => {
     const query = searchQuery.trim().toLowerCase();
@@ -313,7 +327,7 @@ export default function Lore() {
             Type
             <select
               value={selectedType}
-              onChange={(event) => setSelectedType(event.target.value)}
+              onChange={(event) => setFilter("type", event.target.value)}
               className="rounded-lg border border-white/10 bg-black/30 px-2.5 py-1.5 text-xs text-zinc-200 outline-none focus:border-violet-300"
             >
               <option>All</option>
@@ -327,7 +341,7 @@ export default function Lore() {
               Visibility
               <select
                 value={selectedVisibility}
-                onChange={(event) => setSelectedVisibility(event.target.value)}
+                onChange={(event) => setFilter("visibility", event.target.value)}
                 className="rounded-lg border border-white/10 bg-black/30 px-2.5 py-1.5 text-xs text-zinc-200 outline-none focus:border-violet-300"
               >
                 <option>All</option>
@@ -357,8 +371,7 @@ export default function Lore() {
               type="button"
               onClick={() => {
                 setSearchQuery("");
-                setSelectedType("All");
-                setSelectedVisibility("All");
+                saveFilters({ type: "All", ...(isGM ? { visibility: "All" } : {}) });
               }}
               className="rounded-lg border border-white/10 px-2.5 py-1.5 text-xs text-zinc-300 hover:bg-white/10"
             >
@@ -374,7 +387,7 @@ export default function Lore() {
         </div>
       )}
 
-      {isLoading ? (
+      {isCurrentLoading ? (
         <div className="rounded-2xl border border-white/10 bg-white/5 p-6 text-sm text-zinc-300">
           Loading Lore...
         </div>

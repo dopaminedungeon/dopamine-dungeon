@@ -9,6 +9,7 @@ import {
   Plus,
 } from "lucide-react";
 import { npcsRepo } from "../data/npcs/npcs.repo";
+import { useFilterPreferences } from "../data/preferences/useFilterPreferences.jsx";
 import { MarkdownContent } from "../components/MarkdownContent.jsx";
 import {
   getNpcTypeIcon,
@@ -121,20 +122,28 @@ function createNpcDraft() {
 export default function Npcs() {
   const { isGM } = useMode();
   const { selectedCampaignId } = useCampaign();
-  const { selectedTenantId } = useTenant();
+  const { selectedTenantId, accessSnapshotUserUid } = useTenant();
+  const filterDefinitions = useMemo(() => ({
+    type: { defaultValue: "All", options: ["All", ...NPC_TYPES] },
+    role: { defaultValue: "All", options: ["All", ...NPC_ROLES] },
+    status: { defaultValue: "All", options: ["All", ...NPC_STATUSES] },
+    ...(isGM ? { visibility: { defaultValue: "All", options: ["All", "public", "gm-only"] } } : {}),
+  }), [isGM]);
+  const { values: filters, setValue: setFilter, saveValues: saveFilters, isReady: filtersReady } =
+    useFilterPreferences("npcs", filterDefinitions);
 
   const [npcs, setNpcs] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState("");
   const [loadedScope, setLoadedScope] = useState("");
   const [loadVersion, setLoadVersion] = useState(0);
-  const scopeKey = `${selectedTenantId}:${selectedCampaignId}:${isGM ? "gm" : "player"}`;
-  const isCurrentLoading = isLoading || loadedScope !== scopeKey;
+  const scopeKey = `${accessSnapshotUserUid}:${selectedTenantId}:${selectedCampaignId}:${isGM ? "gm" : "player"}`;
+  const isCurrentLoading = isLoading || loadedScope !== scopeKey || !filtersReady;
   const [searchQuery, setSearchQuery] = useState("");
-  const [selectedType, setSelectedType] = useState("All");
-  const [selectedRole, setSelectedRole] = useState("All");
-  const [selectedStatus, setSelectedStatus] = useState("All");
-  const [selectedVisibility, setSelectedVisibility] = useState("All");
+  const selectedType = filters.type || "All";
+  const selectedRole = filters.role || "All";
+  const selectedStatus = filters.status || "All";
+  const selectedVisibility = filters.visibility || "All";
   const [sortMode, setSortMode] = useState("name-asc");
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [formData, setFormData] = useState(createNpcDraft());
@@ -320,10 +329,7 @@ export default function Npcs() {
 
   const handleResetFilters = () => {
     setSearchQuery("");
-    setSelectedType("All");
-    setSelectedRole("All");
-    setSelectedStatus("All");
-    setSelectedVisibility("All");
+    saveFilters({ type: "All", role: "All", status: "All", ...(isGM ? { visibility: "All" } : {}) });
   };
 
   if (!selectedCampaignId) {
@@ -375,7 +381,7 @@ export default function Npcs() {
               <span className="text-xs font-medium uppercase tracking-wide">Type</span>
               <select
                 value={selectedType}
-                onChange={(e) => setSelectedType(e.target.value)}
+                onChange={(e) => setFilter("type", e.target.value)}
                 className="h-9 rounded-lg border border-white/10 bg-zinc-950/70 px-2.5 text-sm text-zinc-200 focus:border-purple-500/50 focus:outline-none focus:ring-2 focus:ring-purple-500/20"
               >
                 {["All", ...NPC_TYPES].map((type) => (
@@ -390,7 +396,7 @@ export default function Npcs() {
               <span className="text-xs font-medium uppercase tracking-wide">Role</span>
               <select
                 value={selectedRole}
-                onChange={(e) => setSelectedRole(e.target.value)}
+                onChange={(e) => setFilter("role", e.target.value)}
                 className="h-9 rounded-lg border border-white/10 bg-zinc-950/70 px-2.5 text-sm text-zinc-200 focus:border-purple-500/50 focus:outline-none focus:ring-2 focus:ring-purple-500/20"
               >
                 {["All", ...NPC_ROLES].map((role) => (
@@ -405,7 +411,7 @@ export default function Npcs() {
               <span className="text-xs font-medium uppercase tracking-wide">Status</span>
               <select
                 value={selectedStatus}
-                onChange={(e) => setSelectedStatus(e.target.value)}
+                onChange={(e) => setFilter("status", e.target.value)}
                 className="h-9 rounded-lg border border-white/10 bg-zinc-950/70 px-2.5 text-sm text-zinc-200 focus:border-purple-500/50 focus:outline-none focus:ring-2 focus:ring-purple-500/20"
               >
                 {["All", ...NPC_STATUSES].map((status) => (
@@ -421,7 +427,7 @@ export default function Npcs() {
                 <span className="text-xs font-medium uppercase tracking-wide">Visibility</span>
                 <select
                   value={selectedVisibility}
-                  onChange={(e) => setSelectedVisibility(e.target.value)}
+                  onChange={(e) => setFilter("visibility", e.target.value)}
                   className="h-9 rounded-lg border border-white/10 bg-zinc-950/70 px-2.5 text-sm text-zinc-200 focus:border-purple-500/50 focus:outline-none focus:ring-2 focus:ring-purple-500/20"
                 >
                   {["All", "public", "gm-only"].map((visibility) => (
