@@ -1,5 +1,5 @@
 import type { VercelRequest, VercelResponse } from "@vercel/node";
-import { and, eq, or } from "drizzle-orm";
+import { and, eq, or, sql } from "drizzle-orm";
 
 import {
   getCurrentUser,
@@ -12,6 +12,8 @@ import { db } from "../db.js";
 import { entityLinksReadWhere } from "../security-boundaries.js";
 import { canViewAsGm } from "../viewer-mode.js";
 import { entityLinks } from "../../../db/schema/entityLinks.js";
+import { locations } from "../../../db/schema/locations.js";
+import { npcs } from "../../../db/schema/npcs.js";
 import {
   assertAllowedEntityPair,
   assertAllowedLabelForPair,
@@ -59,6 +61,45 @@ function normalizeEndpoints(
 function isBagItemLink(entityAType: string, entityBType: string) {
   const pair = new Set([entityAType, entityBType]);
   return pair.has("BagOfHolding") && pair.has("Item");
+}
+
+function isLocationNpcLink(entityAType: string, entityBType: string) {
+  return new Set([entityAType, entityBType]).size === 2 &&
+    [entityAType, entityBType].every((type) => type === "Map" || type === "NPC");
+}
+
+// A Player-visible link cannot disclose a hidden endpoint, even when its own
+// visibility was set to Player. Handle either orientation for historical rows.
+function playerLocationNpcWhere() {
+  return sql`(
+    not ((${entityLinks.entityAType} = 'Map' and ${entityLinks.entityBType} = 'NPC')
+      or (${entityLinks.entityAType} = 'NPC' and ${entityLinks.entityBType} = 'Map'))
+    or (
+      exists (select 1 from ${locations} where ${locations.campaignId} = ${entityLinks.campaignId}
+        and ${locations.id} = case when ${entityLinks.entityAType} = 'Map' then ${entityLinks.entityAId} else ${entityLinks.entityBId} end
+        and ${locations.visibility} = 'public')
+      and exists (select 1 from ${npcs} where ${npcs.campaignId} = ${entityLinks.campaignId}
+        and ${npcs.id} = case when ${entityLinks.entityAType} = 'NPC' then ${entityLinks.entityAId} else ${entityLinks.entityBId} end
+        and ${npcs.visibility} = 'public')
+    )
+  )`;
+}
+
+async function requireLocationNpcEndpoints(values: EntityLinkInsert) {
+  if (!isLocationNpcLink(values.entityAType, values.entityBType)) return;
+  const locationId = values.entityAType === "Map" ? values.entityAId : values.entityBId;
+  const npcId = values.entityAType === "NPC" ? values.entityAId : values.entityBId;
+  const [locationRows, npcRows] = await Promise.all([
+    db.select({ id: locations.id }).from(locations).where(and(
+      eq(locations.campaignId, values.campaignId), eq(locations.id, locationId)
+    )).limit(1),
+    db.select({ id: npcs.id }).from(npcs).where(and(
+      eq(npcs.campaignId, values.campaignId), eq(npcs.id, npcId)
+    )).limit(1),
+  ]);
+  if (!locationRows.length || !npcRows.length) {
+    throw new Error("Location or NPC is unavailable in this campaign");
+  }
 }
 
 function toDate(value: unknown) {
@@ -144,7 +185,18 @@ async function findExistingLink(values: EntityLinkInsert) {
           eq(entityLinks.entityBId, values.entityBId),
           eq(entityLinks.label, values.label),
           eq(entityLinks.visibility, values.visibility)
-        )
+        ),
+        isLocationNpcLink(values.entityAType, values.entityBType)
+          ? and(
+              eq(entityLinks.campaignId, values.campaignId),
+              or(
+                and(eq(entityLinks.entityAType, values.entityAType), eq(entityLinks.entityAId, values.entityAId),
+                  eq(entityLinks.entityBType, values.entityBType), eq(entityLinks.entityBId, values.entityBId)),
+                and(eq(entityLinks.entityAType, values.entityBType), eq(entityLinks.entityAId, values.entityBId),
+                  eq(entityLinks.entityBType, values.entityAType), eq(entityLinks.entityBId, values.entityAId))
+              )
+            )
+          : undefined
       )
     )
     .limit(1);
@@ -180,10 +232,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         .select()
         .from(entityLinks)
         .where(
-          entityLinksReadWhere(entityLinks, {
+          and(entityLinksReadWhere(entityLinks, {
             campaignId: campaign.id,
             isGm: isGmView,
-          })
+          }), isGmView ? undefined : playerLocationNpcWhere())
         );
 
       return res.status(200).json({
@@ -212,6 +264,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       if (!isGmMember && !isBagItemLink(values.entityAType, values.entityBType)) {
         await requireCampaignGm({ campaignId: campaign.id, userId: currentUser.id });
       }
+      if (isLocationNpcLink(values.entityAType, values.entityBType) && !isGmView) {
+        throw new Error("GM mode is required to edit this relationship");
+      }
+
+      await requireLocationNpcEndpoints(values);
 
       const existingLink = await findExistingLink(values);
       let returnedRows: EntityLinkRow[];
@@ -220,7 +277,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         returnedRows = await db
           .update(entityLinks)
           .set({
-            id: values.id,
+            id: existingLink.id,
             entityAType: values.entityAType,
             entityAId: values.entityAId,
             entityBType: values.entityBType,
@@ -257,6 +314,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const link = rows[0];
 
     if (!link) {
+      return res.status(200).json({ ok: true });
+    }
+
+    if (isLocationNpcLink(link.entityAType, link.entityBType) && !isGmView) {
+      // Match the absent-link response without revealing this link's existence.
       return res.status(200).json({ ok: true });
     }
 

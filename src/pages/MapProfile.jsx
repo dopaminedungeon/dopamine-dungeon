@@ -23,7 +23,7 @@ import { sessionsRepo } from "../data/sessions/sessions.repo";
 import { itemsRepo } from "../data/items/items.repo";
 import { loreRepo } from "../data/lore/lore.repo";
 import { createLink } from "../domain/links/link.service";
-import { addLink, getLinksForEntity, loadLinks, removeLink } from "../data/links/links.repo";
+import { addLink, getLinksForEntity, loadLinks, removeLink, updateLink } from "../data/links/links.repo";
 
 const IMAGE_MAX_BYTES = 1024 * 1024;
 const LOCATION_CATEGORIES = [
@@ -657,8 +657,7 @@ export default function MapProfile() {
       }
 
       if (getLinkSignature(originalLink) !== getLinkSignature(nextLink)) {
-        await removeLink(originalLink.id, selectedCampaignId);
-        await addLink(nextLink, selectedCampaignId);
+        await updateLink(nextLink, selectedCampaignId);
       }
     }
 

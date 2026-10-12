@@ -532,6 +532,114 @@ test("API integration: a dual-role user in Player mode receives only Player rela
   ]);
 });
 
+test("API integration: Player Location-NPC links require both public endpoints in the same campaign", async () => {
+  mocks.state.selectRows.push([linkRow({
+    entityAType: "Map", entityAId: "harbor", entityBType: "NPC",
+    entityBId: "archivist", label: "controls",
+  })]);
+  const { res, result } = response();
+  await entityLinksHandler(request("GET"), res);
+
+  assert.equal(result.status, 200);
+  const query = sqlDatabase.select().from(entityLinks)
+    .where(mocks.state.whereClauses[0] as never).toSQL();
+  assert.match(query.sql, /from "locations"/);
+  assert.match(query.sql, /from "npcs"/);
+  assert.match(query.sql, /"locations"\."campaign_id" = "entity_links"\."campaign_id"/);
+  assert.match(query.sql, /"npcs"\."campaign_id" = "entity_links"\."campaign_id"/);
+  assert.match(query.sql, /"locations"\."visibility" = 'public'/);
+  assert.match(query.sql, /"npcs"\."visibility" = 'public'/);
+  assert.deepEqual(query.params, [campaign.id, "Player"]);
+  assert.equal((result.body as any).links[0].label, "controls");
+});
+
+test("API integration: GM mode retains Location-NPC links without the Player endpoint filter", async () => {
+  mocks.state.selectRows.push([linkRow({
+    entityAType: "Map", entityAId: "harbor", entityBType: "NPC",
+    entityBId: "archivist", label: "controls", visibility: "GM",
+  })]);
+  const { res, result } = response();
+  await entityLinksHandler(request("GET", undefined, undefined, "gm"), res);
+
+  assert.equal(result.status, 200);
+  const query = sqlDatabase.select().from(entityLinks)
+    .where(mocks.state.whereClauses[0] as never).toSQL();
+  assert.deepEqual(query.params, [campaign.id]);
+  assert.doesNotMatch(query.sql, /from "locations"/);
+  assert.equal((result.body as any).links[0].visibility, "GM");
+});
+
+test("API integration: Location-NPC edits preserve the existing id and require campaign-scoped endpoints", async () => {
+  const existing = linkRow({
+    entityAType: "Map", entityAId: "harbor", entityBType: "NPC",
+    entityBId: "archivist", label: "controls", visibility: "Player",
+  });
+  mocks.state.selectRows.push([{ id: "harbor" }], [{ id: "archivist" }], [existing]);
+  mocks.state.writeRows.push([{ ...existing, label: "resides_in", visibility: "GM" }]);
+  const { res, result } = response();
+  await entityLinksHandler(request("PUT", undefined, { link: {
+    id: "another-directional-id",
+    entityA: { type: "NPC", id: "archivist" },
+    entityB: { type: "Map", id: "harbor" },
+    label: "resides_in", visibility: "GM",
+  } }, "gm"), res);
+
+  assert.equal(result.status, 200);
+  assert.equal(mocks.db.insert.mock.calls.length, 0);
+  assert.equal((mocks.state.updateValues[0] as any).id, existing.id);
+  assert.equal((result.body as any).link.id, existing.id);
+  const endpointQueries = [locations, npcs].map((table, index) =>
+    sqlDatabase.select().from(table).where(mocks.state.whereClauses[index] as never).toSQL()
+  );
+  assert.deepEqual(endpointQueries[0].params, [campaign.id, "harbor"]);
+  assert.deepEqual(endpointQueries[1].params, [campaign.id, "archivist"]);
+});
+
+test("API integration: Player mode cannot edit a Location-NPC link on a GM account", async () => {
+  const { res, result } = response();
+  await entityLinksHandler(request("PUT", undefined, { link: {
+    id: "link-1", entityA: { type: "Map", id: "harbor" },
+    entityB: { type: "NPC", id: "archivist" },
+    label: "controls", visibility: "Player",
+  } }), res);
+  assert.equal(result.status, 401);
+  assert.equal(mocks.db.insert.mock.calls.length, 0);
+  assert.equal(mocks.db.update.mock.calls.length, 0);
+});
+
+test("API integration: Player-mode deletion does not reveal or remove a Location-NPC link", async () => {
+  mocks.state.selectRows.push([linkRow({
+    entityAType: "Map", entityAId: "hidden-vault", entityBType: "NPC",
+    entityBId: "archivist", label: "controls", visibility: "GM",
+  })]);
+  const { res, result } = response();
+  await entityLinksHandler(request("DELETE", { campaignId: campaign.slug, linkId: "link-1" }), res);
+  assert.equal(result.status, 200);
+  assert.deepEqual(result.body, { ok: true });
+  assert.equal(mocks.db.delete.mock.calls.length, 0);
+});
+
+test("API integration: a Location-NPC link cannot target an entity outside its campaign", async () => {
+  mocks.state.selectRows.push([], [{ id: "archivist" }]);
+  const { res, result } = response();
+  await entityLinksHandler(request("PUT", undefined, { link: {
+    id: "link-2", entityA: { type: "Map", id: "other-campaign-harbor" },
+    entityB: { type: "NPC", id: "archivist" },
+    label: "controls", visibility: "Player",
+  } }, "gm"), res);
+  assert.equal(result.status, 401);
+  assert.equal(mocks.db.insert.mock.calls.length, 0);
+  assert.equal(mocks.db.update.mock.calls.length, 0);
+});
+
+test("API integration: another workspace's campaign links are unavailable without membership", async () => {
+  mocks.requireCampaignMember.mockRejectedValue(new Error("Campaign membership required"));
+  const { res, result } = response();
+  await entityLinksHandler(request("GET"), res);
+  assert.equal(result.status, 401);
+  assert.equal(mocks.db.select.mock.calls.length, 0);
+});
+
 test("API integration: a dual-role user in Player mode receives public sessions without GM payloads", async () => {
   mocks.requireCampaignMember.mockResolvedValue({ role: "gm" });
   mocks.state.selectRows.push([

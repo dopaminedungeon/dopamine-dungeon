@@ -28,7 +28,7 @@ function getLinkKey(link: {
   const a = `${link.entityA.type}:${link.entityA.id}`;
   const b = `${link.entityB.type}:${link.entityB.id}`;
 
-  return [a, b, link.label, link.visibility].join("|");
+  return [...[a, b].sort(), link.label, link.visibility].join("|");
 }
 
 export async function loadLinks(campaignId = getSelectedCampaignId()): Promise<Link[]> {
@@ -79,7 +79,22 @@ export async function addLink(
   );
   const nextLink = response.link ?? link;
 
+  links = links.filter((candidate) => candidate.id !== nextLink.id);
   links.push(nextLink);
+  rebuildKeys(links);
+}
+
+/** Update the canonical row in place so edits retain its stable id. */
+export async function updateLink(
+  link: Link,
+  campaignId = getSelectedCampaignId()
+): Promise<void> {
+  await ensureLoaded(campaignId);
+  const response = await apiFetch<{ ok: true; link: Link }>(
+    `/api/worldbuilding?resource=entityLinks&campaignId=${encodeURIComponent(campaignId)}`,
+    { method: "PUT", body: JSON.stringify({ link }) }
+  );
+  links = links.map((candidate) => candidate.id === link.id ? response.link : candidate);
   rebuildKeys(links);
 }
 
