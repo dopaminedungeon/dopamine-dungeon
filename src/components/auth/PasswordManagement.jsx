@@ -315,10 +315,10 @@ export default function PasswordManagement({
   const isChange = mode === "change";
 
   return (
-    <section className="bg-white/5 border border-white/10 rounded-xl sm:rounded-2xl p-4 sm:p-6 space-y-4">
+    <section className="min-w-0 space-y-4 rounded-xl border border-white/10 bg-white/5 p-4 break-words sm:rounded-2xl sm:p-6">
       <div>
         <h2 className="text-lg font-semibold text-white">Sign-in methods</h2>
-        <p className="text-zinc-500 text-sm mt-1">
+        <p className="mt-1 max-w-prose text-sm text-zinc-500">
           Manage sign-in methods for your account only.
         </p>
       </div>
@@ -331,7 +331,7 @@ export default function PasswordManagement({
         </p>
       ) : (
         <>
-        <div className="rounded-xl border border-white/10 bg-white/[0.025] p-4 space-y-4">
+        <div className="max-w-2xl space-y-4 rounded-xl border border-white/10 bg-white/[0.025] p-4">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div>
               <p className="font-medium text-white">Google</p>
@@ -360,20 +360,22 @@ export default function PasswordManagement({
           </div>
         </div>
         {!providers.hasGoogle && providers.hasPassword ? (
-          <GoogleProviderLinking
-            firebaseUser={firebaseUser}
-            onComplete={async () => {
-              await refreshProviderState();
-              setStatus({ type: "success", message: "Google sign-in is connected" });
-              onProviderStateChange?.();
-            }}
-          />
+          <div className="max-w-xl">
+            <GoogleProviderLinking
+              firebaseUser={firebaseUser}
+              onComplete={async () => {
+                await refreshProviderState();
+                setStatus({ type: "success", message: "Google sign-in is connected" });
+                onProviderStateChange?.();
+              }}
+            />
+          </div>
         ) : null}
         </>
       )}
 
       {mode === "reauthenticate-google" ? (
-        <div className="space-y-3">
+        <div className="max-w-xl space-y-3">
           <p className="text-sm text-zinc-300">
             Confirm your Google sign-in before setting a password.
           </p>
@@ -389,8 +391,8 @@ export default function PasswordManagement({
       ) : null}
 
       {mode === "set" || mode === "change" ? (
-        <form className="space-y-4" onSubmit={handleSubmit}>
-          <p className="text-sm text-zinc-400">
+        <form className="max-w-xl space-y-4" onSubmit={handleSubmit}>
+          <p className="text-sm text-zinc-400 [overflow-wrap:anywhere]">
             Account email: <span className="text-zinc-200">{originalEmailRef.current || "Unavailable"}</span>
           </p>
           {isChange ? (
@@ -441,7 +443,7 @@ export default function PasswordManagement({
 
       {status.message ? (
         <div
-          className={`flex gap-3 rounded-md border p-4 text-sm ${
+          className={`flex max-w-2xl gap-3 rounded-md border p-4 text-sm ${
             status.type === "success"
               ? "border-emerald-900/80 bg-emerald-950/40 text-emerald-100"
               : "border-amber-900/80 bg-amber-950/40 text-amber-100"
@@ -453,7 +455,7 @@ export default function PasswordManagement({
           ) : (
             <ShieldAlert className="h-5 w-5 shrink-0" aria-hidden="true" />
           )}
-          <span>{status.message}</span>
+          <span className="min-w-0 [overflow-wrap:anywhere]">{status.message}</span>
         </div>
       ) : null}
     </section>
