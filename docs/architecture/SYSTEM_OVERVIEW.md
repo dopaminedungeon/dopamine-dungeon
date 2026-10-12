@@ -89,15 +89,15 @@ Firestore has no active application-state, transactional-mail, or auth-email
 limiter runtime path. Historical migration/reconciliation scripts and retained
 operational Firestore configuration still require explicit decommission gates;
 Firebase Authentication and Firebase Storage remain intentional separate
-services. The temporary, claim-gated Production audit reader remains in this
-`dev` snapshot (`api/worldbuilding.ts` and `src/server/productionReadOnlyAudit.ts`);
-[PR #373](https://github.com/dopaminedungeon/dopamine-dungeon/pull/373) removed it
-from `main`. This is an operational exception, not application-state ownership.
-See the [retrospective handoff](../sprints/iteration-3-retrospective-notes.md)
-for its integration follow-up. No new Firestore application data writes should
-be introduced. Do not remove historical inputs or operational configuration until replacement,
-production cutover, and rollback behavior are verified. ADR 0003 records the
-transition; the Neon decision is bounded by ADR 0001.
+services. The one-time, claim-gated Production audit reader was removed from
+both `dev` and `main` by [PR #373](https://github.com/dopaminedungeon/dopamine-dungeon/pull/373)
+after its evidence capture. Its route and implementation are not available.
+This was an operational exception, not application-state ownership. See the
+[retrospective handoff](../sprints/iteration-3-retrospective-notes.md) for the
+historical context. No new Firestore application data writes should be
+introduced. Do not remove historical inputs or operational configuration until
+replacement, production cutover, and rollback behavior are verified. ADR 0003
+records the transition; the Neon decision is bounded by ADR 0001.
 
 ## Environments and repository workflow
 
