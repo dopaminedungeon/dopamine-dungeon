@@ -1,61 +1,29 @@
-## Permission Matrix (Campaign-scoped)
+# Verified Authorization Checks (Path-Specific)
 
-> Intended permission contract. Server code and tests must enforce these rules;
-> the table does not prove every legacy route currently complies. Record known
-> implementation gaps in `docs/product/CURRENT_STATE.md`.
+This is an implementation map, not a complete product permission contract or a
+route allowlist. Membership role and selected GM/Player mode are separate. The
+schema-declared role names and their known limitations are described in the
+[workspace and campaign role guide](multitenant-multirole-management.md).
 
-Legend:
-- ✅ Allowed
-- 🚫 Blocked → NotAuthorized
-- 🟡 Allowed with conditions / special behaviour
-- ✍️ Limited write action
+| Operation / boundary | Verified check in current code | Important limit |
+|---|---|---|
+| Workspace owner operations | `requireWorkspaceOwner` accepts only a membership with role exactly `owner`. Workspace creation grants `owner`; campaign creation and workspace people management require it. | The schema columns are text. Workspace role writers can persist `admin` or `member`; those values do not pass the owner check. This table does not establish a full workspace permission set for `gm` or `player`. |
+| Campaign membership gate | `requireCampaignMember` requires a row for `(campaignId, userId)`. | It does not validate a role string or distinguish `gm` from `player`; endpoint behavior after this check varies. |
+| Campaign GM gate | `requireCampaignGm` requires campaign role exactly `gm`. Several campaign content handlers use it for writes. | This helper does not inspect selected mode. Some handlers add a mode check; others do not. |
+| GM-visible projection | `canViewAsGm` is true only for campaign role `gm` and selected request mode `gm`. Missing/invalid mode resolves to Player. | Applies only to handlers that call this helper; it is not a global middleware guarantee. |
+| Campaign Settings | Requires campaign and workspace membership; GM fields/updates also require campaign role `gm` and explicit GM mode. | This path has its own response projection and is not evidence that all campaign routes match it. |
+| Invitation creation | Resolves the campaign within the requested workspace, then requires workspace owner, campaign membership, and GM mode with campaign role `gm`. | Invitation acceptance currently writes workspace role `member`, despite the workspace schema comment; see the role guide. |
+| Campaign people management | Requires campaign role `gm` and selected GM mode. Removal protects the last campaign GM or workspace owner who is a campaign member. | The people endpoint uses a slug-based campaign lookup before membership; do not generalize its resolver to all routes. |
 
-### Pages & Profiles
+`X-DD-Mode` controls selected projections and some endpoint actions; it never
+changes stored membership. Do not claim that Player mode universally blocks
+every GM-role mutation: route-level checks differ. Read-only UI filtering is
+not security enforcement. For the broader access-boundary test inventory, see
+[`TESTING.md`](operations/TESTING.md); for unresolved permission refinement,
+see [#284](https://github.com/dopaminedungeon/dopamine-dungeon/issues/284).
 
-| Area | Route/Page | CampaignPlayer | CampaignGM | Notes |
-|---|---|---:|---:|---|
-| Core | Dashboard | ✅ | ✅ | Default landing page after guards pass |
-| PCs | PCs (section) | 🟡 | ✅ | Player: Characters tab behaviour depends on assignments |
-| PCs | PCProfile | 🟡 | ✅ | Player: auto-load if exactly 1 assigned PC; otherwise via cards list |
-| PCs | Bag of Holding | ✅ | ✅ | Always available to Player; shared, campaign-scoped |
-| Items | Items | ✅ | ✅ | Read-only list for Player |
-| Items | ItemProfile | ✅ | ✅ | Player can always assign item to self (✍️) |
-| Lore | Lore | ✅ | ✅ | Read-only |
-| Lore | LoreProfile | ✅ | ✅ | Read-only |
-| Maps | Maps | ✅ | ✅ | Read-only |
-| Maps | MapProfile | ✅ | ✅ | Read-only |
-| NPCs | NPCs | ✅ | ✅ | Read-only |
-| NPCs | NpcProfile | ✅ | ✅ | Read-only |
-| Sessions | Sessions | ✅ | ✅ | Read-only |
-| Sessions | SessionProfile | ✅ | ✅ | Read-only |
-| GM-only | CampaignSettings | 🚫 | ✅ | Campaign-scoped settings |
-
-### Actions
-
-| Action | CampaignPlayer | CampaignGM | Notes |
-|---|---:|---:|---|
-| Assign item to self (ItemProfile) | ✍️ | ✅ | Always available for Player (future toggle possible) |
-| Create new PC | 🚫 | ✅ | GM-only |
-| Assign PC to player | 🚫 | ✅ | GM-only (campaign membership assignment) |
-| Mode toggle (GM ↔ Player preview) | 🚫 | ✅ | Only CampaignGM can toggle; switching to Player mode blocks GM-only routes |
-| Access GM-only routes while in Player mode | 🚫 | 🚫 | Even GM role is blocked in Player mode (NotAuthorized) |
-
-Arcs, Quests, and Conditions are reserved entity-link concepts, not active
-routes or persisted product modules. Their former mock-backed screens were
-retired by #319.
-
-### Player PC edge cases (PCs → Characters tab)
-
-| Scenario | Behaviour |
-|---|---|
-| Player has **0** assigned PCs in campaign | Show “No character assigned yet” message in Characters tab; Bag of Holding remains available |
-| Player has **1** assigned PC | Characters tab auto-loads that PCProfile directly (no card list) |
-| Player has **2+** assigned PCs | Show card list; clicking opens PCProfile |
-
-### Security invariants (applies everywhere)
-
-- Guards protect **URLs**, not just sidebar visibility
-- UI hiding is never trusted for security
-- Policy checks happen before entity fetch
-- No forbidden content flashes on screen
-- Every blocked/empty state provides a recovery CTA (Go Home / pick campaign in TopBar)
+The old page-by-page matrix asserted more than the current code establishes
+(including “read-only everywhere else” and universal Player-mode route denial)
+and has been removed rather than retained as a misleading contract. PC
+assignment display rules should be documented with their feature behavior and
+tests, not inferred from this shared helper map.

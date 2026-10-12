@@ -1,6 +1,6 @@
 # Deployment
 
-Last updated: 2026-09-05
+Last reviewed: 2026-10-12
 
 Owner: Magda
 
@@ -10,6 +10,11 @@ Dopamine Dungeon is deployed through Vercel.
 
 Repository branch, CI gate, release-branch, and hotfix policy is maintained in
 [`REPOSITORY_POLICY.md`](./REPOSITORY_POLICY.md).
+
+The Iteration 4 candidate closeout and outstanding Production evidence gates
+are recorded in the [Iteration 4 retrospective](../sprints/iteration-4-retrospective-notes.md)
+and the [#375 migration evidence ledger](../architecture/FIRESTORE_TO_NEON_MIGRATION.md#375-production-evidence-ledger-reviewed-2026-10-12).
+No release or Production operation is implied by this repository guidance.
 
 ## Branch responsibilities
 
