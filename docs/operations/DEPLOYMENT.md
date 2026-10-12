@@ -172,6 +172,33 @@ are tracked in the [Iteration 3 handoff](../sprints/iteration-3-retrospective-no
 Provider configuration, data cutover, canary, and physical retirement are not
 certified by this documentation audit.
 
+Issue [#375](https://github.com/dopaminedungeon/dopamine-dungeon/issues/375)
+reconciles the available evidence in the
+[Firestore-to-Neon gate ledger](../architecture/FIRESTORE_TO_NEON_MIGRATION.md#375-production-evidence-ledger-reviewed-2026-10-12).
+As of 2026-10-12, the only publicly evidenced Production completion is the
+one-time audit capture and temporary-claim revocation reported by PR #373.
+The underlying private audit report and any later Production operator records
+were not available to this review. Three local Development reconciliation
+reports dated 2026-08-31 are not Production evidence. This is not a finding that
+Production is broken or that later actions did not happen. Do not repeat an
+operation until the sole prospective operator has reconciled private evidence
+and current target state.
+
+The requester confirms they are the sole prospective release operator; no
+personal name or independent approver is recorded in this handoff. The private
+archive reference and rollback-retention interval remain decisions required.
+The tentative maintenance target is around 2027-01-12, for planning only; it is
+not approval or a scheduled window. The exact date/time and retention period
+remain undecided. The Deployment document owner is not a substitute for an
+independent approver. Keep the sequence strictly gated: reconcile evidence and
+target first; approve and verify schema,
+data, limiter, and fail-closed handoff; deploy and perform controlled auth/API,
+mail, GM/Player, and cross-scope checks; then use separate approved windows for
+Trigger Email disablement, a monitored Firestore deny-all canary, and physical
+retirement. Preserve source data and archives until parity, rollback, and the
+approved retention period are proven. Application rollback does not reverse
+migrations. No operation is authorized by #375 or this documentation.
+
 A release containing a migration must document:
 
 - migration order;

@@ -142,3 +142,33 @@ Import only those opaque values into Neon, reconcile subject/attempt counts and
 timestamps, and hold a controlled fail-closed window between the final snapshot
 and Neon becoming authoritative. Retain Firestore records temporarily for
 rollback/reconciliation, but do not dual-read or dual-write after cutover.
+
+### #375 Production evidence disposition (reviewed 2026-10-12)
+
+The Production limiter export, import, exact subject/attempt count and
+timestamp reconciliation, and fail-closed authority handoff are **unverified**.
+PR #365 explicitly deferred these actions and PR #372 records them as release
+gates; no Production export/import manifest or sanitized result was available
+in the repository or reviewed PR text. Local Development limiter exports do
+not establish Production state. The private #373 audit report was not available
+here. Do not infer limiter completion from schema presence, code tests, or
+audit capture, and do not rerun a potentially completed export/import to create
+a new record.
+
+The requester confirms they are the sole prospective release operator; no
+personal name is recorded here. They must reconcile any existing private
+evidence first. The tentative maintenance target is around 2027-01-12, for
+planning only; it is not approval or a scheduled window. The exact date/time
+and rollback-retention period remain undecided.
+
+If the evidence proves an import, retain its opaque internal reference,
+checksum, horizon bounds, aggregate subject/attempt counts, timestamp
+comparison, and fail-closed window result. Do not put Firebase UIDs, HMAC
+subject keys, row-level timestamps, manifests, or export files in this
+repository. If no valid prior import is evidenced, schedule only after explicit
+target approval, a complete final active 24-hour snapshot, a reviewed
+retry-safe importer, exact post-import reconciliation, and an approved
+rollback/retention window. Record provider acceptance separately from inbox
+receipt; `delivery_accepted` alone is not inbox-delivery evidence. Current
+status and next steps are tracked in the [#375 gate
+ledger](../architecture/FIRESTORE_TO_NEON_MIGRATION.md#375-production-evidence-ledger-reviewed-2026-10-12).
