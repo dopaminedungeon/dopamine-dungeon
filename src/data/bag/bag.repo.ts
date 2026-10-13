@@ -1,27 +1,12 @@
 import { apiFetch } from "../api/apiClient";
 import { parseWorthGp, worthGpFromCopper } from "../../domain/currency/worth";
+import { COIN_VALUES_CP, currencyToCopper } from "../../domain/currency/coins";
+import type { CoinKey } from "../../domain/currency/coins";
 
-type CoinKey = "gp" | "sp" | "cp" | "ep" | "pp";
-
-const COIN_VALUES_CP: Record<CoinKey, number> = {
-  pp: 1000,
-  gp: 100,
-  ep: 50,
-  sp: 10,
-  cp: 1,
-};
 const COINS_DESCENDING: CoinKey[] = ["pp", "gp", "ep", "sp", "cp"];
 
 function toCopper(currency?: BagCurrency): number {
-  const normalized = normalizeCurrency(currency);
-
-  return (
-    (normalized.pp || 0) * COIN_VALUES_CP.pp +
-    (normalized.gp || 0) * COIN_VALUES_CP.gp +
-    (normalized.ep || 0) * COIN_VALUES_CP.ep +
-    (normalized.sp || 0) * COIN_VALUES_CP.sp +
-    (normalized.cp || 0) * COIN_VALUES_CP.cp
-  );
+  return currencyToCopper(normalizeCurrency(currency));
 }
 
 export type BagCurrency = Partial<Record<CoinKey, number>>;
@@ -189,13 +174,21 @@ export const bagRepo = {
     return normalizeBag(response.bag);
   },
 
-  async save(campaignId: string, bag: BagState): Promise<void> {
+  async save(campaignId: string, bag: BagState, currencyOperation?: { id: string; type: "add" | "spend" }): Promise<BagState | undefined> {
     if (!campaignId) return;
     const normalizedBag = normalizeBag(bag);
-    await apiFetch(`/api/worldbuilding?resource=bag&campaignId=${encodeURIComponent(campaignId)}`, {
+    const response = await apiFetch<{ ok: true; bag: BagState }>(`/api/worldbuilding?resource=bag&campaignId=${encodeURIComponent(campaignId)}`, {
       method: "PUT",
-      body: JSON.stringify({ bag: normalizedBag }),
+      body: JSON.stringify({ bag: normalizedBag, requestId: currencyOperation?.id || crypto.randomUUID(),
+        ...(currencyOperation ? { currencyOperation } : {}) }),
     });
+    return normalizeBag(response.bag);
+  },
+
+  async getReport(campaignId: string, offset = 0): Promise<{ transactions: Array<{
+    id: string; type: string; amountCp: number; balanceAfterCp: number; createdAt: string; actor: string;
+  }>; hasMore: boolean }> {
+    return apiFetch(`/api/worldbuilding?resource=bag&campaignId=${encodeURIComponent(campaignId)}&action=report&offset=${offset}`);
   },
 
   async sell(campaignId: string, entryId: string, saleValueGp: string): Promise<BagState> {

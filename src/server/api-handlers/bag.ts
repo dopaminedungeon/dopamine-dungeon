@@ -1,5 +1,5 @@
 import type { VercelRequest, VercelResponse } from "@vercel/node";
-import { and, eq, notInArray, sql } from "drizzle-orm";
+import { and, desc, eq, notInArray, sql } from "drizzle-orm";
 
 import {
   getCurrentUser,
@@ -8,10 +8,12 @@ import {
 } from "../access.js";
 import { setCorsHeaders } from "../cors.js";
 import { db } from "../db.js";
-import { bagCurrency, bagEntries } from "../../../db/schema/bag.js";
+import { bagCurrency, bagEntries, bagTransactions } from "../../../db/schema/bag.js";
 import { items } from "../../../db/schema/items.js";
+import { users } from "../../../db/schema/users.js";
 import { canViewAsGm } from "../viewer-mode.js";
 import { parseWorthGp, worthGpFromCopper } from "../../domain/currency/worth.js";
+import { currencyToCopper } from "../../domain/currency/coins.js";
 
 type BagCurrency = Partial<Record<"gp" | "sp" | "cp" | "ep" | "pp", number>>;
 type LooseBagItem = {
@@ -78,6 +80,15 @@ function normalizeCurrency(input?: BagCurrency): Required<BagCurrency> {
     ep: Math.max(0, Math.floor(normalizeNumber(input?.ep, 0))),
     pp: Math.max(0, Math.floor(normalizeNumber(input?.pp, 0))),
   };
+}
+
+function sameCurrency(a: Required<BagCurrency>, b: Required<BagCurrency>) {
+  return a.gp === b.gp && a.sp === b.sp && a.cp === b.cp && a.ep === b.ep && a.pp === b.pp;
+}
+
+function requestUuid(value: unknown): string | null {
+  return typeof value === "string" && /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value)
+    ? value : null;
 }
 
 function toDateFromMs(value: unknown) {
@@ -272,6 +283,36 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       userId: currentUser.id,
     });
     const isGm = canViewAsGm(req, membership.role);
+    if (req.method === "GET" && getQueryValue(req.query.action) === "report") {
+      const rawOffset = getQueryValue(req.query.offset) || "0";
+      if (!/^\d{1,5}$/.test(rawOffset)) throw new BagRequestError("Invalid report offset", 400);
+      const offset = Number(rawOffset);
+      const rows = await db.select({
+        id: bagTransactions.id,
+        type: bagTransactions.type,
+        amountCp: bagTransactions.amountCp,
+        balanceAfterCp: bagTransactions.balanceAfterCp,
+        createdAt: bagTransactions.createdAt,
+        actorUserId: bagTransactions.actorUserId,
+        actorName: users.displayName,
+      }).from(bagTransactions).leftJoin(users, eq(users.id, bagTransactions.actorUserId))
+        .where(eq(bagTransactions.campaignId, campaign.id))
+        .orderBy(desc(bagTransactions.createdAt), desc(bagTransactions.id))
+        .limit(51).offset(offset);
+      return res.status(200).json({
+        ok: true,
+        transactions: rows.slice(0, 50).map((row) => ({
+          id: row.id,
+          type: row.type,
+          amountCp: row.amountCp,
+          balanceAfterCp: row.balanceAfterCp,
+          createdAt: row.createdAt,
+          actor: row.actorUserId === currentUser.id ? "You"
+            : isGm ? (row.actorName?.trim() || "Campaign member") : "Campaign member",
+        })),
+        hasMore: rows.length > 50,
+      });
+    }
     const visibleItemRows = isGm ? [] : await db.select({ id: items.id }).from(items).where(
       and(eq(items.campaignId, campaign.id), eq(items.visibility, "public"))
     );
@@ -339,6 +380,14 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
             updatedAt: new Date(),
           },
         }).returning();
+        await tx.insert(bagTransactions).values({
+          campaignId: campaign.id,
+          requestId: crypto.randomUUID(),
+          actorUserId: currentUser.id,
+          type: "sale",
+          amountCp: saleCp,
+          balanceAfterCp: currencyToCopper(currencyRow),
+        });
         const entryRows = await tx.select().from(bagEntries).where(eq(bagEntries.campaignId, campaign.id));
         return projectBagForViewer(toBagPayload(currencyRow, entryRows), isGm, visibleItemIds);
       });
@@ -354,13 +403,45 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     const bag = normalizeBag(rawBag as Partial<BagState>);
     const currency = normalizeCurrency(bag.currency);
+    const operation = req.body?.currencyOperation;
+    const operationId = requestUuid(operation?.id ?? req.body?.requestId);
+    if (operation != null && (!operationId || !["add", "spend"].includes(operation.type))) {
+      throw new BagRequestError("Invalid currency operation", 400);
+    }
+    if (req.body?.requestId != null && !requestUuid(req.body.requestId)) {
+      throw new BagRequestError("Invalid request ID", 400);
+    }
+    if (operation && req.body?.requestId && req.body.requestId !== operationId) {
+      throw new BagRequestError("Currency operation ID does not match request ID", 400);
+    }
     const now = new Date();
     let entryValues = [
       ...bag.looseItems.map((item) => toLooseEntryValues(campaign.id, item)),
       ...bag.linkedEntries.map((entry) => toLinkedEntryValues(campaign.id, entry)),
     ];
 
-    await db.transaction(async (tx) => {
+    const committedBag = await db.transaction(async (tx) => {
+      await tx.insert(bagCurrency).values({ campaignId: campaign.id }).onConflictDoNothing();
+      const [previousCurrencyRow] = await tx.select().from(bagCurrency)
+        .where(eq(bagCurrency.campaignId, campaign.id)).limit(1).for("update");
+      if (operationId) {
+        const [existing] = await tx.select({ id: bagTransactions.id }).from(bagTransactions).where(
+          and(eq(bagTransactions.campaignId, campaign.id), eq(bagTransactions.requestId, operationId))
+        ).limit(1);
+        if (existing) {
+          const [currentCurrency] = await tx.select().from(bagCurrency).where(eq(bagCurrency.campaignId, campaign.id)).limit(1);
+          const currentEntries = await tx.select().from(bagEntries).where(eq(bagEntries.campaignId, campaign.id));
+          return toBagPayload(currentCurrency, currentEntries);
+        }
+      }
+      const previousCurrency = normalizeCurrency(previousCurrencyRow);
+      const currencyChanged = !sameCurrency(previousCurrency, currency);
+      const amountDifferenceCp = currencyToCopper(currency) - currencyToCopper(previousCurrency);
+      if (operation && (!currencyChanged ||
+        (operation.type === "add" && amountDifferenceCp <= 0) ||
+        (operation.type === "spend" && amountDifferenceCp >= 0))) {
+        throw new BagRequestError("Currency operation does not match the saved balance", 400);
+      }
       if (!isGm) {
         const existingRows = await tx.select().from(bagEntries).where(eq(bagEntries.campaignId, campaign.id));
         const hiddenRows = existingRows.filter((row) =>
@@ -377,7 +458,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         entryValues.push(...hiddenRows.map(({ rowId: _rowId, ...row }) => row));
       }
       const entryIds = entryValues.map((entry) => entry.id);
-      await tx
+      const [savedCurrencyRow] = await tx
         .insert(bagCurrency)
         .values({ campaignId: campaign.id, ...currency, updatedAt: now })
         .onConflictDoUpdate({
@@ -390,7 +471,18 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
             pp: currency.pp,
             updatedAt: now,
           },
+        }).returning();
+
+      if (currencyChanged) {
+        await tx.insert(bagTransactions).values({
+          campaignId: campaign.id,
+          requestId: operationId || crypto.randomUUID(),
+          actorUserId: currentUser.id,
+          type: operation?.type || "adjustment",
+          amountCp: operation ? Math.abs(amountDifferenceCp) : amountDifferenceCp,
+          balanceAfterCp: currencyToCopper(savedCurrencyRow),
         });
+      }
 
       for (const values of entryValues) {
         await tx.insert(bagEntries).values(values).onConflictDoUpdate({
@@ -416,9 +508,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       } else {
         await tx.delete(bagEntries).where(eq(bagEntries.campaignId, campaign.id));
       }
+      const savedEntries = await tx.select().from(bagEntries).where(eq(bagEntries.campaignId, campaign.id));
+      return toBagPayload(savedCurrencyRow, savedEntries);
     });
 
-    return res.status(200).json({ ok: true, bag: projectBagForViewer(bag, isGm, visibleItemIds) });
+    return res.status(200).json({ ok: true, bag: projectBagForViewer(committedBag, isGm, visibleItemIds) });
   } catch (error) {
     return res.status(error instanceof BagRequestError ? error.status : 401).json({
       ok: false,
