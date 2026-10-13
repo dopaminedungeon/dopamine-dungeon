@@ -310,6 +310,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         throw new BagRequestError(error instanceof Error ? error.message : "Invalid sale value", 400);
       }
       if (saleCp == null) throw new BagRequestError("Enter a sale value in gp", 400);
+      const proceedsGp = Math.floor(saleCp / 100);
+      const proceedsSp = Math.floor((saleCp % 100) / 10);
+      const proceedsCp = saleCp % 10;
 
       const bag = await db.transaction(async (tx) => {
         const removed = await tx.delete(bagEntries).where(
@@ -323,11 +326,18 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
         const [currencyRow] = await tx.insert(bagCurrency).values({
           campaignId: campaign.id,
-          cp: saleCp,
+          gp: proceedsGp,
+          sp: proceedsSp,
+          cp: proceedsCp,
           updatedAt: new Date(),
         }).onConflictDoUpdate({
           target: bagCurrency.campaignId,
-          set: { cp: sql`${bagCurrency.cp} + ${saleCp}`, updatedAt: new Date() },
+          set: {
+            gp: sql`${bagCurrency.gp} + ${proceedsGp}`,
+            sp: sql`${bagCurrency.sp} + ${proceedsSp}`,
+            cp: sql`${bagCurrency.cp} + ${proceedsCp}`,
+            updatedAt: new Date(),
+          },
         }).returning();
         const entryRows = await tx.select().from(bagEntries).where(eq(bagEntries.campaignId, campaign.id));
         return projectBagForViewer(toBagPayload(currencyRow, entryRows), isGm, visibleItemIds);

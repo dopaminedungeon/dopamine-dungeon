@@ -111,32 +111,32 @@ test("a non-member cannot start a bag write", async () => {
   assert.equal(mocks.transaction.mock.calls.length, 0);
 });
 
-test("selling a loose entry credits exact copper once and a retry cannot credit again", async () => {
+test("selling a loose entry distributes exact proceeds into a mixed purse and a retry cannot credit again", async () => {
   let storedEntry: { id: string; sourceType: string; itemId: string | null; quantity: number; worthGp: number } | null = {
     id: "entry-275", sourceType: "loose", itemId: null, quantity: 2, worthGp: 1.25,
   };
-  let storedCopper = 4;
+  let storedCurrency = { pp: 1, ep: 2, gp: 3, sp: 4, cp: 5 };
   mocks.transaction.mockImplementation(async (callback) => {
     const entryBefore = storedEntry;
-    const copperBefore = storedCopper;
+    const currencyBefore = { ...storedCurrency };
     const tx = {
       delete: () => ({ where: () => ({ returning: async () => {
         const removed = storedEntry;
         storedEntry = null;
         return removed ? [removed] : [];
       } }) }),
-      insert: () => ({ values: (values: { cp: number }) => ({ onConflictDoUpdate: () => ({ returning: async () => {
-        storedCopper += values.cp;
-        return [{ cp: storedCopper, sp: 0, ep: 0, gp: 0, pp: 0 }];
+      insert: () => ({ values: (values: { gp: number; sp: number; cp: number }) => ({ onConflictDoUpdate: () => ({ returning: async () => {
+        storedCurrency = { ...storedCurrency, gp: storedCurrency.gp + values.gp, sp: storedCurrency.sp + values.sp, cp: storedCurrency.cp + values.cp };
+        return [storedCurrency];
       } }) }) }),
       select: () => ({ from: () => ({ where: async () => storedEntry ? [storedEntry] : [] }) }),
     };
     try { return await callback(tx); }
-    catch (error) { storedEntry = entryBefore; storedCopper = copperBefore; throw error; }
+    catch (error) { storedEntry = entryBefore; storedCurrency = currencyBefore; throw error; }
   });
   const request = {
     method: "POST", query: { campaignId: "campaign-275", action: "sell" },
-    body: { entryId: "entry-275", saleValueGp: "2.75" },
+    body: { entryId: "entry-275", saleValueGp: "27.35" },
     headers: { "x-dd-mode": "gm" },
   } as unknown as VercelRequest;
 
@@ -144,13 +144,13 @@ test("selling a loose entry credits exact copper once and a retry cannot credit 
   await handler(request, first.res);
   assert.equal(first.result.status, 200);
   assert.equal(storedEntry, null);
-  assert.equal(storedCopper, 279);
-  assert.deepEqual((first.result.body as { bag: { currency: { cp: number }; looseItems: unknown[] } }).bag.currency.cp, 279);
+  assert.deepEqual(storedCurrency, { pp: 1, ep: 2, gp: 30, sp: 7, cp: 10 });
+  assert.deepEqual((first.result.body as { bag: { currency: typeof storedCurrency } }).bag.currency, storedCurrency);
 
   const retry = response();
   await handler(request, retry.res);
   assert.equal(retry.result.status, 409);
-  assert.equal(storedCopper, 279);
+  assert.deepEqual(storedCurrency, { pp: 1, ep: 2, gp: 30, sp: 7, cp: 10 });
 });
 
 test("invalid sale values and non-members cannot start a sale transaction", async () => {
