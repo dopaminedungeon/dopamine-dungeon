@@ -20,7 +20,7 @@ export const quests = pgTable("quests", {
   hook: text("hook").default("").notNull(),
   journey: text("journey").default("").notNull(),
   aftermath: text("aftermath").default("").notNull(),
-  sectionVisibility: jsonb("section_visibility").$type<Record<QuestSection, QuestVisibility>>().notNull(),
+  sectionVisibility: jsonb("section_visibility").$type<Record<QuestSection, QuestVisibility> & Record<string, QuestVisibility>>().notNull(),
   mainObjectives: jsonb("main_objectives").$type<QuestObjective[]>().default([]).notNull(),
   secondaryObjectives: jsonb("secondary_objectives").$type<QuestObjective[]>().default([]).notNull(),
   createdAt: timestamp("created_at").defaultNow().notNull(),

@@ -331,6 +331,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       await requireQuestEndpoints(values);
 
       const existingLink = await findExistingLink(values);
+      if ((values.entityAType === "Quest" || values.entityBType === "Quest") &&
+        (values.label === "leads_to" || existingLink?.label === "leads_to")) {
+        return res.status(400).json({ ok: false, error: "Edit the main location on the Quest profile" });
+      }
       let returnedRows: EntityLinkRow[];
 
       if (existingLink) {
@@ -383,6 +387,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     }
     if ((link.entityAType === "Quest" || link.entityBType === "Quest") && !isGmView) {
       return res.status(200).json({ ok: true });
+    }
+    if ((link.entityAType === "Quest" || link.entityBType === "Quest") && link.label === "leads_to") {
+      return res.status(400).json({ ok: false, error: "Edit the main location on the Quest profile" });
     }
 
     if (!isGmMember && !isBagItemLink(link.entityAType, link.entityBType)) {

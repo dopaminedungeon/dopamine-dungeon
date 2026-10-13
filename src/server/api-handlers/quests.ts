@@ -7,7 +7,6 @@ import { db } from "../db.js";
 import { quests } from "../../../db/schema/quests.js";
 import { sessions } from "../../../db/schema/sessions.js";
 import { npcs } from "../../../db/schema/npcs.js";
-import { characters } from "../../../db/schema/characters.js";
 import { items } from "../../../db/schema/items.js";
 import { locations } from "../../../db/schema/locations.js";
 import { entityLinks } from "../../../db/schema/entityLinks.js";
@@ -49,7 +48,6 @@ function parseQuest(value: unknown): QuestRecord {
   if (!sectionInput || typeof sectionInput !== "object") throw new QuestError("Section visibility is required");
   const sections = sectionInput as Record<string, unknown>;
   const sectionVisibility = Object.fromEntries(QUEST_SECTIONS.map((section) => [section, visibility(sections[section])])) as QuestRecord["sectionVisibility"];
-  if (!Array.isArray(input.receiverIds) || input.receiverIds.some((id) => !clean(id))) throw new QuestError("Invalid quest receivers");
   const endDate = clean(input.endDate);
   if (endDate && (!/^\d{4}-\d{2}-\d{2}$/.test(endDate) ||
     Number.isNaN(Date.parse(`${endDate}T00:00:00Z`)) ||
@@ -57,6 +55,7 @@ function parseQuest(value: unknown): QuestRecord {
     throw new QuestError("Invalid end date");
   }
   const mainObjectives = objectives(input.mainObjectives);
+  if (mainObjectives.length > 1) throw new QuestError("A quest has one main objective");
   const secondaryObjectives = objectives(input.secondaryObjectives);
   const objectiveIds = [...mainObjectives, ...secondaryObjectives].map((entry) => entry.id);
   if (new Set(objectiveIds).size !== objectiveIds.length) throw new QuestError("Objective IDs must be unique");
@@ -64,27 +63,41 @@ function parseQuest(value: unknown): QuestRecord {
     id: clean(input.id), name: clean(input.name), type: input.type, status: input.status as QuestRecord["status"],
     progress: input.progress as number, visibility: visibility(input.visibility),
     startSessionId: clean(input.startSessionId), endSessionId: clean(input.endSessionId), endDate,
-    giverId: clean(input.giverId), receiverIds: [...new Set((input.receiverIds as string[]).map(clean))],
+    giverId: clean(input.giverId), mainLocationId: clean(input.mainLocationId),
     shortDescription: clean(input.shortDescription), hook: clean(input.hook), journey: clean(input.journey),
     aftermath: clean(input.aftermath), sectionVisibility,
     mainObjectives, secondaryObjectives,
   };
 }
 
-function project(row: typeof quests.$inferSelect, isGm: boolean) {
+function project(row: typeof quests.$inferSelect, isGm: boolean, mainLocationId: string) {
   const endEligible = row.status === "Completed" || row.status === "Abandoned";
-  if (isGm) return row;
+  const { receiverIds: _legacyReceiverIds, ...fields } = row;
+  void _legacyReceiverIds;
+  if (isGm) return { ...fields, mainLocationId };
   const visible = (section: string) => row.sectionVisibility?.[section as keyof typeof row.sectionVisibility] === "public";
   return {
     id: row.id, name: row.name, type: row.type, status: row.status, visibility: "public", progress: row.progress,
     startSessionId: row.startSessionId, endSessionId: endEligible ? row.endSessionId : "", endDate: endEligible ? row.endDate : "",
-    giverId: row.giverId, receiverIds: row.receiverIds,
-    shortDescription: visible("shortDescription") ? row.shortDescription : "",
+    giverId: row.giverId, mainLocationId,
+    shortDescription: row.shortDescription,
     hook: visible("hook") ? row.hook : "", journey: visible("journey") ? row.journey : "",
     aftermath: visible("aftermath") ? row.aftermath : "",
-    mainObjectives: visible("mainObjectives") ? row.mainObjectives.filter((item) => item.visibility === "public") : [],
-    secondaryObjectives: visible("secondaryObjectives") ? row.secondaryObjectives.filter((item) => item.visibility === "public") : [],
+    mainObjectives: row.mainObjectives.filter((item) => item.visibility === "public"),
+    secondaryObjectives: row.secondaryObjectives.filter((item) => item.visibility === "public"),
   };
+}
+
+function mapEndpoint(link: typeof entityLinks.$inferSelect, questId: string) {
+  if (link.entityAType === "Quest" && link.entityAId === questId && link.entityBType === "Map") return link.entityBId;
+  if (link.entityBType === "Quest" && link.entityBId === questId && link.entityAType === "Map") return link.entityAId;
+  return "";
+}
+
+function questLinksWhere(campaignId: string, questId?: string) {
+  return and(eq(entityLinks.campaignId, campaignId),
+    or(and(eq(entityLinks.entityAType, "Quest"), questId ? eq(entityLinks.entityAId, questId) : undefined),
+      and(eq(entityLinks.entityBType, "Quest"), questId ? eq(entityLinks.entityBId, questId) : undefined)));
 }
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
@@ -101,59 +114,64 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       const rows = await db.select().from(quests).where(and(eq(quests.campaignId, campaign.id), id ? eq(quests.id, id) : undefined,
         isGm ? undefined : eq(quests.visibility, "public")));
       // Reference labels are projected from the same campaign and visibility scope.
-      const [sessionRows, npcRows, characterRows, itemRows, locationRows] = await Promise.all([
+      const [sessionRows, npcRows, itemRows, locationRows, mainLinks] = await Promise.all([
         db.select({ id: sessions.id, name: sessions.name, sessionNumber: sessions.sessionNumber }).from(sessions)
           .where(and(eq(sessions.campaignId, campaign.id), isGm ? undefined : eq(sessions.visibility, "public"))),
         db.select({ id: npcs.id, name: npcs.name }).from(npcs)
           .where(and(eq(npcs.campaignId, campaign.id), isGm ? undefined : eq(npcs.visibility, "public"))),
-        db.select({ id: characters.id, name: characters.name }).from(characters)
-          .where(and(eq(characters.campaignId, campaign.id), isGm ? undefined : eq(characters.isPlayerVisible, true))),
         db.select({ id: items.id, name: items.name }).from(items)
           .where(and(eq(items.campaignId, campaign.id), isGm ? undefined : eq(items.visibility, "public"))),
         db.select({ id: locations.id, name: locations.name }).from(locations)
           .where(and(eq(locations.campaignId, campaign.id), isGm ? undefined : eq(locations.visibility, "public"))),
+        db.select().from(entityLinks).where(and(questLinksWhere(campaign.id, id || undefined), eq(entityLinks.label, "leads_to"),
+          isGm ? undefined : eq(entityLinks.visibility, "Player"))),
       ]);
       const sessionIds = new Set(sessionRows.map((row) => row.id));
       const npcIds = new Set(npcRows.map((row) => row.id));
-      const characterIds = new Set(characterRows.map((row) => row.id));
+      const locationIds = new Set(locationRows.map((row) => row.id));
       const projected = rows.filter((row) => isGm || row.visibility === "public").map((row) => {
-        const payload = project(row, isGm);
+        const linkedLocationId = mainLinks.map((link) => !isGm && link.visibility !== "Player" ? "" : mapEndpoint(link, row.id))
+          .find((locationId) => locationIds.has(locationId)) || "";
+        const payload = project(row, isGm, linkedLocationId);
         return { ...payload,
           startSessionId: sessionIds.has(payload.startSessionId) ? payload.startSessionId : "",
           endSessionId: sessionIds.has(payload.endSessionId) ? payload.endSessionId : "",
           giverId: npcIds.has(payload.giverId) ? payload.giverId : "",
-          receiverIds: payload.receiverIds.filter((receiverId) => characterIds.has(receiverId)),
         };
       });
       return res.status(200).json({ ok: true, ...(id ? { quest: projected[0] ?? null } : { quests: projected }),
-        references: { sessions: sessionRows, npcs: npcRows, characters: characterRows, items: itemRows, locations: locationRows } });
+        references: { sessions: sessionRows, npcs: npcRows, items: itemRows, locations: locationRows } });
     }
     if (!isGm) throw new QuestError("GM mode is required to edit quests", 403);
     const quest = parseQuest(req.body?.quest);
-    const [sessionRows, npcRows, characterRows] = await Promise.all([
+    const [sessionRows, npcRows, locationRows] = await Promise.all([
       db.select({ id: sessions.id }).from(sessions).where(eq(sessions.campaignId, campaign.id)),
       db.select({ id: npcs.id }).from(npcs).where(eq(npcs.campaignId, campaign.id)),
-      db.select({ id: characters.id }).from(characters).where(eq(characters.campaignId, campaign.id)),
+      db.select({ id: locations.id }).from(locations).where(eq(locations.campaignId, campaign.id)),
     ]);
     const has = (rows: { id: string }[], id: string) => !id || rows.some((row) => row.id === id);
     if (![quest.startSessionId, quest.endSessionId].every((id) => has(sessionRows, id)) ||
-      !has(npcRows, quest.giverId) || quest.receiverIds.some((id) => !has(characterRows, id))) {
+      !has(npcRows, quest.giverId) || !has(locationRows, quest.mainLocationId)) {
       throw new QuestError("A linked entity is unavailable in this campaign");
     }
     const [saved] = await db.transaction(async (tx) => {
-      const [row] = await tx.insert(quests).values({ ...quest, campaignId: campaign.id, updatedAt: new Date() })
-        .onConflictDoUpdate({ target: [quests.campaignId, quests.id], set: { ...quest, updatedAt: new Date() } }).returning();
+      const { mainLocationId, ...questColumns } = quest;
+      const [oldRow] = await tx.select({ sectionVisibility: quests.sectionVisibility }).from(quests)
+        .where(and(eq(quests.campaignId, campaign.id), eq(quests.id, quest.id))).limit(1);
+      const columns = { ...questColumns, sectionVisibility: { ...oldRow?.sectionVisibility, ...quest.sectionVisibility } };
+      const [row] = await tx.insert(quests).values({ ...columns, campaignId: campaign.id, updatedAt: new Date() })
+        .onConflictDoUpdate({ target: [quests.campaignId, quests.id], set: { ...columns, updatedAt: new Date() } }).returning();
       const priorLinks = await tx.select({ id: entityLinks.id }).from(entityLinks).where(and(eq(entityLinks.campaignId, campaign.id),
         or(and(eq(entityLinks.entityAType, "Quest"), eq(entityLinks.entityAId, quest.id)),
           and(eq(entityLinks.entityBType, "Quest"), eq(entityLinks.entityBId, quest.id)))));
-      const autoIds = priorLinks.map((link) => link.id).filter((linkId) => linkId.startsWith(`quest-hero:${quest.id}:`));
+      const autoIds = priorLinks.map((link) => link.id).filter((linkId) =>
+        linkId.startsWith(`quest-hero:${quest.id}:`) && !linkId.includes(":PC:"));
       if (autoIds.length) await tx.delete(entityLinks).where(and(eq(entityLinks.campaignId, campaign.id), inArray(entityLinks.id, autoIds)));
       const ends = quest.status === "Completed" || quest.status === "Abandoned";
       const targets = [
         ...(quest.startSessionId ? [{ type: "Session", id: quest.startSessionId, label: "started" }] : []),
         ...(ends && quest.endSessionId ? [{ type: "Session", id: quest.endSessionId, label: quest.status === "Completed" ? "completed" : "failed" }] : []),
         ...(quest.giverId ? [{ type: "NPC", id: quest.giverId, label: "given_by" }] : []),
-        ...quest.receiverIds.map((id) => ({ type: "PC", id, label: "assigned_to" })),
       ];
       if (targets.length) await tx.insert(entityLinks).values(targets.map((target) => {
         const questFirst = `Quest:${quest.id}` <= `${target.type}:${target.id}`;
@@ -163,9 +181,27 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           label: target.label, visibility: quest.visibility === "public" ? "Player" : "GM",
           createdByUserId: user.id };
       })).onConflictDoNothing();
+      const locationLinks = await tx.select().from(entityLinks).where(questLinksWhere(campaign.id, quest.id));
+      const currentMain = locationLinks.find((link) => link.label === "leads_to" && mapEndpoint(link, quest.id));
+      if (currentMain && mapEndpoint(currentMain, quest.id) !== mainLocationId) {
+        await tx.update(entityLinks).set({ label: "takes_place_in" }).where(eq(entityLinks.rowId, currentMain.rowId));
+      }
+      if (mainLocationId) {
+        const existingLocation = locationLinks.find((link) => mapEndpoint(link, quest.id) === mainLocationId);
+        if (existingLocation) {
+          await tx.update(entityLinks).set({ label: "leads_to", visibility: quest.visibility === "public" ? "Player" : "GM" })
+            .where(eq(entityLinks.rowId, existingLocation.rowId));
+        } else {
+          const questFirst = `Quest:${quest.id}` <= `Map:${mainLocationId}`;
+          await tx.insert(entityLinks).values({ campaignId: campaign.id, id: `quest-main-location:${quest.id}:${mainLocationId}`,
+            entityAType: questFirst ? "Quest" : "Map", entityAId: questFirst ? quest.id : mainLocationId,
+            entityBType: questFirst ? "Map" : "Quest", entityBId: questFirst ? mainLocationId : quest.id,
+            label: "leads_to", visibility: quest.visibility === "public" ? "Player" : "GM", createdByUserId: user.id });
+        }
+      }
       return [row];
     });
-    return res.status(200).json({ ok: true, quest: project(saved, true) });
+    return res.status(200).json({ ok: true, quest: project(saved, true, quest.mainLocationId) });
   } catch (error) {
     const status = error instanceof QuestError ? error.status : 401;
     return res.status(status).json({ ok: false, error: error instanceof Error ? error.message : "Quest request failed" });

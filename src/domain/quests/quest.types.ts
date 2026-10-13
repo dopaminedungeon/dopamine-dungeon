@@ -9,7 +9,7 @@ export const QUEST_TYPES = [
 ] as const;
 
 export const QUEST_STATUSES = ["Active", "Abandoned", "Completed", "Planned"] as const;
-export const QUEST_SECTIONS = ["shortDescription", "hook", "journey", "mainObjectives", "secondaryObjectives", "aftermath"] as const;
+export const QUEST_SECTIONS = ["hook", "journey", "aftermath"] as const;
 export type QuestType = typeof QUEST_TYPES[number]["id"];
 export type QuestStatus = typeof QUEST_STATUSES[number];
 export type QuestSection = typeof QUEST_SECTIONS[number];
@@ -33,7 +33,7 @@ export type QuestRecord = {
   endSessionId: string;
   endDate: string;
   giverId: string;
-  receiverIds: string[];
+  mainLocationId: string;
   shortDescription: string;
   hook: string;
   journey: string;
