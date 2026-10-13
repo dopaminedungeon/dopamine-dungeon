@@ -111,6 +111,8 @@ export default function BagOfHolding() {
   const isBagSavingRef = useRef(false);
   const linkingItemIdRef = useRef(null);
   const pendingLinkSaveRef = useRef(null);
+  const pendingCurrencyOperationRef = useRef(null);
+  const reportLoadIdRef = useRef(0);
   const currency = useMemo(() => bagState?.currency || {}, [bagState?.currency]);
   const looseItems = useMemo(
     () => (Array.isArray(bagState?.looseItems) ? bagState.looseItems : []),
@@ -143,8 +145,16 @@ export default function BagOfHolding() {
 
     try {
       const next = bagRepo.applyCurrencyDelta(bagState, pendingDelta, mode);
-      await persistBag(next, mode !== "spend");
+      const signature = JSON.stringify({ mode, delta: pendingDelta });
+      if (pendingCurrencyOperationRef.current?.signature !== signature) {
+        pendingCurrencyOperationRef.current = { signature, id: crypto.randomUUID(), type: mode };
+      }
+      const { id, type } = pendingCurrencyOperationRef.current;
+      const didSave = await persistBag(next, false, { id, type });
+      if (!didSave) return;
+      pendingCurrencyOperationRef.current = null;
       setPendingCurrency({ gp: "", sp: "", cp: "", ep: "", pp: "" });
+      if (showReport) void loadReport(0);
     } catch (error) {
       setCurrencyError(mode === "spend" && error?.message?.includes("Not enough funds")
         ? "Not enough funds in treasury. No currency was spent."
@@ -163,10 +173,20 @@ export default function BagOfHolding() {
   const [worthDraft, setWorthDraft] = useState(null);
   const [formError, setFormError] = useState("");
   const [currencyError, setCurrencyError] = useState("");
+  const [showReport, setShowReport] = useState(false);
+  const [reportRows, setReportRows] = useState([]);
+  const [reportHasMore, setReportHasMore] = useState(false);
+  const [reportLoading, setReportLoading] = useState(false);
+  const [reportError, setReportError] = useState("");
+  const [reportRetryOffset, setReportRetryOffset] = useState(0);
 
   useEffect(() => {
     let cancelled = false;
     pendingLinkSaveRef.current = null;
+    pendingCurrencyOperationRef.current = null;
+    reportLoadIdRef.current++;
+    setShowReport(false);
+    setReportRows([]);
     if (!selectedCampaignId) {
       setBagState({ currency: {}, looseItems: [], linkedEntries: [] });
       setAllItems([]);
@@ -336,9 +356,15 @@ export default function BagOfHolding() {
     }
   };
 
+  const reportAmountLabel = (row) => {
+    const amount = `${formatCopperGp(Math.abs(row.amountCp))} gp`;
+    if (row.type === "adjustment" && row.amountCp === 0) return `${amount} (coin change)`;
+    return `${row.type === "spend" || row.amountCp < 0 ? "−" : "+"}${amount}`;
+  };
+
   const canAdd = true; // requirement: players can add
 
-  async function persistBag(next, optimistic = true) {
+  async function persistBag(next, optimistic = true, currencyOperation) {
     if (isBagSavingRef.current) return false;
     isBagSavingRef.current = true;
     setIsBagSaving(true);
@@ -346,13 +372,32 @@ export default function BagOfHolding() {
     try {
       if (!selectedCampaignId) return true;
       if (typeof bagRepo.save === "function") {
-        await Promise.resolve(bagRepo.save(selectedCampaignId, next));
+        const saved = await Promise.resolve(bagRepo.save(selectedCampaignId, next, currencyOperation));
+        setBagState(saved || next);
       }
-      if (!optimistic) setBagState(next);
+      else if (!optimistic) setBagState(next);
       return true;
     } finally {
       isBagSavingRef.current = false;
       setIsBagSaving(false);
+    }
+  }
+
+  async function loadReport(offset = 0) {
+    if (!selectedCampaignId) return;
+    const loadId = ++reportLoadIdRef.current;
+    setReportLoading(true);
+    setReportError("");
+    setReportRetryOffset(offset);
+    try {
+      const result = await bagRepo.getReport(selectedCampaignId, offset);
+      if (loadId !== reportLoadIdRef.current) return;
+      setReportRows((current) => offset === 0 ? result.transactions : [...current, ...result.transactions]);
+      setReportHasMore(result.hasMore);
+    } catch {
+      if (loadId === reportLoadIdRef.current) setReportError("Could not load the financial report. Please try again.");
+    } finally {
+      if (loadId === reportLoadIdRef.current) setReportLoading(false);
     }
   }
 
@@ -621,6 +666,7 @@ export default function BagOfHolding() {
     try {
       const savedBag = await bagRepo.sell(selectedCampaignId, entryId, saleValueGp);
       setBagState(savedBag);
+      if (showReport) void loadReport(0);
       setPendingRemovalAction(null);
       setSaleError("");
 
@@ -752,8 +798,16 @@ export default function BagOfHolding() {
               </div>
             </div>
 
-            <div className="w-full sm:w-auto px-3 py-2 rounded-xl bg-black/20 border border-white/10 text-sm text-zinc-300">
-              Total: <span className="text-white font-semibold">{gpFmt(currencyTotals.totalGp)} gp</span>
+            <div className="flex w-full flex-wrap items-center gap-2 sm:w-auto">
+              <div className="px-3 py-2 rounded-xl bg-black/20 border border-white/10 text-sm text-zinc-300">
+                Total: <span className="text-white font-semibold">{gpFmt(currencyTotals.totalGp)} gp</span>
+              </div>
+              <button type="button" aria-expanded={showReport} onClick={() => {
+                if (!showReport) void loadReport(0);
+                setShowReport((open) => !open);
+              }} className="rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-sm text-zinc-200 hover:bg-white/10">
+                Financial Report
+              </button>
             </div>
           </div>
 
@@ -855,6 +909,37 @@ export default function BagOfHolding() {
               </div>
             ) : null}
           </div>
+          {showReport ? (
+            <section aria-label="Financial Report" className="mt-4 rounded-2xl border border-white/10 bg-black/20 p-4">
+              <h2 className="text-sm font-semibold text-white">Financial Report</h2>
+              <p className="mt-1 text-xs text-zinc-400">Amounts show the value changed; balances show the resulting treasury total.</p>
+              {reportRows.length === 0 && !reportLoading && !reportError ? (
+                <p className="mt-3 text-sm text-zinc-300">No recorded transactions yet. Recording starts with this feature; earlier bag activity is not included.</p>
+              ) : null}
+              <div className="mt-3 space-y-2">
+                {reportRows.map((row) => (
+                  <div key={row.id} className="grid min-w-0 gap-1 rounded-xl border border-white/10 bg-zinc-950/40 p-3 text-sm sm:grid-cols-[minmax(0,1fr)_auto] sm:gap-3">
+                    <div className="min-w-0">
+                      <div className="font-medium text-white">{{ add: "Added currency", spend: "Spent currency", sale: "Sale proceeds", adjustment: "Balance adjustment" }[row.type] || "Currency change"}</div>
+                      <div className="wrap-break-word text-xs text-zinc-400">{row.actor || "Campaign member"} · {new Date(row.createdAt).toLocaleString()}</div>
+                    </div>
+                    <div className="min-w-0 text-left tabular-nums sm:text-right">
+                      <div className="wrap-break-word font-semibold text-white">{reportAmountLabel(row)}</div>
+                      <div className="wrap-break-word text-xs text-zinc-400">Balance: {formatCopperGp(row.balanceAfterCp)} gp</div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+              {reportLoading ? <p role="status" className="mt-3 text-sm text-zinc-400">Loading transactions...</p> : null}
+              {reportError ? (
+                <div className="mt-3 space-y-2">
+                  <p role="alert" className="rounded-xl border border-red-400/30 bg-red-500/10 px-3 py-2 text-sm text-red-200">{reportError}</p>
+                  <button type="button" onClick={() => void loadReport(reportRetryOffset)} className="rounded-xl border border-white/10 bg-white/5 px-4 py-2 text-sm text-white">Retry</button>
+                </div>
+              ) : null}
+              {reportHasMore && !reportError ? <button type="button" disabled={reportLoading} onClick={() => void loadReport(reportRows.length)} className="mt-3 rounded-xl border border-white/10 bg-white/5 px-4 py-2 text-sm text-white disabled:opacity-50">Load more</button> : null}
+            </section>
+          ) : null}
         </div>
 
         {/* Party Totals */}
