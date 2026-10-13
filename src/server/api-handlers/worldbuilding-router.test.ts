@@ -11,6 +11,7 @@ const mocks = vi.hoisted(() => ({
   locations: vi.fn(),
   npcs: vi.fn(),
   sessions: vi.fn(),
+  quests: vi.fn(),
   setCorsHeaders: vi.fn(),
 }));
 
@@ -22,6 +23,7 @@ vi.mock("./lore.js", () => ({ default: mocks.lore }));
 vi.mock("./locations.js", () => ({ default: mocks.locations }));
 vi.mock("./npcs.js", () => ({ default: mocks.npcs }));
 vi.mock("./sessions.js", () => ({ default: mocks.sessions }));
+vi.mock("./quests.js", () => ({ default: mocks.quests }));
 vi.mock("../cors.js", () => ({ setCorsHeaders: mocks.setCorsHeaders }));
 
 import handler from "../../../api/worldbuilding.js";
@@ -53,6 +55,7 @@ test.each([
   ["locations", mocks.locations],
   ["npcs", mocks.npcs],
   ["sessions", mocks.sessions],
+  ["quests", mocks.quests],
 ])("continues routing the %s worldbuilding resource to its handler", async (resource, routedHandler) => {
   const req = request("GET", resource);
   const res = response();

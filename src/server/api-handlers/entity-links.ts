@@ -14,6 +14,10 @@ import { canViewAsGm } from "../viewer-mode.js";
 import { entityLinks } from "../../../db/schema/entityLinks.js";
 import { locations } from "../../../db/schema/locations.js";
 import { npcs } from "../../../db/schema/npcs.js";
+import { quests } from "../../../db/schema/quests.js";
+import { sessions } from "../../../db/schema/sessions.js";
+import { items } from "../../../db/schema/items.js";
+import { characters } from "../../../db/schema/characters.js";
 import {
   assertAllowedEntityPair,
   assertAllowedLabelForPair,
@@ -83,6 +87,45 @@ function playerLocationNpcWhere() {
         and ${npcs.visibility} = 'public')
     )
   )`;
+}
+
+// Existing generic links include reserved Quest endpoints. Once Quest is active,
+// a visible link must be unable to disclose a hidden Quest or hidden counterpart.
+function playerQuestWhere() {
+  const questId = sql`case when ${entityLinks.entityAType} = 'Quest' then ${entityLinks.entityAId} else ${entityLinks.entityBId} end`;
+  const otherId = sql`case when ${entityLinks.entityAType} = 'Quest' then ${entityLinks.entityBId} else ${entityLinks.entityAId} end`;
+  const otherType = sql`case when ${entityLinks.entityAType} = 'Quest' then ${entityLinks.entityBType} else ${entityLinks.entityAType} end`;
+  return sql`(
+    (${entityLinks.entityAType} <> 'Quest' and ${entityLinks.entityBType} <> 'Quest')
+    or (exists (select 1 from ${quests} where ${quests.campaignId} = ${entityLinks.campaignId}
+      and ${quests.id} = ${questId} and ${quests.visibility} = 'public')
+      and (
+        (${otherType} = 'Session' and exists (select 1 from ${sessions} where ${sessions.campaignId} = ${entityLinks.campaignId}
+          and ${sessions.id} = ${otherId} and ${sessions.visibility} = 'public'))
+        or (${otherType} = 'NPC' and exists (select 1 from ${npcs} where ${npcs.campaignId} = ${entityLinks.campaignId}
+          and ${npcs.id} = ${otherId} and ${npcs.visibility} = 'public'))
+        or (${otherType} = 'Map' and exists (select 1 from ${locations} where ${locations.campaignId} = ${entityLinks.campaignId}
+          and ${locations.id} = ${otherId} and ${locations.visibility} = 'public'))
+        or (${otherType} = 'Item' and exists (select 1 from ${items} where ${items.campaignId} = ${entityLinks.campaignId}
+          and ${items.id} = ${otherId} and ${items.visibility} = 'public'))
+        or (${otherType} = 'PC' and exists (select 1 from ${characters} where ${characters.campaignId} = ${entityLinks.campaignId}
+          and ${characters.id} = ${otherId} and ${characters.isPlayerVisible} = true))
+      ))
+  )`;
+}
+
+async function requireQuestEndpoints(values: EntityLinkInsert) {
+  if (values.entityAType !== "Quest" && values.entityBType !== "Quest") return;
+  const questId = values.entityAType === "Quest" ? values.entityAId : values.entityBId;
+  const otherType = values.entityAType === "Quest" ? values.entityBType : values.entityAType;
+  const otherId = values.entityAType === "Quest" ? values.entityBId : values.entityAId;
+  const table = { Session: sessions, NPC: npcs, Map: locations, Item: items, PC: characters }[otherType];
+  if (!table) throw new Error("Quest relationship target is not available");
+  const [questRows, targetRows] = await Promise.all([
+    db.select({ id: quests.id }).from(quests).where(and(eq(quests.campaignId, values.campaignId), eq(quests.id, questId))).limit(1),
+    db.select({ id: table.id }).from(table).where(and(eq(table.campaignId, values.campaignId), eq(table.id, otherId))).limit(1),
+  ]);
+  if (!questRows.length || !targetRows.length) throw new Error("Quest relationship target is unavailable in this campaign");
 }
 
 async function requireLocationNpcEndpoints(values: EntityLinkInsert) {
@@ -235,13 +278,20 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           and(entityLinksReadWhere(entityLinks, {
             campaignId: campaign.id,
             isGm: isGmView,
-          }), isGmView ? undefined : playerLocationNpcWhere())
+          }), isGmView ? undefined : playerLocationNpcWhere(), isGmView ? undefined : playerQuestWhere())
         );
 
       return res.status(200).json({
         ok: true,
         campaignId: campaign.slug,
-        links: rows.map(toLinkPayload),
+        links: rows.map((row) => {
+          const link = toLinkPayload(row);
+          if (!isGmView && (row.entityAType === "Quest" || row.entityBType === "Quest")) {
+            return { id: link.id, entityA: link.entityA, entityB: link.entityB,
+              label: link.label, visibility: link.visibility, createdAt: link.createdAt };
+          }
+          return link;
+        }),
       });
     }
 
@@ -253,6 +303,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
       if (!rawLink || typeof rawLink !== "object") {
         return res.status(400).json({ ok: false, error: "Link payload is required" });
+      }
+      const submitted = rawLink as Record<string, unknown>;
+      const aType = (submitted.entityA as Record<string, unknown> | undefined)?.type;
+      const bType = (submitted.entityB as Record<string, unknown> | undefined)?.type;
+      if ((aType === "Quest" || bType === "Quest") && !["GM", "Player"].includes(String(submitted.visibility))) {
+        return res.status(400).json({ ok: false, error: "Invalid Quest relationship visibility" });
       }
 
       const values = toLinkValues(
@@ -267,8 +323,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       if (isLocationNpcLink(values.entityAType, values.entityBType) && !isGmView) {
         throw new Error("GM mode is required to edit this relationship");
       }
+      if ((values.entityAType === "Quest" || values.entityBType === "Quest") && !isGmView) {
+        throw new Error("GM mode is required to edit this relationship");
+      }
 
       await requireLocationNpcEndpoints(values);
+      await requireQuestEndpoints(values);
 
       const existingLink = await findExistingLink(values);
       let returnedRows: EntityLinkRow[];
@@ -319,6 +379,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     if (isLocationNpcLink(link.entityAType, link.entityBType) && !isGmView) {
       // Match the absent-link response without revealing this link's existence.
+      return res.status(200).json({ ok: true });
+    }
+    if ((link.entityAType === "Quest" || link.entityBType === "Quest") && !isGmView) {
       return res.status(200).json({ ok: true });
     }
 

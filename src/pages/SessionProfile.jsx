@@ -7,6 +7,7 @@ import { sessionsRepo } from "../data/sessions/sessions.repo";
 import { itemsRepo } from "../data/items/items.repo";
 import { npcsRepo } from "../data/npcs/npcs.repo";
 import { loreRepo } from "../data/lore/lore.repo";
+import { QuestReciprocalLinks } from "../components/QuestReciprocalLinks.jsx";
 import { locationsRepo } from "../data/maps/locations.repo";
 import { createLink } from "../domain/links/link.service";
 import { addLink, getLinksForEntity, loadLinks, removeLink } from "../data/links/links.repo";
@@ -1316,6 +1317,7 @@ export default function SessionProfile() {
 	        </div>
 	        </fieldset>
 
+	        <QuestReciprocalLinks campaignId={selectedCampaignId} entityType="Session" entityId={id} />
 	        {/* Metadata strip */}
         <div className="grid grid-cols-1 gap-3 sm:gap-4 text-sm text-zinc-400 pt-2">
           <div className="flex items-center gap-3">

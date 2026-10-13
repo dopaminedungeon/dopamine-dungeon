@@ -10,6 +10,7 @@ import { npcsRepo } from "../data/npcs/npcs.repo";
 import { sessionsRepo } from "../data/sessions/sessions.repo";
 import { itemsRepo } from "../data/items/items.repo";
 import { loreRepo } from "../data/lore/lore.repo";
+import { QuestReciprocalLinks } from "../components/QuestReciprocalLinks.jsx";
 import { locationsRepo } from "../data/maps/locations.repo";
 import { createLink } from "../domain/links/link.service";
 import {
@@ -1985,6 +1986,7 @@ export default function NpcProfile() {
         </aside>
         ) : null}
       </div>
+      <QuestReciprocalLinks campaignId={selectedCampaignId} entityType="NPC" entityId={id} />
     </main>
   );
 }

@@ -11,5 +11,6 @@ export * from "./lore.js";
 export * from "./locations.js";
 export * from "./bag.js";
 export * from "./entityLinks.js";
+export * from "./quests.js";
 export * from "./characterAssignments.js";
 export * from "./authEmailRateLimits.js";

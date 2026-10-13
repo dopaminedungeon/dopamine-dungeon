@@ -6,6 +6,7 @@ import {
   Drama,
   Package,
   BookOpen,
+  ScrollText,
   Map,
   Settings,
 } from "lucide-react";
@@ -41,6 +42,7 @@ export default function Sidebar() {
   const baseNavItems = [
     { to: "/home", icon: LayoutDashboard, label: "Home", on: features.dashboard },
     { to: "/sessions", icon: BookOpen, label: "Sessions", on: features.sessions },
+    { to: "/quests", icon: ScrollText, label: "Quests", on: features.quests },
     { to: "/items", icon: Package, label: "Items", on: features.items },
     { to: "/npcs", icon: Drama, label: "NPCs", on: features.npcs },
     { to: "/pcs", icon: Users, label: "PCs", on: features.pcs },
@@ -66,7 +68,7 @@ export default function Sidebar() {
       : [...baseNavItems]
   )
     .filter((x) => x.on)
-    .slice(0, 5);
+    .slice(0, 6);
 
   return (
     <>
@@ -127,7 +129,7 @@ export default function Sidebar() {
         aria-label="Primary"
       >
         <div className="mx-auto max-w-screen-sm px-2">
-          <div className="grid grid-cols-5 gap-1 py-2">
+          <div className="grid grid-cols-6 gap-1 py-2">
             {mobileNavItems.map(({ to, icon, label }) => {
               const active = to === "/"
                 ? location.pathname === "/"

@@ -7,6 +7,7 @@ import { parseWorthGp } from "../domain/currency/worth";
 import { sessionsRepo } from "../data/sessions/sessions.repo";
 import { npcsRepo } from "../data/npcs/npcs.repo";
 import { loreRepo } from "../data/lore/lore.repo";
+import { QuestReciprocalLinks } from "../components/QuestReciprocalLinks.jsx";
 import { locationsRepo } from "../data/maps/locations.repo";
 import { useCampaign } from "../context/CampaignContext";
 import { createLink } from "../domain/links/link.service";
@@ -1282,6 +1283,7 @@ export default function ItemProfile() {
 	      </div>
         </fieldset>
       </div>
+      <QuestReciprocalLinks campaignId={selectedCampaignId} entityType="Item" entityId={id} />
     </main>
   );
 }

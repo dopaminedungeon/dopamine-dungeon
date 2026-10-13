@@ -22,6 +22,7 @@ import { npcsRepo } from "../data/npcs/npcs.repo";
 import { sessionsRepo } from "../data/sessions/sessions.repo";
 import { itemsRepo } from "../data/items/items.repo";
 import { loreRepo } from "../data/lore/lore.repo";
+import { QuestReciprocalLinks } from "../components/QuestReciprocalLinks.jsx";
 import { createLink } from "../domain/links/link.service";
 import { addLink, getLinksForEntity, loadLinks, removeLink, updateLink } from "../data/links/links.repo";
 
@@ -1291,6 +1292,7 @@ export default function MapProfile() {
           </div>
         </div>
       ), document.body) : null}
+      <QuestReciprocalLinks campaignId={selectedCampaignId} entityType="Map" entityId={id} />
     </main>
   );
 }

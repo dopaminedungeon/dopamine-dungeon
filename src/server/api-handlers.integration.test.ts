@@ -10,6 +10,7 @@ import { items } from "../../db/schema/items.js";
 import { locations } from "../../db/schema/locations.js";
 import { lore } from "../../db/schema/lore.js";
 import { npcs } from "../../db/schema/npcs.js";
+import { quests } from "../../db/schema/quests.js";
 import { sessions } from "../../db/schema/sessions.js";
 
 const mocks = vi.hoisted(() => {
@@ -551,6 +552,33 @@ test("API integration: Player Location-NPC links require both public endpoints i
   assert.match(query.sql, /"npcs"\."visibility" = 'public'/);
   assert.deepEqual(query.params, [campaign.id, "Player"]);
   assert.equal((result.body as any).links[0].label, "controls");
+});
+
+test("API integration: Player Quest links require a public Quest and visible campaign endpoint", async () => {
+  mocks.state.selectRows.push([linkRow({ entityAType: "Quest", entityAId: "quest-one",
+    entityBType: "NPC", entityBId: "archivist", label: "given_by", note: "Secret GM detail" })]);
+  const { res, result } = response();
+  await entityLinksHandler(request("GET"), res);
+  assert.equal(result.status, 200);
+  const query = sqlDatabase.select().from(entityLinks).where(mocks.state.whereClauses[0] as never).toSQL();
+  assert.match(query.sql, /from "quests"/);
+  assert.match(query.sql, /"quests"\."visibility" = 'public'/);
+  assert.match(query.sql, /"npcs"\."visibility" = 'public'/);
+  assert.match(query.sql, /"quests"\."campaign_id" = "entity_links"\."campaign_id"/);
+  assert.equal(JSON.stringify(result.body).includes("Secret GM detail"), false);
+});
+
+test("API integration: Quest links reject targets outside the campaign before writing", async () => {
+  mocks.state.selectRows.push([{ id: "quest-one" }], []);
+  const { res, result } = response();
+  await entityLinksHandler(request("PUT", undefined, { link: {
+    entityA: { type: "Quest", id: "quest-one" }, entityB: { type: "Item", id: "other-campaign-item" },
+    label: "requires", visibility: "Player",
+  } }, "gm"), res);
+  assert.equal(result.status, 401);
+  assert.equal(mocks.db.insert.mock.calls.length, 0);
+  const query = sqlDatabase.select().from(quests).where(mocks.state.whereClauses[0] as never).toSQL();
+  assert.deepEqual(query.params, [campaign.id, "quest-one"]);
 });
 
 test("API integration: GM mode retains Location-NPC links without the Player endpoint filter", async () => {
