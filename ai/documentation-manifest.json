@@ -78,6 +78,9 @@
     "src/components/auth/PasswordRecoveryRequestScreen.jsx",
     "src/components/auth/PasswordResetActionScreen.jsx",
 
+    "src/auth/invitationContext.js",
+    "src/components/invitations/InvitePlayerForm.jsx",
+
     "src/domain/mail/inviteEmail.template.ts",
     "src/domain/mail/verificationEmail.template.ts",
 
@@ -120,7 +123,9 @@
         "src/components/auth/VerificationActionScreen.jsx",
         "src/components/auth/VerificationScreen.jsx",
         "src/components/auth/PasswordRecoveryRequestScreen.jsx",
-        "src/components/auth/PasswordResetActionScreen.jsx"
+        "src/components/auth/PasswordResetActionScreen.jsx",
+        "src/domain/mail/inviteEmail.template.ts",
+        "src/domain/mail/verificationEmail.template.ts"
       ]
     },
     "security-access": {
@@ -152,6 +157,101 @@
         "src/server/viewer-mode.ts",
         "api/me.ts",
         "src/pages/CampaignSettings.jsx"
+      ]
+    },
+    "architecture-persistence": {
+      "scope": [
+        "application architecture and runtime layers",
+        "Neon persistence ownership and migration transition",
+        "workspace/campaign entity and typed-link architecture",
+        "accepted architecture decisions and system diagrams"
+      ],
+      "outOfScope": [
+        "detailed authentication and invitation behavior",
+        "authorization correctness and selected-mode security",
+        "deployment operations and CI workflow behavior",
+        "iteration closeout process"
+      ],
+      "canonical": [
+        "docs/SYSTEMSDIAGRAMS.md",
+        "docs/architecture/SYSTEM_OVERVIEW.md",
+        "docs/architecture/adr/README.md",
+        "docs/architecture/adr/0001-neon-as-primary-database.md",
+        "docs/architecture/adr/0003-transitional-firestore-postgres-persistence.md",
+        "docs/architecture/adr/0005-vercel-runtime-and-isolated-auth-testing.md",
+        "docs/architecture/adr/0006-canonical-workspace-and-campaign-creation.md",
+        "docs/context-architecture.md",
+        "docs/crosslinking.md",
+        "docs/product/PRODUCT_PRINCIPLES.md"
+      ],
+      "evidence": [
+        "src/App.jsx",
+        "api/workspace.ts",
+        "api/campaign-content.ts",
+        "api/worldbuilding.ts",
+        "db/schema/index.ts",
+        "db/schema/workspaces.ts",
+        "db/schema/campaigns.ts",
+        "db/schema/memberships.ts",
+        "db/schema/users.ts",
+        "db/schema/invitations.ts",
+        "db/schema/entityLinks.ts",
+        "src/server/db.ts",
+        "src/server/api-handlers/entity-links.ts"
+      ]
+    },
+    "operations-ci": {
+      "scope": [
+        "deployment and environment model",
+        "branching, rollback, and release operations",
+        "testing and CI workflow behavior",
+        "runtime and migration configuration represented in repository files"
+      ],
+      "outOfScope": [
+        "detailed product authentication flows",
+        "authorization implementation correctness",
+        "iteration closeout issue creation and handoff behavior"
+      ],
+      "canonical": [
+        "docs/architecture/adr/0002-dev-main-deployment-flow.md",
+        "docs/operations/DEPLOYMENT.md",
+        "docs/operations/ENVIRONMENT.md",
+        "docs/operations/REPOSITORY_POLICY.md",
+        "docs/operations/ROLLBACK.md",
+        "docs/operations/TESTING.md"
+      ],
+      "evidence": [
+        "package.json",
+        "pnpm-workspace.yaml",
+        "vercel.json",
+        "firebase.json",
+        "drizzle.config.ts",
+        ".github/workflows/dd-ai-review.yml",
+        ".github/workflows/pr-checks.yml"
+      ]
+    },
+    "iteration-handoff": {
+      "scope": [
+        "iteration closeout and project handoff instructions",
+        "current and planned product state represented in closeout documents",
+        "closeout issue creation and documentation-reconciliation trigger"
+      ],
+      "outOfScope": [
+        "whole-repository documentation completeness",
+        "detailed authentication and authorization implementation review",
+        "Production runtime state or operator evidence not present in the supplied repository inputs"
+      ],
+      "canonical": [
+        "README.md",
+        "docs/README.md",
+        "docs/masterflow.md",
+        "docs/product/ROADMAP.md",
+        "docs/product/FEATURE_SURFACE_AUDIT.md",
+        "docs/operations/ITERATION_CLOSEOUT.md"
+      ],
+      "evidence": [
+        ".github/workflows/create-iteration-closeout.yml",
+        ".github/workflows/dd-doc-reconcile.yml"
       ]
     }
   }

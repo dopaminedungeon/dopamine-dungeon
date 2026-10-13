@@ -1,285 +1,103 @@
-# Multitenant & Multirole Management — Foundational Specification
-
-This document defines how **tenancy**, **roles**, **modes**, and **permissions** work in Dopamine Dungeon.
-
-It is a **source of truth** for:
-- architecture decisions
-- security rules
-- routing & guards
-- UI behaviour
-- future commercial scaling
-
-All diagrams, guards, and implementations **must conform** to this specification.
-
----
-
-## 1. Core Concepts & Definitions
-
-### Tenant (Workspace)
-A **Tenant** (also referred to as a *Workspace*) is the highest-level isolation boundary in the system.
-
-A tenant represents:
-- one GM space, organisation, or table owner
-- one or more campaigns owned by that space
-- one or more users collaborating within that space
-
-**Hard rule (Chinese wall):**
-> Data belonging to one tenant must never be visible or accessible to users outside that tenant.
-
-A user may belong to **multiple tenants**.
-
----
-
-### Campaign
-A **Campaign**:
-- always belongs to exactly **one tenant**
-- is the primary gameplay context
-- contains active gameplay entities such as PCs, NPCs, Sessions, Items,
-  Locations, and Lore
-
-Arc, Quest, and Condition remain reserved entity-link concepts, not active
-standalone pages.
-
-Campaigns **never cross tenant boundaries**.
-
----
-
-### User
-A **User** is a single authenticated identity.
-
-A user:
-- may belong to zero, one, or many tenants
-- may have different permissions in different tenants
-- may have different roles in different campaigns
-
-Authentication is global.  
-Authorization is **contextual**.
-
----
-
-## 2. Naming Conventions (Canonical)
-
-These names are used consistently across code, diagrams, and documentation.
-
-| Concept        | Canonical Name | Notes |
-|----------------|----------------|-------|
-| Tenant         | `tenant` / `workspace` | Pick one term in code; both are equivalent conceptually |
-| Campaign       | `campaign`    | Always scoped to a tenant |
-| User           | `user`        | Global identity |
-| Role           | `role`        | What the user *is allowed* to do |
-| Mode           | `mode`        | What the user is *currently acting as* |
-| Membership     | `membership`  | User ↔ Tenant ↔ Permission binding |
-
----
-
-## 3. Tenant Permission Levels (Workspace Administration)
-
-### What is a Tenant Permission Level?
-A **Tenant Permission Level** defines what a user is allowed to do at the **tenant/workspace level**, independent of any specific campaign.
-
-Tenant permission levels answer questions like:
-- Can this user create a new campaign in this tenant?
-- Can this user invite or remove members?
-- Can this user manage tenant-wide settings?
-
-Tenant permission levels are:
-- assigned per **tenant**
-- not global
-- additive across tenants
-
-A user may have different permission levels in different tenants.
-
----
-
-### Supported Tenant Permission Levels (Initial)
-
-#### WorkspaceAdmin
-- Can create and manage campaigns within the tenant
-- Can manage tenant membership (invite/remove users)
-- Can manage tenant-level settings  
-  *(future: billing, limits, branding)*
-
-#### WorkspaceMember
-- Can participate in campaigns they are added to
-- Cannot manage tenant membership
-- Cannot create campaigns (unless explicitly allowed later)
-
----
-
-## 4. Campaign Roles (Authorization Inside a Campaign)
-
-### What is a Campaign Role?
-A **Campaign Role** defines what a user is allowed to do **within a specific campaign**.
-
-Campaign roles answer questions like:
-- Can this user edit campaign content?
-- Can they see GM-only pages such as Campaign Settings?
-- Can they assign PCs or items?
-
-Campaign roles are:
-- assigned per **campaign**
-- not global
-- **exclusive per campaign**
-
-A user has **exactly one role per campaign**.
-
----
-
-### Supported Campaign Roles (Initial)
-
-#### CampaignGM
-- Full campaign management permissions
-- Access to GM-only routes and features
-- Can create and edit all campaign content
-- Can assign PCs and items
-
-#### CampaignPlayer
-- Participates in the campaign
-- Primarily read-only access to world content
-- Has access to:
-  - their assigned PC(s)
-  - shared resources (e.g. Bag of Holding)
-- Limited write access only where explicitly allowed  
-  (e.g. assigning an item to themselves if enabled)
-
----
-
-## 5. Multi-role Users (Across Campaigns)
-
-A single user may hold different **campaign roles** across campaigns within the same tenant.
-
-Examples:
-- Tenant: “Magda’s Tables”
-  - Campaign A → **CampaignGM**
-  - Campaign B → **CampaignPlayer**
-
-This is expected and supported.
-
-**Hard rule:**
-> A user has exactly one campaign role per campaign.
-
----
-
-## 6. Mode (Active Context)
-
-### What is Mode?
-**Mode** represents the user’s **current operational context** in the UI.
-
-Examples:
-- GM mode
-- Player mode
-
-Mode:
-- is a UI and routing concept
-- does **not** grant permissions
-- only restricts or exposes actions already allowed by roles
-
----
-
-### Role vs Mode (Critical Rule)
-
-- **Role** answers: *“Are you allowed to do this?”*
-- **Mode** answers: *“Are you currently acting as this?”*
-
-A user may:
-- have a CampaignGM role
-- but be currently in Player mode
-
-In that case:
-- GM-only routes are blocked
-- GM-only actions are hidden
-- Player UX applies
-
----
-
-### Mode Switching
-Mode switching:
-- is explicit and user-controlled
-- re-evaluates routing and permissions immediately
-- never changes identity or roles
-
----
-
-## 7. Permissions Model (High-Level)
-
-Permissions are evaluated using **three dimensions**:
-
-1. Tenant membership and permission level
-2. Campaign role
-3. Active mode
-
----
-
-### Permission Evaluation Order (Conceptual)
-
-1. Is the user authenticated?
-2. Is the tenant resolved and accessible?
-3. Does the user have access to the campaign?
-4. Does the user have the required campaign role?
-5. Is the active mode compatible with the action?
-6. Is the entity accessible?
-
-All checks must pass.
-
----
-
-## 8. Visibility vs Access
-
-A strict distinction is enforced:
-
-- **Visibility (UI):**
-  - controlled by mode
-  - affects sidebar items, buttons, and actions
-
-- **Access (Security):**
-  - controlled by roles and membership
-  - enforced at routing and data layers
-
-UI hiding is **never** considered a security mechanism.
-
----
-
-## 9. Campaign & Data Isolation
-
-- Every campaign belongs to exactly one tenant
-- All campaign queries are implicitly tenant-scoped
-- Users only see campaigns they have access to
-- Cross-tenant campaign discovery is impossible
-
-This applies equally to:
-- GMs
-- Players
-- multi-role users
-
----
-
-## 10. Future Commercial Considerations (Explicitly Allowed)
-
-This model explicitly supports:
-- multiple GMs running independent campaigns
-- agencies or groups managing multiple tables
-- tenant-level billing and limits
-- commercial scaling without redesign
-
----
-
-## 11. Non-Goals (For Now)
-
-The following are intentionally out of scope:
-- billing implementation
-- invitation UX details
-- custom fine-grained roles
-- platform-wide super-admin roles
-
-These can be added later without violating this spec.
-
----
-
-## 12. Invariants (Must Always Hold)
-
-- Tenant boundaries are absolute
-- Campaigns never cross tenants
-- Roles grant permission; modes restrict behaviour
-- UI visibility never replaces access control
-- A user’s identity never changes when switching mode
-- A user may safely belong to multiple tenants
+# Workspace and campaign roles: implementation reference
+
+This guide summarizes the role and mode behavior verified in the current
+repository. It is a code-reading reference, not a guarantee that every legacy
+handler follows one centralized permission policy. The schema and authorization
+helpers are the implementation sources: [`memberships.ts`](../db/schema/memberships.ts),
+[`access.ts`](../src/server/access.ts), and
+[`viewer-mode.ts`](../src/server/viewer-mode.ts).
+
+## Identity and scope
+
+Firebase authentication resolves one application user. Memberships associate
+that user with a workspace and, separately, with a campaign. A campaign has a
+`workspace_id`; campaign resolution by the app's workspace-and-campaign IDs
+constrains the lookup to that workspace. Membership checks use both the
+resolved entity ID and user ID. Some older handlers resolve a campaign by slug
+before checking campaign membership, so do not infer that every route uses the
+same workspace-resolution helper. See [`SYSTEM_OVERVIEW.md`](architecture/SYSTEM_OVERVIEW.md)
+for the broader ownership model.
+
+## Roles represented by the membership schema
+
+Both membership `role` columns are PostgreSQL `text`, not database enums or
+check-constrained columns. The comments in the schema declare these values:
+
+| Membership | Schema-declared roles | Verified role-based authorization |
+|---|---|---|
+| Workspace | `owner`, `gm`, `player` | `requireWorkspaceOwner` accepts only `owner`. Workspace creation grants `owner`; campaign creation and workspace people management require `owner`. Invitation creation additionally requires campaign GM membership and selected GM mode. The shared access helpers do not grant workspace-level privileges to `gm` or `player`. |
+| Campaign | `gm`, `player` | `requireCampaignMember` accepts any existing membership row without validating its role string. `requireCampaignGm` accepts only `gm`. Campaign content write handlers using that helper require a campaign GM membership. |
+
+These are the schema-declared role names, not guaranteed exhaustive values in
+existing data. **Current write paths conflict with that declaration:** the
+[`workspace-people` handler](../src/server/api-handlers/workspace-people.ts)
+maps a requested `owner` or `admin` to that literal value and maps other values
+to `member`; [invitation acceptance](../api/invitations/accept-pending.ts)
+inserts the invitation workspace role, defaulting to `member`, into
+`workspace_memberships`. The database column permits these strings.
+Consequently this guide does not treat
+`admin` or `member` as supported workspace roles, but their presence can be
+produced by current code. The full persisted workspace-role set and the
+intended migration/correction policy cannot be established from the schema
+comments and authorization paths alone. These values do not satisfy
+`requireWorkspaceOwner` unless the value is exactly `owner`.
+
+`member` is also a workspace-people/invitation display fallback. In those
+responses it may be a presentation default rather than a membership row; the
+invitation-acceptance insert above is separately confirmed to persist it.
+
+## Verified access behavior
+
+| Operation / boundary | Check visible in current code |
+|---|---|
+| Workspace owner operation | `requireWorkspaceOwner` looks up the `(workspaceId, userId)` membership and accepts only role `owner`; otherwise it rejects. Workspace people management and campaign creation use this owner check. |
+| Campaign member access | `requireCampaignMember` looks up `(campaignId, userId)` and rejects when no row exists. It does not distinguish `gm` from `player` or validate other role strings. |
+| Campaign GM operation | `requireCampaignGm` uses the same campaign/user scope and accepts only role `gm`. Content handlers including NPCs, Locations, Items, Lore, Sessions, Characters, and entity links call it on their relevant writes. |
+| Campaign settings | Requires both campaign and workspace membership. GM fields and updates additionally require campaign role `gm` **and** selected GM mode. |
+| Invitations | Creation resolves the campaign within the supplied workspace, requires workspace role `owner`, then campaign GM membership in selected GM mode. |
+| Removing campaign people | The campaign-people handler requires GM membership in selected GM mode. It prevents removal of the last campaign GM or a workspace owner who is a campaign member. |
+
+These checks are path-specific rather than a complete permission matrix for
+every endpoint. In particular, some campaign write handlers call
+`requireCampaignGm` without consulting the selected mode, while other
+operations (such as Campaign Settings and invitation management) check both.
+Therefore the code does not establish that Player mode blocks every
+GM-role-authorized API mutation. Do not use the mode description below as a
+claim that it universally revokes server-side role permissions.
+
+## Role is not active mode
+
+Campaign role is persisted membership data. Active mode is a separate,
+selected GM/Player viewing context; switching it does not change membership.
+`getSelectedMode` recognizes the `X-DD-Mode: gm` header and otherwise resolves
+to Player. `canViewAsGm` returns true only when both campaign role is `gm` and
+selected mode is `gm`. Read projections that use this helper therefore give a
+GM-role user Player visibility in Player mode. The `ModeContext` also derives
+GM capability from the selected campaign role and downgrades stored GM mode
+when the role is not GM; this is client behavior, not a replacement for API
+authorization.
+
+The names `WorkspaceAdmin`, `WorkspaceMember`, `CampaignGM`, and
+`CampaignPlayer` in older versions of this document were conceptual labels,
+not schema values. Use the lowercase membership values above when discussing
+stored roles. “Tenant” is older terminology for workspace. Billing, limits,
+branding, super-admin access, custom roles, and other fine-grained permissions
+are future concepts, not verified current permissions.
+
+## What this code review does not establish
+
+- The database contains only the roles named in the schema comments; the text
+  columns have no role constraint, and current workspace writers can insert
+  other values.
+- A complete permission set for workspace `gm` and `player` roles. The shared
+  workspace helper grants only the owner check, while many application paths
+  authorize by campaign membership.
+- A universal rule that Player mode blocks all GM-role mutations. Some write
+  handlers check campaign role without checking the mode header.
+- A single tenant-scoping pattern across all routes. The workspace-and-campaign
+  resolver is scoped, but some handlers resolve a campaign slug directly and
+  then rely on membership checks.
+
+Resolve these implementation inconsistencies before turning this reference
+into a stronger permission contract. This documentation change does not alter
+roles, stored data, authorization, or API behavior.

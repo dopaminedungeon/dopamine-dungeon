@@ -1,67 +1,41 @@
+# Authorization Decision Paths (Implementation Snapshot)
+
+This graph summarizes the helpers that are present, not a universal middleware
+flow. Each endpoint may apply only the checks relevant to its path. See the
+[verified authorization table](permissions-table.md) and the
+[role/mode implementation guide](multitenant-multirole-management.md).
+
 ```mermaid
----
-config:
-  theme: redux
-  layout: dagre
----
-flowchart LR
+flowchart TD
+  A[Firebase-authenticated request] --> B[Resolve application user by Firebase UID]
+  B --> C[Resolve workspace and/or campaign for this endpoint]
+  C --> D{Endpoint-specific gate}
+  D -->|No common membership helper| N[Inspect handler's own authorization and scope checks]
+  D -->|requireCampaignMember row exists| E{Endpoint requirement}
+  D -->|Owner predicate| O[requireWorkspaceOwner: exact owner role]
+  O --> P[Owner-gated path continues]
+  E -->|Generic member| F[Continue endpoint-specific behavior]
+  E -->|requireCampaignGm| G{Stored campaign role is gm?}
+  G -->|No| X
+  G -->|Yes| H[GM-role operation may continue]
+  E -->|GM projection via canViewAsGm| I{Role gm AND X-DD-Mode gm?}
+  I -->|No / missing / invalid mode| J[Player-safe projection]
+  I -->|Yes| K[GM projection]
+  E -->|Settings or invitation path| L[Additional owner and/or explicit GM-mode checks]
+```
 
-%% =========================
-%% Permission Matrix — Graph View
-%% =========================
+## Reading the graph
 
-subgraph P["Campaign Role: CampaignPlayer"]
-direction TB
-
-P_NAV["[N] Sidebar shows:</br>Dashboard, PCs, Bag of Holding,</br>Items, Lore, Maps, NPCs, Sessions"] --> P_PAGES
-
-P_PAGES["[P] Allowed pages (Player)"] --> P_ALLOWED_LIST["Dashboard</br>PCs (Player view)</br>Bag of Holding</br>Items</br>ItemProfile</br>Lore</br>LoreProfile</br>Maps</br>MapProfile</br>NPCs</br>NpcProfile</br>Sessions</br>SessionProfile"]
-
-P_PAGES --> P_ACTIONS["[A] Allowed actions (Player)"]
-P_ACTIONS --> P_ACT1["Assign item to self (ItemProfile) — allowed"]
-P_ACTIONS --> P_ACT2["Read-only everywhere else"]
-
-P_PAGES --> P_BLOCKED["[X] Blocked (Player) — NotAuthorized"]
-P_BLOCKED --> P_B2["CampaignSettings"]
-
-P_PAGES --> P_EDGE["[S] Player-specific edge cases"]
-P_EDGE --> P_E1["PCs > Characters tab:</br>0 assigned → message</br>1 assigned → auto-load profile</br>>1 assigned → cards list"]
-end
-
-
-subgraph G["Campaign Role: CampaignGM"]
-direction TB
-
-G_NAV["[N] Sidebar shows:</br>ALL Player pages + GM-only pages"] --> G_PAGES
-
-G_PAGES["[P] Allowed pages (GM)"] --> G_ALLOWED_LIST["Everything Player can access</br>+</br>CampaignSettings"]
-
-G_PAGES --> G_ACTIONS["[A] Allowed actions (GM)"]
-G_ACTIONS --> G_ACT2["PC management:</br>Create PC, edit, assign PC to player"]
-G_ACTIONS --> G_ACT3["Assign items to PC/player</br>+ manage Bag of Holding"]
-G_ACTIONS --> G_ACT4["Mode toggle available:</br>GM ↔ Player preview"]
-
-G_PAGES --> G_NOTES["[S] Notes"]
-G_NOTES --> G_N1["Mode=Player blocks GM-only routes</br>(even for GM role)"]
-end
-
-
-%% =========================
-%% Styling (soft colors)
-%% =========================
-classDef player fill:#eef5ff,stroke:#6aa0ff,color:#0b1b33;
-classDef gm fill:#f2fff3,stroke:#3fb950,color:#0b2a12;
-classDef blocked fill:#fff0f0,stroke:#ff6b6b,color:#3a0b0b;
-classDef nav fill:#f4f4f4,stroke:#bdbdbd,color:#222;
-classDef actions fill:#fff7e6,stroke:#ffb84d,color:#3a2500;
-classDef notes fill:#f7f7ff,stroke:#8b8bff,color:#1a1a33;
-
-class P,P_PAGES,P_ALLOWED_LIST,P_EDGE,P_E1 player;
-class P_NAV nav;
-class P_ACTIONS,P_ACT1,P_ACT2 actions;
-class P_BLOCKED,P_B1,P_B2,P_B3,P_B4,P_B5 blocked;
-
-class G,G_PAGES,G_ALLOWED_LIST gm;
-class G_NAV nav;
-class G_ACTIONS,G_ACT1,G_ACT2,G_ACT3,G_ACT4 actions;
-class G_NOTES,G_N1 notes;
+- Workspace owner operations use a separate check: `requireWorkspaceOwner`
+  accepts only a workspace membership whose role is exactly `owner`.
+- Campaign role and active mode are distinct. A campaign GM may select Player
+  mode; handlers that call `canViewAsGm` then use the Player projection.
+- The selected-mode check is not automatically applied to every handler.
+  Several writes use `requireCampaignGm` alone; some other paths add a mode
+  check. Never infer global mode denial from this diagram.
+- The membership columns are text, while the schema comments declare workspace
+  `owner`/`gm`/`player` and campaign `gm`/`player`. Workspace writers currently
+  have additional `admin`/`member` behavior; see the implementation guide.
+- Client-side routes and navigation are not an authorization boundary. API
+  handlers and their queries must be assessed individually for scope,
+  membership, and Player-safe response behavior.

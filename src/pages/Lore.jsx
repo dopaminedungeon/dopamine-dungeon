@@ -13,7 +13,10 @@ import {
 } from "lucide-react";
 import { useMode } from "../context/ModeContext.jsx";
 import { useCampaign } from "../context/CampaignContext";
+import { useTenant } from "../context/TenantContext.jsx";
+import { useFilterPreferences } from "../data/preferences/useFilterPreferences.jsx";
 import { loreRepo } from "../data/lore/lore.repo";
+import { MarkdownContent } from "../components/MarkdownContent.jsx";
 import {
   compareCreatedAt,
   compareEntityNames,
@@ -111,21 +114,6 @@ function normalizeAliases(value) {
   );
 }
 
-function getPlainTextPreview(value, fallback = "No player-facing details added yet.") {
-  const text = String(value || "")
-    .replace(/^#{1,6}\s+/gm, "")
-    .replace(/^\s*[-*]\s+/gm, "")
-    .replace(/\*\*([^*]+)\*\*/g, "$1")
-    .replace(/(^|[^*])\*([^*]+)\*/g, "$1$2")
-    .replace(/_([^_]+)_/g, "$1")
-    .replace(/`([^`]+)`/g, "$1")
-    .replace(/\s+/g, " ")
-    .trim();
-
-  if (!text) return fallback;
-  return text.length > 180 ? `${text.slice(0, 177).trim()}...` : text;
-}
-
 function visibilityPill(visibility) {
   if (visibility === "public") {
     return (
@@ -150,13 +138,23 @@ export default function Lore() {
   const navigate = useNavigate();
   const { isGM } = useMode();
   const { selectedCampaignId } = useCampaign();
+  const { selectedTenantId, accessSnapshotUserUid } = useTenant();
+  const filterDefinitions = useMemo(() => ({
+    type: { defaultValue: "All", options: ["All", ...LORE_TYPES] },
+    ...(isGM ? { visibility: { defaultValue: "All", options: ["All", "public", "gm-only"] } } : {}),
+  }), [isGM]);
+  const { values: filters, setValue: setFilter, saveValues: saveFilters, isReady: filtersReady } =
+    useFilterPreferences("lore", filterDefinitions);
+  const scopeKey = `${accessSnapshotUserUid}:${selectedTenantId}:${selectedCampaignId}:${isGM ? "gm" : "player"}`;
 
   const [entries, setEntries] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState("");
+  const [loadedScope, setLoadedScope] = useState("");
+  const isCurrentLoading = isLoading || loadedScope !== scopeKey || !filtersReady;
   const [searchQuery, setSearchQuery] = useState("");
-  const [selectedType, setSelectedType] = useState("All");
-  const [selectedVisibility, setSelectedVisibility] = useState("All");
+  const selectedType = filters.type || "All";
+  const selectedVisibility = filters.visibility || "All";
   const [sortMode, setSortMode] = useState("name-asc");
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [formData, setFormData] = useState(createLoreDraft());
@@ -169,6 +167,7 @@ export default function Lore() {
     async function loadLore() {
       if (!selectedCampaignId) {
         setEntries([]);
+        setLoadedScope(scopeKey);
         setIsLoading(false);
         return;
       }
@@ -177,12 +176,13 @@ export default function Lore() {
         setIsLoading(true);
         setError("");
         const data = await loreRepo.getAll(selectedCampaignId);
-        if (!cancelled) setEntries(data);
+        if (!cancelled) { setEntries(data); setLoadedScope(scopeKey); }
       } catch (loadError) {
         console.error("[Lore] Failed to load lore", loadError);
         if (!cancelled) {
           setEntries([]);
           setError("Unable to load Lore right now.");
+          setLoadedScope(scopeKey);
         }
       } finally {
         if (!cancelled) setIsLoading(false);
@@ -194,7 +194,7 @@ export default function Lore() {
     return () => {
       cancelled = true;
     };
-  }, [selectedCampaignId]);
+  }, [scopeKey, selectedCampaignId]);
 
   const filteredEntries = useMemo(() => {
     const query = searchQuery.trim().toLowerCase();
@@ -277,7 +277,7 @@ export default function Lore() {
 
   if (!selectedCampaignId) {
     return (
-      <main className="flex-1 overflow-auto p-8">
+      <main className="app-page-wide flex-1 overflow-auto p-4 sm:p-6 lg:p-8">
         <div className="rounded-2xl border border-white/10 bg-white/5 p-6 text-sm text-zinc-300">
           Select a campaign to view Lore.
         </div>
@@ -286,7 +286,7 @@ export default function Lore() {
   }
 
   return (
-    <main className="flex-1 overflow-auto p-4 sm:p-6 lg:p-8">
+    <main className="app-page-wide flex-1 overflow-auto p-4 sm:p-6 lg:p-8">
       <div className="mb-6 flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
         <div>
           <h1 className="flex items-center gap-3 text-3xl font-bold text-white">
@@ -327,7 +327,7 @@ export default function Lore() {
             Type
             <select
               value={selectedType}
-              onChange={(event) => setSelectedType(event.target.value)}
+              onChange={(event) => setFilter("type", event.target.value)}
               className="rounded-lg border border-white/10 bg-black/30 px-2.5 py-1.5 text-xs text-zinc-200 outline-none focus:border-violet-300"
             >
               <option>All</option>
@@ -341,7 +341,7 @@ export default function Lore() {
               Visibility
               <select
                 value={selectedVisibility}
-                onChange={(event) => setSelectedVisibility(event.target.value)}
+                onChange={(event) => setFilter("visibility", event.target.value)}
                 className="rounded-lg border border-white/10 bg-black/30 px-2.5 py-1.5 text-xs text-zinc-200 outline-none focus:border-violet-300"
               >
                 <option>All</option>
@@ -371,8 +371,7 @@ export default function Lore() {
               type="button"
               onClick={() => {
                 setSearchQuery("");
-                setSelectedType("All");
-                setSelectedVisibility("All");
+                saveFilters({ type: "All", ...(isGM ? { visibility: "All" } : {}) });
               }}
               className="rounded-lg border border-white/10 px-2.5 py-1.5 text-xs text-zinc-300 hover:bg-white/10"
             >
@@ -388,7 +387,7 @@ export default function Lore() {
         </div>
       )}
 
-      {isLoading ? (
+      {isCurrentLoading ? (
         <div className="rounded-2xl border border-white/10 bg-white/5 p-6 text-sm text-zinc-300">
           Loading Lore...
         </div>
@@ -443,7 +442,7 @@ export default function Lore() {
                                 </span>
                                 {isGM && visibilityPill(entry.visibility)}
                               </div>
-                              <h2 className="mt-2 line-clamp-2 text-base font-semibold text-white">
+                              <h2 className="mt-2 line-clamp-2 break-words text-base font-semibold text-white [overflow-wrap:anywhere]">
                                 {entry.name || "Untitled Lore"}
                               </h2>
                             </div>
@@ -451,14 +450,16 @@ export default function Lore() {
                         </div>
 
                         {entry.aliases?.length ? (
-                          <p className="mb-3 text-xs text-zinc-500">
+                          <p className="mb-3 break-words text-xs text-zinc-500 [overflow-wrap:anywhere]">
                             Aliases: {entry.aliases.slice(0, 4).join(" • ")}
                           </p>
                         ) : null}
 
-                        <p className="line-clamp-4 text-sm leading-6 text-zinc-400">
-                          {getPlainTextPreview(entry.summary || entry.content)}
-                        </p>
+                        <MarkdownContent
+                          content={entry.summary || entry.content}
+                          placeholder="No player-facing details added yet."
+                          className="line-clamp-4 text-zinc-400"
+                        />
                       </Link>
                     );
                   })}

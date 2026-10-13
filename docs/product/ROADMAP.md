@@ -1,162 +1,85 @@
 # Dopamine Dungeon Roadmap
 
-Last updated: 2026-09-05
+Last updated: 2026-10-12
 Owner: Magda
 
 ## Product direction
 
-Dopamine Dungeon is evolving from a campaign-specific management tool into a
-multi-campaign platform for game masters and players.
+Dopamine Dungeon is a campaign-management application for game masters and
+players. The near-term product focus is reliability of existing workflows,
+clear permission boundaries, useful cross-links, and a maintainable release
+process. Broader platform, automation, and AI ideas remain directional until
+they have a focused issue and are prioritized by the owner.
 
-The current priority is completing reliable, persistent campaign foundations
-before expanding into advanced relationship, timeline, automation, and
-AI-assisted systems.
+`CURRENT_STATE.md` is the operational snapshot of what is implemented. This
+roadmap describes direction, not a guarantee of delivery or production state.
 
-## Current stage
+## Current release and iteration handoff
 
-The product currently supports core campaign-management foundations including:
+Iteration 4 — bugfixing (v0.6.1) implementation and closeout documentation
+have merged to `dev`. The v0.6.1 candidate awaits its separate release review
+and merge to `main`; this documentation does not claim a Production release.
+The [Iteration 4 retrospective](../sprints/iteration-4-retrospective-notes.md)
+records shipped work, learnings, limits, and the dated Project snapshot.
 
-- authentication;
-- workspaces and campaigns;
-- memberships and invitations;
-- sessions;
-- items and inventory;
-- selected campaign entities;
-- GM and player modes;
-- development and production environments.
+The Project showed Iteration 4 current through Oct 23, 2026 on 2026-10-12.
+No next iteration name, dates, owner assignment, or committed scope was
+confirmed at closeout. Candidate work below remains uncommitted until the
+Project owner prioritizes it.
 
-Some modules remain incomplete, transitional, or partially implemented.
-`CURRENT_STATE.md` is the authoritative operational snapshot.
-Iteration 3's implementation is merged; its evidence and next-iteration inputs
-are in [the retrospective](../sprints/iteration-3-retrospective-notes.md).
+## Candidate near-term inputs
 
-## Iteration ownership
+Existing focused issues were found; do not create duplicates merely to restate
+these themes.
 
-Iteration 2 focused on code cleanup, automated testing and the DD Quality Gate,
-repository/CI administration, and backlog hygiene. Authentication work is
-present in that historical context. Iteration 3 delivered authentication,
-onboarding, public/app separation, and application Firestore retirement.
-Release operations and live readiness are separate from merged implementation.
-Iteration 4 focuses on bugfixing (v0.6.1); its current goals, sequencing and
-dependencies are in [current.md](../sprints/current.md). Magda owns
-prioritization, and the Project owns iteration assignment; this roadmap does
-not imply that planned work is delivered.
+| Theme | Existing issue(s) | Current boundary |
+|---|---|---|
+| Responsive usability beyond the width audit | [#271](https://github.com/dopaminedungeon/dopamine-dungeon/issues/271) | The #389 width audit is delivered; remaining mobile/tablet behavior remains separately open. |
+| Authorization and membership lifecycle | [#284](https://github.com/dopaminedungeon/dopamine-dungeon/issues/284), [#362](https://github.com/dopaminedungeon/dopamine-dungeon/issues/362), [#363](https://github.com/dopaminedungeon/dopamine-dungeon/issues/363), [#364](https://github.com/dopaminedungeon/dopamine-dungeon/issues/364) | Workspace roles, campaign roles, and mode checks are path-specific; safe role management/deletion is not claimed complete. |
+| Relationship vocabulary and broader loading inventory | [#348](https://github.com/dopaminedungeon/dopamine-dungeon/issues/348), [#270](https://github.com/dopaminedungeon/dopamine-dungeon/issues/270) | #340 fixes its bounded canonical NPC–Location defect; broader type/wording and loading redesign remain out of scope. |
+| Cross-tab data freshness | [#396](https://github.com/dopaminedungeon/dopamine-dungeon/issues/396) | Refresh/navigation restoration does not synchronize already-open views. |
+| Release readiness and Production boundaries | [#322](https://github.com/dopaminedungeon/dopamine-dungeon/issues/322), [#375](https://github.com/dopaminedungeon/dopamine-dungeon/issues/375) | The broad security/domain audit and the Iteration 3 Production/Firestore gates are separate; #375 gates remain unverified where evidence is missing. |
 
-## Near-term priorities
+These issues are inputs for triage, not next-iteration commitments. In
+particular, unresolved Production gates must be handled by the prospective
+release operator and must not be described as product implementation.
 
-### 1. Complete persistent campaign entities
+## Delivered product boundaries
 
-Focus areas:
+- Core application state is persisted in Neon behind authenticated APIs;
+  Firebase Authentication remains the identity authority and Brevo is the
+  direct application mail transport.
+- Current persisted campaign functionality includes PCs, Bag of Holding,
+  Items, Sessions, NPCs, Locations, Lore, and typed entity links.
+- The former standalone Relationships, Arcs, Quests, and Conditions screens
+  are retired. Reserved typed-link concepts do not imply active standalone
+  modules.
+- Filters are user preferences, never access control. The selected mode and
+  current workspace/campaign determine the authorized projection.
+- Application-level Firestore runtime removal does not prove Production data
+  migration, configuration retirement, rollback readiness, or physical
+  decommission. See the [migration ledger](../architecture/FIRESTORE_TO_NEON_MIGRATION.md).
 
-- NPCs;
-- Lore;
-- Locations;
-- consistent persistence;
-- visibility enforcement;
-- timestamps;
-- loading and error states;
-- consistent create and edit flows.
+## Longer-term opportunities
 
-Expected outcome:
+These ideas remain exploratory unless tied to an accepted, prioritized issue:
 
-Core campaign records behave as reliable first-class entities rather than
-isolated or mocked screens.
+- Friendship Index and relationship visualization built on the existing
+  typed-link model;
+- campaign timeline, encounter preparation, and session recap tooling;
+- improved search and data import/export;
+- audit history and player-facing refinements;
+- AI-assisted retrieval and campaign consistency tools;
+- external tabletop integrations and commercial onboarding.
 
-### 2. Improve cross-linking and navigation
-
-Focus areas:
-
-- links between sessions, NPCs, locations, lore, quests, and items;
-- consistent entity references;
-- navigation between related records;
-- reduced duplication.
-
-Expected outcome:
-
-Campaign information becomes an interconnected knowledge system.
-
-### 3. Friendship Index foundations
-
-Potential future scope:
-
-- relationship scores;
-- relationship direction;
-- PC-NPC and NPC-NPC relationships;
-- relationship history;
-- faction relationships;
-- GM-controlled visibility.
-
-This work must not begin until the underlying NPC and persistence foundations
-are reliable. It is not a standalone Relationships page; it builds on typed
-cross-links and their existing visibility boundaries.
-
-### 4. Product consistency and quality
-
-Focus areas:
-
-- shared interaction patterns;
-- responsive behaviour;
-- accessible controls;
-- predictable empty states;
-- sorting and filtering;
-- test coverage;
-- error handling;
-- rollback safety.
-
-## Medium-term opportunities
-
-These are directional opportunities, not committed scope:
-
-- campaign timeline;
-- advanced search;
-- relationship visualisation;
-- faction systems;
-- encounter preparation;
-- quest and clue tracking;
-- session recap tooling;
-- richer campaign onboarding beyond the implemented creation flow;
-- import and export;
-- audit history;
-- improved player-facing views.
-
-## Long-term opportunities
-
-These remain exploratory:
-
-- AI-assisted lore retrieval;
-- campaign consistency checks;
-- session preparation assistance;
-- automatic recap generation;
-- contradiction detection;
-- recommendation systems;
-- integrations with external tabletop tools;
-- public or commercial onboarding.
-
-## Explicit non-goals for the current stage
-
-- autonomous production changes;
-- replacing the game master's creative judgment;
-- enforcing one campaign methodology;
-- premature enterprise infrastructure;
-- large-scale AI features before core data is reliable;
-- rebuilding stable systems without a verified user need.
-
-## Prioritisation criteria
-
-Work should be prioritised based on:
-
-1. user value during real campaign use;
-2. reliability and data integrity;
-3. dependencies unlocked for future features;
-4. implementation effort;
-5. architectural risk;
-6. frequency of the problem;
-7. reversibility.
+No existing implementation should be displaced by speculative work without a
+clear user need, a focused scope, and authorization/data-boundary review.
 
 ## Roadmap governance
 
-- GitHub issues describe individual work items.
-- Milestones or iterations describe committed delivery scope.
-- This roadmap describes direction rather than guaranteed dates.
-- `CURRENT_STATE.md` records what actually exists.
-- ADRs record major technical decisions.
+- GitHub issues own acceptance criteria for bounded work.
+- The organization Project owns iteration assignment and status.
+- `CURRENT_STATE.md` records observed implementation state; the roadmap does
+  not promote proposed behavior to current behavior.
+- ADRs record major technical decisions. Production operations remain behind
+  their evidence, approval, rollback, and retention gates.

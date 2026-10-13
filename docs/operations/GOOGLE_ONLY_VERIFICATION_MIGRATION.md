@@ -12,6 +12,25 @@ Firebase remains the live credential and current verification authority. Neon
 `users.email_verified_at` is a UID-keyed historical reconciliation timestamp;
 it is never a second live verification flag.
 
+## #375 Production disposition (reviewed 2026-10-12)
+
+Production execution is **unverified**. PR #372 describes the required
+dry-run, reviewed manifest, and separately approved apply sequence, but no
+Production dry-run report, frozen manifest reference, apply result, or
+post-run UID-scoped verification evidence was available in the repository or
+reviewed PR text. The private #373 audit report does not by itself prove this
+separate migration. Do not rerun a possibly completed apply. First ask the
+sole prospective operator (per requester; no personal name recorded here) for
+an access-controlled evidence reference and reconcile its
+target, eligible/completed/partial/failed/skipped totals, and post-run result.
+
+Only a target-proven dry run showing zero eligible accounts can support an
+`inapplicable` disposition. If any eligible accounts remain, a new apply still
+requires explicit environment-specific approval after review. Keep UID-scoped
+manifests and reports outside this repository and record only their opaque
+internal reference and sanitized aggregate outcomes in the [#375 gate
+ledger](../architecture/FIRESTORE_TO_NEON_MIGRATION.md#375-production-evidence-ledger-reviewed-2026-10-12).
+
 ## Prerequisites
 
 - Explicit written approval for the named environment.

@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import type { APIRequestContext, Locator, Page } from "@playwright/test";
+import type { APIRequestContext, Locator, Page, Route } from "@playwright/test";
 
 import { verifyAuthHeader } from "../src/server/auth";
 import { test, expect } from "./auth.fixture";
@@ -2493,11 +2493,9 @@ test("keeps retired feature and placeholder controls out of authenticated naviga
 });
 
 test("consolidates scoped invitation lifecycle rows into Campaign people for owner GM mode", async ({
-  expectedConsoleErrors,
   page,
   request,
 }) => {
-  expectedConsoleErrors.push("Failed to load resource");
   const resendAvailableAt = new Date(Date.now() + 1_250).toISOString();
   await page.route("**/api/campaign-content?resource=campaignSettings**", async (route) => {
     await route.fulfill({
@@ -2739,6 +2737,585 @@ test("consolidates scoped invitation lifecycle rows into Campaign people for own
   await expect(page.getByText("Campaign people", { exact: true })).toHaveCount(0);
 });
 
+test("prevents self-removal and keeps Campaign Settings in authorized GM mode", async ({
+  page,
+  request,
+}) => {
+  const protectedRequestModes: string[] = [];
+  const recordMode = (headers: Record<string, string>) => {
+    protectedRequestModes.push(headers["x-dd-mode"] || "missing");
+  };
+
+  await page.route("**/api/campaign-content?resource=campaignSettings**", async (route) => {
+    recordMode(route.request().headers());
+    await route.fulfill({
+      status: 200,
+      json: {
+        ok: true,
+        campaign: {
+          id: readyCampaignId,
+          campaignId: "e2e-campaign",
+          workspaceId: readyWorkspaceId,
+          name: "E2E Campaign",
+          description: "Authentication emulator test campaign",
+          status: "active",
+          system: "",
+          playerSummary: "",
+          gmNotes: "",
+          startDate: "",
+          endDate: "",
+        },
+      },
+    });
+  });
+  await page.route("**/api/campaign-content?resource=campaignPeople**", async (route) => {
+    recordMode(route.request().headers());
+    await route.fulfill({
+      status: 200,
+      json: {
+        ok: true,
+        campaignId: "e2e-campaign",
+        people: [
+          {
+            id: "member-current",
+            docId: "membership-current",
+            type: "member",
+            status: "accepted",
+            email: "current@example.test",
+            displayName: "Current GM",
+            label: "Current GM",
+            userId: "e2e-user",
+            workspaceRole: "owner",
+            campaignRole: "gm",
+            characterIds: [],
+          },
+          {
+            id: "member-other",
+            docId: "membership-other",
+            type: "member",
+            status: "accepted",
+            email: "other@example.test",
+            displayName: "Other Member",
+            label: "Other Member",
+            userId: "other-user",
+            workspaceRole: "member",
+            campaignRole: "player",
+            characterIds: [],
+          },
+        ],
+      },
+    });
+  });
+  await page.route("**/api/campaign-content?resource=characterAssignments**", async (route) => {
+    recordMode(route.request().headers());
+    await route.fulfill({
+      status: 200,
+      json: {
+        ok: true,
+        assignments: [],
+        assignedCharacterIds: [],
+        pendingAssignedCharacterIds: [],
+        characters: [],
+      },
+    });
+  });
+  await page.route("**/api/worldbuilding?resource=characters**", async (route) => {
+    recordMode(route.request().headers());
+    await route.fulfill({ status: 200, json: { ok: true, characters: [] } });
+  });
+
+  await signInVerifiedUser(page, request);
+  await expect(page.getByRole("heading", { name: "E2E Campaign" })).toBeVisible();
+  await page.getByRole("button", { name: "GM", exact: true }).click();
+  await page.goto("/campaigns/settings");
+
+  const currentUserRow = page
+    .getByText("current@example.test", { exact: true })
+    .locator("xpath=ancestor::tr");
+  const otherMemberRow = page
+    .getByText("other@example.test", { exact: true })
+    .locator("xpath=ancestor::tr");
+  await expect(currentUserRow.getByRole("button", { name: "Remove", exact: true })).toHaveCount(0);
+  await expect(otherMemberRow.getByRole("button", { name: "Remove", exact: true })).toBeVisible();
+  expect(protectedRequestModes.length).toBeGreaterThan(0);
+  expect(protectedRequestModes.every((mode) => mode === "gm")).toBe(true);
+
+  await page.getByRole("button", { name: "Player", exact: true }).click();
+  await expect(
+    page.getByRole("link", { name: "Campaign Settings", exact: true })
+  ).toHaveCount(0);
+  await expect(page.getByText("Campaign people", { exact: true })).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "Remove", exact: true })).toHaveCount(0);
+  await expect(page.getByText("GM-only. Nice try though 😈", { exact: true })).toBeVisible();
+
+  await page.goto("/home");
+  await page.goto("/campaigns/settings");
+  await expect(page.getByText("GM-only. Nice try though 😈", { exact: true })).toBeVisible();
+  expect(protectedRequestModes).not.toContain("player");
+});
+
+test("persists canonical Campaign overview metadata across campaigns, reloads, and a new tab", async ({
+  page,
+  request,
+}) => {
+  const workspaceId = "00000000-0000-4000-8000-000000000031";
+  const campaignAId = "00000000-0000-4000-8000-000000000032";
+  const campaignBId = "00000000-0000-4000-8000-000000000033";
+  const apiMeResponse = {
+    ok: true,
+    user: { id: "e2e-user" },
+    workspaces: [{ id: workspaceId, slug: "metadata-workspace", name: "Metadata Workspace" }],
+    workspaceMemberships: [{ workspaceId, userId: "e2e-user", role: "owner" }],
+    campaigns: [
+      { id: campaignAId, workspaceId, slug: "metadata-campaign-a", name: "Campaign A", description: "Campaign A description" },
+      { id: campaignBId, workspaceId, slug: "metadata-campaign-b", name: "Campaign B", description: "Campaign B description" },
+    ],
+    campaignMemberships: [
+      { campaignId: campaignAId, userId: "e2e-user", role: "gm" },
+      { campaignId: campaignBId, userId: "e2e-user", role: "gm" },
+    ],
+  };
+  const settingsByCampaign = new Map([
+    ["metadata-campaign-a", {
+      id: campaignAId, campaignId: "metadata-campaign-a", workspaceId, name: "Campaign A", description: "Campaign A description",
+      status: "active", system: "Rules A", playerSummary: "", gmNotes: "", startDate: "2026-01-03", endDate: "2026-12-31",
+    }],
+    ["metadata-campaign-b", {
+      id: campaignBId, campaignId: "metadata-campaign-b", workspaceId, name: "Campaign B", description: "Campaign B description",
+      status: "completed", system: "Rules B", playerSummary: "", gmNotes: "", startDate: "2025-01-03", endDate: "2025-12-31",
+    }],
+  ]);
+  const patches: Array<Record<string, unknown>> = [];
+
+  const fulfillCampaignContent = async (route: Route) => {
+    const requestUrl = new URL(route.request().url());
+    const resource = requestUrl.searchParams.get("resource");
+    if (resource === "campaignSettings") {
+      const campaignId =
+        requestUrl.searchParams.get("campaignId") ||
+        String(route.request().postDataJSON()?.campaignId || "");
+      const current = settingsByCampaign.get(campaignId);
+      expect(current).toBeTruthy();
+      if (route.request().method() === "PATCH") {
+        const update = route.request().postDataJSON() as Record<string, unknown>;
+        patches.push(update);
+        const canonical = {
+          ...current!,
+          ...update,
+          system: "Canonical Rules",
+          updatedAt: "2026-02-01T00:00:00.000Z",
+        };
+        settingsByCampaign.set(campaignId, canonical);
+        await route.fulfill({ status: 200, json: { ok: true, campaign: canonical } });
+        return;
+      }
+      await route.fulfill({ status: 200, json: { ok: true, campaign: current } });
+      return;
+    }
+
+    if (resource === "campaignPeople") {
+      await route.fulfill({ status: 200, json: { ok: true, people: [] } });
+      return;
+    }
+    if (resource === "characterAssignments") {
+      await route.fulfill({ status: 200, json: { ok: true, assignments: [], assignedCharacterIds: [], pendingAssignedCharacterIds: [], characters: [] } });
+      return;
+    }
+    await route.abort();
+  };
+
+  await page.route("**/api/me", async (route) => {
+    await route.fulfill({ status: 200, json: apiMeResponse });
+  });
+  await page.route("**/api/campaign-content?**", fulfillCampaignContent);
+  await page.route("**/api/worldbuilding?resource=characters**", async (route) => {
+    await route.fulfill({ status: 200, json: { ok: true, characters: [] } });
+  });
+
+  const email = generatedEmail();
+  await createVerifiedUser(request, email, password);
+  await openEmailSignIn(page);
+  await page.getByLabel("Email address").fill(email);
+  await page.getByLabel("Password", { exact: true }).fill(password);
+  await page.getByRole("button", { name: "Sign in", exact: true }).click();
+  await page.getByRole("button", { name: "GM", exact: true }).click();
+  await page.goto("/campaigns/settings");
+
+  const overview = page
+    .getByRole("heading", { name: "Campaign overview", exact: true })
+    .locator("xpath=ancestor::section");
+  await expect(overview.getByLabel("Start date")).toHaveValue("2026-01-03");
+  await expect(overview.getByLabel("End date")).toHaveValue("2026-12-31");
+  await expect(page.getByRole("heading", { name: "Metadata", exact: true })).toHaveCount(0);
+
+  await overview.getByLabel("Status").selectOption("paused");
+  await overview.getByLabel("System / ruleset (optional)").fill("Draft rules");
+  await overview.getByLabel("Start date").fill("2026-02-03");
+  await overview.getByLabel("End date").fill("2027-01-04");
+  await page.getByRole("button", { name: "Save", exact: true }).click();
+  await expect(page.getByRole("status")).toHaveText("Campaign settings saved.");
+  expect(patches).toHaveLength(1);
+  expect(patches[0]).toMatchObject({
+    campaignId: "metadata-campaign-a",
+    status: "paused",
+    system: "Draft rules",
+    startDate: "2026-02-03",
+    endDate: "2027-01-04",
+  });
+  await expect(overview.getByLabel("Status")).toHaveValue("paused");
+  await expect(overview.getByLabel("System / ruleset (optional)")).toHaveValue("Canonical Rules");
+
+  await page.goto("/home");
+  await page.goto("/campaigns/settings");
+  await expect(overview.getByLabel("System / ruleset (optional)")).toHaveValue("Canonical Rules");
+  await page.reload();
+  await expect(overview.getByLabel("Start date")).toHaveValue("2026-02-03");
+  await expect(overview.getByLabel("End date")).toHaveValue("2027-01-04");
+
+  await page.locator("header select").nth(1).selectOption("metadata-campaign-b");
+  await expect(overview.getByLabel("System / ruleset (optional)")).toHaveValue("Rules B");
+  await expect(overview.getByLabel("Start date")).toHaveValue("2025-01-03");
+  await page.locator("header select").nth(1).selectOption("metadata-campaign-a");
+  await expect(overview.getByLabel("System / ruleset (optional)")).toHaveValue("Canonical Rules");
+
+  const newPage = await page.context().newPage();
+  try {
+    await newPage.route("http://127.0.0.1:4173/api/**", async (route) => {
+      const requestUrl = new URL(route.request().url());
+      if (requestUrl.pathname === "/api/auth/identity-continuity") {
+        await route.fulfill({ status: 200, json: { ok: true, neonUserId: "e2e-user" } });
+        return;
+      }
+      if (requestUrl.pathname === "/api/me") {
+        await route.fulfill({ status: 200, json: apiMeResponse });
+        return;
+      }
+      if (requestUrl.pathname === "/api/invitations/accept-pending") {
+        await route.fulfill({ status: 200, json: { ok: true, acceptedInvitations: [] } });
+        return;
+      }
+      if (requestUrl.pathname === "/api/campaign-content") {
+        await fulfillCampaignContent(route);
+        return;
+      }
+      if (requestUrl.pathname === "/api/worldbuilding") {
+        await route.fulfill({ status: 200, json: { ok: true, characters: [] } });
+        return;
+      }
+      await route.abort();
+    });
+    await newPage.goto("/campaigns/settings");
+    const reloadedOverview = newPage
+      .getByRole("heading", { name: "Campaign overview", exact: true })
+      .locator("xpath=ancestor::section");
+    await expect(reloadedOverview.getByLabel("Status")).toHaveValue("paused");
+    await expect(reloadedOverview.getByLabel("System / ruleset (optional)")).toHaveValue("Canonical Rules");
+    await expect(reloadedOverview.getByLabel("Start date")).toHaveValue("2026-02-03");
+    await expect(reloadedOverview.getByLabel("End date")).toHaveValue("2027-01-04");
+  } finally {
+    await newPage.close();
+  }
+});
+
+test("keeps failed Campaign Settings metadata saves recoverable and blocks duplicate submissions", async ({
+  expectedConsoleErrors,
+  page,
+  request,
+}) => {
+  let patchAttempts = 0;
+  let releaseSave: () => void = () => {};
+  const saveBlocked = new Promise<void>((resolve) => {
+    releaseSave = resolve;
+  });
+  expectedConsoleErrors.push("500 (Internal Server Error)");
+  expectedConsoleErrors.push("[CampaignSettings] Failed to save campaign");
+
+  await page.route("**/api/campaign-content?resource=campaignSettings**", async (route) => {
+    if (route.request().method() === "PATCH") {
+      patchAttempts += 1;
+      if (patchAttempts === 1) {
+        await saveBlocked;
+        await route.fulfill({ status: 500, json: { ok: false, error: "Settings unavailable" } });
+        return;
+      }
+      await route.fulfill({
+        status: 200,
+        json: {
+          ok: true,
+          campaign: {
+            id: readyCampaignId, campaignId: "e2e-campaign", workspaceId: readyWorkspaceId, name: "E2E Campaign",
+            description: "Authentication emulator test campaign", status: "paused", system: "Recovered Rules",
+            playerSummary: "", gmNotes: "", startDate: "2026-02-03", endDate: "2027-01-04",
+          },
+        },
+      });
+      return;
+    }
+    await route.fulfill({
+      status: 200,
+      json: {
+        ok: true,
+        campaign: {
+          id: readyCampaignId, campaignId: "e2e-campaign", workspaceId: readyWorkspaceId, name: "E2E Campaign",
+          description: "Authentication emulator test campaign", status: "active", system: "Initial Rules",
+          playerSummary: "", gmNotes: "", startDate: "2026-01-03", endDate: "2026-12-31",
+        },
+      },
+    });
+  });
+  await page.route("**/api/campaign-content?resource=campaignPeople**", async (route) => {
+    await route.fulfill({ status: 200, json: { ok: true, people: [] } });
+  });
+  await page.route("**/api/campaign-content?resource=characterAssignments**", async (route) => {
+    await route.fulfill({ status: 200, json: { ok: true, assignments: [], assignedCharacterIds: [], pendingAssignedCharacterIds: [], characters: [] } });
+  });
+  await page.route("**/api/worldbuilding?resource=characters**", async (route) => {
+    await route.fulfill({ status: 200, json: { ok: true, characters: [] } });
+  });
+
+  await signInVerifiedUser(page, request);
+  await page.getByRole("button", { name: "GM", exact: true }).click();
+  await page.goto("/campaigns/settings");
+  const overview = page
+    .getByRole("heading", { name: "Campaign overview", exact: true })
+    .locator("xpath=ancestor::section");
+  await overview.getByLabel("Status").selectOption("paused");
+  await overview.getByLabel("System / ruleset (optional)").fill("Retry Rules");
+  await overview.getByLabel("Start date").fill("2026-02-03");
+  await overview.getByLabel("End date").fill("2027-01-04");
+  const saveButton = page.getByRole("button", { name: "Save", exact: true });
+  await saveButton.click();
+  await expect(page.getByRole("button", { name: "Saving...", exact: true })).toBeDisabled();
+  expect(patchAttempts).toBe(1);
+
+  releaseSave();
+  await expect(page.getByRole("alert")).toHaveText("Could not save campaign settings.");
+  await expect(page.getByRole("status")).toHaveCount(0);
+  await expect(overview.getByLabel("Status")).toHaveValue("paused");
+  await expect(overview.getByLabel("System / ruleset (optional)")).toHaveValue("Retry Rules");
+  await expect(overview.getByLabel("Start date")).toHaveValue("2026-02-03");
+  await expect(overview.getByLabel("End date")).toHaveValue("2027-01-04");
+
+  await page.getByRole("button", { name: "Save", exact: true }).click();
+  await expect(page.getByRole("status")).toHaveText("Campaign settings saved.");
+  expect(patchAttempts).toBe(2);
+  await expect(overview.getByLabel("System / ruleset (optional)")).toHaveValue("Recovered Rules");
+});
+
+test("renders saved player-facing Markdown after reload while keeping GM settings out of Player mode", async ({
+  apiMeResponse,
+  apiMeResponseController,
+  page,
+  request,
+}) => {
+  const markdown = "# One: a deliberately long Markdown heading for mobile wrapping\n\n## Two\n\n### Three\n\n#### Four\n\n##### Five\n\n###### Six\n\nThe party arrives at **dawn**.\n\n---\n\nBring _torches_.";
+  let playerSummary = "Initial player summary";
+  let settingsRequests = 0;
+
+  await page.route("**/api/campaign-content?resource=campaignSettings**", async (route) => {
+    settingsRequests += 1;
+    if (route.request().method() === "PATCH") {
+      const body = route.request().postDataJSON() as { playerSummary?: string };
+      playerSummary = body.playerSummary || "";
+    }
+    await route.fulfill({
+      status: 200,
+      json: {
+        ok: true,
+        campaign: {
+          id: readyCampaignId, campaignId: "e2e-campaign", workspaceId: readyWorkspaceId,
+          name: "E2E Campaign", description: "Authentication emulator test campaign", status: "active",
+          system: "", playerSummary, gmNotes: "GM-only prep", startDate: "", endDate: "",
+        },
+      },
+    });
+  });
+  await page.route("**/api/campaign-content?resource=campaignPeople**", async (route) => {
+    await route.fulfill({ status: 200, json: { ok: true, people: [] } });
+  });
+  await page.route("**/api/campaign-content?resource=characterAssignments**", async (route) => {
+    await route.fulfill({ status: 200, json: { ok: true, assignments: [], assignedCharacterIds: [], pendingAssignedCharacterIds: [], characters: [] } });
+  });
+  await page.route("**/api/worldbuilding?resource=characters**", async (route) => {
+    await route.fulfill({ status: 200, json: { ok: true, characters: [] } });
+  });
+
+  await signInVerifiedUser(page, request);
+  await page.getByRole("button", { name: "GM", exact: true }).click();
+  await page.goto("/campaigns/settings");
+  await page.getByPlaceholder("What players generally know / the elevator pitch…").fill(markdown);
+  await page.getByRole("button", { name: "Save", exact: true }).click();
+  await expect(page.getByRole("status")).toHaveText("Campaign settings saved.");
+
+  apiMeResponseController.current = {
+    ...apiMeResponse,
+    campaigns: apiMeResponse.campaigns.map((campaign) =>
+      campaign.slug === "e2e-campaign" ? { ...campaign, playerSummary } : campaign
+    ),
+  };
+  await page.reload();
+  await expect(page.getByPlaceholder("What players generally know / the elevator pitch…")).toHaveValue(markdown);
+  await page.goto("/home");
+  await expect(page.getByRole("heading", { name: /One: a deliberately long Markdown heading/ }).first()).toBeVisible();
+  await expect(page.locator("strong", { hasText: "dawn" }).first()).toBeVisible();
+  await expect(page.locator("hr").first()).toBeVisible();
+  const hierarchy = await page.locator(".markdown-content").first().evaluate((root) => {
+    const headings = Array.from(root.querySelectorAll("h1, h2, h3, h4, h5, h6"));
+    const style = (element: Element) => getComputedStyle(element);
+    return {
+      tags: headings.map((heading) => heading.tagName.toLowerCase()),
+      fontSizes: headings.map((heading) => Number.parseFloat(style(heading).fontSize)),
+      rootWidth: root.clientWidth,
+      headingWidths: headings.map((heading) => heading.scrollWidth),
+      pageTitleSize: Number.parseFloat(style(document.querySelector("main h1")!).fontSize),
+      cardTitleSize: Number.parseFloat(
+        style(Array.from(document.querySelectorAll("h2")).find((heading) => heading.textContent === "Latest player-safe context")!).fontSize
+      ),
+    };
+  });
+  expect(hierarchy.tags).toEqual(["h1", "h2", "h3", "h4", "h5", "h6"]);
+  expect(hierarchy.fontSizes).toEqual([17, 16, 15, 14, 13, 12]);
+  expect(hierarchy.pageTitleSize).toBeGreaterThan(hierarchy.fontSizes[0]);
+  expect(hierarchy.cardTitleSize).toBeGreaterThan(hierarchy.fontSizes[0]);
+  expect(hierarchy.headingWidths.every((width) => width <= hierarchy.rootWidth)).toBe(true);
+
+  await page.setViewportSize({ width: 375, height: 667 });
+  await expect.poll(() => page.locator(".markdown-content h1").first().evaluate((heading) => heading.scrollWidth <= heading.parentElement!.clientWidth)).toBe(true);
+  await page.setViewportSize({ width: 1280, height: 900 });
+
+  await page.goto("/campaigns/settings");
+  await expect(page.getByPlaceholder("What players generally know / the elevator pitch…")).toHaveValue(markdown);
+  const gmSettingsRequests = settingsRequests;
+  await page.getByRole("button", { name: "Player", exact: true }).click();
+  await page.goto("/campaigns/settings");
+  await expect(page.getByText("GM-only. Nice try though 😈", { exact: true })).toBeVisible();
+  expect(settingsRequests).toBe(gmSettingsRequests);
+  await page.goto("/home");
+  await expect(page.getByRole("heading", { name: /One: a deliberately long Markdown heading/ }).first()).toBeVisible();
+  await expect(page.getByText("GM-only prep", { exact: true })).toHaveCount(0);
+});
+
+test("keeps the Create NPC modal above app chrome and contained across viewports", async ({
+  expectedConsoleErrors,
+  page,
+  request,
+}) => {
+  let upsertAttempts = 0;
+  const upsertCampaignIds: string[] = [];
+  let releaseFailedSave: () => void = () => {};
+  const failedSave = new Promise<void>((resolve) => {
+    releaseFailedSave = resolve;
+  });
+  const savedNpcs: Array<Record<string, unknown>> = [];
+  expectedConsoleErrors.push("Failed to load resource");
+  expectedConsoleErrors.push("[Npcs] Failed to create NPC");
+
+  await page.route("**/api/worldbuilding**", async (route) => {
+    const url = new URL(route.request().url());
+    if (url.searchParams.get("entity") !== "npcs") {
+      await route.abort();
+      return;
+    }
+
+    if (route.request().method() === "GET") {
+      await route.fulfill({ status: 200, json: { ok: true, npcs: savedNpcs } });
+      return;
+    }
+
+    upsertAttempts += 1;
+    upsertCampaignIds.push(url.searchParams.get("campaignId") || "");
+    if (upsertAttempts === 1) {
+      await failedSave;
+      await route.fulfill({ status: 500, json: { ok: false, error: "NPC save unavailable" } });
+      return;
+    }
+
+    const npc = route.request().postDataJSON().npc as Record<string, unknown>;
+    savedNpcs.unshift(npc);
+    await route.fulfill({ status: 200, json: { ok: true, npc } });
+  });
+
+  await signInVerifiedUser(page, request);
+  await page.getByRole("button", { name: "GM", exact: true }).click();
+  await page.goto("/npcs");
+  const addNpc = page.getByRole("button", { name: "Add NPC", exact: true });
+  await expect(addNpc).toBeVisible();
+
+  await addNpc.click();
+  const dialog = page.getByRole("dialog", { name: "Add NPC", exact: true });
+  const name = dialog.getByLabel("Name", { exact: true });
+  const save = dialog.getByRole("button", { name: "Save NPC", exact: true });
+  const cancel = dialog.getByRole("button", { name: "Cancel", exact: true });
+  await expect(dialog).toBeVisible();
+  await expect(name).toBeFocused();
+  await expect(page.locator("body")).toHaveCSS("overflow", "hidden");
+
+  for (const viewport of [
+    { width: 1440, height: 900 },
+    { width: 768, height: 1024 },
+    { width: 375, height: 667 },
+  ]) {
+    await page.setViewportSize(viewport);
+    const metrics = await dialog.evaluate((element) => {
+      const rect = element.getBoundingClientRect();
+      const topmost = document.elementFromPoint(rect.left + 16, rect.top + 16);
+      return {
+        insideViewport: rect.top >= 0 && rect.left >= 0 && rect.right <= window.innerWidth && rect.bottom <= window.innerHeight,
+        isTopmost: element.contains(topmost),
+      };
+    });
+    expect(metrics.insideViewport).toBe(true);
+    expect(metrics.isTopmost).toBe(true);
+    await expect(save).toBeVisible();
+    await expect(cancel).toBeVisible();
+  }
+  await page.setViewportSize({ width: 1440, height: 900 });
+
+  await name.press("Shift+Tab");
+  await expect(save).toBeFocused();
+  await save.press("Tab");
+  await expect(name).toBeFocused();
+  await cancel.click();
+  await expect(dialog).toHaveCount(0);
+  await expect(addNpc).toBeFocused();
+  await expect(page.locator("body")).not.toHaveCSS("overflow", "hidden");
+
+  await addNpc.click();
+  await page.keyboard.press("Escape");
+  await expect(dialog).toHaveCount(0);
+  await expect(addNpc).toBeFocused();
+  await expect(page.locator("body")).not.toHaveCSS("overflow", "hidden");
+
+  await addNpc.click();
+  await expect(name).toBeFocused();
+  await save.click();
+  expect(upsertAttempts).toBe(0);
+  await name.fill("Retry NPC");
+  await dialog.getByLabel("Description", { exact: true }).fill("A saved campaign NPC.");
+  await save.click();
+  await expect(dialog.getByRole("button", { name: "Saving...", exact: true })).toBeDisabled();
+  expect(upsertAttempts).toBe(1);
+  releaseFailedSave();
+  await expect(dialog.getByRole("alert")).toHaveText("Unable to save NPC right now.");
+  await expect(name).toHaveValue("Retry NPC");
+  await expect(dialog).toBeVisible();
+
+  const scrollArea = dialog.locator("div.overflow-y-auto").first();
+  expect(await scrollArea.evaluate((element) => element.scrollHeight > element.clientHeight)).toBe(true);
+  await scrollArea.evaluate((element) => { element.scrollTop = element.scrollHeight; });
+  await expect(save).toBeVisible();
+  await save.click();
+  await expect(dialog).toHaveCount(0);
+  expect(upsertAttempts).toBe(2);
+  expect(upsertCampaignIds).toEqual(["e2e-campaign", "e2e-campaign"]);
+  expect(savedNpcs).toHaveLength(1);
+  await expect(page.getByText("Retry NPC", { exact: true })).toBeVisible();
+
+  await page.getByRole("button", { name: "Player", exact: true }).click();
+  await expect(addNpc).toHaveCount(0);
+  expect(upsertAttempts).toBe(2);
+});
+
 test("shows a generic error for incorrect credentials", async ({ page }) => {
   const email = generatedEmail();
 
@@ -2777,6 +3354,110 @@ test("@smoke signs out and keeps protected routes behind authentication", async 
   await expect(page).toHaveURL(/\/$/);
   await expect(page.getByTestId("public-home")).toBeVisible();
   await expect(page.getByText("E2E Campaign", { exact: true })).toHaveCount(0);
+});
+
+test("restores an authorized nested route after refresh and in a new tab", async ({ page, request }) => {
+  await signInVerifiedUser(page, request);
+  await expect(page.getByRole("heading", { name: "E2E Campaign" })).toBeVisible();
+
+  await page.getByRole("button", { name: "Player", exact: true }).click();
+  await page.goto("/settings/profile");
+  await expect(page.getByRole("heading", { name: "Profile Settings" })).toBeVisible();
+
+  await page.reload();
+  await expect(page).toHaveURL(/\/settings\/profile$/);
+  await expect(page.getByRole("heading", { name: "Profile Settings" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Player", exact: true })).toHaveClass(/border-indigo-500/);
+  const newTab = await page.context().newPage();
+  try {
+    await newTab.route("**/api/**", async (route) => {
+      const requestUrl = new URL(route.request().url());
+      expect(route.request().headers().authorization).toMatch(/^Bearer /);
+      expect(route.request().headers()["x-dd-mode"]).toBe("player");
+
+      if (requestUrl.pathname === "/api/me") {
+        await route.fulfill({
+          status: 200,
+          json: {
+            ok: true,
+            user: { id: "e2e-user" },
+            workspaces: [
+              {
+                id: "00000000-0000-4000-8000-000000000001",
+                slug: "e2e-workspace",
+                name: "E2E Workspace",
+              },
+            ],
+            workspaceMemberships: [
+              {
+                workspaceId: "00000000-0000-4000-8000-000000000001",
+                userId: "e2e-user",
+                role: "owner",
+              },
+            ],
+            campaigns: [
+              {
+                id: "00000000-0000-4000-8000-000000000002",
+                workspaceId: "00000000-0000-4000-8000-000000000001",
+                slug: "e2e-campaign",
+                name: "E2E Campaign",
+                description: "Authentication emulator test campaign",
+              },
+            ],
+            campaignMemberships: [
+              {
+                campaignId: "00000000-0000-4000-8000-000000000002",
+                userId: "e2e-user",
+                role: "gm",
+              },
+            ],
+          },
+        });
+        return;
+      }
+
+      if (requestUrl.pathname === "/api/invitations/accept-pending") {
+        await route.fulfill({ status: 200, json: { ok: true, acceptedInvitations: [] } });
+        return;
+      }
+
+      await route.abort();
+    });
+    await newTab.goto("/settings/profile");
+    await expect(newTab).toHaveURL(/\/settings\/profile$/);
+    await expect(newTab.getByRole("heading", { name: "Profile Settings" })).toBeVisible();
+    await expect(newTab.getByRole("button", { name: "Player", exact: true })).toHaveClass(/border-indigo-500/);
+  } finally {
+    await newTab.close();
+  }
+});
+
+test("repairs stale persisted workspace and campaign selections without creating data", async ({
+  apiCallLog,
+  page,
+  request,
+}) => {
+  await signInVerifiedUser(page, request);
+  await expect(page.getByRole("heading", { name: "E2E Campaign" })).toBeVisible();
+
+  await page.evaluate(() => {
+    localStorage.setItem("dd_selectedTenantId", "stale-workspace");
+    localStorage.setItem("dd_selectedCampaignId", "stale-campaign");
+    localStorage.setItem("dd:mode:stale-workspace:stale-campaign", "gm");
+  });
+  const workspaceCreatesBeforeReload = apiCallLog.workspaceCreate.length;
+  const campaignCreatesBeforeReload = apiCallLog.campaignCreate.length;
+
+  await page.goto("/settings/profile");
+  await expect(page.getByRole("heading", { name: "Profile Settings" })).toBeVisible();
+  await expect
+    .poll(() => page.evaluate(() => localStorage.getItem("dd_selectedTenantId")))
+    .toBe("e2e-workspace");
+  await expect
+    .poll(() => page.evaluate(() => localStorage.getItem("dd_selectedCampaignId")))
+    .toBe("e2e-campaign");
+  expect(apiCallLog.workspaceCreate).toHaveLength(workspaceCreatesBeforeReload);
+  expect(apiCallLog.campaignCreate).toHaveLength(campaignCreatesBeforeReload);
 });
 
 test("@smoke keeps the public homepage outside application bootstrap", async ({

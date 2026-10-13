@@ -12,6 +12,7 @@ import { createLink } from "../domain/links/link.service";
 import { addLink, getLinksForEntity, loadLinks, removeLink } from "../data/links/links.repo";
 import { getApiCampaignPeople, getApiCharacterAssignments } from "../data/api/apiClient";
 import { getAllCharacters } from "../data/characters/characters.repo";
+import { MarkdownContent } from "../components/MarkdownContent.jsx";
 
 const ITEM_TYPES = [
   "Weapon",
@@ -671,7 +672,7 @@ export default function ItemProfile() {
 
   if (loading) {
     return (
-      <div className="p-8 text-white">
+      <div className="app-page-wide p-4 text-white sm:p-6 lg:p-8">
         <div className="text-zinc-400">Loading item...</div>
       </div>
     );
@@ -679,7 +680,7 @@ export default function ItemProfile() {
 
   if (!formData) {
     return (
-      <div className="p-8 text-white">
+      <div className="app-page-wide p-4 text-white sm:p-6 lg:p-8">
         <h1 className="text-3xl font-bold">Item Not Found</h1>
         <p className="mt-2 text-zinc-400">There is no item with this ID.</p>
         <button
@@ -719,7 +720,7 @@ export default function ItemProfile() {
   // Hard gate: players should not be able to open GM-only items via direct URL.
   if (!isGM && visibility === "gm-only") {
     return (
-      <main className="flex-1 overflow-auto p-4 sm:p-6 lg:p-8">
+      <main className="app-page-wide flex-1 overflow-auto p-4 sm:p-6 lg:p-8">
         <div className="max-w-xl mx-auto bg-white/5 border border-white/10 rounded-2xl p-8 text-center">
           <h1 className="text-2xl font-bold text-white mb-2">DM Eyes Only</h1>
           <p className="text-zinc-400 text-sm mb-4">
@@ -738,7 +739,7 @@ export default function ItemProfile() {
 
   return (
     <main className="flex-1 overflow-auto p-4 sm:p-6 lg:p-8">
-      <div className="mx-auto max-w-7xl">
+      <div className="app-page-wide">
         <div className="mb-6 flex flex-col gap-4">
           <button
             className="inline-flex w-fit items-center gap-2 text-sm text-zinc-300 hover:text-white"
@@ -749,11 +750,11 @@ export default function ItemProfile() {
           </button>
 
           <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
-            <div>
-              <h1 className="text-2xl md:text-3xl font-semibold tracking-tight text-white">
+            <div className="min-w-0">
+              <h1 className="min-w-0 [overflow-wrap:anywhere] text-2xl md:text-3xl font-semibold tracking-tight text-white">
                 {formData.name}
               </h1>
-              <p className="mt-1 text-xs md:text-sm text-zinc-400">
+              <p className="mt-1 break-words text-xs md:text-sm text-zinc-400">
                 {formData.type} • <span className="font-medium">{formData.rarity}</span>
               </p>
             </div>
@@ -960,7 +961,7 @@ export default function ItemProfile() {
                 onChange={(e) => handleFieldChange("description", e.target.value)}
               />
             ) : (
-              <p className="text-zinc-400">{formData.description || ""}</p>
+              <MarkdownContent content={formData.description} className="text-zinc-400" />
             )}
           </section>
 
@@ -1191,10 +1192,11 @@ export default function ItemProfile() {
                   onChange={(e) => handleFieldChange("hiddenEffects", e.target.value)}
                 />
               ) : (
-                <p className="text-zinc-400">
-                  {formData.hiddenEffects ||
-                    "Space for secret mechanics, extra damage riders, or conditional bonuses the players haven't discovered yet."}
-                </p>
+                <MarkdownContent
+                  content={formData.hiddenEffects}
+                  placeholder="Space for secret mechanics, extra damage riders, or conditional bonuses the players haven't discovered yet."
+                  className="text-zinc-400"
+                />
               )}
             </section>
 
@@ -1207,11 +1209,11 @@ export default function ItemProfile() {
                   onChange={(e) => handleFieldChange("curse", e.target.value)}
                 />
               ) : (
-                <p className="text-zinc-400">
-                  {formData.curse && formData.curse !== "—"
-                    ? formData.curse
-                    : "If this item has a curse or downside, park it here so you remember to actually use it at the table."}
-                </p>
+                <MarkdownContent
+                  content={formData.curse === "—" ? "" : formData.curse}
+                  placeholder="If this item has a curse or downside, park it here so you remember to actually use it at the table."
+                  className="text-zinc-400"
+                />
               )}
             </section>
 
@@ -1224,10 +1226,11 @@ export default function ItemProfile() {
                   onChange={(e) => handleFieldChange("upgradePath", e.target.value)}
                 />
               ) : (
-                <p className="text-zinc-400">
-                  {formData.upgradePath ||
-                    "Ideas for how this item can grow with the party: reforging, absorbing shards, unlocking attunement tiers, etc."}
-                </p>
+                <MarkdownContent
+                  content={formData.upgradePath}
+                  placeholder="Ideas for how this item can grow with the party: reforging, absorbing shards, unlocking attunement tiers, etc."
+                  className="text-zinc-400"
+                />
               )}
             </section>
 
@@ -1240,10 +1243,11 @@ export default function ItemProfile() {
                   onChange={(e) => handleFieldChange("storyHooks", e.target.value)}
                 />
               ) : (
-                <p className="text-zinc-400 mb-2">
-                  {formData.storyHooks ||
-                    "Notes on which NPCs, factions, locations or future sessions this item is tied to."}
-                </p>
+                <MarkdownContent
+                  content={formData.storyHooks}
+                  placeholder="Notes on which NPCs, factions, locations or future sessions this item is tied to."
+                  className="mb-2 text-zinc-400"
+                />
               )}
             </section>
           </div>

@@ -88,18 +88,53 @@ is intentionally not persisted.
 
 The reconciliation is read-only: it reads the configured canonical documents
 and pass-scoped repository evidence, calls Mistral, and does not edit issues,
-labels, Project status, documentation, code, or commits. The generated report
-is written to the GitHub Actions **Step Summary**, with one section per pass
-and a final count of retained documentation drift, implementation risks, and
-human-verification findings. Dropped-finding diagnostics remain in the job
-logs for debugging and are not included in the clean summary.
+labels, Project status, documentation, code, or commits. Before any model call,
+the script validates that every declared inventory path is supplied to at
+least one pass, every pass input is declared, pass paths are unique, and all
+referenced files exist. A mismatch fails with the affected paths; there is no
+top-level fallback that silently changes prompt scope.
 
-Current coverage is limited to `security-auth` and `security-access` in
-`ai/documentation-manifest.json`. The script reads each pass's lists; top-level
-canonical/evidence lists do not expand that scope. A successful run is not a
-complete persistence, operations, or iteration audit. Continue the manual
-checklist below; [#377](https://github.com/dopaminedungeon/dopamine-dungeon/issues/377)
-tracks the coverage handoff.
+The run is partitioned into small, explicit passes. Current declared coverage
+is:
+
+| Pass | Canonical documents | Repository evidence | Subject |
+| --- | ---: | ---: | --- |
+| `security-auth` | 3 | 15 | Authentication, verification, recovery, and invitation flows |
+| `security-access` | 5 | 6 | Workspace/campaign authorization, selected mode, and access boundaries |
+| `architecture-persistence` | 10 | 13 | Runtime architecture, persistence, migration transition, and entity links |
+| `operations-ci` | 6 | 7 | Deployment, environment, CI, testing, and rollback |
+| `iteration-handoff` | 6 | 2 | Product/iteration closeout and its automation |
+
+The top-level inventory has 29 canonical documents and 43 evidence files; all
+are assigned to at least one pass. `docs/product/CURRENT_STATE.md` is
+intentionally supplied to both security passes because it makes claims in
+both subjects. The prior configuration sent only 7/29 declared canonical
+documents and 17/41 declared evidence files to a pass; two additional auth
+evidence inputs were configured only inside the auth pass and absent from the
+declared inventory. The three new thematic passes supply the 22 omitted
+canonical files and 22 of the 24 omitted evidence files in bounded prompts.
+The two remaining omitted evidence files (mail templates) are assigned to
+`security-auth`; the two existing auth evidence files are now declared in the
+inventory. This increases prompt inputs
+because the prior successful run did not inspect the declared closeout scope;
+the files are divided by subject rather than combined into one broad prompt.
+
+There are no exclusions within the declared inventory. This remains a scoped
+reconciliation, not a whole-repository audit: files outside the manifest are
+excluded, including unlisted code or documents, generated/ignored artifacts,
+private reports, secrets, and live provider/deployment state. They are not
+safe or authoritative prompt inputs for this workflow. The existing
+evidence-based rubric still governs what may be reported; no finding is
+inferred merely because an input omits a claim or implementation detail.
+
+The GitHub Actions **Step Summary** lists the exact executed pass names and,
+for each pass, its scope plus canonical and evidence paths inspected. It then
+shows one findings section per pass and counts retained documentation drift,
+implementation risks, human-verification findings, and passes with no
+findings. The summary explicitly says it is not a whole-repository audit.
+Dropped-finding diagnostics remain in job logs and are not included in the
+clean summary. Continue the manual checklist below; the automated report is
+evidence for its listed inputs and subject scopes only.
 
 ## Duplicate prevention
 

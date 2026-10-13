@@ -52,6 +52,31 @@ route, implementation module, and dedicated tests have now been removed from
 the release source. Future audits must use a newly reviewed, explicitly
 approved mechanism; this resource is no longer available.
 
+### #375 evidence reconciliation status (reviewed 2026-10-12)
+
+PR #373 (merged 2026-09-04) is the available dated, sanitized reference for
+the one-time audit capture/review and verified removal of the temporary claim.
+Its private report is not present in the checked-out repository or available
+through the reviewed PR text. Three ignored Development reports dated
+2026-08-31 are present under
+`reports/firestore-reconciliation/development/`; their latest summaries show
+`NEEDS_RECONCILIATION` and `UNRESOLVED` findings. No later Development
+disposition report or Production report is available in this checkout. These
+Development results do not establish whether Production operations occurred.
+Do not probe Production, rerun the retired route, or repeat a potentially
+completed read/export to fill the evidence gap.
+
+The requester confirms they are the sole prospective release operator; no
+personal name is recorded in this handoff. They must supply an
+access-controlled internal reference to the audit report, if it can be safely
+located, and any later inventory, reconciliation, limiter export/import,
+Google-only migration, and effective configuration archives. Record only the
+opaque internal reference, target, operation date, and sanitized result in the
+[#375 gate ledger](../architecture/FIRESTORE_TO_NEON_MIGRATION.md#375-production-evidence-ledger-reviewed-2026-10-12).
+Never copy report contents, identifiers, limiter keys, or private URLs into
+this repository. Until the reference and result are reviewed, each gate remains
+**unverified**.
+
 ## Vercel Preview process mode
 
 Use process mode when Vercel injects Preview variables so encrypted values never

@@ -1,3 +1,4 @@
+import { MarkdownContent } from "../components/MarkdownContent.jsx";
 import React, { useEffect, useMemo, useState } from "react";
 import { Link, useParams, useNavigate } from "react-router-dom";
 import { ArrowLeft, Clock, Trash2 } from "lucide-react";
@@ -36,120 +37,9 @@ function formatSessionDate(value) {
   });
 }
 
-function renderInlineMarkdown(text) {
-  const raw = String(text || "");
-  const parts = [];
-  const pattern = /(\*\*[^*]+\*\*|_[^_]+_|\*[^*]+\*)/g;
-  let lastIndex = 0;
-  let match;
-
-  while ((match = pattern.exec(raw)) !== null) {
-    if (match.index > lastIndex) {
-      parts.push(raw.slice(lastIndex, match.index));
-    }
-
-    const token = match[0];
-    if (token.startsWith("**")) {
-      parts.push(<strong key={parts.length}>{token.slice(2, -2)}</strong>);
-    } else {
-      parts.push(<em key={parts.length}>{token.slice(1, -1)}</em>);
-    }
-
-    lastIndex = match.index + token.length;
-  }
-
-  if (lastIndex < raw.length) {
-    parts.push(raw.slice(lastIndex));
-  }
-
-  return parts.map((part, index) =>
-    typeof part === "string" ? <React.Fragment key={index}>{part}</React.Fragment> : part
-  );
-}
-
-function renderMarkdownBlock(value, placeholder = "") {
-  const text = String(value || "").trim();
-  if (!text) {
-    return <p className="text-zinc-500 text-sm italic">{placeholder}</p>;
-  }
-
-  const nodes = [];
-  let paragraphLines = [];
-  let listItems = [];
-
-  const flushParagraph = () => {
-    if (paragraphLines.length === 0) return;
-    const content = paragraphLines.join("\n");
-    nodes.push(
-      <p key={`p-${nodes.length}`} className="whitespace-pre-line leading-6">
-        {renderInlineMarkdown(content)}
-      </p>
-    );
-    paragraphLines = [];
-  };
-
-  const flushList = () => {
-    if (listItems.length === 0) return;
-    nodes.push(
-      <ul key={`ul-${nodes.length}`} className="list-disc space-y-1 pl-5">
-        {listItems.map((item, index) => (
-          <li key={index}>{renderInlineMarkdown(item)}</li>
-        ))}
-      </ul>
-    );
-    listItems = [];
-  };
-
-  text.split("\n").forEach((line) => {
-    const trimmed = line.trim();
-
-    if (!trimmed) {
-      flushParagraph();
-      flushList();
-      return;
-    }
-
-    const heading = trimmed.match(/^(#{1,3})\s+(.+)$/);
-    if (heading) {
-      flushParagraph();
-      flushList();
-
-      const level = heading[1].length;
-      const className =
-        level === 1
-          ? "text-xl font-semibold text-white"
-          : level === 2
-            ? "text-lg font-semibold text-white"
-            : "text-base font-semibold text-zinc-100";
-
-      nodes.push(
-        <h3 key={`h-${nodes.length}`} className={className}>
-          {renderInlineMarkdown(heading[2])}
-        </h3>
-      );
-      return;
-    }
-
-    const listItem = trimmed.match(/^[-*]\s+(.+)$/);
-    if (listItem) {
-      flushParagraph();
-      listItems.push(listItem[1]);
-      return;
-    }
-
-    flushList();
-    paragraphLines.push(line.trimEnd());
-  });
-
-  flushParagraph();
-  flushList();
-
-  return (
-    <div className="space-y-3 text-sm text-zinc-300">
-      {nodes}
-    </div>
-  );
-}
+const renderMarkdownBlock = (value, placeholder = "") => (
+  <MarkdownContent content={value} placeholder={placeholder} />
+);
 
 function formatLinkLabel(label) {
   return String(label || "").replaceAll("_", " ");
@@ -859,7 +749,7 @@ export default function SessionProfile() {
 
   if (loading) {
     return (
-      <main className="flex-1 overflow-auto flex items-center justify-center">
+      <main className="app-page-wide flex-1 overflow-auto flex items-center justify-center">
         <div className="text-zinc-400">Loading session...</div>
       </main>
     );
@@ -867,7 +757,7 @@ export default function SessionProfile() {
   // No such session at all
   if (!normalizedSession) {
     return (
-      <main className="flex-1 overflow-auto p-4 sm:p-6 lg:p-8 text-white">
+      <main className="app-page-wide flex-1 overflow-auto p-4 sm:p-6 lg:p-8 text-white">
         <h1 className="text-3xl font-bold">Session Not Found</h1>
         <p className="text-zinc-400 mt-2">
           There is no session with this ID.
@@ -885,7 +775,7 @@ export default function SessionProfile() {
   // GM restriction guard: prevent players from viewing GM-only sessions
   if (normalizedSession?.visibility === "gm-only" && !isGM) {
     return (
-      <main className="flex-1 overflow-auto p-4 sm:p-6 lg:p-8">
+      <main className="app-page-wide flex-1 overflow-auto p-4 sm:p-6 lg:p-8">
         <button
           className="mb-5 inline-flex items-center gap-2 text-sm text-zinc-300 hover:text-white"
           onClick={() => navigate("/sessions")}
@@ -943,7 +833,7 @@ export default function SessionProfile() {
 
   return (
     <main className="flex-1 overflow-auto p-4 sm:p-6 lg:p-8">
-      <div className="mx-auto max-w-7xl">
+      <div className="app-page-wide">
         <button
           className="mb-5 inline-flex items-center gap-2 text-sm text-zinc-300 hover:text-white"
           onClick={() => navigate("/sessions")}
@@ -955,8 +845,8 @@ export default function SessionProfile() {
         <div className="bg-white/5 border border-white/10 rounded-2xl p-5 sm:p-6 lg:p-8 backdrop-blur-sm space-y-5 sm:space-y-6">
         {/* Header */}
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 sm:gap-4">
-          <div>
-            <h1 className="text-2xl sm:text-3xl font-bold text-white flex flex-wrap items-center gap-2">
+          <div className="min-w-0">
+            <h1 className="min-w-0 [overflow-wrap:anywhere] text-2xl sm:text-3xl font-bold text-white flex flex-wrap items-center gap-2">
               {viewSession?.name || "Untitled session"}
               {isGmOnlyCurrent && (
                 <span className="px-2 py-1 text-[10px] rounded-full bg-red-500/20 text-red-300 border border-red-500/40">
@@ -964,7 +854,7 @@ export default function SessionProfile() {
                 </span>
               )}
             </h1>
-            <p className="text-zinc-400 text-sm">
+            <p className="break-words text-zinc-400 text-sm">
               {mainLocation ? (
                 <Link
                   to={`/maps/${mainLocation.id}`}

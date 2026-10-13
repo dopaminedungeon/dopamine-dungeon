@@ -47,11 +47,50 @@ request is allowed.
 
 The limiter transaction ignores and prunes attempts outside the 24-hour rolling
 authorization horizon for subjects it touches. `expires_at` is retained on both
-subject and attempt rows for later physical housekeeping. There is deliberately
-no cron or public cleanup endpoint in this slice: authorization never depends
-on physical deletion. Inactive expired rows require a separately approved
-database-maintenance process, tracked by
-[#376](https://github.com/dopaminedungeon/dopamine-dungeon/issues/376).
+subject and attempt rows for later physical housekeeping. A row is eligible for
+physical cleanup only when its stored `expires_at` is strictly earlier than the
+maintenance transaction's PostgreSQL `transaction_timestamp()`. Rows at the
+exact boundary, and all future-expiring rows, are retained. This does not
+shorten the 48-hour default record TTL or change a rate-limit threshold.
+
+Maintainers run the operator-only command against an approved environment with
+its `DATABASE_URL` supplied out of band. It has no HTTP route, browser control,
+or application role. It defaults to a count-only dry run:
+
+```sh
+pnpm auth-email-rate-limit:housekeep -- --batch-size 100
+```
+
+Deletion requires an explicit flag and remains capped at 500 expired subjects
+per transaction:
+
+```sh
+pnpm auth-email-rate-limit:housekeep -- --apply --batch-size 100
+```
+
+The command selects expired parent subjects in expiry/ID order with `FOR UPDATE
+SKIP LOCKED`, deletes their attempt rows, then deletes only those locked parent
+rows in one transaction. Concurrent reservations either hold the parent lock so
+cleanup skips it, or safely reserve a replacement after cleanup commits. Repeat
+the bounded command until `moreEligible` is false. Output contains aggregate
+counts and safe limiter scopes only; never capture subject keys, Firebase UIDs,
+HMACs, emails, IPs, database URLs, or raw database errors.
+
+Repository maintainers own this task. Run a dry run at least daily and an
+approved apply run at the same cadence when backlog is present. Monitor the
+exit status, `eligibleSubjectCount`, `deletedSubjectCount`, and `moreEligible`;
+retry a failed run only after correcting the operator environment. The operation
+is idempotent: a retry processes only remaining expired rows. Automated
+scheduling is intentionally disabled: this repository has no protected
+environment-scoped database-secret workflow for cleanup. Before adding one,
+maintainers must approve the environment, secret ownership, cadence, overlap
+protection, and dry-run/apply separation.
+
+To disable housekeeping, stop invoking `--apply` or disable a future protected
+operator workflow. No application rollback is needed because authorization
+never consults physical cleanup. Restoring this code stops future deletion;
+already deleted expired limiter rows are intentionally not reconstructed and do
+not represent active rate-limit state.
 
 ## Monitoring
 
@@ -103,3 +142,33 @@ Import only those opaque values into Neon, reconcile subject/attempt counts and
 timestamps, and hold a controlled fail-closed window between the final snapshot
 and Neon becoming authoritative. Retain Firestore records temporarily for
 rollback/reconciliation, but do not dual-read or dual-write after cutover.
+
+### #375 Production evidence disposition (reviewed 2026-10-12)
+
+The Production limiter export, import, exact subject/attempt count and
+timestamp reconciliation, and fail-closed authority handoff are **unverified**.
+PR #365 explicitly deferred these actions and PR #372 records them as release
+gates; no Production export/import manifest or sanitized result was available
+in the repository or reviewed PR text. Local Development limiter exports do
+not establish Production state. The private #373 audit report was not available
+here. Do not infer limiter completion from schema presence, code tests, or
+audit capture, and do not rerun a potentially completed export/import to create
+a new record.
+
+The requester confirms they are the sole prospective release operator; no
+personal name is recorded here. They must reconcile any existing private
+evidence first. The tentative maintenance target is around 2027-01-12, for
+planning only; it is not approval or a scheduled window. The exact date/time
+and rollback-retention period remain undecided.
+
+If the evidence proves an import, retain its opaque internal reference,
+checksum, horizon bounds, aggregate subject/attempt counts, timestamp
+comparison, and fail-closed window result. Do not put Firebase UIDs, HMAC
+subject keys, row-level timestamps, manifests, or export files in this
+repository. If no valid prior import is evidenced, schedule only after explicit
+target approval, a complete final active 24-hour snapshot, a reviewed
+retry-safe importer, exact post-import reconciliation, and an approved
+rollback/retention window. Record provider acceptance separately from inbox
+receipt; `delivery_accepted` alone is not inbox-delivery evidence. Current
+status and next steps are tracked in the [#375 gate
+ledger](../architecture/FIRESTORE_TO_NEON_MIGRATION.md#375-production-evidence-ledger-reviewed-2026-10-12).

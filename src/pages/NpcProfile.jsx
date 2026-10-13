@@ -1,9 +1,11 @@
 // src/pages/NpcProfile.jsx
+import { MarkdownContent } from "../components/MarkdownContent.jsx";
 import React, { useEffect, useMemo, useState } from "react";
 import { Link, useParams, useNavigate } from "react-router-dom";
 import { ArrowLeft, Eye, Lock, Plus, Trash2 } from "lucide-react";
 import { useMode } from "../context/ModeContext.jsx";
 import { useCampaign } from "../context/CampaignContext";
+import { useTenant } from "../context/TenantContext.jsx";
 import { npcsRepo } from "../data/npcs/npcs.repo";
 import { sessionsRepo } from "../data/sessions/sessions.repo";
 import { itemsRepo } from "../data/items/items.repo";
@@ -15,6 +17,7 @@ import {
   getLinksForEntity,
   loadLinks,
   removeLink,
+  updateLink,
 } from "../data/links/links.repo";
 import {
   getNpcTypeIcon,
@@ -28,7 +31,7 @@ const NPC_STATUSES = ["active", "missing", "dead", "unknown"];
 const NPC_SESSION_LABELS = ["present", "mentioned", "ally", "antagonist"];
 const NPC_ITEM_LABELS = ["owns", "uses"];
 const NPC_LORE_LABELS = ["connected"];
-const NPC_LOCATION_LABELS = ["connected"];
+const NPC_LOCATION_LABELS = ["connected", "resides_in", "controls"];
 const ABILITIES = ["str", "dex", "con", "int", "wis", "cha"];
 const SIZE_OPTIONS = ["Tiny", "Small", "Medium", "Large", "Huge", "Gargantuan"];
 const CREATURE_TYPE_OPTIONS = [
@@ -102,116 +105,9 @@ function normalizeStatus(value) {
   return NPC_STATUSES.includes(status) ? status : "unknown";
 }
 
-function renderInlineMarkdown(text) {
-  const raw = String(text || "");
-  const parts = [];
-  const pattern = /(\*\*[^*]+\*\*|_[^_]+_|\*[^*]+\*)/g;
-  let lastIndex = 0;
-  let match;
-
-  while ((match = pattern.exec(raw)) !== null) {
-    if (match.index > lastIndex) {
-      parts.push(raw.slice(lastIndex, match.index));
-    }
-
-    const token = match[0];
-    if (token.startsWith("**")) {
-      parts.push(<strong key={parts.length}>{token.slice(2, -2)}</strong>);
-    } else {
-      parts.push(<em key={parts.length}>{token.slice(1, -1)}</em>);
-    }
-
-    lastIndex = match.index + token.length;
-  }
-
-  if (lastIndex < raw.length) {
-    parts.push(raw.slice(lastIndex));
-  }
-
-  return parts.map((part, index) =>
-    typeof part === "string" ? <React.Fragment key={index}>{part}</React.Fragment> : part
-  );
-}
-
-function renderMarkdownBlock(value, placeholder = "") {
-  const text = String(value || "").trim();
-  if (!text) {
-    return <p className="text-zinc-500 text-sm italic">{placeholder}</p>;
-  }
-
-  const nodes = [];
-  let paragraphLines = [];
-  let listItems = [];
-
-  const flushParagraph = () => {
-    if (paragraphLines.length === 0) return;
-    const content = paragraphLines.join("\n");
-    nodes.push(
-      <p key={`p-${nodes.length}`} className="whitespace-pre-line leading-6">
-        {renderInlineMarkdown(content)}
-      </p>
-    );
-    paragraphLines = [];
-  };
-
-  const flushList = () => {
-    if (listItems.length === 0) return;
-    nodes.push(
-      <ul key={`ul-${nodes.length}`} className="list-disc space-y-1 pl-5">
-        {listItems.map((item, index) => (
-          <li key={index}>{renderInlineMarkdown(item)}</li>
-        ))}
-      </ul>
-    );
-    listItems = [];
-  };
-
-  text.split("\n").forEach((line) => {
-    const trimmed = line.trim();
-
-    if (!trimmed) {
-      flushParagraph();
-      flushList();
-      return;
-    }
-
-    const heading = trimmed.match(/^(#{1,3})\s+(.+)$/);
-    if (heading) {
-      flushParagraph();
-      flushList();
-
-      const level = heading[1].length;
-      const className =
-        level === 1
-          ? "text-xl font-semibold text-white"
-          : level === 2
-            ? "text-lg font-semibold text-white"
-            : "text-base font-semibold text-zinc-100";
-
-      nodes.push(
-        <h3 key={`h-${nodes.length}`} className={className}>
-          {renderInlineMarkdown(heading[2])}
-        </h3>
-      );
-      return;
-    }
-
-    const listItem = trimmed.match(/^[-*]\s+(.+)$/);
-    if (listItem) {
-      flushParagraph();
-      listItems.push(listItem[1]);
-      return;
-    }
-
-    flushList();
-    paragraphLines.push(line.trimEnd());
-  });
-
-  flushParagraph();
-  flushList();
-
-  return <div className="space-y-3 text-sm text-zinc-300">{nodes}</div>;
-}
+const renderMarkdownBlock = (value, placeholder = "") => (
+  <MarkdownContent content={value} placeholder={placeholder} />
+);
 
 function createEmptyStatBlock() {
   return {
@@ -553,26 +449,19 @@ function NpcLinkSection({
     return entityList
       .filter((entity) => {
         const label = getEntityLabel(entity);
-        if (normalizedQuery && !String(label || "").toLowerCase().includes(normalizedQuery)) {
+        const aliases = entityType === "Map" && Array.isArray(entity.aliases) ? entity.aliases : [];
+        if (normalizedQuery && ![label, ...aliases].some((value) =>
+          String(value || "").toLowerCase().includes(normalizedQuery)
+        )) {
           return false;
         }
-
-        return !links.some((link) => {
-          const other = getOtherEndpoint(link, "NPC", npcId);
-
-          return (
-            other.type === entityType &&
-            String(other.id) === String(entity.id)
-          );
-        });
+        return true;
       })
       .slice(0, 30);
   }, [
     entityList,
     entityType,
     getEntityLabel,
-    links,
-    npcId,
     query,
   ]);
 
@@ -714,17 +603,21 @@ function NpcLinkSection({
             {candidateEntities.length === 0 ? (
               <p className="px-3 py-2 text-sm text-zinc-500">No results.</p>
             ) : (
-              candidateEntities.map((entity) => (
-                <button
+              candidateEntities.map((entity) => {
+                const alreadyLinked = links.some((link) => {
+                  const other = getOtherEndpoint(link, "NPC", npcId);
+                  return other.type === entityType && String(other.id) === String(entity.id);
+                });
+                return <button
                   key={entity.id}
                   type="button"
-                  disabled={isDisabled}
+                  disabled={isDisabled || alreadyLinked}
                   onClick={() => handleAdd(entity.id)}
                   className="block w-full px-3 py-2 text-left text-sm text-zinc-200 hover:bg-white/5 disabled:cursor-not-allowed disabled:opacity-50"
                 >
-                  {busyId === `add-${entity.id}` ? "Linking..." : getEntityLabel(entity)}
-                </button>
-              ))
+                  {getEntityLabel(entity)}{alreadyLinked ? " — Already linked" : ""}
+                </button>;
+              })
             )}
           </div>
         </div>
@@ -1226,11 +1119,17 @@ export default function NpcProfile() {
   const navigate = useNavigate();
   const { isGM } = useMode();
   const { selectedCampaignId } = useCampaign();
+  const { selectedTenantId } = useTenant();
 
   const [npc, setNpc] = useState(null);
   const [draft, setDraft] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState("");
+  const [relatedError, setRelatedError] = useState("");
+  const [loadedScope, setLoadedScope] = useState("");
+  const [relatedScope, setRelatedScope] = useState("");
+  const [loadVersion, setLoadVersion] = useState(0);
+  const scopeKey = `${selectedTenantId}:${selectedCampaignId}:${isGM ? "gm" : "player"}:${id}`;
   const [isEditing, setIsEditing] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
@@ -1253,30 +1152,47 @@ export default function NpcProfile() {
         setItems([]);
         setLoreEntries([]);
         setLocations([]);
+        setLoadedScope(scopeKey);
+        setRelatedScope(scopeKey);
         setIsLoading(false);
         return;
       }
 
-      try {
-        setIsLoading(true);
-        setError("");
-        const [data, sessionData, itemData, loreData, locationData] = await Promise.all([
-          npcsRepo.getById(selectedCampaignId, id),
-          sessionsRepo.getAll(selectedCampaignId),
-          itemsRepo.getAll(selectedCampaignId),
-          loreRepo.getAll(selectedCampaignId),
-          locationsRepo.getAll(selectedCampaignId),
-          loadLinks(selectedCampaignId),
-        ]);
-        if (!cancelled) {
-          setNpc(data);
-          setDraft(data ? buildDraft(data) : null);
-          setIsStatBlockCollapsed(data ? isStatBlockEmpty(data.statBlock) : true);
+      setIsLoading(true);
+      setError("");
+      setRelatedError("");
+      setRelatedScope("");
+      setIsEditing(false);
+      setDraftLinks(null);
+      const relatedRequest = Promise.all([
+        sessionsRepo.getAll(selectedCampaignId),
+        itemsRepo.getAll(selectedCampaignId),
+        loreRepo.getAll(selectedCampaignId),
+        locationsRepo.getAll(selectedCampaignId),
+        loadLinks(selectedCampaignId),
+      ]);
+      relatedRequest.then(
+        ([sessionData, itemData, loreData, locationData]) => {
+          if (cancelled) return;
           setSessions(Array.isArray(sessionData) ? sessionData : []);
           setItems(Array.isArray(itemData) ? itemData : []);
           setLoreEntries(Array.isArray(loreData) ? loreData : []);
           setLocations(Array.isArray(locationData) ? locationData : []);
           setLinksVersion((version) => version + 1);
+          setRelatedScope(scopeKey);
+        },
+        (loadError) => {
+          console.error("[NpcProfile] Failed to load linked details", loadError);
+          if (!cancelled) setRelatedError("Unable to load linked campaign details right now.");
+        }
+      );
+      try {
+        const data = await npcsRepo.getById(selectedCampaignId, id);
+        if (!cancelled) {
+          setNpc(data);
+          setDraft(data ? buildDraft(data) : null);
+          setIsStatBlockCollapsed(data ? isStatBlockEmpty(data.statBlock) : true);
+          setLoadedScope(scopeKey);
         }
       } catch (loadError) {
         console.error("[NpcProfile] Failed to load NPC", loadError);
@@ -1287,6 +1203,7 @@ export default function NpcProfile() {
           setLoreEntries([]);
           setLocations([]);
           setError("Unable to load this NPC right now.");
+          setLoadedScope(scopeKey);
         }
       } finally {
         if (!cancelled) setIsLoading(false);
@@ -1298,7 +1215,7 @@ export default function NpcProfile() {
     return () => {
       cancelled = true;
     };
-  }, [selectedCampaignId, id]);
+  }, [scopeKey, selectedCampaignId, id, loadVersion]);
 
   const npcLinks = useMemo(() => {
     void linksVersion;
@@ -1352,8 +1269,7 @@ export default function NpcProfile() {
       }
 
       if (getLinkSignature(originalLink) !== getLinkSignature(nextLink)) {
-        await removeLink(originalLink.id, selectedCampaignId);
-        await addLink(nextLink, selectedCampaignId);
+        await updateLink(nextLink, selectedCampaignId);
       }
     }
 
@@ -1552,7 +1468,7 @@ export default function NpcProfile() {
 
   if (!selectedCampaignId) {
     return (
-      <main className="flex-1 overflow-auto flex items-center justify-center p-8">
+      <main className="app-page-wide flex-1 overflow-auto flex items-center justify-center p-4 sm:p-6 lg:p-8">
         <div className="max-w-md rounded-2xl border border-white/10 bg-white/5 p-6 text-center">
           <h1 className="text-xl font-semibold text-white">Select a campaign</h1>
           <p className="mt-2 text-sm text-zinc-400">
@@ -1563,19 +1479,20 @@ export default function NpcProfile() {
     );
   }
 
-  if (isLoading) {
-    return <main className="p-8 text-zinc-400">Loading NPC...</main>;
+  if (isLoading || loadedScope !== scopeKey) {
+    return <main className="app-page-wide p-4 text-zinc-400 sm:p-6 lg:p-8" role="status">Loading NPC profile for this campaign...</main>;
   }
 
   if (!npc) {
     return (
-      <main className="p-8 text-white">
+      <main className="app-page-wide p-4 text-white sm:p-6 lg:p-8">
         <div className="max-w-xl bg-white/5 border border-white/10 rounded-2xl p-8">
-          <h1 className="text-2xl font-bold">NPC not found</h1>
+          <h1 className="text-2xl font-bold">{error ? "Unable to load NPC" : "NPC not found"}</h1>
           <p className="mt-2 text-sm text-zinc-400">
             This NPC does not exist in the active campaign, or it is not visible in the current mode.
           </p>
           {error ? <p className="mt-3 text-sm text-rose-300">{error}</p> : null}
+          {error ? <button type="button" onClick={() => setLoadVersion((version) => version + 1)} className="mt-3 text-sm text-white underline">Retry</button> : null}
           <button
             type="button"
             onClick={() => navigate("/npcs")}
@@ -1590,7 +1507,7 @@ export default function NpcProfile() {
 
   if (!isGM && npc.visibility === "gm-only") {
     return (
-      <main className="flex-1 p-8 overflow-auto">
+      <main className="app-page-wide flex-1 overflow-auto p-4 sm:p-6 lg:p-8">
         <div className="max-w-xl mx-auto bg-white/5 border border-white/10 rounded-2xl p-8 text-center">
           <h1 className="text-2xl font-bold text-white mb-2">DM Eyes Only</h1>
           <p className="text-zinc-400 text-sm mb-4">This NPC is marked GM-only.</p>
@@ -1614,7 +1531,7 @@ export default function NpcProfile() {
   const TypeIcon = getNpcTypeIcon(viewNpc.type);
 
   return (
-    <main className="flex-1 overflow-auto p-4 sm:p-6 lg:p-8">
+    <main className="app-page-wide flex-1 overflow-auto p-4 sm:p-6 lg:p-8">
       <div className="mb-6 flex flex-col gap-4">
         <button
           type="button"
@@ -1730,8 +1647,8 @@ export default function NpcProfile() {
                   </div>
                 ) : (
                   <>
-                    <h1 className="text-3xl font-bold text-white">{viewNpc.name || "Unnamed NPC"}</h1>
-                    {viewNpc.title ? <p className="mt-1 text-sm text-zinc-400">{viewNpc.title}</p> : null}
+                    <h1 className="break-words [overflow-wrap:anywhere] text-3xl font-bold text-white">{viewNpc.name || "Unnamed NPC"}</h1>
+                    {viewNpc.title ? <p className="mt-1 break-words [overflow-wrap:anywhere] text-sm text-zinc-400">{viewNpc.title}</p> : null}
                     {normalizeAliases(viewNpc.aliases).length > 0 ? (
                       <div className="mt-4">
                         <p className="text-xs font-medium uppercase tracking-wide text-zinc-500">
@@ -1868,6 +1785,13 @@ export default function NpcProfile() {
             )}
           </section>
 
+          {relatedScope !== scopeKey ? (
+            <section className="rounded-2xl border border-white/10 bg-white/5 p-6 text-sm text-zinc-300" role="status">
+              {relatedError ? (
+                <>{relatedError} <button type="button" onClick={() => setLoadVersion((version) => version + 1)} className="ml-2 underline hover:text-white">Retry</button></>
+              ) : "Loading linked campaign details..."}
+            </section>
+          ) : <>
           <NpcLinkSection
             key={`npc-sessions-${linkDraftKey}`}
             title="Sessions"
@@ -1957,6 +1881,8 @@ export default function NpcProfile() {
             getEntityPath={(location) => `/maps/${location.id}`}
             onLinksChanged={setDraftLinks}
           />
+
+          </>}
 
         </div>
 

@@ -6,6 +6,7 @@ import { Link } from "../../domain/links/link.types";
 let links: Link[] = [];
 let linkKeys = new Set<string>();
 let loadedCampaignId: string | null = null;
+let latestLoad = 0;
 
 function getSelectedCampaignId(): string {
   try {
@@ -28,10 +29,11 @@ function getLinkKey(link: {
   const a = `${link.entityA.type}:${link.entityA.id}`;
   const b = `${link.entityB.type}:${link.entityB.id}`;
 
-  return [a, b, link.label, link.visibility].join("|");
+  return [...[a, b].sort(), link.label, link.visibility].join("|");
 }
 
 export async function loadLinks(campaignId = getSelectedCampaignId()): Promise<Link[]> {
+  const loadId = ++latestLoad;
   if (!campaignId) {
     links = [];
     loadedCampaignId = null;
@@ -43,10 +45,15 @@ export async function loadLinks(campaignId = getSelectedCampaignId()): Promise<L
     `/api/worldbuilding?resource=entityLinks&campaignId=${encodeURIComponent(campaignId)}`
   );
 
-  links = Array.isArray(response.links) ? response.links : [];
-  loadedCampaignId = campaignId;
-  rebuildKeys(links);
-  return [...links];
+  const nextLinks = Array.isArray(response.links) ? response.links : [];
+  // A slower response from a prior campaign or selected mode must not replace
+  // the active view's links after a switch.
+  if (loadId === latestLoad) {
+    links = nextLinks;
+    loadedCampaignId = campaignId;
+    rebuildKeys(links);
+  }
+  return [...nextLinks];
 }
 
 async function ensureLoaded(campaignId = getSelectedCampaignId()) {
@@ -79,7 +86,22 @@ export async function addLink(
   );
   const nextLink = response.link ?? link;
 
+  links = links.filter((candidate) => candidate.id !== nextLink.id);
   links.push(nextLink);
+  rebuildKeys(links);
+}
+
+/** Update the canonical row in place so edits retain its stable id. */
+export async function updateLink(
+  link: Link,
+  campaignId = getSelectedCampaignId()
+): Promise<void> {
+  await ensureLoaded(campaignId);
+  const response = await apiFetch<{ ok: true; link: Link }>(
+    `/api/worldbuilding?resource=entityLinks&campaignId=${encodeURIComponent(campaignId)}`,
+    { method: "PUT", body: JSON.stringify({ link }) }
+  );
+  links = links.map((candidate) => candidate.id === link.id ? response.link : candidate);
   rebuildKeys(links);
 }
 

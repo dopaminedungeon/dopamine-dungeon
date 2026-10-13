@@ -1,7 +1,7 @@
 import { createContext, useCallback, useContext, useEffect, useState } from "react";
 import { useTenant } from "./TenantContext";
 import { useAuth } from "./AuthContext";
-import { createApiCampaign, getApiMe } from "../data/api/apiClient";
+import { createApiCampaign } from "../data/api/apiClient";
 
 const CampaignContext = createContext(null);
 const CAMPAIGN_STORAGE_KEY = "dd_selectedCampaignId";
@@ -11,7 +11,13 @@ function getCampaignAppId(campaign) {
 }
 
 export function CampaignProvider({ children }) {
-  const { selectedTenantId, tenantStatus, membershipVersion } = useTenant();
+  const {
+    accessSnapshot,
+    refreshTenants,
+    selectedTenantId,
+    tenantStatus,
+    membershipVersion,
+  } = useTenant();
   const { user } = useAuth();
   const [campaignStatus, setCampaignStatus] = useState("loading");
   const [accessibleCampaigns, setAccessibleCampaigns] = useState([]);
@@ -49,7 +55,7 @@ export function CampaignProvider({ children }) {
       return;
     }
 
-    if (tenantStatus !== "ready") {
+    if (tenantStatus !== "ready" || !accessSnapshot) {
       setAccessibleCampaigns([]);
       setSelectedCampaignId(null);
       setCampaignRole(null);
@@ -68,9 +74,7 @@ export function CampaignProvider({ children }) {
     setCampaignStatus("loading");
 
     try {
-      const apiMe = await getApiMe();
-
-      const selectedWorkspace = (apiMe.workspaces ?? []).find(
+      const selectedWorkspace = (accessSnapshot.workspaces ?? []).find(
         (workspace) => workspace.slug === selectedTenantId
       );
 
@@ -87,9 +91,9 @@ export function CampaignProvider({ children }) {
         return;
       }
 
-      const memberships = apiMe.campaignMemberships ?? [];
+      const memberships = accessSnapshot.campaignMemberships ?? [];
 
-      const campaigns = (apiMe.campaigns ?? [])
+      const campaigns = (accessSnapshot.campaigns ?? [])
         .filter((campaign) => campaign.workspaceId === selectedWorkspace.id)
         .map((campaign) => {
           const membership = memberships.find(
@@ -154,7 +158,7 @@ export function CampaignProvider({ children }) {
     }
   // membershipVersion intentionally retriggers this loader after membership changes.
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [membershipVersion, selectedCampaignId, selectedTenantId, tenantStatus, user]);
+  }, [accessSnapshot, membershipVersion, selectedCampaignId, selectedTenantId, tenantStatus, user]);
 
   useEffect(() => {
     loadCampaigns();
@@ -238,7 +242,7 @@ export function CampaignProvider({ children }) {
     });
     const campaign = created.campaign;
 
-    await loadCampaigns();
+    await refreshTenants();
     selectCampaign(campaign.slug);
 
     return {
@@ -258,7 +262,7 @@ export function CampaignProvider({ children }) {
         selectCampaign,
         updateCampaignInContext,
         createCampaign,
-        refreshCampaigns: loadCampaigns,
+        refreshCampaigns: refreshTenants,
         campaignRole,
       }}
     >

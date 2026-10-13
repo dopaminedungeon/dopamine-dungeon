@@ -13,7 +13,10 @@ import {
 } from "lucide-react";
 import { useMode } from "../context/ModeContext.jsx";
 import { useCampaign } from "../context/CampaignContext";
+import { useTenant } from "../context/TenantContext.jsx";
 import { locationsRepo } from "../data/maps/locations.repo";
+import { useFilterPreferences } from "../data/preferences/useFilterPreferences.jsx";
+import { MarkdownContent } from "../components/MarkdownContent.jsx";
 import {
   compareCreatedAt,
   compareEntityNames,
@@ -96,21 +99,6 @@ function visibilityPill(visibility) {
   );
 }
 
-function getPlainTextPreview(value, fallback = "No player-facing details added yet.") {
-  const text = String(value || "")
-    .replace(/^#{1,6}\s+/gm, "")
-    .replace(/^\s*[-*]\s+/gm, "")
-    .replace(/\*\*([^*]+)\*\*/g, "$1")
-    .replace(/(^|[^*])\*([^*]+)\*/g, "$1$2")
-    .replace(/_([^_]+)_/g, "$1")
-    .replace(/`([^`]+)`/g, "$1")
-    .replace(/\s+/g, " ")
-    .trim();
-
-  if (!text) return fallback;
-  return text.length > 180 ? `${text.slice(0, 177).trim()}...` : text;
-}
-
 function readImageAsDataUrl(file) {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
@@ -124,14 +112,25 @@ export default function Maps() {
   const navigate = useNavigate();
   const { isGM } = useMode();
   const { selectedCampaignId } = useCampaign();
+  const { selectedTenantId, accessSnapshotUserUid } = useTenant();
+  const filterDefinitions = useMemo(() => ({
+    category: { defaultValue: "All", options: ["All", ...LOCATION_CATEGORIES] },
+    ...(isGM ? { visibility: { defaultValue: "All", options: ["All", "public", "gm-only"] } } : {}),
+  }), [isGM]);
+  const { values: filters, setValue: setFilter, saveValues: saveFilters, isReady: filtersReady } =
+    useFilterPreferences("locations", filterDefinitions);
 
   const [locations, setLocations] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState("");
+  const [loadedScope, setLoadedScope] = useState("");
+  const [loadVersion, setLoadVersion] = useState(0);
+  const scopeKey = `${accessSnapshotUserUid}:${selectedTenantId}:${selectedCampaignId}:${isGM ? "gm" : "player"}`;
+  const isCurrentLoading = isLoading || loadedScope !== scopeKey || !filtersReady;
   const [imageError, setImageError] = useState("");
   const [searchQuery, setSearchQuery] = useState("");
-  const [selectedCategory, setSelectedCategory] = useState("All");
-  const [selectedVisibility, setSelectedVisibility] = useState("All");
+  const selectedCategory = filters.category || "All";
+  const selectedVisibility = filters.visibility || "All";
   const [sortMode, setSortMode] = useState("name-asc");
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [formData, setFormData] = useState(createDraft());
@@ -144,6 +143,7 @@ export default function Maps() {
     async function loadLocations() {
       if (!selectedCampaignId) {
         setLocations([]);
+        setLoadedScope(scopeKey);
         setIsLoading(false);
         return;
       }
@@ -152,12 +152,16 @@ export default function Maps() {
         setIsLoading(true);
         setError("");
         const data = await locationsRepo.getAll(selectedCampaignId);
-        if (!cancelled) setLocations(data);
+        if (!cancelled) {
+          setLocations(data);
+          setLoadedScope(scopeKey);
+        }
       } catch (loadError) {
         console.error("[Locations] Failed to load locations", loadError);
         if (!cancelled) {
           setLocations([]);
           setError("Unable to load Locations right now.");
+          setLoadedScope(scopeKey);
         }
       } finally {
         if (!cancelled) setIsLoading(false);
@@ -169,7 +173,7 @@ export default function Maps() {
     return () => {
       cancelled = true;
     };
-  }, [selectedCampaignId]);
+  }, [scopeKey, selectedCampaignId, loadVersion]);
 
   const filteredLocations = useMemo(() => {
     const query = searchQuery.trim().toLowerCase();
@@ -270,7 +274,7 @@ export default function Maps() {
 
   if (!selectedCampaignId) {
     return (
-      <main className="flex-1 overflow-auto p-8">
+      <main className="app-page-wide flex-1 overflow-auto p-4 sm:p-6 lg:p-8">
         <div className="rounded-2xl border border-white/10 bg-white/5 p-6 text-sm text-zinc-300">
           Select a campaign to view Locations.
         </div>
@@ -279,7 +283,7 @@ export default function Maps() {
   }
 
   return (
-    <main className="flex-1 overflow-auto p-4 sm:p-6 lg:p-8">
+    <main className="app-page-wide flex-1 overflow-auto p-4 sm:p-6 lg:p-8">
       <div className="mb-6 flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
         <div>
           <h1 className="flex items-center gap-3 text-3xl font-bold text-white">
@@ -323,7 +327,7 @@ export default function Maps() {
             Category
             <select
               value={selectedCategory}
-              onChange={(event) => setSelectedCategory(event.target.value)}
+              onChange={(event) => setFilter("category", event.target.value)}
               className="rounded-lg border border-white/10 bg-black/30 px-2.5 py-1.5 text-xs text-zinc-200 outline-none focus:border-indigo-300"
             >
               <option>All</option>
@@ -337,7 +341,7 @@ export default function Maps() {
               Visibility
               <select
                 value={selectedVisibility}
-                onChange={(event) => setSelectedVisibility(event.target.value)}
+                onChange={(event) => setFilter("visibility", event.target.value)}
                 className="rounded-lg border border-white/10 bg-black/30 px-2.5 py-1.5 text-xs text-zinc-200 outline-none focus:border-indigo-300"
               >
                 <option>All</option>
@@ -367,8 +371,7 @@ export default function Maps() {
               type="button"
               onClick={() => {
                 setSearchQuery("");
-                setSelectedCategory("All");
-                setSelectedVisibility("All");
+                saveFilters({ category: "All", ...(isGM ? { visibility: "All" } : {}) });
               }}
               className="rounded-lg border border-white/10 px-2.5 py-1.5 text-xs text-zinc-300 hover:bg-white/10"
             >
@@ -378,17 +381,17 @@ export default function Maps() {
         </div>
       </section>
 
-      {error && (
+      {error && !isCurrentLoading && (
         <div className="mb-4 rounded-xl border border-red-400/20 bg-red-500/10 p-3 text-sm text-red-200">
-          {error}
+          {error} <button type="button" onClick={() => setLoadVersion((version) => version + 1)} className="ml-2 underline hover:text-white">Retry</button>
         </div>
       )}
 
-      {isLoading ? (
+      {isCurrentLoading ? (
         <div className="rounded-2xl border border-white/10 bg-white/5 p-6 text-sm text-zinc-300">
-          Loading Locations...
+          Loading Locations for this campaign...
         </div>
-      ) : sortedLocations.length === 0 ? (
+      ) : error ? null : sortedLocations.length === 0 ? (
         <div className="rounded-2xl border border-white/10 bg-white/5 p-8 text-center">
           <Map className="mx-auto mb-3 h-8 w-8 text-zinc-500" />
           <h2 className="text-base font-semibold text-white">No Locations yet</h2>
@@ -433,7 +436,7 @@ export default function Maps() {
                           </span>
                           {isGM && visibilityPill(location.visibility)}
                         </div>
-                        <h2 className="mt-2 line-clamp-2 text-base font-semibold text-white">
+                        <h2 className="mt-2 line-clamp-2 break-words text-base font-semibold text-white [overflow-wrap:anywhere]">
                           {location.name || "Untitled Location"}
                         </h2>
                       </div>
@@ -441,14 +444,16 @@ export default function Maps() {
                   </div>
 
                   {location.aliases?.length ? (
-                    <p className="mb-3 text-xs text-zinc-500">
+                    <p className="mb-3 break-words text-xs text-zinc-500 [overflow-wrap:anywhere]">
                       Aliases: {location.aliases.slice(0, 4).join(" • ")}
                     </p>
                   ) : null}
 
-                  <p className="line-clamp-4 text-sm leading-6 text-zinc-400">
-                    {getPlainTextPreview(location.summary || location.description)}
-                  </p>
+                  <MarkdownContent
+                    content={location.summary || location.description}
+                    placeholder="No player-facing details added yet."
+                    className="line-clamp-4 text-zinc-400"
+                  />
                 </div>
               </Link>
             );

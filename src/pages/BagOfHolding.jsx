@@ -1,6 +1,8 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { useMode } from "../context/ModeContext.jsx";
 import { useCampaign } from "../context/CampaignContext";
+import { useTenant } from "../context/TenantContext.jsx";
+import { useFilterPreferences } from "../data/preferences/useFilterPreferences.jsx";
 import { Search, Plus } from "lucide-react";
 import { Link, NavLink } from "react-router-dom";
 import { createLink } from "../domain/links/link.service";
@@ -8,27 +10,34 @@ import { addLink, getLinksForEntity, loadLinks, removeLink } from "../data/links
 import { itemsRepo } from "../data/items/items.repo";
 import { bagRepo } from "../data/bag/bag.repo";
 
+const BAG_TYPES = [
+  "All",
+  "Weapon",
+  "Armor",
+  "Shield",
+  "Consumable",
+  "Potion",
+  "Scroll",
+  "Wand",
+  "Staff",
+  "Rod",
+  "Ring",
+  "Wondrous Item",
+  "Tool",
+  "Adventuring Gear",
+  "Mount / Vehicle",
+  "Other",
+];
+
 export default function BagOfHolding() {
   const { isGM } = useMode();
   const { selectedCampaignId } = useCampaign();
-  const bagTypes = [
-    "All",
-    "Weapon",
-    "Armor",
-    "Shield",
-    "Consumable",
-    "Potion",
-    "Scroll",
-    "Wand",
-    "Staff",
-    "Rod",
-    "Ring",
-    "Wondrous Item",
-    "Tool",
-    "Adventuring Gear",
-    "Mount / Vehicle",
-    "Other",
-  ];
+  const { selectedTenantId, accessSnapshotUserUid } = useTenant();
+  const filterDefinitions = useMemo(() => ({ type: { defaultValue: "All", options: BAG_TYPES } }), []);
+  const { values: filters, setValue: setFilter, isReady: filtersReady } =
+    useFilterPreferences("bag", filterDefinitions);
+  const type = filters.type || "All";
+  const scopeKey = `${accessSnapshotUserUid}:${selectedTenantId}:${selectedCampaignId}:${isGM ? "gm" : "player"}`;
 
   const bagTypeLabels = {
     All: "All",
@@ -94,6 +103,7 @@ export default function BagOfHolding() {
   const [bagState, setBagState] = useState({ currency: {}, looseItems: [], linkedEntries: [] });
   const [allItems, setAllItems] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [loadedScope, setLoadedScope] = useState("");
   const [isBagSaving, setIsBagSaving] = useState(false);
   const [linkingItemId, setLinkingItemId] = useState(null);
   const isBagSavingRef = useRef(false);
@@ -144,7 +154,6 @@ export default function BagOfHolding() {
     setCurrencyError("");
   };
   const [search, setSearch] = useState("");
-  const [type, setType] = useState("All");
   const [showModal, setShowModal] = useState(false);
   const [showLinkModal, setShowLinkModal] = useState(false);
   const [linkQuery, setLinkQuery] = useState("");
@@ -153,12 +162,14 @@ export default function BagOfHolding() {
   const [currencyError, setCurrencyError] = useState("");
 
   useEffect(() => {
+    let cancelled = false;
     if (!selectedCampaignId) {
       setBagState({ currency: {}, looseItems: [], linkedEntries: [] });
       setAllItems([]);
       setCurrencyError("");
+      setLoadedScope(scopeKey);
       setLoading(false);
-      return;
+      return () => { cancelled = true; };
     }
 
     async function load() {
@@ -170,25 +181,31 @@ export default function BagOfHolding() {
           loadLinks(selectedCampaignId),
         ]);
 
+        if (cancelled) return;
         setBagState({
           currency: bagData?.currency || {},
           looseItems: Array.isArray(bagData?.looseItems) ? bagData.looseItems : [],
           linkedEntries: Array.isArray(bagData?.linkedEntries) ? bagData.linkedEntries : [],
         });
         setAllItems(Array.isArray(itemData) ? itemData : []);
+        setLoadedScope(scopeKey);
         setCurrencyError("");
       } catch (error) {
         console.error("[BagOfHolding] Failed to load bag data", error);
-        setBagState({ currency: {}, looseItems: [], linkedEntries: [] });
-        setAllItems([]);
+        if (!cancelled) {
+          setBagState({ currency: {}, looseItems: [], linkedEntries: [] });
+          setAllItems([]);
+          setLoadedScope(scopeKey);
+        }
         setCurrencyError("");
       } finally {
-        setLoading(false);
+        if (!cancelled) setLoading(false);
       }
     }
 
     load();
-  }, [selectedCampaignId, rerenderTick]);
+    return () => { cancelled = true; };
+  }, [scopeKey, selectedCampaignId, rerenderTick]);
 
   const itemsById = useMemo(() => {
     return new Map((Array.isArray(allItems) ? allItems : []).map((it) => [String(it.id), it]));
@@ -520,22 +537,22 @@ export default function BagOfHolding() {
 
   if (!selectedCampaignId) {
     return (
-      <main className="flex-1 overflow-auto flex items-center justify-center">
+      <main className="app-page-wide flex-1 overflow-auto flex items-center justify-center">
         <div className="text-zinc-400">Select a campaign to view the Bag of Holding.</div>
       </main>
     );
   }
 
-  if (loading) {
+  if (loading || loadedScope !== scopeKey || !filtersReady) {
     return (
-      <main className="flex-1 overflow-auto flex items-center justify-center">
+      <main className="app-page-wide flex-1 overflow-auto flex items-center justify-center">
         <div className="text-zinc-400">Loading Bag of Holding...</div>
       </main>
     );
   }
 
   return (
-    <main className="flex-1 overflow-auto">
+    <main className="app-page-wide flex-1 overflow-auto">
       {/* Subsection nav */}
       <div className="mb-4 flex flex-wrap items-center gap-2 overflow-x-auto whitespace-nowrap pr-1 [-webkit-overflow-scrolling:touch]">
         <NavLink
@@ -597,10 +614,10 @@ export default function BagOfHolding() {
 
         <div className="rounded-2xl border border-white/10 bg-white/5 p-3">
           <div className="flex flex-wrap gap-2">
-            {bagTypes.map((t) => (
+            {BAG_TYPES.map((t) => (
               <button
                 key={t}
-                onClick={() => setType(t)}
+                onClick={() => setFilter("type", t)}
                 className={`px-3 py-2 rounded-xl text-sm font-medium whitespace-nowrap transition-all ${
                   type === t
                     ? "bg-blue-500 text-white"
@@ -994,7 +1011,7 @@ export default function BagOfHolding() {
                     onChange={(e) => setForm((p) => ({ ...p, type: e.target.value }))}
                     className="w-full px-3 py-2 bg-white/5 border border-white/10 rounded-xl text-white"
                   >
-                    {bagTypes.filter((t) => t !== "All").map((t) => (
+                    {BAG_TYPES.filter((t) => t !== "All").map((t) => (
                       <option key={t} value={t}>
                         {bagTypeLabels[t] || t}
                       </option>

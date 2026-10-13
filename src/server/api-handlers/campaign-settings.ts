@@ -56,6 +56,16 @@ function normalizeDate(value: unknown, field: "startDate" | "endDate") {
     throw new CampaignSettingsError(`${field} must be an ISO calendar date`, 400);
   }
 
+  const [year, month, day] = normalized.split("-").map(Number);
+  const parsed = new Date(Date.UTC(year, month - 1, day));
+  if (
+    parsed.getUTCFullYear() !== year ||
+    parsed.getUTCMonth() !== month - 1 ||
+    parsed.getUTCDate() !== day
+  ) {
+    throw new CampaignSettingsError(`${field} must be an ISO calendar date`, 400);
+  }
+
   return normalized;
 }
 

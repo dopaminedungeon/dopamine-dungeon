@@ -7,7 +7,7 @@ Decision owner: Magda
 ## Context
 
 Historical decision context follows. Implementation status was reconciled on
-2026-09-05; the current boundary is recorded below.
+2026-10-12; the current boundary is recorded below.
 
 Dopamine Dungeon is migrating application data from Firestore to Neon PostgreSQL.
 
@@ -27,7 +27,10 @@ the destination architecture, not merely an intended direction.
 
 Firebase Authentication remains responsible for user authentication.
 
-Existing Firestore-backed application-data paths are treated as migration debt.
+Historical Firestore-backed application-data paths were migration debt; the
+active browser application-data repositories have since been retired. Retained
+Firestore records and provider configuration remain operational evidence and
+rollback inputs, not an active application persistence path.
 
 [ADR 0006](0006-canonical-workspace-and-campaign-creation.md) defines the
 canonical server-API creation path for workspaces and campaigns. [#298](https://github.com/dopaminedungeon/dopamine-dungeon/issues/298) owns the complete
@@ -52,10 +55,14 @@ uses direct Brevo. The browser Firestore repositories and initialization are
 retired (PR #365).
 
 Firestore remains an explicit historical input for operational tooling and
-retention/recovery. The temporary Production audit reader remains on `dev`
-but was removed from `main` by PR #373. Environment exports, limiter cutover,
-deny-all canary, and physical retirement require separate evidence and authority;
-see the [migration inventory](../FIRESTORE_TO_NEON_MIGRATION.md).
+retention/recovery. The temporary Production audit reader was removed from
+both `dev` and `main` by PR #373 after its one-time evidence capture; it is not
+an available API resource. The private #373 audit report could not be located.
+Environment exports, limiter cutover, deny-all canary, and physical retirement
+require separate evidence and authority; see the
+[migration inventory and #375 gate ledger](../FIRESTORE_TO_NEON_MIGRATION.md#375-production-evidence-ledger-reviewed-2026-10-12).
+Those Production gates remain unverified where the ledger identifies missing
+records; no completion or non-execution is inferred.
 
 ## Consequences
 

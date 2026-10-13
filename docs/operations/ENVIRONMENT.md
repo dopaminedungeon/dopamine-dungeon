@@ -1,6 +1,6 @@
 # Environment Configuration
 
-Repository configuration reviewed: 2026-09-05 (live values not verified)
+Repository configuration reviewed: 2026-10-12 (live values not verified)
 
 ## Purpose
 

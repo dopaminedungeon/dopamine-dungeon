@@ -1,7 +1,7 @@
 # Firestore to Neon Migration Inventory and Authorization Matrix
 
 Status: Development implementation complete; Production operational completion
-requires operator evidence (reviewed 2026-09-05)
+requires operator evidence (reviewed 2026-10-12; see #375 ledger below)
 
 Date: 2026-08-28
 
@@ -173,6 +173,135 @@ importing and reconciling opaque subjects/attempts into Neon, and retaining
 Firestore source evidence for rollback. Trigger Email disablement, rules
 deny-all, and physical Firestore retirement remain separate later operational
 windows.
+
+## #375 Production evidence ledger (reviewed 2026-10-12)
+
+This ledger reconciles repository, public PR, and locally available sanitized
+Development report evidence only. It does not authorize or perform Production
+operations. The checkout contains three ignored Development reports from
+2026-08-31; no Production reconciliation report or access-controlled operator
+archive, Production migration ledger, Production Google-only manifest,
+Production limiter export/import report, configuration archive, or rollback
+record was available to this review. A missing report is **unverified**, not
+proof that an operation did not happen. Do not rerun a potentially completed
+operation to manufacture evidence.
+
+The requester confirms they are the sole prospective Production release
+operator. No personal name or independent approver is recorded in this
+handoff. The tentative maintenance target is around 2027-01-12; this is a
+planning target, not approval or a scheduled window. The exact date/time and
+rollback-retention period remain undecided. The requester does not know which,
+if any, Production migrations, limiter imports, Google-only verification
+steps, or Firestore changes have occurred; these remain **unverified**, not
+evidence of either execution or non-execution.
+
+Safe public evidence references are [PR #365](https://github.com/dopaminedungeon/dopamine-dungeon/pull/365)
+(merged 2026-09-01), [PR #372](https://github.com/dopaminedungeon/dopamine-dungeon/pull/372)
+(merged 2026-09-04), and [PR #373](https://github.com/dopaminedungeon/dopamine-dungeon/pull/373)
+(merged 2026-09-04). PR #365 records Development/Preview implementation and
+explicitly defers Production migration, limiter import, and Firestore
+retirement. PR #372 lists the Production gates and says its merge did not
+perform them. PR #373 confirms the one-time read-only audit was captured and
+reviewed, the temporary claim was removed and verified absent, and the route
+was retired. It does not publish the private audit report or prove the other
+gates below. The requester cannot locate the private report or identify where
+it was stored. The `Owner: Magda` label in the deployment runbook is
+documentation ownership, not evidence that Magda is the release operator.
+
+| Gate | Target | Status | Dated sanitized evidence reference | Owner and next decision |
+| --- | --- | --- | --- | --- |
+| Development implementation and Preview validation | Development / Preview | completed | PR #365, merged 2026-09-01; PR #372, merged 2026-09-04, reports authenticated bootstrap, persistence, verification/recovery, invitation, selected-mode, and direct-mail Preview checks. | No Production completion follows from this. Preserve those PRs as implementation evidence. |
+| Development inventory/reconciliation report generation | Development | completed | Ignored sanitized summaries: `reports/firestore-reconciliation/development/2026-08-31T18-07-34-847Z/summary.md`, `reports/firestore-reconciliation/development/2026-08-31T18-28-59-136Z/summary.md`, and `reports/firestore-reconciliation/development/2026-08-31T18-38-51-997Z/summary.md`. The full JSON reports stay private and uncommitted. | This is Development evidence only. Do not use its limiter export or classifications as Production proof. |
+| Current disposition of Development unresolved findings | Development | unverified | The latest visible Development summaries from 2026-08-31 include `NEEDS_RECONCILIATION` and `UNRESOLVED` classifications. No later Development disposition report was available. Exact per-record findings remain in ignored private reports. | Locate later reviewed evidence or assign an authorized owner to resolve findings; preserve opaque references and do not infer current closure from these dated reports. |
+| One-time Production audit capture and temporary claim removal | Production | completed | PR #373, merged 2026-09-04, reports sanitized audit capture/review and verified claim removal. The requester cannot locate the private report or identify its storage location; no private artifact was available here. | Do not rerun the retired route or restore the claim. Recover the report only if it can be safely located; otherwise retain this as PR-reported evidence and do not claim access to its contents. |
+| Migration 0014 — nullable `users.email_verified_at` | Production Neon | unverified | PR #372 specifies sequence, not application; Production ledger/schema proof is unavailable as of 2026-10-12. | Sole prospective operator (per requester; no name recorded) must obtain sanitized ledger/schema proof. Do not reapply based on this document. |
+| Migration 0015 — workspace creation request key and uniqueness | Production Neon | unverified | PR #372 specifies sequence, not application; no Production ledger/schema proof was available. | Verify ledger and resulting schema before any action; decide forward-fix/restore response. |
+| Migration 0016 — campaign creator/request key and uniqueness | Production Neon | unverified | PR #372 specifies sequence, not application; no Production ledger/schema proof was available. | Verify ledger and constraints before any action. |
+| Migration 0017 — `users.reduced_motion` | Production Neon | unverified | PR #372 specifies sequence, not application; no Production ledger/schema proof was available. | Verify ledger, default, and nullability before any action. |
+| Migration 0018 — campaign summary, GM notes, dates, and update timestamp | Production Neon | unverified | PR #372 specifies sequence, not application; no Production ledger/schema proof was available. | Verify ledger/schema and GM-only projection evidence; do not infer from Development. |
+| Migration 0019 — invitation-character assignments and expiry | Production Neon | unverified | PR #372 specifies sequence, not application; no Production ledger/schema proof was available. | Verify ledger, foreign key, and invitation assignment parity. |
+| Migration 0020 — auth-email limiter subject/attempt tables | Production Neon | unverified | PR #372 specifies sequence, not application; no Production ledger/schema proof was available. | Verify ledger/schema before evaluating limiter import. |
+| Migration 0021 — limiter timestamp time-zone corrections | Production Neon | unverified | PR #372 specifies sequence, not application; no Production ledger/schema proof was available. | Verify ledger and timestamp interpretation before comparing exported attempts. |
+| Migration 0022 — invitation lifecycle fields and active uniqueness index | Production Neon | unverified | PR #372 records sequence and duplicate preflight, not application; no sanitized preflight/ledger/schema result was available. | Verify duplicate preflight result and index before any action; retain its evidence. |
+| Firestore-to-Neon dispositions, including unresolved/archive-only records | Production Firestore + Neon | unverified | No Production `inventory.json`, `reconciliation.json`, `unresolved.json`, or sanitized `summary.md` was available in the checked report directory or reviewed PR text as of 2026-10-12. The local 2026-08-31 reports are Development-only. | Obtain the access-controlled sanitized report and review every unresolved/needs-reconciliation disposition. Existing migration scripts are not approved for Production apply by this ledger. |
+| Google-only verification migration | Production Firebase + Neon | unverified | PR #372 documents a separate guarded dry-run/manifest/apply gate; no Production dry-run, reviewed manifest, apply report, or post-run verification was available. | Confirm via report whether eligible accounts existed. Mark inapplicable only if a target-proven dry run reports none; otherwise obtain separate approval and review partial/failed/skipped outcomes. Never rerun a possibly completed apply. |
+| Complete active 24-hour limiter horizon preserved/imported; counts/timestamps reconciled; fail-closed handoff | Production Firestore + Neon | unverified | PR #365 explicitly deferred this; PR #372 specifies the gate. No private limiter manifest, checksum, count/timestamp comparison, import result, or cutover record was available. | Sole prospective operator must locate access-controlled evidence or obtain approval for a new cutover. Preserve opaque UID/HMAC keys and timestamps; never put keys or export contents in this repository. |
+| Preview auth/API/mail and GM/Player validation | Preview | completed | PR #365, merged 2026-09-01, and PR #372, merged 2026-09-04, report Preview bootstrap, recovery/verification, invitation, mode-boundary, and direct-mail workflows. PR #372 also records 70 full-E2E passes and 3 failures (touch-target assertion, missing expected console error, obsolete seed heading). | This is Preview evidence only. The accessible summary does not distinguish provider acceptance from inbox delivery; keep those separate and unverified. Review the three E2E failures before treating those journeys as release evidence. |
+| Cross-scope runtime verification | Preview / Production | unverified | PR #365 says cross-scope runtime testing was deferred because creating another persistent campaign only for the test would leave shared state while campaign deletion remained deferred to #364. Existing API/boundary tests do not establish a live Production result. | Record explicit other-workspace/campaign denial results after release approval; any runtime fixture needs an approved cleanup plan. This documented deferral is not an approval to skip Production authorization checks. |
+| Production auth/API/mail, GM/Player, and tenant/campaign checks | Production | unverified | PR #372 reports Preview validation, not Production verification. No Production smoke record was available as of 2026-10-12. | After target/release approval, record sanitized auth, API, selected-mode, GM-only projection, mail, and cross-scope results. |
+| Effective Firestore rules, indexes, TTL, and Trigger Email configuration archive | Production | unverified | Repository inventory says these are console-managed and not committed. PR #372 requires an archive; no sanitized archive reference was supplied. | Sole prospective operator must locate or create the approved access-controlled archive before any config change. Record only an internal reference and review disposition. |
+| Rollback readiness, source/archive retention, and historical-data disposition | Production | unverified | PR #372 describes prior-deployment application rollback, migration forward-fix/approved restore, and Firestore retention; no actual backup, retention approval, restore test, or expiry date was available. | Decide and record retention interval, archive owner, restore authority, and deletion approval. Application rollback does not reverse migrations. Preserve historical data until parity and rollback gates pass. |
+| Trigger Email disablement | Production | unverified | PR #365 says it was not disabled in that work; PR #372 reserves a later change window. No subsequent operator record was available. | First verify current state. If still enabled, schedule a separately approved window only after direct Brevo operation, sender/DNS checks, and rollback readiness are evidenced. |
+| Monitored Firestore deny-all canary | Production | unverified | PR #372 reserves a separate later window; no canary result, monitoring interval, or rollback record was available. | First verify current rules/state. Define owner, observation window, success/error thresholds, monitoring, and restore procedure; obtain separate approval before a canary. |
+| Physical Firestore/configuration retirement and data-deletion disposition | Production | unverified | PR #372 defers physical/historical retirement; no deletion approval, retention expiry, or archive verification was available. | Keep data/configuration intact until reconciliation, replacement authorization, canary, and retention gates pass. Obtain separate data-owner approval and record exact scope before retirement. |
+
+The inventory documents workspace-only Firestore invitations as an explicitly
+retired application behavior. This is a design-level disposition, not proof
+that Production contains none and not authorization to delete any matching
+records. Their actual Production count and per-record reconciliation status
+remain unverified until the sanitized report is available.
+
+No Production gate is marked pending solely because a runbook says it should
+happen; current state must first be confirmed by the sole prospective
+operator. No gate is currently proven inapplicable. Google-only verification is inapplicable only
+if an approved target-proven dry run establishes that no eligible accounts
+exist.
+
+### Ordered operator handoff (no action authorized by #375)
+
+1. **Recover evidence and resolve approval ownership:** the requester confirms
+   they are the sole prospective release operator (no personal name is
+   recorded here); identify an independent approver and the approved private
+   evidence/archive location; reconcile any existing Production migration
+   ledger, audit report, record dispositions,
+   Google-only manifest/results, limiter evidence, configuration archive,
+   deployment record, and rollback/retention approval. Do not repeat completed
+   work. Resolve whether Production already runs the Iteration 3 release before
+   proposing a change.
+2. **Read-only readiness review:** prove the exact Firebase/Neon/Vercel target
+   from non-secret metadata; inspect migration state and the `0022` duplicate
+   preflight evidence; review Firestore dispositions and effective
+   rules/indexes/TTL/Trigger Email archive; resolve Preview resource-sharing
+   topology where relevant. Stop on missing, conflicting, or unresolved
+   evidence. The existing reconciliation reporter is read-only; legacy
+   migration scripts are not a Production importer and are not approved for
+   apply.
+3. **Approve cutover and rollback before a change window:** explicitly approve
+   any required migrations in order `0014`–`0022`, Google-only verification
+   only if applicable, the complete final active 24-hour limiter snapshot and
+   import, exact count/timestamp reconciliation, and a controlled fail-closed
+   handoff before Neon becomes authoritative. Capture results after each step.
+   No dual-read/write is allowed. Keep Firestore source data and the export for
+   an operator-approved retention period. Set that period and restore authority
+   before beginning; neither is established by current evidence. The tentative
+   planning target is around 2027-01-12, not an approved or scheduled window.
+   Decide the exact date/time and rollback-retention period before proceeding.
+   Migration rollback is forward-fix or an approved database restore, not
+   application rollback.
+4. **Deploy and verify only after gates pass:** use the approved release
+   workflow, then record sanitized Production auth/API/mail, GM/Player
+   visibility, cross-workspace/campaign denial, and non-destructive smoke
+   evidence. Record Brevo provider acceptance separately from inbox delivery.
+   If a check fails, stop rollout and use the approved application rollback
+   while preserving migrations and source evidence.
+5. **Separate Trigger Email disablement window:** verify current state and
+   dependencies first. Disable only after archived configuration, accepted
+   direct-mail tests, monitored sender/DNS/provider readiness, sole prospective
+   operator, independent approver, and rollback procedure are recorded.
+6. **Separate deny-all canary window:** only after replacement authorization
+   checks and absence of Firestore application dependencies are proven. Approve
+   a monitored duration, alert thresholds, operator, and rules-restore
+   procedure; record the canary result before advancing.
+7. **Separate physical retirement window:** only after successful canary,
+   complete reconciliation with no unresolved data, verified archives, and
+   expiry of the explicitly approved retention period. Obtain data-owner and
+   operational approval for the exact records/configuration to retire. Preserve
+   source archives and audit evidence according to the approved retention
+   policy; no exact date/time or retention expiry is established.
+
+The private evidence reference must be an access-controlled internal pointer
+recorded by the operator, not a copied report or secret in this repository.
+Until supplied, the relevant status remains **unverified**.
 
 ## Related architecture records
 

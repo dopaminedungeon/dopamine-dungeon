@@ -5,6 +5,7 @@ import { useAuth } from "../context/AuthContext";
 import { useCampaign } from "../context/CampaignContext";
 import { getCharacterById, removeCharacter, upsertCharacter } from "../data/characters/characters.repo";
 import { getApiCharacterAssignments, unassignApiCharacter } from "../data/api/apiClient";
+import { MarkdownContent } from "../components/MarkdownContent.jsx";
 
 const abilityLabels = {
   str: "STR",
@@ -617,7 +618,7 @@ const PCProfile = () => {
   // unless the character is explicitly theirs.
   if (!canPlayerViewPc && pc) {
     return (
-      <main className="flex-1 p-8 overflow-auto">
+      <main className="app-page-wide flex-1 overflow-auto p-4 sm:p-6 lg:p-8">
         <div className="max-w-xl mx-auto bg-white/5 border border-white/10 rounded-2xl p-8 text-center">
           <h1 className="text-2xl font-bold text-white mb-2">DM Eyes Only</h1>
           <p className="text-zinc-400 text-sm mb-4">
@@ -636,7 +637,7 @@ const PCProfile = () => {
 
   if (isLoading) {
     return (
-      <div className="p-8 text-white">
+      <div className="app-page-wide p-4 text-white sm:p-6 lg:p-8">
         <div className="max-w-md space-y-3">
           <h1 className="text-xl font-semibold">Loading PC…</h1>
           <p className="text-sm text-zinc-400">
@@ -649,7 +650,7 @@ const PCProfile = () => {
 
   if (!pc) {
     return (
-      <div className="p-8 text-white">
+      <div className="app-page-wide p-4 text-white sm:p-6 lg:p-8">
         <div className="max-w-md space-y-3">
           <h1 className="text-xl font-semibold">PC not found</h1>
           <p className="text-sm text-zinc-400">
@@ -841,7 +842,7 @@ const PCProfile = () => {
   // Modal-based edit UI removed in favor of inline editor.
 
   return (
-    <div className="p-6 md:p-8 text-white">
+    <div className="app-page-wide p-4 text-white sm:p-6 md:p-8">
       <div className="space-y-6">
         {!isGMMode ? (
           <div className="mb-4 flex items-center gap-2">
@@ -877,7 +878,7 @@ const PCProfile = () => {
                 <span>Back to PCs</span>
               </Link>
             </div>
-            <h1 className="text-2xl md:text-3xl font-semibold tracking-tight flex items-center gap-3">
+            <h1 className="min-w-0 [overflow-wrap:anywhere] text-2xl md:text-3xl font-semibold tracking-tight flex flex-wrap items-center gap-3">
               {pc.name}
               <span className="inline-flex items-center rounded-full bg-indigo-500/20 border border-indigo-400/40 px-3 py-1 text-[11px] font-medium text-indigo-100">
                 {pc.level ? `Level ${pc.level} ` : ""}
@@ -885,9 +886,11 @@ const PCProfile = () => {
                 {classSummary !== "—" ? ` ${classSummary}` : ""}
               </span>
             </h1>
-            <p className="text-xs md:text-sm text-zinc-400 max-w-2xl">
-              {pc.background || pc.publicNotes || "A brave disaster waiting to happen."}
-            </p>
+            <MarkdownContent
+              content={pc.background || pc.publicNotes}
+              placeholder="A brave disaster waiting to happen."
+              className="max-w-2xl text-xs md:text-sm text-zinc-400"
+            />
           </div>
 
           <div className="flex flex-col items-end gap-2 text-right">
@@ -1781,35 +1784,35 @@ const PCProfile = () => {
                   {pc.publicNotes ? (
                   <div>
                     <div className="text-[10px] uppercase tracking-wide text-zinc-500 mb-1">Public Notes</div>
-                    <p className="whitespace-pre-wrap">{pc.publicNotes}</p>
+                    <MarkdownContent content={pc.publicNotes} />
                   </div>
                   ) : null}
 
                   {narrative.personalityTraits ? (
                   <div>
                     <div className="text-[10px] uppercase tracking-wide text-zinc-500 mb-1">Personality Traits</div>
-                    <p className="whitespace-pre-wrap">{narrative.personalityTraits}</p>
+                    <MarkdownContent content={narrative.personalityTraits} />
                   </div>
                   ) : null}
 
                   {narrative.ideals ? (
                   <div>
                     <div className="text-[10px] uppercase tracking-wide text-zinc-500 mb-1">Ideals</div>
-                    <p className="whitespace-pre-wrap">{narrative.ideals}</p>
+                    <MarkdownContent content={narrative.ideals} />
                   </div>
                   ) : null}
 
                   {narrative.bonds ? (
                   <div>
                     <div className="text-[10px] uppercase tracking-wide text-zinc-500 mb-1">Bonds</div>
-                    <p className="whitespace-pre-wrap">{narrative.bonds}</p>
+                    <MarkdownContent content={narrative.bonds} />
                   </div>
                   ) : null}
 
                   {narrative.flaws ? (
                   <div>
                     <div className="text-[10px] uppercase tracking-wide text-zinc-500 mb-1">Flaws</div>
-                    <p className="whitespace-pre-wrap">{narrative.flaws}</p>
+                    <MarkdownContent content={narrative.flaws} />
                   </div>
                   ) : null}
                 </div>
@@ -1831,16 +1834,14 @@ const PCProfile = () => {
                 {isGMMode ? (
                   <>
                     {pc.gmNotes ? (
-                      <p className="text-[11px] md:text-xs text-zinc-200 whitespace-pre-wrap">
-                        {pc.gmNotes}
-                      </p>
+                      <MarkdownContent content={pc.gmNotes} className="text-[11px] md:text-xs text-zinc-200" />
                     ) : null}
                     {pc.secrets ? (
                       <div className="mt-2 rounded-lg bg-black/60 border border-rose-500/40 px-3 py-2 text-[11px] md:text-xs text-rose-100">
                         <div className="text-[10px] uppercase tracking-wide text-rose-300 mb-1">
                           Secrets
                         </div>
-                        <p className="whitespace-pre-wrap">{pc.secrets}</p>
+                        <MarkdownContent content={pc.secrets} />
                       </div>
                     ) : null}
                   </>

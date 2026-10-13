@@ -1,6 +1,6 @@
 # Active Feature Surface Audit
 
-Last updated: 2026-09-05 (persistence dispositions reconciled in #328)
+Last updated: 2026-10-12 (surface dispositions reconciled in #407)
 Issue: [#319](https://github.com/dopaminedungeon/dopamine-dungeon/issues/319)
 
 ## Purpose
@@ -8,6 +8,13 @@ Issue: [#319](https://github.com/dopaminedungeon/dopamine-dungeon/issues/319)
 This audit records which product surfaces are active, which were retired, and
 which domain concepts remain only as infrastructure or future work. It is not a
 roadmap and does not authorize future feature implementation.
+
+Since the #319 inventory, the bounded NPC–Location canonical-link repair and
+application width audit shipped in [PR #398](https://github.com/dopaminedungeon/dopamine-dungeon/pull/398)
+and [PR #401](https://github.com/dopaminedungeon/dopamine-dungeon/pull/401);
+Profile Settings width shipped in [PR #400](https://github.com/dopaminedungeon/dopamine-dungeon/pull/400).
+These changes improve the listed existing surfaces without adding a product
+module or changing this inventory's retain/retire decisions.
 
 ## Audit summary
 
@@ -55,9 +62,11 @@ pending a separate decision about near-term session cross-linking.
 
 - Dashboard activity and “what matters now” signals need a separate product
   decision backed by authoritative data.
-- Campaign creation and retained settings metadata now follow the Neon/API
-  ownership plan. Deletion remains #364; #264 still needs owner validation of
-  its original persistence acceptance criteria before its status is changed.
+- Campaign creation and retained settings metadata follow the Neon/API
+  ownership plan. Campaign Settings persistence was delivered in
+  [PR #387](https://github.com/dopaminedungeon/dopamine-dungeon/pull/387); safe
+  campaign deletion remains separately tracked in
+  [#364](https://github.com/dopaminedungeon/dopamine-dungeon/issues/364).
 - Location image storage and upload limits need a focused persistence decision.
 - PC profile cross-link presentation remains future work; the typed link
   infrastructure is already preserved.

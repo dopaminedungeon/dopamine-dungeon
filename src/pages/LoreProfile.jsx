@@ -1,3 +1,4 @@
+import { MarkdownContent } from "../components/MarkdownContent.jsx";
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import {
@@ -148,114 +149,9 @@ function normalizeLore(input = {}) {
   };
 }
 
-function renderInlineMarkdown(text) {
-  const raw = String(text || "");
-  const parts = [];
-  const pattern = /(\*\*[^*]+\*\*|_[^_]+_|\*[^*]+\*)/g;
-  let lastIndex = 0;
-  let match;
-
-  while ((match = pattern.exec(raw)) !== null) {
-    if (match.index > lastIndex) {
-      parts.push(raw.slice(lastIndex, match.index));
-    }
-
-    const token = match[0];
-    if (token.startsWith("**")) {
-      parts.push(<strong key={parts.length}>{token.slice(2, -2)}</strong>);
-    } else {
-      parts.push(<em key={parts.length}>{token.slice(1, -1)}</em>);
-    }
-
-    lastIndex = match.index + token.length;
-  }
-
-  if (lastIndex < raw.length) {
-    parts.push(raw.slice(lastIndex));
-  }
-
-  return parts.map((part, index) =>
-    typeof part === "string" ? <React.Fragment key={index}>{part}</React.Fragment> : part
-  );
-}
-
-function renderMarkdownBlock(value, placeholder = "") {
-  const text = String(value || "").trim();
-  if (!text) {
-    return placeholder ? <p className="text-sm italic text-zinc-500">{placeholder}</p> : null;
-  }
-
-  const nodes = [];
-  let paragraphLines = [];
-  let listItems = [];
-
-  const flushParagraph = () => {
-    if (paragraphLines.length === 0) return;
-    const content = paragraphLines.join("\n");
-    nodes.push(
-      <p key={`p-${nodes.length}`} className="whitespace-pre-line leading-6">
-        {renderInlineMarkdown(content)}
-      </p>
-    );
-    paragraphLines = [];
-  };
-
-  const flushList = () => {
-    if (listItems.length === 0) return;
-    nodes.push(
-      <ul key={`ul-${nodes.length}`} className="list-disc space-y-1 pl-5">
-        {listItems.map((item, index) => (
-          <li key={index}>{renderInlineMarkdown(item)}</li>
-        ))}
-      </ul>
-    );
-    listItems = [];
-  };
-
-  text.split("\n").forEach((line) => {
-    const trimmed = line.trim();
-
-    if (!trimmed) {
-      flushParagraph();
-      flushList();
-      return;
-    }
-
-    const heading = trimmed.match(/^(#{1,3})\s+(.+)$/);
-    if (heading) {
-      flushParagraph();
-      flushList();
-      const level = heading[1].length;
-      const className =
-        level === 1
-          ? "text-xl font-semibold text-white"
-          : level === 2
-            ? "text-lg font-semibold text-white"
-            : "text-base font-semibold text-zinc-100";
-      nodes.push(
-        <h3 key={`h-${nodes.length}`} className={className}>
-          {renderInlineMarkdown(heading[2])}
-        </h3>
-      );
-      return;
-    }
-
-    const listItem = trimmed.match(/^[-*]\s+(.+)$/);
-    if (listItem) {
-      flushParagraph();
-      listItems.push(listItem[1]);
-      return;
-    }
-
-    flushList();
-    paragraphLines.push(line.trimEnd());
-  });
-
-  flushParagraph();
-  flushList();
-
-  return <div className="space-y-3 text-sm text-zinc-300">{nodes}</div>;
-}
+const renderMarkdownBlock = (value, placeholder = "") => (
+  <MarkdownContent content={value} placeholder={placeholder} />
+);
 
 function Card({ title, children }) {
   return (
@@ -875,7 +771,7 @@ export default function LoreProfile() {
 
   if (isLoading) {
     return (
-      <main className="flex-1 overflow-auto p-8">
+      <main className="app-page-wide flex-1 overflow-auto p-4 sm:p-6 lg:p-8">
         <div className="rounded-2xl border border-white/10 bg-white/5 p-6 text-sm text-zinc-300">
           Loading Lore...
         </div>
@@ -885,7 +781,7 @@ export default function LoreProfile() {
 
   if (!canView) {
     return (
-      <main className="flex-1 overflow-auto p-8">
+      <main className="app-page-wide flex-1 overflow-auto p-4 sm:p-6 lg:p-8">
         <button
           type="button"
           onClick={() => navigate("/lore")}
@@ -905,7 +801,7 @@ export default function LoreProfile() {
   }
 
   return (
-    <main className="flex-1 overflow-auto p-4 sm:p-6 lg:p-8">
+    <main className="app-page-wide flex-1 overflow-auto p-4 sm:p-6 lg:p-8">
       <button
         type="button"
         disabled={isSaving || isDeleting}
@@ -1018,11 +914,11 @@ export default function LoreProfile() {
                       {viewLore.visibility === "public" ? "Player-visible" : "GM-only"}
                     </span>
                   </div>
-                  <h1 className="text-3xl font-bold text-white">{viewLore.name || "Untitled Lore"}</h1>
+                  <h1 className="break-words text-3xl font-bold text-white">{viewLore.name || "Untitled Lore"}</h1>
                   {viewLore.aliases?.length ? (
                     <div className="mt-3 text-sm">
                       <p className="font-medium text-zinc-300">Aliases:</p>
-                      <p className="mt-1 text-zinc-400">{viewLore.aliases.join(" • ")}</p>
+                      <p className="mt-1 break-words [overflow-wrap:anywhere] text-zinc-400">{viewLore.aliases.join(" • ")}</p>
                     </div>
                   ) : null}
                 </>

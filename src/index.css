@@ -9,3 +9,9 @@
   body { @apply bg-black text-zinc-100 antialiased; }
   #root { @apply min-h-screen; }
 }
+
+@layer components {
+  .app-page-standard { @apply mx-auto w-full min-w-0 max-w-6xl; }
+  .app-page-wide { @apply mx-auto w-full min-w-0 max-w-7xl; }
+  .app-reading-width { @apply max-w-prose; }
+}

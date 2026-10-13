@@ -60,6 +60,10 @@ must never select, merge, or repair an identity by email, and browser clients
 cannot invoke or assert this migration state. Firebase remains the live
 verification authority after the migration.
 
+The presence of this operator tool and its release instructions does not prove
+that the Production migration ran. Its Production execution record remains
+unverified in the [#375 gate ledger](../FIRESTORE_TO_NEON_MIGRATION.md#375-production-evidence-ledger-reviewed-2026-10-12).
+
 ## Ongoing validation
 
 - Verify the real development or Preview inbox/action-link flow; emulator
