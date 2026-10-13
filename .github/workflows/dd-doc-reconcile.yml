@@ -25,7 +25,7 @@ jobs:
     concurrency:
       group: dd-doc-reconcile-${{ github.event.issue.number || github.run_id }}
       cancel-in-progress: false
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-26.04
 
     steps:
       - name: Checkout repository
