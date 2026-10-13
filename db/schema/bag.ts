@@ -35,7 +35,7 @@ export const bagEntries = pgTable(
     name: text("name").default("").notNull(),
     category: text("category"),
     quantity: integer("quantity").default(1).notNull(),
-    worthGp: doublePrecision("worth_gp").default(0).notNull(),
+    worthGp: doublePrecision("worth_gp"),
     notes: text("notes"),
     addedBy: text("added_by"),
     createdAt: timestamp("created_at").defaultNow().notNull(),

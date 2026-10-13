@@ -13,7 +13,8 @@ import {
   itemReadWhere,
   stripGmOnlyItemFields,
 } from "../security-boundaries.js";
-import { canViewAsGm } from "../viewer-mode.js";
+import { canViewAsGm, getSelectedMode } from "../viewer-mode.js";
+import { parseWorthGp, worthGpFromCopper } from "../../domain/currency/worth.js";
 import { items } from "../../../db/schema/items.js";
 
 type ItemRow = typeof items.$inferSelect;
@@ -66,6 +67,13 @@ function toItemValues(campaignId: string, rawItem: Record<string, unknown>) {
       : "public";
   const now = new Date();
 
+  const data: Record<string, unknown> = { ...rawItem, id: itemId, visibility };
+  if (Object.prototype.hasOwnProperty.call(rawItem, "worthGp")) {
+    const copper = parseWorthGp(rawItem.worthGp);
+    if (copper == null) delete data.worthGp;
+    else data.worthGp = worthGpFromCopper(copper);
+  }
+
   return {
     campaignId,
     id: itemId,
@@ -74,11 +82,7 @@ function toItemValues(campaignId: string, rawItem: Record<string, unknown>) {
     rarity: normalizeString(rawItem.rarity, "Common") || "Common",
     power: normalizeNumber(rawItem.power, 0),
     visibility,
-    data: {
-      ...rawItem,
-      id: itemId,
-      visibility,
-    },
+    data,
     updatedAt: now,
   };
 }
@@ -146,6 +150,19 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         return res
           .status(400)
           .json({ ok: false, error: "Item payload is required" });
+      }
+
+      if (getSelectedMode(req) !== "gm") {
+        const incoming = rawItem as Record<string, unknown>;
+        if (Object.prototype.hasOwnProperty.call(incoming, "worthGp")) {
+          throw new Error("GM mode is required to edit item worth");
+        }
+        const existing = await db.select({ data: items.data }).from(items).where(
+          and(eq(items.campaignId, campaign.id), eq(items.id, normalizeString(incoming.id)))
+        ).limit(1);
+        if (existing[0]?.data && Object.prototype.hasOwnProperty.call(existing[0].data, "worthGp")) {
+          throw new Error("GM mode is required to edit item worth");
+        }
       }
 
       const values = toItemValues(campaign.id, rawItem as Record<string, unknown>);

@@ -162,6 +162,13 @@
       "when": 1788293805769,
       "tag": "0022_fuzzy_sinister_six",
       "breakpoints": true
+    },
+    {
+      "idx": 23,
+      "version": "7",
+      "when": 1791887658723,
+      "tag": "0023_chief_albert_cleary",
+      "breakpoints": true
     }
   ]
 }

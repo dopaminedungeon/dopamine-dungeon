@@ -3,6 +3,7 @@ import { Link, useParams, useNavigate } from "react-router-dom";
 import { useMode } from "../context/ModeContext.jsx";
 import { ArrowLeft, Swords, Shield, Sparkles, Trash2 } from "lucide-react";
 import { itemsRepo } from "../data/items/items.repo";
+import { parseWorthGp } from "../domain/currency/worth";
 import { sessionsRepo } from "../data/sessions/sessions.repo";
 import { npcsRepo } from "../data/npcs/npcs.repo";
 import { loreRepo } from "../data/lore/lore.repo";
@@ -440,6 +441,7 @@ export default function ItemProfile() {
   const [locations, setLocations] = useState([]);
   const [loading, setLoading] = useState(true);
   const [isItemSaving, setIsItemSaving] = useState(false);
+  const [worthError, setWorthError] = useState("");
   const [isItemDeleting, setIsItemDeleting] = useState(false);
   const isItemSavingRef = useRef(false);
   const [linksVersion, setLinksVersion] = useState(0);
@@ -625,6 +627,7 @@ export default function ItemProfile() {
     if (!isGM || isItemSaving || isItemDeleting) return;
 
     setFormData(rawItem || null);
+    setWorthError("");
     setDraftLinks(itemLinks);
     setLinkDraftKey((key) => key + 1);
     setIsEditing(true);
@@ -634,6 +637,7 @@ export default function ItemProfile() {
     if (isItemSaving) return;
 
     setFormData(rawItem || null);
+    setWorthError("");
     setDraftLinks(null);
     setLinkDraftKey((key) => key + 1);
     setIsEditing(false);
@@ -643,6 +647,8 @@ export default function ItemProfile() {
     if (isItemSavingRef.current || isItemDeleting || !formData || !selectedCampaignId) return;
 
     try {
+      parseWorthGp(formData.worthGp);
+      setWorthError("");
       isItemSavingRef.current = true;
       setIsItemSaving(true);
       const savedItem = await itemsRepo.upsert(selectedCampaignId, formData);
@@ -653,6 +659,8 @@ export default function ItemProfile() {
       setDraftLinks(null);
       setLinkDraftKey((key) => key + 1);
       setIsEditing(false);
+    } catch (error) {
+      setWorthError(error instanceof Error ? error.message : "Could not save item worth. Please try again.");
     } finally {
       isItemSavingRef.current = false;
       setIsItemSaving(false);
@@ -883,7 +891,7 @@ export default function ItemProfile() {
             </div>
           </div>
 
-          <div className="grid grid-cols-2 md:grid-cols-3 gap-3 text-sm">
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-sm">
             <div className="bg-white/5 rounded-xl border border-white/10 px-4 py-3">
               <p className="text-zinc-500 text-xs uppercase tracking-wide">Bonus</p>
               {isEditing && isGM ? (
@@ -943,8 +951,27 @@ export default function ItemProfile() {
                 </p>
               )}
             </div>
+            <div className="bg-white/5 rounded-xl border border-white/10 px-4 py-3">
+              <label htmlFor="item-worth-gp" className="text-zinc-500 text-xs uppercase tracking-wide">Worth (gp each)</label>
+              {isEditing && isGM ? (
+                <input
+                  id="item-worth-gp"
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  inputMode="decimal"
+                  className="mt-1 w-full bg-transparent border border-white/20 rounded-lg px-2 py-1 text-white"
+                  value={formData.worthGp ?? ""}
+                  onChange={(event) => { handleFieldChange("worthGp", event.target.value); if (worthError) setWorthError(""); }}
+                  placeholder="Not set"
+                />
+              ) : (
+                <p className="text-white text-xl font-bold">{formData.worthGp == null ? "—" : `${formData.worthGp} gp`}</p>
+              )}
+            </div>
           </div>
         </div>
+        {worthError ? <p role="alert" className="mt-3 rounded-xl border border-red-400/30 bg-red-500/10 px-3 py-2 text-sm text-red-200">{worthError}</p> : null}
       </div>
 
       {/* Player vs GM columns */}
