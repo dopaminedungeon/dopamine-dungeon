@@ -169,6 +169,13 @@
       "when": 1791887658723,
       "tag": "0023_chief_albert_cleary",
       "breakpoints": true
+    },
+    {
+      "idx": 24,
+      "version": "7",
+      "when": 1791894402260,
+      "tag": "0024_past_cobalt_man",
+      "breakpoints": true
     }
   ]
 }
