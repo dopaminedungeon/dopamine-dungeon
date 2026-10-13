@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { useMode } from "../context/ModeContext.jsx";
 import { useCampaign } from "../context/CampaignContext";
 import { useTenant } from "../context/TenantContext.jsx";
@@ -9,6 +10,7 @@ import { createLink } from "../domain/links/link.service";
 import { addLink, getLinksForEntity, loadLinks, removeLink } from "../data/links/links.repo";
 import { itemsRepo } from "../data/items/items.repo";
 import { bagRepo } from "../data/bag/bag.repo";
+import { formatCopperGp, parseWorthGp, worthGpFromCopper } from "../domain/currency/worth";
 
 const BAG_TYPES = [
   "All",
@@ -108,6 +110,7 @@ export default function BagOfHolding() {
   const [linkingItemId, setLinkingItemId] = useState(null);
   const isBagSavingRef = useRef(false);
   const linkingItemIdRef = useRef(null);
+  const pendingLinkSaveRef = useRef(null);
   const currency = useMemo(() => bagState?.currency || {}, [bagState?.currency]);
   const looseItems = useMemo(
     () => (Array.isArray(bagState?.looseItems) ? bagState.looseItems : []),
@@ -152,12 +155,18 @@ export default function BagOfHolding() {
   const [showModal, setShowModal] = useState(false);
   const [showLinkModal, setShowLinkModal] = useState(false);
   const [linkQuery, setLinkQuery] = useState("");
-  const [rerenderTick, setRerenderTick] = useState(0);
+  const [linkError, setLinkError] = useState("");
   const [pendingRemovalAction, setPendingRemovalAction] = useState(null);
+  const [saleError, setSaleError] = useState("");
+  const [completionError, setCompletionError] = useState("");
+  const [itemOperation, setItemOperation] = useState(null);
+  const [worthDraft, setWorthDraft] = useState(null);
+  const [formError, setFormError] = useState("");
   const [currencyError, setCurrencyError] = useState("");
 
   useEffect(() => {
     let cancelled = false;
+    pendingLinkSaveRef.current = null;
     if (!selectedCampaignId) {
       setBagState({ currency: {}, looseItems: [], linkedEntries: [] });
       setAllItems([]);
@@ -200,7 +209,7 @@ export default function BagOfHolding() {
 
     load();
     return () => { cancelled = true; };
-  }, [scopeKey, selectedCampaignId, rerenderTick]);
+  }, [scopeKey, selectedCampaignId]);
 
   const itemsById = useMemo(() => {
     return new Map((Array.isArray(allItems) ? allItems : []).map((it) => [String(it.id), it]));
@@ -267,10 +276,13 @@ export default function BagOfHolding() {
     );
 
     const linkedQty = filteredLinked.reduce((acc, { entry }) => acc + (Number(entry?.quantity) || 0), 0);
-    // Linked items do not carry independent worth yet; worth stays on loose entries for now.
+    const linkedWorth = filteredLinked.reduce(
+      (acc, { entry }) => acc + (Number(entry?.worth) || 0) * (Number(entry?.quantity) || 0),
+      0
+    );
 
     const totalQty = looseQty + linkedQty;
-    const totalWorth = looseWorth;
+    const totalWorth = looseWorth + linkedWorth;
     return { totalQty, totalWorth };
   }, [filteredLoose, filteredLinked]);
 
@@ -305,6 +317,25 @@ export default function BagOfHolding() {
     return v.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 2 });
   };
 
+  const defaultSaleValue = (worth, quantity) => {
+    if (worth == null) return "";
+    try {
+      const copper = parseWorthGp(worth) * quantity;
+      return copper <= 2_147_483_647 ? formatCopperGp(copper) : "";
+    } catch {
+      return "";
+    }
+  };
+
+  const itemWorthLabel = (worth) => {
+    if (worth == null) return "Not set";
+    try {
+      return `${formatCopperGp(parseWorthGp(worth))} gp`;
+    } catch {
+      return "Not set";
+    }
+  };
+
   const canAdd = true; // requirement: players can add
 
   async function persistBag(next, optimistic = true) {
@@ -325,18 +356,53 @@ export default function BagOfHolding() {
     }
   }
 
-  async function refreshItems() {
-    if (!selectedCampaignId) {
-      setAllItems([]);
-      return;
-    }
+  async function saveEntryWorth() {
+    if (!worthDraft || isBagSavingRef.current) return;
     try {
-      const data = await Promise.resolve(itemsRepo.getAll(selectedCampaignId));
-      setAllItems(Array.isArray(data) ? data : []);
+      const next = bagRepo.updateEntryWorth(
+        bagState, worthDraft.kind, worthDraft.id, worthDraft.value
+      );
+      await persistBag(next, false);
+      setWorthDraft(null);
     } catch (error) {
-      console.error("[BagOfHolding] Failed to refresh items", error);
-      setAllItems([]);
+      setWorthDraft((current) => current && ({
+        ...current,
+        error: error instanceof Error && error.message.startsWith("Worth ")
+          ? error.message
+          : "Could not save worth. Please try again.",
+      }));
     }
+  }
+
+  function worthControl(kind, id, name, worth) {
+    if (worthDraft?.kind === kind && worthDraft.id === id) {
+      return (
+        <div className="mt-3 space-y-2">
+          <label className="block text-xs text-zinc-300">
+            Worth (gp each) for {name}
+            <input
+              type="number"
+              min="0"
+              step="0.01"
+              inputMode="decimal"
+              disabled={isBagSaving}
+              value={worthDraft.value}
+              onChange={(event) => setWorthDraft((current) => ({ ...current, value: event.target.value, error: "" }))}
+              className="mt-1 w-full rounded-lg border border-white/10 bg-zinc-950/50 px-2 py-1.5 text-sm text-white"
+              placeholder="Not set"
+            />
+          </label>
+          <div className="flex gap-2">
+            <button type="button" disabled={isBagSaving} onClick={saveEntryWorth} className="rounded-lg bg-indigo-500 px-3 py-1.5 text-xs text-white disabled:opacity-50">{isBagSaving ? "Saving..." : "Save worth"}</button>
+            <button type="button" disabled={isBagSaving} onClick={() => setWorthDraft(null)} className="rounded-lg border border-white/10 px-3 py-1.5 text-xs text-zinc-300 disabled:opacity-50">Cancel</button>
+          </div>
+          {worthDraft.error ? <p role="alert" className="rounded-lg border border-red-400/30 bg-red-500/10 px-3 py-2 text-xs text-red-200">{worthDraft.error}</p> : null}
+        </div>
+      );
+    }
+    return (
+      <button type="button" disabled={isBagSaving} onClick={() => setWorthDraft({ kind, id, value: worth == null ? "" : String(worth), error: "" })} className="text-xs text-indigo-200 hover:text-indigo-100 disabled:opacity-50">Edit worth</button>
+    );
   }
 
   const onSubmit = async (e) => {
@@ -346,21 +412,35 @@ export default function BagOfHolding() {
     const name = form.name.trim();
     if (!name) return;
 
+    let worth = null;
+    try {
+      const copper = parseWorthGp(form.worth);
+      worth = copper == null ? null : worthGpFromCopper(copper);
+      setFormError("");
+    } catch (error) {
+      setFormError(error instanceof Error ? error.message : "Invalid worth in gp");
+      return;
+    }
+
     const newItem = {
       id: `boh-${crypto.randomUUID()}`,
       name,
       qty: Math.max(1, Number(form.qty) || 1),
-      worth: form.worth === "" ? 0 : Math.max(0, Number(form.worth) || 0),
+      worth,
       type: form.type || "Other",
       addedBy: isGM ? "gm" : "player",
       createdAt: Date.now(),
     };
 
     const next = bagRepo.addLooseItem(bagState, newItem);
-    const didSave = await persistBag(next);
-    if (!didSave) return;
-    setShowModal(false);
-    setForm({ name: "", qty: 1, worth: "", type: "Other" });
+    try {
+      const didSave = await persistBag(next, false);
+      if (!didSave) return;
+      setShowModal(false);
+      setForm({ name: "", qty: 1, worth: "", type: "Other" });
+    } catch {
+      setFormError("Could not add item. Please try again.");
+    }
   };
 
   const linkCandidates = useMemo(() => {
@@ -377,48 +457,55 @@ export default function BagOfHolding() {
 
   async function addLinkedItem(itemId) {
     const normalizedItemId = String(itemId);
-    if (isBagSavingRef.current || linkingItemIdRef.current === normalizedItemId) return;
+    if (isBagSavingRef.current || linkingItemIdRef.current ||
+      (pendingLinkSaveRef.current && pendingLinkSaveRef.current.itemId !== normalizedItemId)) return;
 
+    isBagSavingRef.current = true;
+    setIsBagSaving(true);
     linkingItemIdRef.current = normalizedItemId;
     setLinkingItemId(normalizedItemId);
+    setLinkError("");
     try {
-    const existingLink = getLinksForEntity("BagOfHolding", bagId, "Player").find((linkObj) => {
-      if (linkObj?.label !== "contained_in") return false;
-      const other = linkObj.entityA.type === "BagOfHolding" ? linkObj.entityB : linkObj.entityA;
-      return String(other?.id) === normalizedItemId;
-    });
-
-    if (!existingLink) {
-      const linkObj = createLink({
-        entityA: { type: "BagOfHolding", id: bagId },
-        entityB: { type: "Item", id: normalizedItemId },
-        label: "contained_in",
-        visibility: "Player",
+      const existingLink = getLinksForEntity("BagOfHolding", bagId, "Player").find((linkObj) => {
+        if (linkObj?.label !== "contained_in") return false;
+        const other = linkObj.entityA.type === "BagOfHolding" ? linkObj.entityB : linkObj.entityA;
+        return String(other?.id) === normalizedItemId;
       });
-      await addLink(linkObj, selectedCampaignId);
-    }
 
-    const next = bagRepo.addLinkedItem(bagState, normalizedItemId, {
-      sourceType: "linked",
-      addedBy: isGM ? "gm" : "player",
-    });
-    const didSave = await persistBag(next);
-    if (!didSave) return;
-    await refreshItems();
-    setShowLinkModal(false);
-    setLinkQuery("");
-    setRerenderTick((v) => v + 1);
-    setPendingRemovalAction(null);
+      if (!existingLink) {
+        const linkObj = createLink({
+          entityA: { type: "BagOfHolding", id: bagId },
+          entityB: { type: "Item", id: normalizedItemId },
+          label: "contained_in",
+          visibility: "Player",
+        });
+        await addLink(linkObj, selectedCampaignId);
+      }
+
+      const next = pendingLinkSaveRef.current?.next || bagRepo.addLinkedItem(bagState, normalizedItemId, {
+          sourceType: "linked",
+          addedBy: isGM ? "gm" : "player",
+          worth: itemsById.get(normalizedItemId)?.worthGp ?? null,
+        });
+      pendingLinkSaveRef.current = { itemId: normalizedItemId, next };
+      await bagRepo.save(selectedCampaignId, next);
+      pendingLinkSaveRef.current = null;
+      setBagState(next);
+      setShowLinkModal(false);
+      setLinkQuery("");
+    } catch {
+      setLinkError(pendingLinkSaveRef.current
+        ? "Could not confirm the bag entry was saved. Retry to finish linking safely."
+        : "Could not link item. Please try again.");
     } finally {
+      isBagSavingRef.current = false;
+      setIsBagSaving(false);
       linkingItemIdRef.current = null;
       setLinkingItemId(null);
     }
   }
 
-  async function removeLinkedItem(entryId, itemId) {
-    const next = bagRepo.removeLinkedItem(bagState, entryId);
-    await persistBag(next);
-
+  async function cleanupLinkedItemLink(itemId, next) {
     const stillExists = next.linkedEntries.some((entry) => String(entry.itemId) === String(itemId));
     if (!stillExists) {
       const matchingLinks = getLinksForEntity("BagOfHolding", bagId, "Player").filter((linkObj) => {
@@ -430,10 +517,39 @@ export default function BagOfHolding() {
         await removeLink(linkObj.id, selectedCampaignId);
       }
     }
+  }
 
-    await refreshItems();
-    setLinkQuery("");
-    setRerenderTick((v) => v + 1);
+  async function removeBagEntry(kind, entryId, itemId, fromDialog = false) {
+    if (isBagSavingRef.current || !selectedCampaignId) return;
+    isBagSavingRef.current = true;
+    setIsBagSaving(true);
+    setItemOperation("remove");
+    setSaleError("");
+    setCompletionError("");
+    let saved = false;
+    try {
+      const next = kind === "linked"
+        ? bagRepo.removeLinkedItem(bagState, entryId)
+        : bagRepo.removeLooseItem(bagState, entryId);
+      await bagRepo.save(selectedCampaignId, next);
+      saved = true;
+      setBagState(next);
+      if (kind === "linked") await cleanupLinkedItemLink(itemId, next);
+      if (fromDialog) setPendingRemovalAction(null);
+    } catch {
+      if (saved) {
+        if (fromDialog) setPendingRemovalAction(null);
+        setCompletionError("Item removed, but its link could not be updated. Refresh the bag before making further changes.");
+      } else if (fromDialog) {
+        setSaleError("Could not remove item. Please try again.");
+      } else {
+        setCompletionError("Could not remove item. Please try again.");
+      }
+    } finally {
+      isBagSavingRef.current = false;
+      setIsBagSaving(false);
+      setItemOperation(null);
+    }
   }
 
   async function incrementLinkedItem(entryId) {
@@ -454,7 +570,7 @@ export default function BagOfHolding() {
 
     const nextQuantity = (Number(entry.quantity) || 0) - 1;
     if (nextQuantity <= 0) {
-      await removeLinkedItem(entryId, itemId);
+      await removeBagEntry("linked", entryId, itemId);
       return;
     }
 
@@ -462,20 +578,14 @@ export default function BagOfHolding() {
     await persistBag(next);
   }
 
-  async function confirmRemoveLooseItem() {
-    if (!pendingRemovalAction?.itemId) return;
-
-    const next = bagRepo.removeLooseItem(bagState, pendingRemovalAction.itemId);
-    await persistBag(next);
-    setPendingRemovalAction(null);
-  }
-
-  async function confirmSellLooseItem() {
-    if (!pendingRemovalAction?.itemId) return;
-
-    const next = bagRepo.sellLooseItem(bagState, pendingRemovalAction.itemId);
-    await persistBag(next);
-    setPendingRemovalAction(null);
+  async function confirmRemoveItem() {
+    if (!pendingRemovalAction) return;
+    await removeBagEntry(
+      pendingRemovalAction.kind,
+      pendingRemovalAction.entryId || pendingRemovalAction.itemId,
+      pendingRemovalAction.itemId,
+      true
+    );
   }
 
   function updatePendingRemovalValue(value) {
@@ -486,39 +596,51 @@ export default function BagOfHolding() {
         manualSaleValue: value,
       };
     });
+    if (saleError) setSaleError("");
   }
 
-  async function confirmSellLinkedItem() {
-    if (!pendingRemovalAction?.entryId) return;
-
-    const saleValue = Math.max(0, Number(pendingRemovalAction.manualSaleValue) || 0);
-    const afterRemove = bagRepo.removeLinkedItem(bagState, pendingRemovalAction.entryId);
-    const next = bagRepo.applyCurrencyDelta(
-      afterRemove,
-      { gp: saleValue, sp: 0, cp: 0, ep: 0, pp: 0 },
-      "add"
-    );
-
-    await persistBag(next);
-
-    const stillExists = next.linkedEntries.some(
-      (entry) => String(entry.itemId) === String(pendingRemovalAction.itemId)
-    );
-    if (!stillExists) {
-      const matchingLinks = getLinksForEntity("BagOfHolding", bagId, "Player").filter((linkObj) => {
-        if (linkObj?.label !== "contained_in") return false;
-        const other = linkObj.entityA.type === "BagOfHolding" ? linkObj.entityB : linkObj.entityA;
-        return String(other?.id) === String(pendingRemovalAction.itemId);
-      });
-      for (const linkObj of matchingLinks) {
-        await removeLink(linkObj.id, selectedCampaignId);
+  async function confirmSellItem() {
+    if (!pendingRemovalAction || isBagSavingRef.current || !selectedCampaignId) return;
+    const entryId = pendingRemovalAction.entryId || pendingRemovalAction.itemId;
+    let saleValueGp;
+    try {
+      if (parseWorthGp(pendingRemovalAction.manualSaleValue) == null) {
+        setSaleError("Enter a sale value in gp.");
+        return;
       }
+      saleValueGp = pendingRemovalAction.manualSaleValue;
+    } catch (error) {
+      setSaleError(error instanceof Error ? error.message : "Invalid sale value in gp.");
+      return;
     }
 
-    await refreshItems();
-    setLinkQuery("");
-    setRerenderTick((v) => v + 1);
-    setPendingRemovalAction(null);
+    isBagSavingRef.current = true;
+    setIsBagSaving(true);
+    setItemOperation("sell");
+    setCompletionError("");
+    try {
+      const savedBag = await bagRepo.sell(selectedCampaignId, entryId, saleValueGp);
+      setBagState(savedBag);
+      setPendingRemovalAction(null);
+      setSaleError("");
+
+      if (pendingRemovalAction.kind === "linked") {
+        try {
+          await cleanupLinkedItemLink(pendingRemovalAction.itemId, savedBag);
+        } catch (error) {
+          console.error("[BagOfHolding] Sale saved but link cleanup failed", error);
+          setCompletionError("Item sold, but its link could not be updated. Refresh the bag before making further changes.");
+        }
+      }
+    } catch (error) {
+      setSaleError(error instanceof Error && error.message.includes("already sold")
+        ? "This entry was already sold or removed. Refresh the bag before retrying."
+        : "Could not sell item. Your sale value is preserved; please try again.");
+    } finally {
+      isBagSavingRef.current = false;
+      setIsBagSaving(false);
+      setItemOperation(null);
+    }
   }
 
   if (!selectedCampaignId) {
@@ -781,6 +903,8 @@ export default function BagOfHolding() {
           </div>
         </div>
 
+        {completionError ? <p role="alert" className="mb-4 rounded-xl border border-red-400/30 bg-red-500/10 px-3 py-2 text-sm text-red-200">{completionError}</p> : null}
+
         {/* Card grid */}
         {filteredLoose.length === 0 && filteredLinked.length === 0 ? (
           <div className="rounded-2xl border border-white/10 bg-black/20 p-8 text-center">
@@ -856,13 +980,15 @@ export default function BagOfHolding() {
                   <button
                     className="text-[11px] text-red-300 hover:text-red-200 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity"
                     onClick={() => {
+                      setSaleError("");
                       setPendingRemovalAction({
                         kind: "linked",
                         entryId: entry.id,
                         itemId: item?.id || entry.itemId,
                         name: displayName,
                         qty: Math.max(1, Number(entry.quantity) || 1),
-                        manualSaleValue: "",
+                        worth: entry.worth ?? null,
+                        manualSaleValue: defaultSaleValue(entry.worth, Math.max(1, Number(entry.quantity) || 1)),
                       });
                     }}
                     type="button"
@@ -891,8 +1017,9 @@ export default function BagOfHolding() {
                       +
                     </button>
                   </div>
-                  <span>Worth: —</span>
+                  <span>Worth: {entry.worth == null ? "—" : `${gpFmt(entry.worth)} gp each`}</span>
                 </div>
+                {worthControl("linked", entry.id, displayName, entry.worth)}
               </div>
             ))}
 
@@ -925,15 +1052,14 @@ export default function BagOfHolding() {
                   <button
                     className="text-[11px] text-red-300 hover:text-red-200 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity"
                     onClick={() => {
+                      setSaleError("");
                       setPendingRemovalAction({
                         kind: "loose",
                         itemId: it.id,
                         name: it.name,
                         qty: Math.max(1, Number(it.qty) || 1),
-                        worth: Math.max(0, Number(it.worth) || 0),
-                        totalWorth:
-                          Math.max(1, Number(it.qty) || 1) *
-                          Math.max(0, Number(it.worth) || 0),
+                        worth: it.worth ?? null,
+                        manualSaleValue: defaultSaleValue(it.worth, Math.max(1, Number(it.qty) || 1)),
                       });
                     }}
                     type="button"
@@ -944,8 +1070,9 @@ export default function BagOfHolding() {
 
                 <div className="mt-4 flex items-center justify-between text-xs text-zinc-400">
                   <span>Qty: <span className="text-zinc-200">{it.qty}</span></span>
-                  <span>Worth: <span className="text-zinc-200">{gpFmt(it.worth)}</span></span>
+                  <span>Worth: <span className="text-zinc-200">{it.worth == null ? "—" : `${gpFmt(it.worth)} gp each`}</span></span>
                 </div>
+                {worthControl("loose", it.id, it.name, it.worth)}
               </div>
             ))}
           </div>
@@ -953,7 +1080,7 @@ export default function BagOfHolding() {
       </div>
 
       {/* Modal */}
-      {showModal && (
+      {showModal && createPortal((
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4 overflow-auto">
           <div className="w-[92vw] max-w-lg max-h-[85vh] overflow-y-auto bg-zinc-950 border border-white/10 rounded-xl sm:rounded-2xl p-4 sm:p-6">
             <h2 className="text-lg sm:text-xl font-bold text-white mb-4">Add to Bag of Holding</h2>
@@ -961,8 +1088,9 @@ export default function BagOfHolding() {
 	            <form className="space-y-4" onSubmit={onSubmit}>
                 <fieldset disabled={isBagSaving} className="space-y-4 disabled:opacity-60">
               <div>
-                <label className="block text-sm text-zinc-400 mb-1">Item</label>
+                <label htmlFor="bag-loose-name" className="block text-sm text-zinc-400 mb-1">Item</label>
                 <input
+                  id="bag-loose-name"
                   value={form.name}
                   onChange={(e) => setForm((p) => ({ ...p, name: e.target.value }))}
                   className="w-full px-3 py-2 bg-white/5 border border-white/10 rounded-xl text-white"
@@ -972,8 +1100,9 @@ export default function BagOfHolding() {
 
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4">
                 <div>
-                  <label className="block text-sm text-zinc-400 mb-1">Qty</label>
+                  <label htmlFor="bag-loose-qty" className="block text-sm text-zinc-400 mb-1">Qty</label>
                   <input
+                    id="bag-loose-qty"
                     type="number"
                     min={1}
                     value={form.qty}
@@ -982,18 +1111,21 @@ export default function BagOfHolding() {
                   />
                 </div>
                 <div>
-                  <label className="block text-sm text-zinc-400 mb-1">Worth (each)</label>
+                  <label htmlFor="bag-loose-worth" className="block text-sm text-zinc-400 mb-1">Worth (gp each)</label>
                   <input
+                    id="bag-loose-worth"
                     type="number"
                     min={0}
+                    step="0.01"
                     value={form.worth}
-                    onChange={(e) => setForm((p) => ({ ...p, worth: e.target.value }))}
+                    onChange={(e) => { setForm((p) => ({ ...p, worth: e.target.value })); if (formError) setFormError(""); }}
                     className="w-full px-3 py-2 bg-white/5 border border-white/10 rounded-xl text-white"
                   />
                 </div>
                 <div>
-                  <label className="block text-sm text-zinc-400 mb-1">Type</label>
+                  <label htmlFor="bag-loose-type" className="block text-sm text-zinc-400 mb-1">Type</label>
                   <select
+                    id="bag-loose-type"
                     value={form.type}
                     onChange={(e) => setForm((p) => ({ ...p, type: e.target.value }))}
                     className="w-full px-3 py-2 bg-white/5 border border-white/10 rounded-xl text-white"
@@ -1006,6 +1138,8 @@ export default function BagOfHolding() {
                   </select>
                 </div>
               </div>
+
+              {formError ? <p role="alert" className="rounded-xl border border-red-400/30 bg-red-500/10 px-3 py-2 text-sm text-red-200">{formError}</p> : null}
 
 	              <div className="flex flex-col-reverse sm:flex-row sm:justify-end gap-3 pt-2">
                 <button
@@ -1028,10 +1162,10 @@ export default function BagOfHolding() {
 	            </form>
           </div>
         </div>
-      )}
+      ), document.body)}
 
       {/* Link existing Item modal */}
-      {showLinkModal && (
+      {showLinkModal && createPortal((
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4 overflow-auto">
           <div className="w-[92vw] max-w-lg max-h-[85vh] overflow-y-auto bg-zinc-950 border border-white/10 rounded-xl sm:rounded-2xl p-4 sm:p-6">
             <h2 className="text-lg sm:text-xl font-bold text-white mb-2">Link existing Item</h2>
@@ -1054,18 +1188,20 @@ export default function BagOfHolding() {
                 linkCandidates.map((it) => (
                   <button
                     key={it.id}
-                    disabled={isBagSaving || linkingItemId === String(it.id)}
+                    disabled={isBagSaving || (pendingLinkSaveRef.current && pendingLinkSaveRef.current.itemId !== String(it.id))}
                     onClick={() => {
                       addLinkedItem(it.id);
                     }}
-                    className="block w-full text-left px-3 py-2 text-sm text-zinc-200 hover:bg-white/5 disabled:cursor-not-allowed disabled:opacity-60"
+                    className="block w-full min-w-0 text-left px-3 py-2 text-sm text-zinc-200 hover:bg-white/5 disabled:cursor-not-allowed disabled:opacity-60"
                   >
-                    {linkingItemId === String(it.id) ? "Linking..." : it.name}
-                    <span className="ml-2 text-xs text-zinc-500">({it.type || "Other"})</span>
+                    <span className="block wrap-break-word">{linkingItemId === String(it.id) ? "Linking..." : it.name}</span>
+                    <span className="block text-xs text-zinc-400">{it.type || "Other"} · Worth: {itemWorthLabel(it.worthGp)}</span>
                   </button>
                 ))
               )}
             </div>
+
+            {linkError ? <p role="alert" className="rounded-xl border border-red-400/30 bg-red-500/10 px-3 py-2 text-sm text-red-200">{linkError}</p> : null}
 
             <div className="flex flex-col-reverse sm:flex-row sm:justify-end gap-3 pt-4">
               <button
@@ -1074,6 +1210,7 @@ export default function BagOfHolding() {
 	                onClick={() => {
                   setShowLinkModal(false);
                   setLinkQuery("");
+                  if (!pendingLinkSaveRef.current) setLinkError("");
                 }}
 	                className="w-full sm:w-auto px-4 py-2.5 rounded-xl bg-white/5 text-zinc-300 hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-50"
 	              >
@@ -1083,13 +1220,13 @@ export default function BagOfHolding() {
 	            </fieldset>
 	          </div>
         </div>
-      )}
+      ), document.body)}
 
       {/* Remove / sell item modal */}
-      {pendingRemovalAction && (
+      {pendingRemovalAction && createPortal((
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4 overflow-auto">
           <div className="w-[92vw] max-w-md bg-zinc-950 border border-white/10 rounded-xl sm:rounded-2xl p-4 sm:p-6">
-            <h2 className="text-lg sm:text-xl font-bold text-white mb-2">Remove item</h2>
+            <h2 className="text-lg sm:text-xl font-bold text-white mb-2">Remove or sell item</h2>
             <p className="text-sm text-zinc-400 mb-4">
               What happened to <span className="text-white font-medium">{pendingRemovalAction.name}</span>?
             </p>
@@ -1099,63 +1236,46 @@ export default function BagOfHolding() {
                 Qty: <span className="text-white">{pendingRemovalAction.qty}</span>
               </div>
 
-              {pendingRemovalAction.kind === "loose" ? (
-                <>
-                  <div>
-                    Worth each: <span className="text-white">{gpFmt(pendingRemovalAction.worth)} gp</span>
-                  </div>
-                  <div>
-                    Total sale value: <span className="text-white">{gpFmt(pendingRemovalAction.totalWorth)} gp</span>
-                  </div>
-                </>
-              ) : (
-                <div>
-                  Enter agreed sale value: <span className="text-white">manual gp input</span>
-                </div>
-              )}
+              <div>
+                Worth each: <span className="text-white">{pendingRemovalAction.worth == null ? "Not set" : `${gpFmt(pendingRemovalAction.worth)} gp`}</span>
+              </div>
+              <div>Sale removes all {pendingRemovalAction.qty} unit{pendingRemovalAction.qty === 1 ? "" : "s"} from this entry.</div>
             </div>
 
-            {pendingRemovalAction.kind === "linked" ? (
-              <div className="mb-4">
-                <label className="block text-sm text-zinc-400 mb-1">Sale value (gp)</label>
+            <div className="mb-4">
+              <label htmlFor="bag-total-sale-value" className="block text-sm text-zinc-400 mb-1">Total sale value (gp)</label>
 	                  <input
+	                    id="bag-total-sale-value"
 	                    type="number"
 	                    min={0}
+	                    step="0.01"
 	                    inputMode="decimal"
 	                    disabled={isBagSaving}
                   value={pendingRemovalAction.manualSaleValue}
                   onChange={(e) => updatePendingRemovalValue(e.target.value)}
 	                  className="w-full px-3 py-2 bg-white/5 border border-white/10 rounded-xl text-white disabled:cursor-not-allowed disabled:opacity-50"
-                  placeholder="0"
+                  placeholder="Enter amount in gp"
                 />
-              </div>
-            ) : null}
+            </div>
+            {saleError ? <p role="alert" className="mb-4 rounded-xl border border-red-400/30 bg-red-500/10 px-3 py-2 text-sm text-red-200">{saleError}</p> : null}
 
             <div className="grid grid-cols-1 gap-2">
               <button
 	                type="button"
 	                disabled={isBagSaving}
-	                onClick={pendingRemovalAction.kind === "loose" ? confirmRemoveLooseItem : async () => {
-                  await removeLinkedItem(
-                    pendingRemovalAction.entryId,
-                    pendingRemovalAction.itemId
-                  );
-                  setPendingRemovalAction(null);
-                }}
+	                onClick={confirmRemoveItem}
 	                className="w-full px-4 py-2.5 rounded-xl bg-white/5 border border-white/10 text-zinc-200 hover:bg-white/10 transition-colors disabled:cursor-not-allowed disabled:opacity-50"
               >
-                Remove only
+                {itemOperation === "remove" ? "Removing..." : "Remove only"}
               </button>
 
               <button
 	                type="button"
 	                disabled={isBagSaving}
-	                onClick={pendingRemovalAction.kind === "loose" ? confirmSellLooseItem : confirmSellLinkedItem}
+	                onClick={confirmSellItem}
 	                className="w-full px-4 py-2.5 rounded-xl bg-linear-to-r from-emerald-500 to-teal-500 text-white font-medium hover:opacity-90 transition-opacity disabled:cursor-not-allowed disabled:opacity-50"
               >
-                {pendingRemovalAction.kind === "loose"
-                  ? `Sell for ${gpFmt(pendingRemovalAction.totalWorth)} gp`
-                  : `Sell for ${gpFmt(pendingRemovalAction.manualSaleValue)} gp`}
+                {itemOperation === "sell" ? "Selling..." : "Sell item"}
               </button>
 
               <button
@@ -1169,7 +1289,7 @@ export default function BagOfHolding() {
             </div>
           </div>
         </div>
-      )}
+      ), document.body)}
     </main>
   );
 }

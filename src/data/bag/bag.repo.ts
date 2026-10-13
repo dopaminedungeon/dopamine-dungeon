@@ -1,4 +1,5 @@
 import { apiFetch } from "../api/apiClient";
+import { parseWorthGp, worthGpFromCopper } from "../../domain/currency/worth";
 
 type CoinKey = "gp" | "sp" | "cp" | "ep" | "pp";
 
@@ -85,7 +86,7 @@ export type LooseBagItem = {
   id: string;
   name: string;
   qty?: number;
-  worth?: number;
+  worth?: number | null;
   type?: string;
   addedBy?: string;
   createdAt?: number;
@@ -97,6 +98,7 @@ export type BagEntry = {
   itemId: string;
   quantity: number;
   sourceType: "linked" | "manual";
+  worth?: number | null;
   note?: string;
   addedBy?: string;
   createdAt?: number;
@@ -134,7 +136,7 @@ function normalizeLooseItems(input?: LooseBagItem[]): LooseBagItem[] {
         id: String(item.id),
         name: String(item.name),
         qty: Math.max(1, Number(item?.qty) || 1),
-        worth: Math.max(0, Number(item?.worth) || 0),
+        worth: item?.worth == null ? null : Number(item.worth),
         type: item?.type || "Other",
         createdAt: Number(item?.createdAt) || Date.now(),
       };
@@ -157,6 +159,7 @@ function normalizeLinkedEntries(input?: BagEntry[]): BagEntry[] {
         itemId: String(entry.itemId),
         quantity: Math.max(1, Number(entry?.quantity) || 1),
         sourceType: entry?.sourceType === "manual" ? "manual" : "linked",
+        worth: entry?.worth == null ? null : Number(entry.worth),
         createdAt: Number(entry?.createdAt) || Date.now(),
         updatedAt: Number(entry?.updatedAt) || Date.now(),
       };
@@ -195,6 +198,28 @@ export const bagRepo = {
     });
   },
 
+  async sell(campaignId: string, entryId: string, saleValueGp: string): Promise<BagState> {
+    const response = await apiFetch<{ ok: true; bag: BagState }>(
+      `/api/worldbuilding?resource=bag&campaignId=${encodeURIComponent(campaignId)}&action=sell`,
+      { method: "POST", body: JSON.stringify({ entryId, saleValueGp }) }
+    );
+    return normalizeBag(response.bag);
+  },
+
+  updateEntryWorth(bag: BagState, kind: "loose" | "linked", id: string, worthGp: unknown): BagState {
+    const copper = parseWorthGp(worthGp);
+    const worth = copper == null ? null : worthGpFromCopper(copper);
+    const current = normalizeBag(bag);
+    if (kind === "loose") {
+      return { ...current, looseItems: current.looseItems.map((item) =>
+        item.id === id ? { ...item, worth } : item
+      ) };
+    }
+    return { ...current, linkedEntries: current.linkedEntries.map((entry) =>
+      entry.id === id ? { ...entry, worth } : entry
+    ) };
+  },
+
   addLooseItem(bag: BagState, newItem: LooseBagItem): BagState {
     const current = normalizeBag(bag);
     return {
@@ -204,7 +229,7 @@ export const bagRepo = {
         {
           ...newItem,
           qty: Math.max(1, Number(newItem?.qty) || 1),
-          worth: Math.max(0, Number(newItem?.worth) || 0),
+          worth: newItem?.worth == null ? null : Number(newItem.worth),
           type: newItem?.type || "Other",
         },
       ],
@@ -221,39 +246,10 @@ export const bagRepo = {
     };
   },
 
-  sellLooseItem(bag: BagState, itemId: string): BagState {
-    const current = normalizeBag(bag);
-    const itemToSell = current.looseItems.find(
-      (item) => String(item.id) === String(itemId)
-    );
-
-    if (!itemToSell) {
-      return current;
-    }
-
-    const saleValue =
-      Math.max(0, Number(itemToSell.worth) || 0) *
-      Math.max(1, Number(itemToSell.qty) || 1);
-
-    return {
-      ...current,
-      looseItems: current.looseItems.filter(
-        (item) => String(item.id) !== String(itemId)
-      ),
-      currency: {
-        ...normalizeCurrency(current.currency),
-        gp: Math.max(
-          0,
-          (Number(current.currency?.gp) || 0) + saleValue
-        ),
-      },
-    };
-  },
-
   addLinkedItem(
     bag: BagState,
     itemId: string,
-    options?: Pick<BagEntry, "addedBy" | "note" | "sourceType">
+    options?: Pick<BagEntry, "addedBy" | "note" | "sourceType" | "worth">
   ): BagState {
     const current = normalizeBag(bag);
     const normalizedItemId = String(itemId);
@@ -287,6 +283,7 @@ export const bagRepo = {
           itemId: normalizedItemId,
           quantity: 1,
           sourceType: options?.sourceType === "manual" ? "manual" : "linked",
+          worth: options?.worth ?? null,
           ...(options?.note != null ? { note: String(options.note) } : {}),
           ...(options?.addedBy != null ? { addedBy: String(options.addedBy) } : {}),
           createdAt: now,

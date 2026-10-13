@@ -1,5 +1,5 @@
 import type { VercelRequest, VercelResponse } from "@vercel/node";
-import { and, eq, notInArray } from "drizzle-orm";
+import { and, eq, notInArray, sql } from "drizzle-orm";
 
 import {
   getCurrentUser,
@@ -9,13 +9,16 @@ import {
 import { setCorsHeaders } from "../cors.js";
 import { db } from "../db.js";
 import { bagCurrency, bagEntries } from "../../../db/schema/bag.js";
+import { items } from "../../../db/schema/items.js";
+import { canViewAsGm } from "../viewer-mode.js";
+import { parseWorthGp, worthGpFromCopper } from "../../domain/currency/worth.js";
 
 type BagCurrency = Partial<Record<"gp" | "sp" | "cp" | "ep" | "pp", number>>;
 type LooseBagItem = {
   id: string;
   name: string;
   qty?: number;
-  worth?: number;
+  worth?: number | null;
   type?: string;
   addedBy?: string;
   createdAt?: number;
@@ -26,6 +29,7 @@ type LinkedBagEntry = {
   itemId: string;
   quantity: number;
   sourceType: "linked" | "manual";
+  worth?: number | null;
   note?: string;
   addedBy?: string;
   createdAt?: number;
@@ -37,6 +41,15 @@ type BagState = {
   linkedEntries: LinkedBagEntry[];
 };
 type BagEntryInsert = typeof bagEntries.$inferInsert;
+
+class BagRequestError extends Error {
+  constructor(message: string, readonly status: number) { super(message); }
+}
+
+function normalizedWorth(value: unknown): number | null {
+  const copper = parseWorthGp(value);
+  return copper == null ? null : worthGpFromCopper(copper);
+}
 
 const EMPTY_BAG: BagState = {
   currency: { gp: 0, sp: 0, cp: 0, ep: 0, pp: 0 },
@@ -92,7 +105,7 @@ function normalizeLooseItems(input: unknown): LooseBagItem[] {
         id: normalizeString(item.id),
         name: normalizeString(item.name),
         qty: Math.max(1, Math.floor(normalizeNumber(item.qty, 1))),
-        worth: Math.max(0, normalizeNumber(item.worth, 0)),
+        worth: normalizedWorth(item.worth),
         type: normalizeString(item.type, "Other") || "Other",
         createdAt: normalizeNumber(item.createdAt, Date.now()),
       };
@@ -117,6 +130,7 @@ function normalizeLinkedEntries(input: unknown): LinkedBagEntry[] {
         itemId: normalizeString(entry.itemId),
         quantity: Math.max(1, Math.floor(normalizeNumber(entry.quantity, 1))),
         sourceType: entry.sourceType === "manual" ? "manual" : "linked",
+        worth: normalizedWorth(entry.worth),
         createdAt: normalizeNumber(entry.createdAt, Date.now()),
         updatedAt: normalizeNumber(entry.updatedAt, Date.now()),
       };
@@ -149,7 +163,7 @@ function toLooseEntryValues(
     name: item.name,
     category: item.type ?? "Other",
     quantity: Math.max(1, Math.floor(normalizeNumber(item.qty, 1))),
-    worthGp: Math.max(0, normalizeNumber(item.worth, 0)),
+    worthGp: item.worth ?? null,
     notes: item.notes ?? null,
     addedBy: item.addedBy ?? null,
     createdAt,
@@ -170,7 +184,7 @@ function toLinkedEntryValues(
     name: "",
     category: null,
     quantity: Math.max(1, Math.floor(normalizeNumber(entry.quantity, 1))),
-    worthGp: 0,
+    worthGp: entry.worth ?? null,
     notes: entry.note ?? null,
     addedBy: entry.addedBy ?? null,
     createdAt: toDateFromMs(entry.createdAt),
@@ -204,6 +218,7 @@ function toBagPayload(
         itemId: row.itemId,
         quantity: row.quantity,
         sourceType: "linked",
+        worth: row.worthGp,
         ...(row.notes != null ? { note: row.notes } : {}),
         ...(row.addedBy != null ? { addedBy: row.addedBy } : {}),
         createdAt: toMs(row.createdAt),
@@ -227,14 +242,22 @@ function toBagPayload(
   return { currency, looseItems, linkedEntries };
 }
 
+function projectBagForViewer(bag: BagState, isGm: boolean, visibleItemIds: Set<string>): BagState {
+  if (isGm) return bag;
+  return {
+    ...bag,
+    linkedEntries: bag.linkedEntries.filter((entry) => visibleItemIds.has(entry.itemId)),
+  };
+}
+
 export default async function handler(req: VercelRequest, res: VercelResponse) {
-  setCorsHeaders(res, "GET, PUT, OPTIONS");
+  setCorsHeaders(res, "GET, PUT, POST, OPTIONS");
 
   if (req.method === "OPTIONS") {
     return res.status(204).end();
   }
 
-  if (!["GET", "PUT"].includes(req.method || "")) {
+  if (!["GET", "PUT", "POST"].includes(req.method || "")) {
     return res.status(405).json({ ok: false, error: "Method not allowed" });
   }
 
@@ -244,10 +267,15 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     // Normalize the app-safe campaign slug from the frontend to the Postgres campaign UUID.
     const campaign = await resolveCampaignBySlug(campaignSlug);
 
-    await requireCampaignMember({
+    const membership = await requireCampaignMember({
       campaignId: campaign.id,
       userId: currentUser.id,
     });
+    const isGm = canViewAsGm(req, membership.role);
+    const visibleItemRows = isGm ? [] : await db.select({ id: items.id }).from(items).where(
+      and(eq(items.campaignId, campaign.id), eq(items.visibility, "public"))
+    );
+    const visibleItemIds = new Set(visibleItemRows.map((row) => row.id));
 
     if (req.method === "GET") {
       const [currencyRows, entryRows] = await Promise.all([
@@ -265,8 +293,56 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       return res.status(200).json({
         ok: true,
         campaignId: campaign.slug,
-        bag: toBagPayload(currencyRows[0], entryRows),
+        bag: projectBagForViewer(toBagPayload(currencyRows[0], entryRows), isGm, visibleItemIds),
       });
+    }
+
+    if (req.method === "POST") {
+      if (getQueryValue(req.query.action) !== "sell") {
+        throw new BagRequestError("Unknown bag action", 400);
+      }
+      const entryId = normalizeString(req.body?.entryId);
+      if (!entryId) throw new BagRequestError("Bag entry is required", 400);
+      let saleCp: number | null;
+      try {
+        saleCp = parseWorthGp(req.body?.saleValueGp);
+      } catch (error) {
+        throw new BagRequestError(error instanceof Error ? error.message : "Invalid sale value", 400);
+      }
+      if (saleCp == null) throw new BagRequestError("Enter a sale value in gp", 400);
+      const proceedsGp = Math.floor(saleCp / 100);
+      const proceedsSp = Math.floor((saleCp % 100) / 10);
+      const proceedsCp = saleCp % 10;
+
+      const bag = await db.transaction(async (tx) => {
+        const removed = await tx.delete(bagEntries).where(
+          and(eq(bagEntries.campaignId, campaign.id), eq(bagEntries.id, entryId))
+        ).returning();
+        const sold = removed[0];
+        if (!sold) throw new BagRequestError("This bag entry was already sold or removed", 409);
+        if (sold.sourceType === "linked" && (!sold.itemId || (!isGm && !visibleItemIds.has(sold.itemId)))) {
+          throw new BagRequestError("This bag entry is not available in Player mode", 403);
+        }
+
+        const [currencyRow] = await tx.insert(bagCurrency).values({
+          campaignId: campaign.id,
+          gp: proceedsGp,
+          sp: proceedsSp,
+          cp: proceedsCp,
+          updatedAt: new Date(),
+        }).onConflictDoUpdate({
+          target: bagCurrency.campaignId,
+          set: {
+            gp: sql`${bagCurrency.gp} + ${proceedsGp}`,
+            sp: sql`${bagCurrency.sp} + ${proceedsSp}`,
+            cp: sql`${bagCurrency.cp} + ${proceedsCp}`,
+            updatedAt: new Date(),
+          },
+        }).returning();
+        const entryRows = await tx.select().from(bagEntries).where(eq(bagEntries.campaignId, campaign.id));
+        return projectBagForViewer(toBagPayload(currencyRow, entryRows), isGm, visibleItemIds);
+      });
+      return res.status(200).json({ ok: true, bag });
     }
 
     const rawBag =
@@ -279,13 +355,28 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const bag = normalizeBag(rawBag as Partial<BagState>);
     const currency = normalizeCurrency(bag.currency);
     const now = new Date();
-    const entryValues = [
+    let entryValues = [
       ...bag.looseItems.map((item) => toLooseEntryValues(campaign.id, item)),
       ...bag.linkedEntries.map((entry) => toLinkedEntryValues(campaign.id, entry)),
     ];
-    const entryIds = entryValues.map((entry) => entry.id);
 
     await db.transaction(async (tx) => {
+      if (!isGm) {
+        const existingRows = await tx.select().from(bagEntries).where(eq(bagEntries.campaignId, campaign.id));
+        const hiddenRows = existingRows.filter((row) =>
+          row.sourceType === "linked" && (!row.itemId || !visibleItemIds.has(row.itemId))
+        );
+        const hiddenIds = new Set(hiddenRows.map((row) => row.id));
+        for (const value of entryValues) {
+          if (value.sourceType === "linked" && value.itemId &&
+              !visibleItemIds.has(value.itemId) && !hiddenIds.has(value.id)) {
+            throw new BagRequestError("This item is not available in Player mode", 403);
+          }
+        }
+        entryValues = entryValues.filter((value) => !hiddenIds.has(value.id));
+        entryValues.push(...hiddenRows.map(({ rowId: _rowId, ...row }) => row));
+      }
+      const entryIds = entryValues.map((entry) => entry.id);
       await tx
         .insert(bagCurrency)
         .values({ campaignId: campaign.id, ...currency, updatedAt: now })
@@ -327,9 +418,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       }
     });
 
-    return res.status(200).json({ ok: true, bag });
+    return res.status(200).json({ ok: true, bag: projectBagForViewer(bag, isGm, visibleItemIds) });
   } catch (error) {
-    return res.status(401).json({
+    return res.status(error instanceof BagRequestError ? error.status : 401).json({
       ok: false,
       error: error instanceof Error ? error.message : "Unauthorized",
     });

@@ -838,6 +838,42 @@ test("API integration: item create and update share a campaign-scoped upsert", a
   assert.equal((result.body as any).item.gmNotes, "Actually cursed");
 });
 
+test("API integration: GM item worth is saved and returned on reload", async () => {
+  const savedRow = itemRow({ data: { worthGp: 2.75 } });
+  mocks.state.writeRows.push([savedRow]);
+  const saved = response();
+  await itemsHandler(request("PUT", undefined, { item: { id: "moonblade", name: "Moonblade", worthGp: "2.75" } }, "gm"), saved.res);
+  assert.equal(saved.result.status, 200);
+  assert.equal((mocks.state.insertValues[0] as any).data.worthGp, 2.75);
+
+  mocks.state.selectRows.push([savedRow]);
+  const reloaded = response();
+  await itemsHandler(request("GET", { campaignId: campaign.slug, itemId: "moonblade" }, undefined, "gm"), reloaded.res);
+  assert.equal(reloaded.result.status, 200);
+  assert.equal((reloaded.result.body as any).item.worthGp, 2.75);
+});
+
+test("API integration: Player mode cannot add or erase item worth", async () => {
+  const add = response();
+  await itemsHandler(request("PUT", undefined, { item: { id: "moonblade", name: "Moonblade", worthGp: 2 } }), add.res);
+  assert.equal(add.result.status, 401);
+  assert.match((add.result.body as any).error, /GM mode is required/);
+
+  mocks.state.selectRows.push([{ data: { worthGp: 2 } }]);
+  const erase = response();
+  await itemsHandler(request("PUT", undefined, { item: { id: "moonblade", name: "Moonblade" } }), erase.res);
+  assert.equal(erase.result.status, 401);
+  assert.equal(mocks.db.insert.mock.calls.length, 0);
+});
+
+test("API integration: invalid profile worth is rejected before an item write", async () => {
+  const { res, result } = response();
+  await itemsHandler(request("PUT", undefined, { item: { id: "moonblade", name: "Moonblade", worthGp: "1.234" } }, "gm"), res);
+  assert.equal(result.status, 401);
+  assert.match((result.body as { error: string }).error, /two decimal places/);
+  assert.equal(mocks.db.insert.mock.calls.length, 0);
+});
+
 test("API integration: non-GM users cannot create general campaign links", async () => {
   mocks.requireCampaignMember.mockResolvedValue({ role: "player" });
   mocks.requireCampaignGm.mockRejectedValue(
