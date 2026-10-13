@@ -138,20 +138,15 @@ export default function BagOfHolding() {
 
     setCurrencyError("");
 
-    if (mode === "spend" && pendingDeltaTotalGp > currencyTotals.totalGp) {
-      setCurrencyError(
-        `Not enough funds in treasury. You tried to spend ${gpFmt(
-          pendingDeltaTotalGp
-        )} gp, but only ${gpFmt(currencyTotals.totalGp)} gp is available.`
-      );
-      return;
+    try {
+      const next = bagRepo.applyCurrencyDelta(bagState, pendingDelta, mode);
+      await persistBag(next, mode !== "spend");
+      setPendingCurrency({ gp: "", sp: "", cp: "", ep: "", pp: "" });
+    } catch (error) {
+      setCurrencyError(mode === "spend" && error?.message?.includes("Not enough funds")
+        ? "Not enough funds in treasury. No currency was spent."
+        : `Could not ${mode === "spend" ? "spend" : "add"} currency. Please try again.`);
     }
-
-    const next = bagRepo.applyCurrencyDelta(bagState, pendingDelta, mode);
-    await persistBag(next);
-
-    setPendingCurrency({ gp: "", sp: "", cp: "", ep: "", pp: "" });
-    setCurrencyError("");
   };
   const [search, setSearch] = useState("");
   const [showModal, setShowModal] = useState(false);
@@ -305,16 +300,6 @@ export default function BagOfHolding() {
     return { gp, sp, cp, pp, ep, totalGp };
   }, [currency]);
 
-  const pendingDeltaTotalGp = useMemo(() => {
-    const gp = Number(pendingDelta?.gp) || 0;
-    const sp = Number(pendingDelta?.sp) || 0;
-    const cp = Number(pendingDelta?.cp) || 0;
-    const pp = Number(pendingDelta?.pp) || 0;
-    const ep = Number(pendingDelta?.ep) || 0;
-
-    return gp + sp * 0.1 + cp * 0.01 + pp * 10 + ep * 0.5;
-  }, [pendingDelta]);
-
   const gpFmt = (n) => {
     const v = Math.round((Number(n) || 0) * 100) / 100;
     return v.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 2 });
@@ -322,16 +307,17 @@ export default function BagOfHolding() {
 
   const canAdd = true; // requirement: players can add
 
-  async function persistBag(next) {
+  async function persistBag(next, optimistic = true) {
     if (isBagSavingRef.current) return false;
     isBagSavingRef.current = true;
     setIsBagSaving(true);
-    setBagState(next);
+    if (optimistic) setBagState(next);
     try {
       if (!selectedCampaignId) return true;
       if (typeof bagRepo.save === "function") {
         await Promise.resolve(bagRepo.save(selectedCampaignId, next));
       }
+      if (!optimistic) setBagState(next);
       return true;
     } finally {
       isBagSavingRef.current = false;
@@ -671,24 +657,19 @@ export default function BagOfHolding() {
             ))}
           </div>
 
-          {/* Add to treasury */}
+          {/* Adjust treasury currency */}
           <div className="mt-4 rounded-2xl border border-white/10 bg-black/20 p-4">
-            <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-3 mb-3">
-              <div>
-                <div className="text-sm font-semibold text-white">Add currency</div>
-                <div className="text-xs text-zinc-500 mt-0.5">Enter what you’re adding, click Add. Inputs clear automatically.</div>
+            <div className="flex flex-wrap items-start justify-between gap-3 mb-3">
+              <div className="min-w-0 basis-64 flex-1">
+                <div className="text-sm font-semibold text-white">Adjust currency</div>
+                <div className="text-xs text-zinc-500 mt-0.5">Enter amounts, then choose Spend or Add. Inputs clear after a successful save.</div>
               </div>
-              {currencyError ? (
-                <div className="rounded-xl border border-red-400/30 bg-red-500/10 px-3 py-2 text-sm text-red-200">
-                  {currencyError}
-                </div>
-              ) : null}
-              <div className="grid grid-cols-2 gap-2 w-full sm:w-auto">
-              <button
-                type="button"
+              <div className="grid grid-cols-2 gap-2 w-full sm:w-auto min-w-[12.5rem] shrink-0">
+                <button
+                  type="button"
                   disabled={!hasPendingDelta || isBagSaving}
                   onClick={() => applyPendingCurrency("spend")}
-                  className={`w-full px-4 py-2.5 rounded-xl border border-white/10 font-medium transition-colors ${hasPendingDelta && !isBagSaving
+                  className={`w-full whitespace-nowrap px-4 py-2.5 rounded-xl border border-white/10 font-medium transition-colors ${hasPendingDelta && !isBagSaving
                     ? "bg-red-500/15 text-red-200 hover:bg-red-500/25"
                     : "bg-white/5 text-zinc-500 cursor-not-allowed"
                     }`}
@@ -700,7 +681,7 @@ export default function BagOfHolding() {
                   type="button"
                   disabled={!hasPendingDelta || isBagSaving}
                   onClick={() => applyPendingCurrency("add")}
-                  className={`w-full px-4 py-2.5 rounded-xl font-medium transition-opacity ${hasPendingDelta && !isBagSaving
+                  className={`w-full whitespace-nowrap px-4 py-2.5 rounded-xl font-medium transition-opacity ${hasPendingDelta && !isBagSaving
                     ? "bg-linear-to-r from-indigo-500 to-purple-500 text-white hover:opacity-90"
                     : "bg-white/5 text-zinc-500 cursor-not-allowed"
                     }`}
@@ -725,6 +706,7 @@ export default function BagOfHolding() {
                   </div>
 	                  <input
 	                    type="number"
+	                    aria-label={`${label} amount`}
 	                    min={0}
 	                    inputMode="numeric"
 	                    disabled={isBagSaving}
@@ -745,6 +727,11 @@ export default function BagOfHolding() {
                 </div>
               ))}
             </div>
+            {currencyError ? (
+              <div role="alert" className="mt-3 w-full rounded-xl border border-red-400/30 bg-red-500/10 px-3 py-2 text-sm text-red-200">
+                {currencyError}
+              </div>
+            ) : null}
           </div>
         </div>
 

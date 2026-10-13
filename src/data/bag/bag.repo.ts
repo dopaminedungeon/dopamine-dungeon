@@ -9,6 +9,7 @@ const COIN_VALUES_CP: Record<CoinKey, number> = {
   sp: 10,
   cp: 1,
 };
+const COINS_DESCENDING: CoinKey[] = ["pp", "gp", "ep", "sp", "cp"];
 
 function toCopper(currency?: BagCurrency): number {
   const normalized = normalizeCurrency(currency);
@@ -22,30 +23,63 @@ function toCopper(currency?: BagCurrency): number {
   );
 }
 
-function fromCopper(totalCp: number): BagCurrency {
-  let remaining = Math.max(0, Math.floor(Number(totalCp) || 0));
-
-  const pp = Math.floor(remaining / COIN_VALUES_CP.pp);
-  remaining -= pp * COIN_VALUES_CP.pp;
-
-  const gp = Math.floor(remaining / COIN_VALUES_CP.gp);
-  remaining -= gp * COIN_VALUES_CP.gp;
-
-  const sp = Math.floor(remaining / COIN_VALUES_CP.sp);
-  remaining -= sp * COIN_VALUES_CP.sp;
-
-  const cp = remaining;
-
-  return {
-    pp,
-    gp,
-    ep: 0,
-    sp,
-    cp,
-  };
-}
-
 export type BagCurrency = Partial<Record<CoinKey, number>>;
+
+export function spendCurrency(available: BagCurrency, requested: BagCurrency): BagCurrency {
+  for (const currency of [available, requested]) {
+    for (const key of COINS_DESCENDING) {
+      const count = currency[key] ?? 0;
+      if (!Number.isSafeInteger(count) || count < 0) {
+        throw new Error("Currency amounts must be non-negative whole coins.");
+      }
+    }
+  }
+
+  const balance = { ...normalizeCurrency(available) } as Required<BagCurrency>;
+  const remaining = { ...normalizeCurrency(requested) } as Required<BagCurrency>;
+  const availableCp = toCopper(balance);
+  const requestedCp = toCopper(remaining);
+  if (!Number.isSafeInteger(availableCp) || !Number.isSafeInteger(requestedCp)) {
+    throw new Error("Currency amount is too large.");
+  }
+  if (requestedCp > availableCp) {
+    throw new Error("Not enough funds in treasury.");
+  }
+
+  // Keep every denomination that can be paid directly before making change.
+  for (const key of COINS_DESCENDING) {
+    const paid = Math.min(balance[key], remaining[key]);
+    balance[key] -= paid;
+    remaining[key] -= paid;
+  }
+
+  for (let index = COINS_DESCENDING.length - 1; index >= 0; index--) {
+    const key = COINS_DESCENDING[index];
+    while (remaining[key] > 0) {
+      const higher = COINS_DESCENDING.slice(0, index).reverse().find((coin) => balance[coin] > 0);
+      if (higher) {
+        balance[higher]--;
+        balance[key] += COIN_VALUES_CP[higher] / COIN_VALUES_CP[key];
+        const paid = Math.min(balance[key], remaining[key]);
+        balance[key] -= paid;
+        remaining[key] -= paid;
+        continue;
+      }
+
+      // Existing spending allows lower coins to cover a higher-denomination request.
+      let neededCp = remaining[key] * COIN_VALUES_CP[key];
+      for (const lower of COINS_DESCENDING.slice(index + 1)) {
+        const paid = Math.min(balance[lower], Math.floor(neededCp / COIN_VALUES_CP[lower]));
+        balance[lower] -= paid;
+        neededCp -= paid * COIN_VALUES_CP[lower];
+      }
+      if (neededCp !== 0) throw new Error("Not enough funds in treasury.");
+      remaining[key] = 0;
+    }
+  }
+
+  return balance;
+}
 
 export type LooseBagItem = {
   id: string;
@@ -324,20 +358,14 @@ export const bagRepo = {
       };
     }
 
-    const availableCp = toCopper(current.currency);
-    const requestedCp = toCopper(normalizedDelta);
-
-    if (requestedCp <= 0) {
-      return current;
-    }
-
-    if (requestedCp > availableCp) {
+    const spentCurrency = spendCurrency(current.currency, delta);
+    if (toCopper(normalizedDelta) <= 0) {
       return current;
     }
 
     return {
       ...current,
-      currency: fromCopper(availableCp - requestedCp),
+      currency: spentCurrency,
     };
   },
 };
