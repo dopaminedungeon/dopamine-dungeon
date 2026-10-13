@@ -138,20 +138,15 @@ export default function BagOfHolding() {
 
     setCurrencyError("");
 
-    if (mode === "spend" && pendingDeltaTotalGp > currencyTotals.totalGp) {
-      setCurrencyError(
-        `Not enough funds in treasury. You tried to spend ${gpFmt(
-          pendingDeltaTotalGp
-        )} gp, but only ${gpFmt(currencyTotals.totalGp)} gp is available.`
-      );
-      return;
+    try {
+      const next = bagRepo.applyCurrencyDelta(bagState, pendingDelta, mode);
+      await persistBag(next, mode !== "spend");
+      setPendingCurrency({ gp: "", sp: "", cp: "", ep: "", pp: "" });
+    } catch (error) {
+      setCurrencyError(mode === "spend" && error?.message?.includes("Not enough funds")
+        ? "Not enough funds in treasury. No currency was spent."
+        : `Could not ${mode === "spend" ? "spend" : "add"} currency. Please try again.`);
     }
-
-    const next = bagRepo.applyCurrencyDelta(bagState, pendingDelta, mode);
-    await persistBag(next);
-
-    setPendingCurrency({ gp: "", sp: "", cp: "", ep: "", pp: "" });
-    setCurrencyError("");
   };
   const [search, setSearch] = useState("");
   const [showModal, setShowModal] = useState(false);
@@ -305,16 +300,6 @@ export default function BagOfHolding() {
     return { gp, sp, cp, pp, ep, totalGp };
   }, [currency]);
 
-  const pendingDeltaTotalGp = useMemo(() => {
-    const gp = Number(pendingDelta?.gp) || 0;
-    const sp = Number(pendingDelta?.sp) || 0;
-    const cp = Number(pendingDelta?.cp) || 0;
-    const pp = Number(pendingDelta?.pp) || 0;
-    const ep = Number(pendingDelta?.ep) || 0;
-
-    return gp + sp * 0.1 + cp * 0.01 + pp * 10 + ep * 0.5;
-  }, [pendingDelta]);
-
   const gpFmt = (n) => {
     const v = Math.round((Number(n) || 0) * 100) / 100;
     return v.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 2 });
@@ -322,16 +307,17 @@ export default function BagOfHolding() {
 
   const canAdd = true; // requirement: players can add
 
-  async function persistBag(next) {
+  async function persistBag(next, optimistic = true) {
     if (isBagSavingRef.current) return false;
     isBagSavingRef.current = true;
     setIsBagSaving(true);
-    setBagState(next);
+    if (optimistic) setBagState(next);
     try {
       if (!selectedCampaignId) return true;
       if (typeof bagRepo.save === "function") {
         await Promise.resolve(bagRepo.save(selectedCampaignId, next));
       }
+      if (!optimistic) setBagState(next);
       return true;
     } finally {
       isBagSavingRef.current = false;
@@ -725,6 +711,7 @@ export default function BagOfHolding() {
                   </div>
 	                  <input
 	                    type="number"
+	                    aria-label={`${label} amount`}
 	                    min={0}
 	                    inputMode="numeric"
 	                    disabled={isBagSaving}

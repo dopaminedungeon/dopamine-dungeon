@@ -227,26 +227,6 @@ function toBagPayload(
   return { currency, looseItems, linkedEntries };
 }
 
-async function upsertEntry(values: BagEntryInsert) {
-  await db
-    .insert(bagEntries)
-    .values(values)
-    .onConflictDoUpdate({
-      target: [bagEntries.campaignId, bagEntries.id],
-      set: {
-        sourceType: values.sourceType,
-        itemId: values.itemId,
-        name: values.name,
-        category: values.category,
-        quantity: values.quantity,
-        worthGp: values.worthGp,
-        notes: values.notes,
-        addedBy: values.addedBy,
-        updatedAt: values.updatedAt,
-      },
-    });
-}
-
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   setCorsHeaders(res, "GET, PUT, OPTIONS");
 
@@ -305,41 +285,47 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     ];
     const entryIds = entryValues.map((entry) => entry.id);
 
-    await db
-      .insert(bagCurrency)
-      .values({
-        campaignId: campaign.id,
-        ...currency,
-        updatedAt: now,
-      })
-      .onConflictDoUpdate({
-        target: bagCurrency.campaignId,
-        set: {
-          cp: currency.cp,
-          sp: currency.sp,
-          ep: currency.ep,
-          gp: currency.gp,
-          pp: currency.pp,
-          updatedAt: now,
-        },
-      });
+    await db.transaction(async (tx) => {
+      await tx
+        .insert(bagCurrency)
+        .values({ campaignId: campaign.id, ...currency, updatedAt: now })
+        .onConflictDoUpdate({
+          target: bagCurrency.campaignId,
+          set: {
+            cp: currency.cp,
+            sp: currency.sp,
+            ep: currency.ep,
+            gp: currency.gp,
+            pp: currency.pp,
+            updatedAt: now,
+          },
+        });
 
-    for (const values of entryValues) {
-      await upsertEntry(values);
-    }
+      for (const values of entryValues) {
+        await tx.insert(bagEntries).values(values).onConflictDoUpdate({
+          target: [bagEntries.campaignId, bagEntries.id],
+          set: {
+            sourceType: values.sourceType,
+            itemId: values.itemId,
+            name: values.name,
+            category: values.category,
+            quantity: values.quantity,
+            worthGp: values.worthGp,
+            notes: values.notes,
+            addedBy: values.addedBy,
+            updatedAt: values.updatedAt,
+          },
+        });
+      }
 
-    if (entryIds.length > 0) {
-      await db
-        .delete(bagEntries)
-        .where(
-          and(
-            eq(bagEntries.campaignId, campaign.id),
-            notInArray(bagEntries.id, entryIds)
-          )
+      if (entryIds.length > 0) {
+        await tx.delete(bagEntries).where(
+          and(eq(bagEntries.campaignId, campaign.id), notInArray(bagEntries.id, entryIds))
         );
-    } else {
-      await db.delete(bagEntries).where(eq(bagEntries.campaignId, campaign.id));
-    }
+      } else {
+        await tx.delete(bagEntries).where(eq(bagEntries.campaignId, campaign.id));
+      }
+    });
 
     return res.status(200).json({ ok: true, bag });
   } catch (error) {
