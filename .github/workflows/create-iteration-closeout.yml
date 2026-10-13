@@ -26,7 +26,7 @@ permissions:
 jobs:
   create-closeout-task:
     name: Create closeout task
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-26.04
 
     steps:
       - name: Create or reuse closeout task
