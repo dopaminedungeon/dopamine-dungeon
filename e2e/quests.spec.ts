@@ -10,6 +10,11 @@ test("Quest creation modal and profile follow GM edit and Player visibility rule
   let holdSave = false;
   let releaseSave: (() => void) | undefined;
   let saveCalls = 0;
+  let playerQuestResponse: any;
+  const locations = [{ id: "location-1", name: "The destination", visibility: "public" },
+    { id: "location-2", name: "The side passage", visibility: "public" },
+    { id: "location-3", name: "GM hidden destination", visibility: "gm-only" },
+    { id: "location-4", name: "The newer trail", visibility: "public" }];
   await page.route("**/api/worldbuilding?**", async (route) => {
     const url = new URL(route.request().url());
     const resource = url.searchParams.get("resource");
@@ -20,7 +25,8 @@ test("Quest creation modal and profile follow GM edit and Player visibility rule
         links.push(link);
         await route.fulfill({ json: { ok: true, link } }); return;
       }
-      await route.fulfill({ json: { ok: true, links: isGm ? links : links.filter((link) => link.visibility === "Player") } });
+      await route.fulfill({ json: { ok: true, links: isGm ? links : links.filter((link) => link.visibility === "Player" &&
+        ![link.entityA.id, link.entityB.id].includes("location-3")) } });
       return;
     }
     if (resource === "quests") {
@@ -34,15 +40,17 @@ test("Quest creation modal and profile follow GM edit and Player visibility rule
         await route.fulfill({ json: { ok: true, quest } }); return;
       }
       const projected = saved.filter((quest) => isGm || quest.visibility === "public").map((quest) => isGm ? quest : {
-        ...quest, hook: "", mainObjectives: quest.mainObjectives.filter((entry: any) => entry.visibility === "public"),
+        ...quest, mainLocationId: quest.mainLocationId === "location-3" ? "" : quest.mainLocationId,
+        ...(quest.mainLocationId === "location-3" ? { destinationHidden: true } : {}),
+        hook: "", mainObjectives: quest.mainObjectives.filter((entry: any) => entry.visibility === "public"),
         secondaryObjectives: quest.secondaryObjectives.filter((entry: any) => entry.visibility === "public"),
       });
       const questId = url.searchParams.get("questId");
-      await route.fulfill({ json: { ok: true, ...(questId ? { quest: projected.find((quest) => quest.id === questId) || null } : { quests: projected }),
+      const response = { ok: true, ...(questId ? { quest: projected.find((quest) => quest.id === questId) || null } : { quests: projected }),
         references: { sessions: [{ id: "session-1", name: "Opening", sessionNumber: 1 }],
-          npcs: [{ id: "npc-1", name: "Guide" }], items: [], locations: isGm ? [
-            { id: "location-1", name: "The destination" }, { id: "location-2", name: "The side passage" },
-          ] : [{ id: "location-1", name: "The destination" }, { id: "location-2", name: "The side passage" }] } } });
+          npcs: [{ id: "npc-1", name: "Guide" }], items: [], locations: locations.filter((location) => isGm || location.visibility === "public") } };
+      if (!isGm) playerQuestResponse = response;
+      await route.fulfill({ json: response });
       return;
     }
     await route.fulfill({ json: { ok: true, items: [], sessions: [], npcs: [], locations: [], lore: [], characters: [] } });
@@ -63,7 +71,10 @@ test("Quest creation modal and profile follow GM edit and Player visibility rule
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1)).toBe(true);
     const search = await page.getByLabel("Search quests").boundingBox();
     const status = await page.getByRole("button", { name: "All", exact: true }).boundingBox();
+    const add = await page.getByRole("button", { name: "Add new" }).boundingBox();
     expect(search && status && status.y >= search.y && status.y - search.y < 100).toBe(true);
+    if (width === 1440) expect(search && add && Math.abs(add.y - search.y) < 10).toBe(true);
+    else expect(search && add && add.y > search.y + search.height).toBe(true);
     if (width === 375) {
       expect(search?.y).toBeGreaterThanOrEqual(95);
       expect(search?.width).toBeGreaterThan(300);
@@ -85,6 +96,8 @@ test("Quest creation modal and profile follow GM edit and Player visibility rule
   await expect(dialog.getByText("Quest receivers")).toHaveCount(0);
   await expect(dialog.getByText("Short description visibility")).toHaveCount(0);
   await expect(dialog.getByLabel("Quest type").locator("option")).toHaveCount(7);
+  await expect(dialog.getByLabel("Destination")).toBeVisible();
+  await expect(dialog.getByRole("button", { name: "Save quest" })).toBeVisible();
   await page.setViewportSize({ width: 375, height: 600 });
   expect(await dialog.evaluate((element) => element.scrollHeight > element.clientHeight)).toBe(true);
   await dialog.getByRole("button", { name: "Cancel" }).scrollIntoViewIfNeeded();
@@ -119,6 +132,8 @@ test("Quest creation modal and profile follow GM edit and Player visibility rule
   await expect(page.getByRole("link", { name: "Find the long lost relic of the coast" })).toBeVisible();
   expect(new URL(page.url()).pathname).toBe("/quests");
   expect(saved).toHaveLength(1);
+  links.push({ id: "legacy-location-link", entityA: { type: "Quest", id: saved[0].id },
+    entityB: { type: "Map", id: "location-2" }, label: "takes_place_in", visibility: "Player" });
   await page.getByLabel("Search quests").fill("no matching quest");
   await expect(page.getByText("No quests match these filters.")).toBeVisible();
   await page.getByLabel("Search quests").clear();
@@ -128,32 +143,57 @@ test("Quest creation modal and profile follow GM edit and Player visibility rule
   await expect(page.getByRole("link", { name: "Find the long lost relic of the coast" })).toBeVisible();
   await page.getByRole("link", { name: "Find the long lost relic of the coast" }).click();
   await expect(page.getByText("A visible summary for the whole party.")).toBeVisible();
+  await expect(page.getByText("Destination:")).toHaveCount(0);
   await expect(page.getByText("Main objective")).toHaveCount(0);
   await expect(page.getByRole("button", { name: "Add Location" })).toHaveCount(0);
   await page.getByRole("button", { name: "Edit" }).click();
+  const profileHeader = page.locator("main.app-page-wide header");
+  await expect(profileHeader.getByRole("button", { name: "Cancel" })).toBeVisible();
+  await expect(profileHeader.getByRole("button", { name: "Save quest" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Save quest" })).toHaveCount(1);
+  await page.getByLabel("Destination").selectOption("location-1");
+  await profileHeader.getByRole("button", { name: "Cancel" }).click();
+  await expect(page.getByText("Destination:")).toHaveCount(0);
+  expect(saveCalls).toBe(2);
+  await profileHeader.getByRole("button", { name: "Edit" }).click();
   await expect(page.getByRole("heading", { name: "Main objective" })).toBeVisible();
   await expect(page.getByRole("button", { name: "Add main objective" })).toHaveCount(0);
   await expect(page.getByRole("button", { name: "Remove" })).toHaveCount(0);
   await expect(page.getByLabel("Main objective visibility 1")).toHaveCount(1);
-  await page.getByLabel("Main location").selectOption("location-1");
+  await page.getByLabel("Destination").selectOption("location-1");
+  for (const label of ["Session", "NPC", "Item", "Location"]) {
+    await page.getByRole("button", { name: `Add ${label}` }).click();
+    await expect(page.getByLabel("Relationship", { exact: true }).locator("option")).toHaveText(["Related"]);
+    await page.getByRole("button", { name: "Close" }).click();
+  }
+  await expect(page.getByText("The side passage")).toBeVisible();
+  await expect(page.getByText("takes place in")).toBeVisible();
   await page.getByRole("button", { name: "Add Location" }).click();
-  await page.getByRole("button", { name: "The side passage" }).click();
+  await expect(page.getByRole("button", { name: "The side passage" })).toHaveCount(0);
+  await page.getByRole("button", { name: "The newer trail" }).click();
   await page.locator("section").filter({ has: page.getByRole("heading", { name: "Main objective", exact: true }) }).getByLabel("Description").fill("Find the hidden clue");
   await page.getByLabel("Main objective visibility 1").selectOption("gm-only");
   await page.getByRole("button", { name: "Add secondary objective" }).click();
   await page.locator("section").filter({ has: page.getByRole("heading", { name: "Secondary / bonus objectives" }) }).getByLabel("Description").fill("Find the public clue");
   await page.getByLabel("Secondary objective visibility 1").selectOption("public");
   await page.getByLabel("Set progress").fill("45");
+  rejectSave = true;
+  expectedConsoleErrors.push("500 (Internal Server Error)");
+  await profileHeader.getByRole("button", { name: "Save quest" }).click();
+  await expect(profileHeader.getByRole("alert")).toContainText("Save unavailable");
+  await expect(page.getByLabel("Destination")).toHaveValue("location-1");
   for (const width of [1440, 375]) {
     await page.setViewportSize({ width, height: 900 });
     await page.screenshot({ path: testInfo.outputPath(`quest-edit-${width}.png`), fullPage: true });
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1)).toBe(true);
   }
-  await page.getByRole("button", { name: "Save quest" }).click();
+  await profileHeader.getByRole("button", { name: "Save quest" }).click();
   await expect(page.getByRole("button", { name: "Edit" })).toBeVisible();
   await page.reload();
   await expect(page.getByText("Find the hidden clue")).toBeVisible();
   await expect(page.getByText("The side passage")).toBeVisible();
+  await expect(page.getByText("The newer trail")).toBeVisible();
+  await expect(page.getByText("takes place in")).toBeVisible();
   await expect(page.getByText("The destination")).toBeVisible();
   await expect(page.getByLabel("Quest progress 45%")).toBeVisible();
   for (const width of [1440, 375]) {
@@ -162,11 +202,20 @@ test("Quest creation modal and profile follow GM edit and Player visibility rule
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1)).toBe(true);
   }
   await page.setViewportSize({ width: 1440, height: 900 });
+  await page.getByRole("button", { name: "Edit" }).click();
+  await page.getByLabel("Destination").selectOption("location-3");
+  await profileHeader.getByRole("button", { name: "Save quest" }).click();
+  await expect(page.getByText("GM hidden destination")).toBeVisible();
   await page.getByRole("button", { name: "Player", exact: true }).click();
   await page.goto("/quests");
   await expect(page.getByRole("link", { name: "Find the long lost relic of the coast" })).toBeVisible();
+  await expect(page.getByText("Destination: Unknown")).toBeVisible();
   await expect(page.getByRole("button", { name: "Add new" })).toHaveCount(0);
   await page.getByRole("link", { name: "Find the long lost relic of the coast" }).click();
+  await expect(page.getByText("Destination: Unknown")).toBeVisible();
+  expect(JSON.stringify(playerQuestResponse)).not.toContain("location-3");
+  expect(JSON.stringify(playerQuestResponse)).not.toContain("GM hidden destination");
+  await expect(page.getByRole("link", { name: "GM hidden destination" })).toHaveCount(0);
   await expect(page.getByText("Find the hidden clue")).toHaveCount(0);
   await expect(page.getByText("Find the public clue")).toBeVisible();
   await expect(page.getByRole("button", { name: "Edit" })).toHaveCount(0);

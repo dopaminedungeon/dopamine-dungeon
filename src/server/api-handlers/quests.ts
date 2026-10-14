@@ -70,7 +70,7 @@ function parseQuest(value: unknown): QuestRecord {
   };
 }
 
-function project(row: typeof quests.$inferSelect, isGm: boolean, mainLocationId: string) {
+function project(row: typeof quests.$inferSelect, isGm: boolean, mainLocationId: string, destinationHidden = false) {
   const endEligible = row.status === "Completed" || row.status === "Abandoned";
   const { receiverIds: _legacyReceiverIds, ...fields } = row;
   void _legacyReceiverIds;
@@ -80,6 +80,7 @@ function project(row: typeof quests.$inferSelect, isGm: boolean, mainLocationId:
     id: row.id, name: row.name, type: row.type, status: row.status, visibility: "public", progress: row.progress,
     startSessionId: row.startSessionId, endSessionId: endEligible ? row.endSessionId : "", endDate: endEligible ? row.endDate : "",
     giverId: row.giverId, mainLocationId,
+    ...(destinationHidden ? { destinationHidden: true } : {}),
     shortDescription: row.shortDescription,
     hook: visible("hook") ? row.hook : "", journey: visible("journey") ? row.journey : "",
     aftermath: visible("aftermath") ? row.aftermath : "",
@@ -121,18 +122,21 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           .where(and(eq(npcs.campaignId, campaign.id), isGm ? undefined : eq(npcs.visibility, "public"))),
         db.select({ id: items.id, name: items.name }).from(items)
           .where(and(eq(items.campaignId, campaign.id), isGm ? undefined : eq(items.visibility, "public"))),
-        db.select({ id: locations.id, name: locations.name }).from(locations)
-          .where(and(eq(locations.campaignId, campaign.id), isGm ? undefined : eq(locations.visibility, "public"))),
-        db.select().from(entityLinks).where(and(questLinksWhere(campaign.id, id || undefined), eq(entityLinks.label, "leads_to"),
-          isGm ? undefined : eq(entityLinks.visibility, "Player"))),
+        db.select({ id: locations.id, name: locations.name, visibility: locations.visibility }).from(locations)
+          .where(eq(locations.campaignId, campaign.id)),
+        db.select().from(entityLinks).where(and(questLinksWhere(campaign.id, id || undefined), eq(entityLinks.label, "leads_to"))),
       ]);
       const sessionIds = new Set(sessionRows.map((row) => row.id));
       const npcIds = new Set(npcRows.map((row) => row.id));
       const locationIds = new Set(locationRows.map((row) => row.id));
+      const visibleLocationRows = locationRows.filter((row) => isGm || row.visibility === "public")
+        .map(({ id, name }) => ({ id, name }));
+      const visibleLocationIds = new Set(visibleLocationRows.map((row) => row.id));
       const projected = rows.filter((row) => isGm || row.visibility === "public").map((row) => {
-        const linkedLocationId = mainLinks.map((link) => !isGm && link.visibility !== "Player" ? "" : mapEndpoint(link, row.id))
-          .find((locationId) => locationIds.has(locationId)) || "";
-        const payload = project(row, isGm, linkedLocationId);
+        const mainLink = mainLinks.find((link) => locationIds.has(mapEndpoint(link, row.id)));
+        const selectedLocationId = mainLink ? mapEndpoint(mainLink, row.id) : "";
+        const locationVisible = isGm || (mainLink?.visibility === "Player" && visibleLocationIds.has(selectedLocationId));
+        const payload = project(row, isGm, locationVisible ? selectedLocationId : "", Boolean(selectedLocationId && !locationVisible));
         return { ...payload,
           startSessionId: sessionIds.has(payload.startSessionId) ? payload.startSessionId : "",
           endSessionId: sessionIds.has(payload.endSessionId) ? payload.endSessionId : "",
@@ -140,7 +144,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         };
       });
       return res.status(200).json({ ok: true, ...(id ? { quest: projected[0] ?? null } : { quests: projected }),
-        references: { sessions: sessionRows, npcs: npcRows, items: itemRows, locations: locationRows } });
+        references: { sessions: sessionRows, npcs: npcRows, items: itemRows, locations: visibleLocationRows } });
     }
     if (!isGm) throw new QuestError("GM mode is required to edit quests", 403);
     const quest = parseQuest(req.body?.quest);

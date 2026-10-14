@@ -18,10 +18,10 @@ const SECTION = "min-w-0 rounded-2xl border border-white/10 bg-white/[0.04] p-4"
 const NARRATIVE = [["shortDescription", "Short description"], ["hook", "The hook"], ["journey", "The journey"]];
 const emptyRefs = { sessions: [], npcs: [], items: [], locations: [] };
 const RELATED = [
-  { type: "Session", key: "sessions", path: "/sessions", title: "Sessions", labels: ["related", "advanced", "progressed"] },
-  { type: "NPC", key: "npcs", path: "/npcs", title: "NPCs", labels: ["target", "ally"] },
-  { type: "Item", key: "items", path: "/items", title: "Items", labels: ["requires", "rewards", "unlocks"] },
-  { type: "Map", key: "locations", path: "/maps", title: "Additional locations", labels: ["takes_place_in"] },
+  { type: "Session", key: "sessions", path: "/sessions", title: "Sessions" },
+  { type: "NPC", key: "npcs", path: "/npcs", title: "NPCs" },
+  { type: "Item", key: "items", path: "/items", title: "Items" },
+  { type: "Map", key: "locations", path: "/maps", title: "Additional locations" },
 ];
 const managedLabels = new Set(["started", "completed", "failed", "given_by", "leads_to", "assigned_to"]);
 
@@ -67,7 +67,7 @@ function QuestCard({ quest, refs, isGM }) {
         {ended && quest.endSessionId && <span>End: <RefLink id={quest.endSessionId} rows={refs.sessions} to="/sessions" /></span>}
         {ended && quest.endDate && <span>Ended: {quest.endDate}</span>}
         {quest.giverId && <span>Giver: <RefLink id={quest.giverId} rows={refs.npcs} to="/npcs" /></span>}
-        {quest.mainLocationId && <span>Destination: <RefLink id={quest.mainLocationId} rows={refs.locations} to="/maps" /></span>}
+        {(quest.mainLocationId || quest.destinationHidden) && <span>Destination: {quest.destinationHidden ? "Unknown" : <RefLink id={quest.mainLocationId} rows={refs.locations} to="/maps" />}</span>}
       </div><div className="mt-3"><Progress value={quest.progress} /></div>
     </div></div>
   </article>;
@@ -112,10 +112,9 @@ function otherEndpoint(link, questId) {
 function QuestLinkSection({ group, questId, refs, links, mainLocationId, editing, isGM, saving, onChange }) {
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
-  const [label, setLabel] = useState(group.labels[0]);
   const [visibility, setVisibility] = useState("Player");
   const entries = links.filter((link) => { const other = otherEndpoint(link, questId);
-    return other.type === group.type && group.labels.includes(link.label) && refs[group.key].some((row) => row.id === other.id); });
+    return other.type === group.type && refs[group.key].some((row) => row.id === other.id); });
   const available = refs[group.key].filter((row) => row.id !== (group.type === "Map" ? mainLocationId : "") &&
     row.name.toLowerCase().includes(query.toLowerCase()) && !links.some((link) => {
       const other = otherEndpoint(link, questId); return other.type === group.type && other.id === row.id;
@@ -126,11 +125,11 @@ function QuestLinkSection({ group, questId, refs, links, mainLocationId, editing
     {editing && open && <div className="mt-4 space-y-3 rounded-xl border border-white/10 bg-black/10 p-4">
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-[minmax(0,1fr)_160px_140px]">
         <input aria-label={`Search ${group.title.toLowerCase()}`} className={INPUT} value={query} onChange={(event) => setQuery(event.target.value)} placeholder={`Search ${group.title.toLowerCase()}...`} />
-        <select aria-label="Relationship" className={INPUT} value={label} onChange={(event) => setLabel(event.target.value)}>{group.labels.map((option) => <option key={option} value={option}>{option.replaceAll("_", " ")}</option>)}</select>
+        <select aria-label="Relationship" className={INPUT} value="related" onChange={() => {}}><option value="related">Related</option></select>
         <select aria-label="Relationship visibility" className={INPUT} value={visibility} onChange={(event) => setVisibility(event.target.value)}><option value="Player">Player-visible</option><option value="GM">GM-only</option></select>
       </div>
       <div className="max-h-48 overflow-auto rounded-xl border border-white/10">{available.length ? available.map((row) => <button key={row.id} type="button" className="block w-full px-3 py-2 text-left text-sm text-zinc-200 hover:bg-white/5" onClick={() => {
-        onChange([...links, createLink({ entityA: { type: "Quest", id: questId }, entityB: { type: group.type, id: row.id }, label, visibility })]);
+        onChange([...links, createLink({ entityA: { type: "Quest", id: questId }, entityB: { type: group.type, id: row.id }, label: "related", visibility })]);
         setOpen(false); setQuery("");
       }}>{row.name}</button>) : <p className="px-3 py-2 text-sm text-zinc-500">No results.</p>}</div>
     </div>}
@@ -139,7 +138,7 @@ function QuestLinkSection({ group, questId, refs, links, mainLocationId, editing
       return <div key={link.id} className="group relative min-w-0 rounded-xl border border-white/10 bg-black/15 p-4">
         {editing && <button type="button" disabled={saving} onClick={() => onChange(links.filter((entry) => entry.id !== link.id))} className="absolute right-3 top-3 text-xs text-red-300 hover:text-red-200">Remove</button>}
         <Link to={`${group.path}/${encodeURIComponent(other.id)}`} className="block max-w-full break-words pr-12 text-sm font-semibold text-white hover:text-purple-200">{row?.name}</Link>
-        <div className="mt-3 flex flex-wrap gap-2">{editing ? <><select aria-label={`Relationship for ${row?.name}`} className={INPUT} value={link.label} onChange={(event) => onChange(links.map((entry) => entry.id === link.id ? { ...entry, label: event.target.value } : entry))}>{group.labels.map((option) => <option key={option}>{option}</option>)}</select>
+        <div className="mt-3 flex flex-wrap gap-2">{editing ? <><span className="rounded-full border border-white/10 bg-white/5 px-2.5 py-1 text-xs text-zinc-300">{link.label.replaceAll("_", " ")}</span>{link.label !== "related" && <button type="button" className={BUTTON} disabled={saving} onClick={() => onChange(links.map((entry) => entry.id === link.id ? { ...entry, label: "related" } : entry))}>Change to Related</button>}
           <select aria-label={`Visibility for ${row?.name}`} className={INPUT} value={link.visibility} onChange={(event) => onChange(links.map((entry) => entry.id === link.id ? { ...entry, visibility: event.target.value } : entry))}><option value="Player">Player-visible</option><option value="GM">GM-only</option></select></>
           : <><span className="rounded-full border border-white/10 bg-white/5 px-2.5 py-1 text-[11px] text-zinc-300">{link.label.replaceAll("_", " ")}</span>{isGM && <span className="text-xs text-zinc-400">{link.visibility === "Player" ? "Player-visible" : "GM-only"}</span>}</>}</div>
       </div>;
@@ -285,13 +284,13 @@ export default function Quests() {
   if (loading) return <main className="app-page-wide flex items-center justify-center" role="status">Loading quests...</main>;
   if (error) return <main className="app-page-wide space-y-3"><p role="alert" className="text-red-200">{error}</p><button className={BUTTON} onClick={() => window.location.reload()}>Retry</button></main>;
   if (isList) return <main className="app-page-wide flex-1 overflow-auto">
-    <div className="mb-8 flex flex-col gap-4 md:flex-row md:flex-wrap">
-      <div className="relative w-full min-w-0 md:min-w-64 md:flex-[1_1_16rem]"><Search className="absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-zinc-500" />
+    <div className="mb-8 flex flex-col gap-4 lg:flex-row lg:flex-nowrap">
+      <div className="relative w-full min-w-0 lg:w-auto lg:flex-[1_1_11rem]"><Search className="absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-zinc-500" />
         <input aria-label="Search quests" className="w-full rounded-xl border border-white/10 bg-white/5 py-2.5 pl-11 pr-3 text-white placeholder-zinc-500 transition-all focus:border-emerald-500/50 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 sm:py-3 sm:pl-12 sm:pr-4" placeholder="Search quests..." value={search} onChange={(event) => setSearch(event.target.value)} /></div>
-      <div className="flex gap-2 overflow-x-auto whitespace-nowrap pr-1 [-webkit-overflow-scrolling:touch]">{["All", ...QUEST_STATUSES].map((status) => <button key={status} type="button" onClick={() => setStatusFilter(status)} className={`shrink-0 rounded-xl px-3 py-2.5 font-medium transition-all sm:px-4 sm:py-3 ${statusFilter === status ? "bg-emerald-500 text-white" : "bg-white/5 text-zinc-400 hover:bg-white/10 hover:text-white"}`}>{status}</button>)}</div>
-      <select aria-label="Filter quest type" className="w-full rounded-xl border border-white/10 bg-white/5 px-3 py-2.5 text-sm font-medium text-zinc-200 focus:border-emerald-500/50 focus:outline-none sm:py-3 md:w-auto" value={typeFilter} onChange={(event) => setTypeFilter(event.target.value)}><option value="All">All types</option>{QUEST_TYPES.map((type) => <option key={type.id} value={type.id}>{type.label}</option>)}</select>
-      {isGM && <select aria-label="Filter quest visibility" className="w-full rounded-xl border border-white/10 bg-white/5 px-3 py-2.5 text-sm font-medium text-zinc-200 focus:border-emerald-500/50 focus:outline-none sm:py-3 md:w-auto" value={visibilityFilter} onChange={(event) => setVisibilityFilter(event.target.value)}><option value="All">All visibility</option><option value="public">Player-visible</option><option value="gm-only">GM-only</option></select>}
-      {isGM && <button ref={createButtonRef} type="button" className="flex w-full items-center justify-center gap-2 rounded-xl bg-linear-to-r from-indigo-500 to-purple-500 px-4 py-2.5 font-medium text-white transition-opacity hover:opacity-90 sm:px-6 sm:py-3 md:w-auto" onClick={() => { setCreateDraft(blankQuest(crypto.randomUUID())); setShowCreateModal(true); }}><Plus className="h-5 w-5" />Add new</button>}
+      <div className="flex min-w-0 gap-2 overflow-x-auto whitespace-nowrap pr-1 [-webkit-overflow-scrolling:touch] lg:flex-[2_1_20rem]">{["All", ...QUEST_STATUSES].map((status) => <button key={status} type="button" onClick={() => setStatusFilter(status)} className={`shrink-0 rounded-xl px-3 py-2.5 font-medium transition-all sm:px-4 sm:py-3 ${statusFilter === status ? "bg-emerald-500 text-white" : "bg-white/5 text-zinc-400 hover:bg-white/10 hover:text-white"}`}>{status}</button>)}</div>
+      <select aria-label="Filter quest type" className="w-full rounded-xl border border-white/10 bg-white/5 px-3 py-2.5 text-sm font-medium text-zinc-200 focus:border-emerald-500/50 focus:outline-none sm:py-3 lg:w-32 lg:shrink-0" value={typeFilter} onChange={(event) => setTypeFilter(event.target.value)}><option value="All">All types</option>{QUEST_TYPES.map((type) => <option key={type.id} value={type.id}>{type.label}</option>)}</select>
+      {isGM && <select aria-label="Filter quest visibility" className="w-full rounded-xl border border-white/10 bg-white/5 px-3 py-2.5 text-sm font-medium text-zinc-200 focus:border-emerald-500/50 focus:outline-none sm:py-3 lg:w-32 lg:shrink-0" value={visibilityFilter} onChange={(event) => setVisibilityFilter(event.target.value)}><option value="All">All visibility</option><option value="public">Player-visible</option><option value="gm-only">GM-only</option></select>}
+      {isGM && <button ref={createButtonRef} type="button" className="flex w-full items-center justify-center gap-2 rounded-xl bg-linear-to-r from-indigo-500 to-purple-500 px-4 py-2.5 font-medium text-white transition-opacity hover:opacity-90 sm:px-6 sm:py-3 lg:w-auto lg:shrink-0" onClick={() => { setCreateDraft(blankQuest(crypto.randomUUID())); setShowCreateModal(true); }}><Plus className="h-5 w-5" />Add new</button>}
     </div>
     {quests.length === 0 ? <p className="rounded-2xl border border-white/10 p-5 text-zinc-300">No quests yet.</p> : filtered.length === 0 ? <p className="rounded-2xl border border-white/10 p-5 text-zinc-300">No quests match these filters.</p> :
       QUEST_STATUSES.map((status) => { const rows = filtered.filter((entry) => entry.status === status); return rows.length ? <section key={status} className="mb-6 space-y-3"><h2 className="text-lg font-semibold text-white">{status}</h2><div className="grid gap-3 lg:grid-cols-2">{rows.map((entry) => <QuestCard key={entry.id} quest={entry} refs={refs} isGM={isGM} />)}</div></section> : null; })}
@@ -307,6 +306,7 @@ export default function Quests() {
             <label className="block text-sm text-zinc-400">Start session<select className={INPUT} value={createDraft.startSessionId} onChange={(event) => setCreateDraft({ ...createDraft, startSessionId: event.target.value })}><option value="">Not set</option>{refs.sessions.map((row) => <option key={row.id} value={row.id}>{row.name}</option>)}</select></label>
             {(createDraft.status === "Completed" || createDraft.status === "Abandoned") && <><label className="block text-sm text-zinc-400">End session<select className={INPUT} value={createDraft.endSessionId} onChange={(event) => setCreateDraft({ ...createDraft, endSessionId: event.target.value })}><option value="">Not set</option>{refs.sessions.map((row) => <option key={row.id} value={row.id}>{row.name}</option>)}</select></label><label className="block text-sm text-zinc-400">End date<input type="date" className={INPUT} value={createDraft.endDate} onChange={(event) => setCreateDraft({ ...createDraft, endDate: event.target.value })} /></label></>}
             <label className="block text-sm text-zinc-400">Quest giver<select className={INPUT} value={createDraft.giverId} onChange={(event) => setCreateDraft({ ...createDraft, giverId: event.target.value })}><option value="">Not set</option>{refs.npcs.map((row) => <option key={row.id} value={row.id}>{row.name}</option>)}</select></label>
+            <label className="block text-sm text-zinc-400">Destination<select className={INPUT} value={createDraft.mainLocationId} onChange={(event) => setCreateDraft({ ...createDraft, mainLocationId: event.target.value })}><option value="">No destination</option>{refs.locations.map((row) => <option key={row.id} value={row.id}>{row.name}</option>)}</select></label>
           </div>
           <label className="block text-sm text-zinc-400">Short description<textarea className={INPUT} rows={3} value={createDraft.shortDescription} onChange={(event) => setCreateDraft({ ...createDraft, shortDescription: event.target.value })} /></label>
           {createError && <p role="alert" className="rounded-xl border border-red-400/30 bg-red-500/10 p-3 text-sm text-red-200">{createError}</p>}
@@ -324,8 +324,7 @@ export default function Quests() {
       <header className={SECTION}>
         <div className="flex flex-wrap items-start justify-between gap-3"><div className="flex min-w-0 items-center gap-3"><TypeIcon type={value.type} size={26} />
           {editing ? <label className="min-w-0 text-xs text-zinc-400">Quest name<input className={INPUT} value={value.name} onChange={(event) => update("name", event.target.value)} /></label> : <h1 className="break-words text-2xl font-bold text-white">{value.name}</h1>}</div>
-          {!editing && isGM && <button type="button" className={BUTTON} onClick={() => { setDraft(structuredClone(quest)); setDraftLinks(links.filter((link) => !managedLabels.has(link.label))); setEditing(true); }}>Edit</button>}
-          {!editing && isGM && <Visibility value={value.visibility} />}</div>
+          {isGM && <div className="flex shrink-0 flex-wrap items-center gap-2">{editing ? <><button type="button" className={BUTTON} onClick={() => { setDraft(null); setDraftLinks([]); setEditing(false); setSaveError(""); }}>Cancel</button><button className={BUTTON} type="submit">{saving ? "Saving..." : "Save quest"}</button></> : <><Visibility value={value.visibility} /><button type="button" className={BUTTON} onClick={() => { setDraft(structuredClone(quest)); setDraftLinks(links.filter((link) => !managedLabels.has(link.label))); setEditing(true); }}>Edit</button></>}</div>}</div>
         {editing ? <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
           <label className="text-xs text-zinc-400">Quest type<select className={INPUT} value={value.type} onChange={(event) => update("type", event.target.value)}>{QUEST_TYPES.map((type) => <option key={type.id} value={type.id}>{type.label}</option>)}</select></label>
           <label className="text-xs text-zinc-400">Status<select className={INPUT} value={value.status} onChange={(event) => update("status", event.target.value)}>{QUEST_STATUSES.map((status) => <option key={status}>{status}</option>)}</select></label>
@@ -333,15 +332,16 @@ export default function Quests() {
           <label className="text-xs text-zinc-400">Start session<select className={INPUT} value={value.startSessionId} onChange={(event) => update("startSessionId", event.target.value)}><option value="">Not set</option>{refs.sessions.map((row) => <option key={row.id} value={row.id}>{row.name}</option>)}</select></label>
           {ended && <><label className="text-xs text-zinc-400">End session<select className={INPUT} value={value.endSessionId} onChange={(event) => update("endSessionId", event.target.value)}><option value="">Not set</option>{refs.sessions.map((row) => <option key={row.id} value={row.id}>{row.name}</option>)}</select></label><label className="text-xs text-zinc-400">End date<input type="date" className={INPUT} value={value.endDate} onChange={(event) => update("endDate", event.target.value)} /></label></>}
           <label className="text-xs text-zinc-400">Quest giver<select className={INPUT} value={value.giverId} onChange={(event) => update("giverId", event.target.value)}><option value="">Not set</option>{refs.npcs.map((row) => <option key={row.id} value={row.id}>{row.name}</option>)}</select></label>
-          <label className="text-xs text-zinc-400">Main location<select className={INPUT} value={value.mainLocationId || ""} onChange={(event) => update("mainLocationId", event.target.value)}><option value="">No location</option>{refs.locations.map((row) => <option key={row.id} value={row.id}>{row.name}</option>)}</select></label>
+          <label className="text-xs text-zinc-400">Destination<select className={INPUT} value={value.mainLocationId || ""} onChange={(event) => update("mainLocationId", event.target.value)}><option value="">No destination</option>{refs.locations.map((row) => <option key={row.id} value={row.id}>{row.name}</option>)}</select></label>
         </div> : <div className="mt-4 flex flex-wrap gap-x-5 gap-y-2 text-sm text-zinc-300">
           {value.startSessionId && <span>Start: <RefLink id={value.startSessionId} rows={refs.sessions} to="/sessions" /></span>}
           {ended && value.endSessionId && <span>End: <RefLink id={value.endSessionId} rows={refs.sessions} to="/sessions" /></span>}
           {ended && value.endDate && <span>Ended: {value.endDate}</span>}
           {value.giverId && <span>Giver: <RefLink id={value.giverId} rows={refs.npcs} to="/npcs" /></span>}
-          {value.mainLocationId && <span>Destination: <RefLink id={value.mainLocationId} rows={refs.locations} to="/maps" /></span>}
+          {(value.mainLocationId || value.destinationHidden) && <span>Destination: {value.destinationHidden ? "Unknown" : <RefLink id={value.mainLocationId} rows={refs.locations} to="/maps" />}</span>}
         </div>}
         <div className="mt-4"><Progress value={value.progress} />{editing && <label className="mt-2 block text-xs text-zinc-400">Set progress<input aria-label="Set progress" type="range" min="0" max="100" value={value.progress} onChange={(event) => update("progress", Number(event.target.value))} className="w-full accent-violet-500" /></label>}</div>
+        {editing && saveError && <p role="alert" className="mt-3 rounded-xl border border-red-400/30 bg-red-500/10 p-3 text-sm text-red-200">{saveError}</p>}
       </header>
       <div className="grid min-w-0 gap-5 lg:grid-cols-2"><div className="min-w-0 space-y-4">{NARRATIVE.map(([field, title]) =>
         editing || value[field] ? <section key={field} className={SECTION}><div className="flex flex-wrap items-center justify-between gap-2"><h2 className="font-semibold text-white">{title}</h2>{!editing && isGM && field !== "shortDescription" && <Visibility value={value.sectionVisibility[field]} />}</div>
@@ -350,8 +350,6 @@ export default function Quests() {
       {(editing || value.aftermath) && <section className={SECTION}><h2 className="font-semibold text-white">Aftermath</h2>{editing ? <div className="mt-3 space-y-2"><Visibility ariaLabel="Aftermath visibility" value={value.sectionVisibility.aftermath} onChange={(next) => update("sectionVisibility", { ...value.sectionVisibility, aftermath: next })} /><textarea aria-label="Aftermath" className={INPUT} rows={5} value={value.aftermath} onChange={(event) => update("aftermath", event.target.value)} /></div> : <MarkdownContent content={value.aftermath} />}</section>}
       <div className="space-y-4">{RELATED.map((group) => <QuestLinkSection key={group.type} group={group} questId={id} refs={refs} links={visibleLinks} mainLocationId={value.mainLocationId} editing={editing} isGM={isGM} saving={saving} onChange={setDraftLinks} />)}</div>
       {linkError && <p role="alert" className="text-sm text-red-200">{linkError}</p>}
-      {editing && <div className="space-y-3">{saveError && <p role="alert" className="rounded-xl border border-red-400/30 bg-red-500/10 p-3 text-sm text-red-200">{saveError}</p>}
-        <div className="flex flex-wrap gap-2"><button className={BUTTON} type="submit">{saving ? "Saving..." : "Save quest"}</button><button className={BUTTON} type="button" onClick={() => { setDraft(null); setDraftLinks([]); setEditing(false); setSaveError(""); }}>Cancel</button></div></div>}
     </fieldset></form>
   </main>;
 }

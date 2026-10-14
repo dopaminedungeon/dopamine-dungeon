@@ -154,23 +154,36 @@ test("Player mode and nonmembers cannot save; invalid campaign references and ty
 test("main destination is projected only with an authorised location and link", async () => {
   mocks.saved = [{ ...base, campaignId, receiverIds: ["legacy-pc"],
     sectionVisibility: { ...visibility, shortDescription: "gm-only" } }];
-  mocks.rows.set(locations, [{ id: "location-one", name: "Destination" }]);
+  mocks.rows.set(locations, [{ id: "location-one", name: "Secret destination", visibility: "gm-only" }]);
   mocks.rows.set(entityLinks, [{ label: "leads_to", visibility: "GM", entityAType: "Quest",
     entityAId: base.id, entityBType: "Map", entityBId: "location-one" }]);
   const hidden = response();
   await handler(request("GET", "player", undefined, base.id), hidden.res);
   assert.equal(hidden.result.body.quest.mainLocationId, "");
+  assert.equal(hidden.result.body.quest.destinationHidden, true);
+  assert.equal(JSON.stringify(hidden.result.body).includes("location-one"), false);
+  assert.equal(JSON.stringify(hidden.result.body).includes("Secret destination"), false);
   assert.equal(hidden.result.body.quest.shortDescription, "Visible summary");
   assert.equal("receiverIds" in hidden.result.body.quest, false);
+  const gm = response();
+  await handler(request("GET", "gm", undefined, base.id), gm.res);
+  assert.equal(gm.result.body.quest.mainLocationId, "location-one");
   mocks.rows.set(entityLinks, [{ label: "leads_to", visibility: "Player", entityAType: "Quest",
     entityAId: base.id, entityBType: "Map", entityBId: "location-one" }]);
+  const hiddenLocation = response();
+  await handler(request("GET", "player", undefined, base.id), hiddenLocation.res);
+  assert.equal(hiddenLocation.result.body.quest.destinationHidden, true);
+  assert.equal(JSON.stringify(hiddenLocation.result.body).includes("location-one"), false);
+  mocks.rows.set(locations, [{ id: "location-one", name: "Destination", visibility: "public" }]);
   const shown = response();
   await handler(request("GET", "player", undefined, base.id), shown.res);
   assert.equal(shown.result.body.quest.mainLocationId, "location-one");
-  mocks.rows.set(locations, []);
-  const noLocation = response();
-  await handler(request("GET", "player", undefined, base.id), noLocation.res);
-  assert.equal(noLocation.result.body.quest.mainLocationId, "");
+  assert.equal(shown.result.body.quest.destinationHidden, undefined);
+  mocks.rows.set(entityLinks, []);
+  const unset = response();
+  await handler(request("GET", "player", undefined, base.id), unset.res);
+  assert.equal(unset.result.body.quest.mainLocationId, "");
+  assert.equal(unset.result.body.quest.destinationHidden, undefined);
 });
 
 test("saving a main destination uses one Quest location link and omits receiver writes", async () => {
