@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { ArrowLeft, Compass, Feather, Flag, PackageSearch, Plus, ScrollText, Search, Shield, Swords } from "lucide-react";
@@ -12,14 +12,15 @@ import { createLink } from "../domain/links/link.service";
 
 const ICONS = { fetch: PackageSearch, delivery: Flag, combat: Swords, investigation: Search,
   negotiation: Feather, survival: Shield, discovery: Compass };
-const INPUT = "w-full min-w-0 rounded-xl border border-white/10 bg-zinc-950/60 px-3 py-2 text-sm text-white focus:border-violet-300 focus:outline-none";
-const BUTTON = "rounded-xl border border-white/15 bg-white/5 px-4 py-2 text-sm text-white hover:bg-white/10 disabled:opacity-50";
-const SECTION = "min-w-0 rounded-2xl border border-white/10 bg-white/[0.04] p-4";
+const INPUT = "w-full min-w-0 rounded-xl border border-white/15 bg-white/5 px-3 py-2 text-sm text-white focus:border-purple-500/60 focus:outline-none";
+const BUTTON = "rounded-xl border border-white/10 bg-white/5 px-3 py-1.5 text-xs text-zinc-200 hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-50";
+const SAVE_BUTTON = "rounded-xl bg-purple-500 px-3 py-1.5 text-xs font-medium text-white hover:bg-purple-400 disabled:cursor-not-allowed disabled:opacity-50";
+const SECTION = "min-w-0 rounded-2xl border border-white/10 bg-white/5 p-5 sm:p-6 backdrop-blur-sm";
 const NARRATIVE = [["shortDescription", "Short description"], ["hook", "The hook"], ["journey", "The journey"]];
 const emptyRefs = { sessions: [], npcs: [], items: [], locations: [] };
 const RELATED = [
-  { type: "Session", key: "sessions", path: "/sessions", title: "Sessions" },
-  { type: "NPC", key: "npcs", path: "/npcs", title: "NPCs" },
+  { type: "Session", key: "sessions", path: "/sessions", title: "Related sessions" },
+  { type: "NPC", key: "npcs", path: "/npcs", title: "Related NPCs" },
   { type: "Item", key: "items", path: "/items", title: "Items" },
   { type: "Map", key: "locations", path: "/maps", title: "Additional locations" },
 ];
@@ -33,14 +34,20 @@ function blankQuest(id) {
     mainObjectives: [], secondaryObjectives: [] };
 }
 
-function TypeIcon({ type, size = 20 }) {
-  return React.createElement(ICONS[type] || ScrollText, { size, className: "shrink-0 text-violet-300", "aria-hidden": true });
+function TypeIcon({ type, size = 20, className = "text-violet-300" }) {
+  return React.createElement(ICONS[type] || ScrollText, { size, className: `shrink-0 ${className}`, "aria-hidden": true });
 }
 
-function Progress({ value }) {
-  return <div className="space-y-1" aria-label={`Quest progress ${value}%`}>
+function Progress({ value, onChange }) {
+  const track = { backgroundImage: "linear-gradient(90deg, #a855f7, #f472b6 35%, #0ea5e9 70%, #2dd4bf)",
+    backgroundSize: `${value}% 100%`, backgroundRepeat: "no-repeat", backgroundColor: "#27272a" };
+  return <div className="space-y-2">
     <div className="flex justify-between text-xs text-zinc-400"><span>Progress</span><span>{value}%</span></div>
-    <div className="h-2 overflow-hidden rounded-full bg-zinc-800"><div className="h-full rounded-full bg-linear-to-r from-purple-500 to-pink-400" style={{ width: `${value}%` }} /></div>
+    {onChange ? <input aria-label="Set progress" aria-valuetext={`${value}%`} type="range" min="0" max="100" value={value}
+      onChange={(event) => onChange(Number(event.target.value))} style={track}
+      className="block h-3 w-full cursor-pointer appearance-none rounded-full focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-purple-300 [&::-webkit-slider-runnable-track]:h-3 [&::-webkit-slider-runnable-track]:rounded-full [&::-webkit-slider-runnable-track]:bg-transparent [&::-webkit-slider-thumb]:-mt-1 [&::-webkit-slider-thumb]:h-5 [&::-webkit-slider-thumb]:w-5 [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:border-2 [&::-webkit-slider-thumb]:border-white [&::-webkit-slider-thumb]:bg-purple-500 [&::-moz-range-track]:h-3 [&::-moz-range-track]:rounded-full [&::-moz-range-track]:bg-transparent [&::-moz-range-thumb]:h-5 [&::-moz-range-thumb]:w-5 [&::-moz-range-thumb]:rounded-full [&::-moz-range-thumb]:border-2 [&::-moz-range-thumb]:border-white [&::-moz-range-thumb]:bg-purple-500" />
+      : <div role="progressbar" aria-label={`Quest progress ${value}%`} aria-valuemin={0} aria-valuemax={100} aria-valuenow={value}
+        className="h-3 rounded-full" style={track} />}
   </div>;
 }
 
@@ -51,26 +58,61 @@ function Visibility({ value, onChange, ariaLabel = "Visibility" }) {
     {value === "public" ? "Player-visible" : "GM-only"}</span>;
 }
 
-function RefLink({ id, rows, to }) {
+function QuestPrimaryLinkSection({ title, id, rows, path, editing, onChange, hidden = false }) {
   const row = rows.find((entry) => entry.id === id);
-  return row ? <Link className="break-words text-violet-200 underline-offset-2 hover:underline" to={`${to}/${encodeURIComponent(id)}`}>{row.name}</Link> : null;
+  return <section className={SECTION}>
+    <h2 className="text-sm font-semibold uppercase tracking-wide text-zinc-300">{title}</h2>
+    {editing ? <label className="mt-4 block text-xs text-zinc-400">Select {title.toLowerCase()}
+      <select aria-label={title} className={`${INPUT} mt-1`} value={id || ""} onChange={(event) => onChange(event.target.value)}>
+        <option value="">{title === "Destination" ? "No destination" : "Not set"}</option>
+        {rows.map((entry) => <option key={entry.id} value={entry.id}>{entry.name}</option>)}
+      </select>
+    </label> : <div className="mt-4 min-w-0 rounded-xl border border-white/10 bg-black/15 p-4 text-sm">
+      {hidden ? <span className="text-zinc-300">Destination: Unknown</span>
+        : row ? <Link className="break-words font-semibold text-white hover:text-purple-200 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-purple-300" to={`${path}/${encodeURIComponent(row.id)}`}>{row.name}</Link>
+          : <span className="text-zinc-500">Not set</span>}
+    </div>}
+  </section>;
+}
+
+function QuestLoadingShell({ isList }) {
+  if (isList) return <div role="status" className="rounded-2xl border border-white/10 bg-white/5 p-5 text-sm text-zinc-400">Loading quests...</div>;
+  return <main className="app-page-wide min-w-0 flex-1 overflow-auto p-4 sm:p-6 lg:p-8">
+    <Link className="mb-6 inline-flex items-center gap-2 text-sm text-zinc-400 hover:text-white" to="/quests"><ArrowLeft size={20} /> Back to Quests</Link>
+    <div role="status" className="space-y-6" aria-label="Loading quest">
+      <div className="rounded-2xl border border-white/10 bg-white/5 p-5 sm:p-6 lg:p-8"><div className="h-16 w-16 rounded-2xl bg-white/10" /><div className="mt-5 h-5 w-1/2 max-w-72 rounded bg-white/10" /><div className="mt-6 h-3 w-full rounded bg-white/10" /></div>
+      <div className="grid gap-6 lg:grid-cols-2"><div className="h-40 rounded-2xl border border-white/10 bg-white/5" /><div className="h-40 rounded-2xl border border-white/10 bg-white/5" /></div>
+      <span className="sr-only">Loading quest...</span>
+    </div>
+  </main>;
 }
 
 function QuestCard({ quest, refs, isGM }) {
   const ended = quest.status === "Completed" || quest.status === "Abandoned";
-  return <article className="block min-w-0 rounded-2xl border border-white/10 bg-white/[0.04] p-4 hover:border-violet-400/40">
-    <div className="flex min-w-0 items-start gap-3"><TypeIcon type={quest.type} /><div className="min-w-0 flex-1">
-      <div className="flex flex-wrap items-center gap-2"><h3 className="break-words font-semibold text-white"><Link className="hover:underline" to={`/quests/${encodeURIComponent(quest.id)}`}>{quest.name}</Link></h3>{isGM && <Visibility value={quest.visibility} />}</div>
-      {quest.shortDescription && <p className="mt-2 line-clamp-3 break-words text-sm text-zinc-300">{quest.shortDescription}</p>}
-      <div className="mt-3 flex flex-wrap gap-x-4 gap-y-1 text-xs text-zinc-400">
-        {quest.startSessionId && <span>Start: <RefLink id={quest.startSessionId} rows={refs.sessions} to="/sessions" /></span>}
-        {ended && quest.endSessionId && <span>End: <RefLink id={quest.endSessionId} rows={refs.sessions} to="/sessions" /></span>}
-        {ended && quest.endDate && <span>Ended: {quest.endDate}</span>}
-        {quest.giverId && <span>Giver: <RefLink id={quest.giverId} rows={refs.npcs} to="/npcs" /></span>}
-        {(quest.mainLocationId || quest.destinationHidden) && <span>Destination: {quest.destinationHidden ? "Unknown" : <RefLink id={quest.mainLocationId} rows={refs.locations} to="/maps" />}</span>}
-      </div><div className="mt-3"><Progress value={quest.progress} /></div>
-    </div></div>
-  </article>;
+  const start = refs.sessions.find((row) => row.id === quest.startSessionId);
+  const end = refs.sessions.find((row) => row.id === quest.endSessionId);
+  const giver = refs.npcs.find((row) => row.id === quest.giverId);
+  const destination = refs.locations.find((row) => row.id === quest.mainLocationId);
+  return <Link to={`/quests/${encodeURIComponent(quest.id)}`} aria-label={`Open quest ${quest.name}`}
+    className="group flex min-w-0 flex-col rounded-2xl border border-white/10 bg-white/[0.04] p-5 text-left transition hover:border-violet-300/40 hover:bg-white/[0.07] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-violet-300 sm:p-6">
+    <div className="mb-4 flex items-start justify-between gap-3">
+      <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-xl bg-linear-to-br from-purple-500 to-pink-500 shadow-lg"><TypeIcon type={quest.type} size={28} className="text-white" /></div>
+      <div className="flex flex-wrap justify-end gap-2">
+        <span className="rounded-lg border border-white/10 bg-white/5 px-3 py-1 text-xs font-medium text-zinc-300">{QUEST_TYPES.find((type) => type.id === quest.type)?.label}</span>
+        {isGM && <Visibility value={quest.visibility} />}
+      </div>
+    </div>
+    <h3 className="break-words [overflow-wrap:anywhere] text-xl font-bold text-white transition-colors group-hover:text-purple-300">{quest.name}</h3>
+    {quest.shortDescription && <p className="mt-2 line-clamp-2 break-words text-sm text-zinc-400">{quest.shortDescription}</p>}
+    <div className="mt-auto flex flex-wrap gap-x-4 gap-y-1 border-t border-white/10 pt-4 text-xs text-zinc-400">
+      {start && <span>Start: {start.name}</span>}
+      {ended && end && <span>End: {end.name}</span>}
+      {ended && quest.endDate && <span>Ended: {quest.endDate}</span>}
+      {giver && <span>Giver: {giver.name}</span>}
+      {(destination || quest.destinationHidden) && <span>Destination: {quest.destinationHidden ? "Unknown" : destination?.name}</span>}
+    </div>
+    <div className="mt-4"><Progress value={quest.progress} /></div>
+  </Link>;
 }
 
 function ObjectiveList({ title, field, quest, editing, update, isGM }) {
@@ -87,7 +129,7 @@ function ObjectiveList({ title, field, quest, editing, update, isGM }) {
     if (other < 0 || other >= next.length) return;
     [next[index], next[other]] = [next[other], next[index]]; update(field, next); };
   return <section className={SECTION}>
-    <div className="flex flex-wrap items-center justify-between gap-2"><h2 className="font-semibold text-white">{title}</h2>
+    <div className="flex flex-wrap items-center justify-between gap-2"><h2 className="text-sm font-semibold uppercase tracking-wide text-zinc-300">{title}</h2>
       {editing && !main && <button type="button" className={BUTTON} onClick={() => update(field, [...entries,
         { id: crypto.randomUUID(), type: QUEST_TYPES[0].id, description: "", visibility: "gm-only" }])}>Add secondary objective</button>}
     </div>
@@ -119,8 +161,8 @@ function QuestLinkSection({ group, questId, refs, links, mainLocationId, editing
     row.name.toLowerCase().includes(query.toLowerCase()) && !links.some((link) => {
       const other = otherEndpoint(link, questId); return other.type === group.type && other.id === row.id;
     })).slice(0, 30);
-  return <section className="rounded-xl border border-white/10 bg-white/5 p-4 sm:p-5">
-    <div className="flex items-start justify-between gap-3"><h2 className="text-lg font-semibold text-white">{group.title}</h2>
+  return <section className={SECTION}>
+    <div className="flex items-start justify-between gap-3"><h2 className="text-sm font-semibold uppercase tracking-wide text-zinc-300">{group.title}</h2>
       {editing && <button type="button" className="rounded-lg border border-white/10 bg-white/5 px-3 py-1.5 text-xs text-zinc-200 hover:bg-white/10" disabled={saving} onClick={() => setOpen(!open)}>{open ? "Close" : `Add ${group.type === "Map" ? "Location" : group.type}`}</button>}</div>
     {editing && open && <div className="mt-4 space-y-3 rounded-xl border border-white/10 bg-black/10 p-4">
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-[minmax(0,1fr)_160px_140px]">
@@ -175,6 +217,12 @@ export default function Quests() {
   const [linkError, setLinkError] = useState("");
   const isNew = id === "new";
   const isList = !id || isNew;
+  const loadScope = JSON.stringify([selectedCampaignId, id, isList, isGM]);
+  const scopeRef = useRef(loadScope);
+  const [loadedScope, setLoadedScope] = useState("");
+  const [retryCount, setRetryCount] = useState(0);
+
+  useLayoutEffect(() => { scopeRef.current = loadScope; }, [loadScope]);
 
   const closeCreate = useCallback(() => {
     if (savingRef.current) return;
@@ -185,17 +233,26 @@ export default function Quests() {
 
   useEffect(() => {
     let active = true;
-    setLoading(true); setError(""); setEditing(false); setSaveError("");
-    if (!selectedCampaignId) { setQuests([]); setQuest(null); setLoading(false); return; }
+    setLoading(true); setError("");
+    if (!selectedCampaignId) { setQuests([]); setQuest(null); setRefs(emptyRefs); setLoadedScope(loadScope); setLoading(false); return; }
     const request = isList ? questsRepo.all(selectedCampaignId) : questsRepo.one(selectedCampaignId, id);
     request.then((result) => {
       if (!active) return;
       setRefs(result.references || emptyRefs);
       if (isList) setQuests(result.quests || []); else setQuest(result.quest);
-    }).catch(() => { if (active) setError("Could not load quests. Please try again."); })
+      setLoadedScope(loadScope);
+    }).catch(() => { if (active) { setError(`Could not load ${isList ? "quests" : "this quest"}. Please try again.`); setLoadedScope(loadScope); } })
       .finally(() => { if (active) setLoading(false); });
     return () => { active = false; };
-  }, [selectedCampaignId, id, isList, isGM]);
+  }, [selectedCampaignId, id, isList, isGM, loadScope, retryCount]);
+
+  useEffect(() => {
+    setDraft(null); setDraftLinks([]); setEditing(false); setSaveError("");
+  }, [selectedCampaignId, id, isList]);
+
+  useEffect(() => {
+    if (!isGM) { setDraft(null); setDraftLinks([]); setEditing(false); setSaveError(""); }
+  }, [isGM]);
 
   useEffect(() => {
     let active = true;
@@ -239,13 +296,15 @@ export default function Quests() {
     event.preventDefault();
     if (savingRef.current || !selectedCampaignId) return;
     if (!createDraft.name.trim()) { setCreateError("Quest name is required."); return; }
+    const saveScope = loadScope;
     savingRef.current = true; setSaving(true); setCreateError("");
     try {
       const result = await questsRepo.save(selectedCampaignId, createDraft);
+      if (scopeRef.current !== saveScope) return;
       setQuests((current) => [...current.filter((row) => row.id !== result.quest.id), result.quest]);
       setShowCreateModal(false); setCreateDraft(blankQuest(crypto.randomUUID()));
       if (isNew) navigate("/quests", { replace: true });
-    } catch (failure) { setCreateError(failure?.message || "Could not create quest. Please try again."); }
+    } catch (failure) { if (scopeRef.current === saveScope) setCreateError(failure?.message || "Could not create quest. Please try again."); }
     finally { savingRef.current = false; setSaving(false); }
   }
 
@@ -264,35 +323,45 @@ export default function Quests() {
     }
   }
 
-  async function save(event) {
-    event.preventDefault();
+  async function save() {
     if (savingRef.current) return;
     if (!selectedCampaignId || !draft?.name.trim()) { setSaveError("Quest name is required."); return; }
+    const saveScope = loadScope;
     savingRef.current = true; setSaving(true); setSaveError("");
     try {
       const result = await questsRepo.save(selectedCampaignId, draft);
+      if (scopeRef.current !== saveScope) return;
       try { await applyDraftLinks(selectedCampaignId, id, draftLinks, links, draft.mainLocationId); }
-      catch (failure) { setSaveError(`Quest saved, but relationships could not be saved. Retry to finish. ${failure?.message || ""}`); return; }
+      catch (failure) { if (scopeRef.current === saveScope) setSaveError(`Quest saved, but relationships could not be saved. Retry to finish. ${failure?.message || ""}`); return; }
+      if (scopeRef.current !== saveScope) return;
       setQuest(result.quest); setDraft(null); setEditing(false);
       try { setLinks((await loadLinks(selectedCampaignId)).filter((link) =>
         (link.entityA.type === "Quest" && link.entityA.id === id) || (link.entityB.type === "Quest" && link.entityB.id === id))); }
       catch { setLinkError("Quest saved, but relationships could not refresh. Reload to try again."); }
-    } catch (failure) { setSaveError(failure?.message || "Could not save quest. Please try again."); }
+    } catch (failure) { if (scopeRef.current === saveScope) setSaveError(failure?.message || "Could not save quest. Please try again."); }
     finally { savingRef.current = false; setSaving(false); }
   }
 
-  if (loading) return <main className="app-page-wide flex items-center justify-center" role="status">Loading quests...</main>;
-  if (error) return <main className="app-page-wide space-y-3"><p role="alert" className="text-red-200">{error}</p><button className={BUTTON} onClick={() => window.location.reload()}>Retry</button></main>;
-  if (isList) return <main className="app-page-wide flex-1 overflow-auto">
-    <div className="mb-8 flex flex-col gap-4 lg:flex-row lg:flex-nowrap">
-      <div className="relative w-full min-w-0 lg:w-auto lg:flex-[1_1_11rem]"><Search className="absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-zinc-500" />
-        <input aria-label="Search quests" className="w-full rounded-xl border border-white/10 bg-white/5 py-2.5 pl-11 pr-3 text-white placeholder-zinc-500 transition-all focus:border-emerald-500/50 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 sm:py-3 sm:pl-12 sm:pr-4" placeholder="Search quests..." value={search} onChange={(event) => setSearch(event.target.value)} /></div>
-      <div className="flex min-w-0 gap-2 overflow-x-auto whitespace-nowrap pr-1 [-webkit-overflow-scrolling:touch] lg:flex-[2_1_20rem]">{["All", ...QUEST_STATUSES].map((status) => <button key={status} type="button" onClick={() => setStatusFilter(status)} className={`shrink-0 rounded-xl px-3 py-2.5 font-medium transition-all sm:px-4 sm:py-3 ${statusFilter === status ? "bg-emerald-500 text-white" : "bg-white/5 text-zinc-400 hover:bg-white/10 hover:text-white"}`}>{status}</button>)}</div>
-      <select aria-label="Filter quest type" className="w-full rounded-xl border border-white/10 bg-white/5 px-3 py-2.5 text-sm font-medium text-zinc-200 focus:border-emerald-500/50 focus:outline-none sm:py-3 lg:w-32 lg:shrink-0" value={typeFilter} onChange={(event) => setTypeFilter(event.target.value)}><option value="All">All types</option>{QUEST_TYPES.map((type) => <option key={type.id} value={type.id}>{type.label}</option>)}</select>
-      {isGM && <select aria-label="Filter quest visibility" className="w-full rounded-xl border border-white/10 bg-white/5 px-3 py-2.5 text-sm font-medium text-zinc-200 focus:border-emerald-500/50 focus:outline-none sm:py-3 lg:w-32 lg:shrink-0" value={visibilityFilter} onChange={(event) => setVisibilityFilter(event.target.value)}><option value="All">All visibility</option><option value="public">Player-visible</option><option value="gm-only">GM-only</option></select>}
-      {isGM && <button ref={createButtonRef} type="button" className="flex w-full items-center justify-center gap-2 rounded-xl bg-linear-to-r from-indigo-500 to-purple-500 px-4 py-2.5 font-medium text-white transition-opacity hover:opacity-90 sm:px-6 sm:py-3 lg:w-auto lg:shrink-0" onClick={() => { setCreateDraft(blankQuest(crypto.randomUUID())); setShowCreateModal(true); }}><Plus className="h-5 w-5" />Add new</button>}
+  const isCurrentLoading = loading || loadedScope !== loadScope;
+  if (isCurrentLoading && !isList) return <QuestLoadingShell isList={false} />;
+  if (error && !isCurrentLoading) return <main className="app-page-wide space-y-3"><p role="alert" className="text-red-200">{error}</p><button type="button" className={BUTTON} onClick={() => setRetryCount((count) => count + 1)}>Retry</button></main>;
+  if (isList) return <main className="app-page-wide flex-1 overflow-auto p-4 sm:p-6 lg:p-8">
+    <div className="mb-8 rounded-2xl border border-white/10 bg-white/5 p-4 backdrop-blur-sm">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+        <div className="relative min-w-0 flex-1"><Search className="absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-zinc-500" />
+          <input aria-label="Search quests" className="w-full rounded-xl border border-white/10 bg-white/5 py-3 pl-12 pr-4 text-white placeholder-zinc-500 focus:border-purple-500/50 focus:outline-none focus:ring-2 focus:ring-purple-500/20" placeholder="Search quests..." value={search} onChange={(event) => setSearch(event.target.value)} /></div>
+        {isGM && <button ref={createButtonRef} type="button" className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-linear-to-r from-indigo-500 to-purple-500 px-5 py-3 text-sm font-medium text-white transition-opacity hover:opacity-90 sm:w-auto" onClick={() => { setCreateDraft(blankQuest(crypto.randomUUID())); setShowCreateModal(true); }}><Plus className="h-4 w-4" />Add new</button>}
+      </div>
+      <div className="mt-3 flex flex-wrap items-center gap-2 text-sm">
+        <label className="inline-flex max-w-full items-center gap-2 text-zinc-500"><span className="shrink-0 text-xs font-medium uppercase tracking-wide">Status</span>
+          <select aria-label="Filter quest status" className="h-9 min-w-0 rounded-lg border border-white/10 bg-zinc-950/70 px-2.5 text-sm text-zinc-200 focus:border-purple-500/50 focus:outline-none focus:ring-2 focus:ring-purple-500/20" value={statusFilter} onChange={(event) => setStatusFilter(event.target.value)}><option value="All">All</option>{QUEST_STATUSES.map((status) => <option key={status} value={status}>{status}</option>)}</select></label>
+        <label className="inline-flex max-w-full items-center gap-2 text-zinc-500"><span className="shrink-0 text-xs font-medium uppercase tracking-wide">Type</span>
+          <select aria-label="Filter quest type" className="h-9 min-w-0 max-w-[14rem] rounded-lg border border-white/10 bg-zinc-950/70 px-2.5 text-sm text-zinc-200 focus:border-purple-500/50 focus:outline-none focus:ring-2 focus:ring-purple-500/20" value={typeFilter} onChange={(event) => setTypeFilter(event.target.value)}><option value="All">All</option>{QUEST_TYPES.map((type) => <option key={type.id} value={type.id}>{type.label}</option>)}</select></label>
+        {isGM && <label className="inline-flex max-w-full items-center gap-2 text-zinc-500"><span className="shrink-0 text-xs font-medium uppercase tracking-wide">Visibility</span>
+          <select aria-label="Filter quest visibility" className="h-9 min-w-0 rounded-lg border border-white/10 bg-zinc-950/70 px-2.5 text-sm text-zinc-200 focus:border-purple-500/50 focus:outline-none focus:ring-2 focus:ring-purple-500/20" value={visibilityFilter} onChange={(event) => setVisibilityFilter(event.target.value)}><option value="All">All</option><option value="public">Player-visible</option><option value="gm-only">GM-only</option></select></label>}
+      </div>
     </div>
-    {quests.length === 0 ? <p className="rounded-2xl border border-white/10 p-5 text-zinc-300">No quests yet.</p> : filtered.length === 0 ? <p className="rounded-2xl border border-white/10 p-5 text-zinc-300">No quests match these filters.</p> :
+    {isCurrentLoading ? <QuestLoadingShell isList /> : quests.length === 0 ? <p className="rounded-2xl border border-white/10 p-5 text-zinc-300">No quests yet.</p> : filtered.length === 0 ? <p className="rounded-2xl border border-white/10 p-5 text-zinc-300">No quests match these filters.</p> :
       QUEST_STATUSES.map((status) => { const rows = filtered.filter((entry) => entry.status === status); return rows.length ? <section key={status} className="mb-6 space-y-3"><h2 className="text-lg font-semibold text-white">{status}</h2><div className="grid gap-3 lg:grid-cols-2">{rows.map((entry) => <QuestCard key={entry.id} quest={entry} refs={refs} isGM={isGM} />)}</div></section> : null; })}
     {showCreateModal && isGM && createPortal(<div data-testid="quest-modal-backdrop" className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/70 p-4 pt-6 pb-28 backdrop-blur-sm sm:items-center sm:pb-6" onMouseDown={(event) => { if (event.target === event.currentTarget) closeCreate(); }}>
       <div role="dialog" aria-modal="true" aria-label="Create a quest" className="my-auto max-h-[85vh] w-[92vw] max-w-xl overflow-y-auto rounded-xl border border-white/10 bg-zinc-950 p-4 sm:rounded-2xl sm:p-6">
@@ -316,40 +385,51 @@ export default function Quests() {
     </div>, document.body)}
   </main>;
 
-  if (!value) return <main className="app-page-wide text-zinc-300">Quest not found.</main>;
+  if (!value) return <main className="app-page-wide text-zinc-300">Quest not available in this mode.</main>;
   const visibleLinks = (editing ? draftLinks : links).filter((link) => !managedLabels.has(link.label));
-  return <main className="app-page-wide min-w-0 space-y-5">
-    <Link className="inline-flex items-center gap-2 text-sm text-violet-200" to="/quests"><ArrowLeft size={16} /> Quests</Link>
-    <form onSubmit={save} className="min-w-0 space-y-5"><fieldset disabled={saving} className="min-w-0 space-y-5 disabled:opacity-60">
-      <header className={SECTION}>
-        <div className="flex flex-wrap items-start justify-between gap-3"><div className="flex min-w-0 items-center gap-3"><TypeIcon type={value.type} size={26} />
-          {editing ? <label className="min-w-0 text-xs text-zinc-400">Quest name<input className={INPUT} value={value.name} onChange={(event) => update("name", event.target.value)} /></label> : <h1 className="break-words text-2xl font-bold text-white">{value.name}</h1>}</div>
-          {isGM && <div className="flex shrink-0 flex-wrap items-center gap-2">{editing ? <><button type="button" className={BUTTON} onClick={() => { setDraft(null); setDraftLinks([]); setEditing(false); setSaveError(""); }}>Cancel</button><button className={BUTTON} type="submit">{saving ? "Saving..." : "Save quest"}</button></> : <><Visibility value={value.visibility} /><button type="button" className={BUTTON} onClick={() => { setDraft(structuredClone(quest)); setDraftLinks(links.filter((link) => !managedLabels.has(link.label))); setEditing(true); }}>Edit</button></>}</div>}</div>
+  return <main className="app-page-wide min-w-0 flex-1 overflow-auto p-4 sm:p-6 lg:p-8">
+    <Link className="mb-6 inline-flex items-center gap-2 text-sm text-zinc-400 hover:text-white" to="/quests"><ArrowLeft size={20} /> Back to Quests</Link>
+    <div className="min-w-0 space-y-6"><fieldset disabled={saving} className="min-w-0 space-y-6 disabled:opacity-60">
+      <header className="rounded-2xl border border-white/10 bg-white/5 p-5 sm:p-6 lg:p-8 backdrop-blur-sm">
+        <div className="flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between">
+          <div className="flex min-w-0 flex-1 items-start gap-4">
+            <div className="flex h-16 w-16 shrink-0 items-center justify-center rounded-2xl bg-linear-to-br from-purple-500 to-pink-500"><TypeIcon type={value.type} size={32} className="text-white" /></div>
+            <div className="min-w-0 flex-1">
+              {editing ? <label className="block min-w-0 text-xs text-zinc-400">Quest name<input className={`${INPUT} mt-1`} value={value.name} onChange={(event) => update("name", event.target.value)} /></label>
+                : <h1 className="break-words [overflow-wrap:anywhere] text-2xl font-bold text-white sm:text-3xl">{value.name}</h1>}
+              {!editing && <div className="mt-4 flex flex-wrap items-center gap-2">
+                <span className="rounded-full border border-white/10 bg-white/5 px-3 py-1 text-xs text-zinc-300">{QUEST_TYPES.find((type) => type.id === value.type)?.label}</span>
+                <span className="rounded-full border border-white/10 bg-white/5 px-3 py-1 text-xs text-zinc-300">{value.status}</span>
+                {isGM && <Visibility value={value.visibility} />}
+              </div>}
+            </div>
+          </div>
+          {isGM && <div className="flex shrink-0 flex-wrap items-center gap-2 self-start">{editing ? <><button type="button" className={BUTTON} onClick={() => { setDraft(null); setDraftLinks([]); setEditing(false); setSaveError(""); }}>Cancel</button><button className={SAVE_BUTTON} type="button" onClick={save}>{saving ? "Saving..." : "Save quest"}</button></> : <button type="button" className={BUTTON} onClick={() => { setDraft(structuredClone(quest)); setDraftLinks(links.filter((link) => !managedLabels.has(link.label))); setEditing(true); }}>Edit</button>}</div>}
+        </div>
         {editing ? <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
           <label className="text-xs text-zinc-400">Quest type<select className={INPUT} value={value.type} onChange={(event) => update("type", event.target.value)}>{QUEST_TYPES.map((type) => <option key={type.id} value={type.id}>{type.label}</option>)}</select></label>
           <label className="text-xs text-zinc-400">Status<select className={INPUT} value={value.status} onChange={(event) => update("status", event.target.value)}>{QUEST_STATUSES.map((status) => <option key={status}>{status}</option>)}</select></label>
           <label className="text-xs text-zinc-400">Overall visibility<Visibility ariaLabel="Overall visibility" value={value.visibility} onChange={(next) => update("visibility", next)} /></label>
-          <label className="text-xs text-zinc-400">Start session<select className={INPUT} value={value.startSessionId} onChange={(event) => update("startSessionId", event.target.value)}><option value="">Not set</option>{refs.sessions.map((row) => <option key={row.id} value={row.id}>{row.name}</option>)}</select></label>
-          {ended && <><label className="text-xs text-zinc-400">End session<select className={INPUT} value={value.endSessionId} onChange={(event) => update("endSessionId", event.target.value)}><option value="">Not set</option>{refs.sessions.map((row) => <option key={row.id} value={row.id}>{row.name}</option>)}</select></label><label className="text-xs text-zinc-400">End date<input type="date" className={INPUT} value={value.endDate} onChange={(event) => update("endDate", event.target.value)} /></label></>}
-          <label className="text-xs text-zinc-400">Quest giver<select className={INPUT} value={value.giverId} onChange={(event) => update("giverId", event.target.value)}><option value="">Not set</option>{refs.npcs.map((row) => <option key={row.id} value={row.id}>{row.name}</option>)}</select></label>
-          <label className="text-xs text-zinc-400">Destination<select className={INPUT} value={value.mainLocationId || ""} onChange={(event) => update("mainLocationId", event.target.value)}><option value="">No destination</option>{refs.locations.map((row) => <option key={row.id} value={row.id}>{row.name}</option>)}</select></label>
+          {ended && <label className="text-xs text-zinc-400">End date<input type="date" className={INPUT} value={value.endDate} onChange={(event) => update("endDate", event.target.value)} /></label>}
         </div> : <div className="mt-4 flex flex-wrap gap-x-5 gap-y-2 text-sm text-zinc-300">
-          {value.startSessionId && <span>Start: <RefLink id={value.startSessionId} rows={refs.sessions} to="/sessions" /></span>}
-          {ended && value.endSessionId && <span>End: <RefLink id={value.endSessionId} rows={refs.sessions} to="/sessions" /></span>}
           {ended && value.endDate && <span>Ended: {value.endDate}</span>}
-          {value.giverId && <span>Giver: <RefLink id={value.giverId} rows={refs.npcs} to="/npcs" /></span>}
-          {(value.mainLocationId || value.destinationHidden) && <span>Destination: {value.destinationHidden ? "Unknown" : <RefLink id={value.mainLocationId} rows={refs.locations} to="/maps" />}</span>}
         </div>}
-        <div className="mt-4"><Progress value={value.progress} />{editing && <label className="mt-2 block text-xs text-zinc-400">Set progress<input aria-label="Set progress" type="range" min="0" max="100" value={value.progress} onChange={(event) => update("progress", Number(event.target.value))} className="w-full accent-violet-500" /></label>}</div>
-        {editing && saveError && <p role="alert" className="mt-3 rounded-xl border border-red-400/30 bg-red-500/10 p-3 text-sm text-red-200">{saveError}</p>}
+        <div className="mt-4"><Progress value={value.progress} onChange={editing ? (next) => update("progress", next) : undefined} /></div>
+        {editing && saveError && <p role="alert" className="mt-4 rounded-xl border border-red-400/30 bg-red-500/10 p-3 text-sm text-red-200">{saveError}</p>}
       </header>
-      <div className="grid min-w-0 gap-5 lg:grid-cols-2"><div className="min-w-0 space-y-4">{NARRATIVE.map(([field, title]) =>
-        editing || value[field] ? <section key={field} className={SECTION}><div className="flex flex-wrap items-center justify-between gap-2"><h2 className="font-semibold text-white">{title}</h2>{!editing && isGM && field !== "shortDescription" && <Visibility value={value.sectionVisibility[field]} />}</div>
-          {editing ? <div className="mt-3 space-y-2">{field !== "shortDescription" && <Visibility ariaLabel={`${title} visibility`} value={value.sectionVisibility[field]} onChange={(next) => update("sectionVisibility", { ...value.sectionVisibility, [field]: next })} />}<textarea aria-label={title} className={INPUT} rows={field === "shortDescription" ? 3 : 6} value={value[field]} onChange={(event) => update(field, event.target.value)} /></div> : <MarkdownContent content={value[field]} />}</section> : null
-      )}</div><div className="min-w-0 space-y-4"><ObjectiveList title="Main objective" field="mainObjectives" quest={value} editing={editing} update={update} isGM={isGM} /><ObjectiveList title="Secondary / bonus objectives" field="secondaryObjectives" quest={value} editing={editing} update={update} isGM={isGM} /></div></div>
-      {(editing || value.aftermath) && <section className={SECTION}><h2 className="font-semibold text-white">Aftermath</h2>{editing ? <div className="mt-3 space-y-2"><Visibility ariaLabel="Aftermath visibility" value={value.sectionVisibility.aftermath} onChange={(next) => update("sectionVisibility", { ...value.sectionVisibility, aftermath: next })} /><textarea aria-label="Aftermath" className={INPUT} rows={5} value={value.aftermath} onChange={(event) => update("aftermath", event.target.value)} /></div> : <MarkdownContent content={value.aftermath} />}</section>}
-      <div className="space-y-4">{RELATED.map((group) => <QuestLinkSection key={group.type} group={group} questId={id} refs={refs} links={visibleLinks} mainLocationId={value.mainLocationId} editing={editing} isGM={isGM} saving={saving} onChange={setDraftLinks} />)}</div>
+      <div className="grid min-w-0 gap-6 lg:grid-cols-2"><div className="min-w-0 space-y-6">{NARRATIVE.map(([field, title]) =>
+        editing || value[field] ? <section key={field} className={SECTION}><div className="flex flex-wrap items-center justify-between gap-2"><h2 className="text-sm font-semibold uppercase tracking-wide text-zinc-300">{title}</h2>{!editing && isGM && field !== "shortDescription" && <Visibility value={value.sectionVisibility?.[field] || "gm-only"} />}</div>
+          {editing ? <div className="mt-3 space-y-2">{field !== "shortDescription" && <Visibility ariaLabel={`${title} visibility`} value={value.sectionVisibility?.[field] || "gm-only"} onChange={(next) => update("sectionVisibility", { ...value.sectionVisibility, [field]: next })} />}<textarea aria-label={title} className={INPUT} rows={field === "shortDescription" ? 3 : 6} value={value[field]} onChange={(event) => update(field, event.target.value)} /></div> : <MarkdownContent content={value[field]} />}</section> : null
+      )}</div><div className="min-w-0 space-y-6"><ObjectiveList title="Main objective" field="mainObjectives" quest={value} editing={editing} update={update} isGM={isGM} /><ObjectiveList title="Secondary / bonus objectives" field="secondaryObjectives" quest={value} editing={editing} update={update} isGM={isGM} /></div></div>
+      {(editing || value.aftermath) && <section className={SECTION}><h2 className="text-sm font-semibold uppercase tracking-wide text-zinc-300">Aftermath</h2>{editing ? <div className="mt-3 space-y-2"><Visibility ariaLabel="Aftermath visibility" value={value.sectionVisibility?.aftermath || "gm-only"} onChange={(next) => update("sectionVisibility", { ...value.sectionVisibility, aftermath: next })} /><textarea aria-label="Aftermath" className={INPUT} rows={5} value={value.aftermath} onChange={(event) => update("aftermath", event.target.value)} /></div> : <MarkdownContent content={value.aftermath} />}</section>}
+      <div className="grid min-w-0 gap-6 lg:grid-cols-2">
+        <QuestPrimaryLinkSection title="Start session" id={value.startSessionId} rows={refs.sessions} path="/sessions" editing={editing} onChange={(next) => update("startSessionId", next)} />
+        {ended && <QuestPrimaryLinkSection title="End session" id={value.endSessionId} rows={refs.sessions} path="/sessions" editing={editing} onChange={(next) => update("endSessionId", next)} />}
+        <QuestPrimaryLinkSection title="Quest giver" id={value.giverId} rows={refs.npcs} path="/npcs" editing={editing} onChange={(next) => update("giverId", next)} />
+        <QuestPrimaryLinkSection title="Destination" id={value.mainLocationId} rows={refs.locations} path="/maps" editing={editing} onChange={(next) => update("mainLocationId", next)} hidden={value.destinationHidden} />
+      </div>
+      <div className="space-y-6">{RELATED.map((group) => <QuestLinkSection key={group.type} group={group} questId={id} refs={refs} links={visibleLinks} mainLocationId={value.mainLocationId} editing={editing} isGM={isGM} saving={saving} onChange={setDraftLinks} />)}</div>
       {linkError && <p role="alert" className="text-sm text-red-200">{linkError}</p>}
-    </fieldset></form>
+    </fieldset></div>
   </main>;
 }

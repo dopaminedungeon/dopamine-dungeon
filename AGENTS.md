@@ -160,3 +160,82 @@ Every completed coding/implementation task must include:
 For design-only work, documentation updates, or existing-issue edits, use a
 compact report of decisions, files/issues updated, verification, and unresolved
 questions. Do not imply GitHub updates or commits occurred without confirmation.
+
+
+## Project skill routing
+
+Use relevant repository-local skills automatically within the current task.
+Do not wait for an explicit $skill invocation when the task matches.
+Read each selected SKILL.md and briefly announce which skill is being used.
+
+### Design Decision Keeper
+
+Path: .agents/skills/design-decision-keeper/SKILL.md
+
+Use for product or UX discussions, mockup reviews, requirement corrections,
+confirmed design decisions, and reconciliation of existing GitHub issues.
+
+Distinguish exploratory proposals from confirmed decisions.
+Record clear decisions and reconcile clearly affected existing issues
+according to the Keeper's operating rules without requesting approval again.
+Clarify ambiguous decisions or targets before dependent updates.
+
+Use existing authoritative records:
+- Feature requirements: their owning issue or requirement document.
+- Cross-cutting product/UX standards: reusable product documentation.
+- Architectural decisions: the Guardian and existing ADR process.
+
+Create issues only when explicitly requested. Check for duplicates first,
+create only the requested issue, and never add issues opportunistically.
+
+### DD Architecture Guardian
+
+Path: .agents/skills/dd-architecture-guardian/SKILL.md
+
+Use when a task affects architecture, authorization, GM/Player projection,
+tenant or campaign isolation, persistence boundaries, data models,
+API contracts, or architectural implementation planning and review.
+
+Ground reviews in repository evidence and follow the Guardian's existing
+verdict and escalation rules.
+
+### UI Consistency Scout
+
+Path: .agents/skills/ui-consistency-scout/SKILL.md
+
+Use when implementing or changing UI, reviewing mockups, or investigating
+visual or interaction inconsistencies.
+
+Automatically review the affected UI against applicable approved patterns.
+Keep the review scoped to the current task; inspect other pages as references.
+Do not initiate an app-wide audit unless requested.
+
+Report findings by default. Implement corrections only when explicitly
+requested, including requests such as “fix the inconsistencies,” and only
+within the authorized scope.
+
+Locate the canonical UI pattern library through repository documentation.
+Issue #418 owns its initial audit, approval, and review method; its suggested
+document path is docs/product/ui-patterns.md.
+
+Distinguish observed, proposed, and approved patterns.
+Do not treat common implementations as approved standards or override
+documented exceptions.
+
+### Coordination and boundaries
+
+Use multiple skills when their responsibilities apply to the same task:
+- Scout identifies and verifies visual/interaction differences.
+- Keeper records confirmed decisions and reconciles requirements/issues.
+- Guardian assesses architectural and authorization implications.
+
+Do not duplicate records or repeat the same review under multiple skills.
+Route unresolved product choices to the user and architectural concerns
+to the Guardian; do not silently convert either into approved requirements.
+
+Explicit task restrictions apply to every skill. A read-only task permits
+no writes. Automatic skill selection does not expand implementation scope
+or authorize commits, branches, PRs, deployments, or issue creation.
+
+If a required skill is unavailable, report that limitation rather than
+claiming it was used.

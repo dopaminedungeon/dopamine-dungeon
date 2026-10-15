@@ -6,11 +6,19 @@ const npc = { id: "archivist", name: "Archivist", visibility: "public", type: "N
 const harbor = { id: "harbor", name: "Harbor", aliases: ["Safe Haven"], visibility: "public", category: "District" };
 const lookout = { id: "lookout", name: "Lookout", aliases: ["North Watch"], visibility: "public", category: "Landmark" };
 const hidden = { id: "hidden-vault", name: "Hidden Vault", aliases: ["Secret Hold"], visibility: "gm-only", category: "Dungeon" };
+const visibleQuest = { id: "coastal-quest", name: "Coastal lead", type: "discovery", status: "Planned", visibility: "public", progress: 20,
+  startSessionId: "", endSessionId: "", endDate: "", giverId: "", mainLocationId: harbor.id,
+  shortDescription: "Follow the coast.", hook: "", journey: "", aftermath: "", sectionVisibility: {}, mainObjectives: [], secondaryObjectives: [] };
+const privateLinkQuest = { id: "private-link-quest", name: "Private trail", visibility: "public" };
+const hiddenQuest = { id: "secret-quest", name: "Secret lead", visibility: "gm-only" };
 
-test("Location and NPC profiles share one link and NPC search keeps linked name and alias matches", async ({ page, request }) => {
+test("Location and NPC profiles share one link and NPC search keeps linked name and alias matches", async ({ page, request }, testInfo) => {
   let links = [
     { id: "link-harbor", entityA: { type: "Map", id: harbor.id }, entityB: { type: "NPC", id: npc.id }, label: "controls", visibility: "Player" },
     { id: "link-hidden", entityA: { type: "Map", id: hidden.id }, entityB: { type: "NPC", id: npc.id }, label: "connected", visibility: "GM" },
+    { id: "quest-destination", entityA: { type: "Quest", id: visibleQuest.id }, entityB: { type: "Map", id: harbor.id }, label: "leads_to", visibility: "Player" },
+    { id: "quest-gm-link", entityA: { type: "Quest", id: privateLinkQuest.id }, entityB: { type: "Map", id: harbor.id }, label: "related", visibility: "GM" },
+    { id: "hidden-quest-link", entityA: { type: "Quest", id: hiddenQuest.id }, entityB: { type: "Map", id: harbor.id }, label: "related", visibility: "Player" },
   ];
   const writes: string[] = [];
 
@@ -72,6 +80,13 @@ test("Location and NPC profiles share one link and NPC search keeps linked name 
         : { ok: true, locations: visibleLocations } });
       return;
     }
+    if (resource === "quests") {
+      const quests = mode === "gm" ? [visibleQuest, privateLinkQuest, hiddenQuest] : [visibleQuest, privateLinkQuest];
+      const questId = url.searchParams.get("questId");
+      await route.fulfill({ json: { ok: true, ...(questId ? { quest: quests.find((quest) => quest.id === questId) ?? null } : { quests }),
+        references: { sessions: [], npcs: [], items: [], locations: visibleLocations } } });
+      return;
+    }
     if (resource === "entityLinks") {
       if (method === "PUT") {
         const next = route.request().postDataJSON().link as typeof links[number];
@@ -87,7 +102,8 @@ test("Location and NPC profiles share one link and NPC search keeps linked name 
         await route.fulfill({ json: { ok: true } });
         return;
       }
-      await route.fulfill({ json: { ok: true, links: mode === "gm" ? links : links.filter((link) => link.visibility === "Player" && link.entityA.id !== hidden.id) } });
+      await route.fulfill({ json: { ok: true, links: mode === "gm" ? links : links.filter((link) => link.visibility === "Player" &&
+        link.entityA.id !== hidden.id && link.entityB.id !== hidden.id && link.entityA.id !== hiddenQuest.id) } });
       return;
     }
     if (resource === "sessions") { await route.fulfill({ json: { ok: true, sessions: [] } }); return; }
@@ -108,8 +124,24 @@ test("Location and NPC profiles share one link and NPC search keeps linked name 
 
   await page.goto(`/maps/${harbor.id}`);
   const npcsSection = page.locator("section").filter({ has: page.getByRole("heading", { name: "NPCs", exact: true }) }).last();
+  const questsSection = page.locator("section").filter({ has: page.getByRole("heading", { name: "Related quests", exact: true }) }).last();
   await expect(npcsSection).toContainText("Archivist");
   await expect(npcsSection).toContainText("controls");
+  await expect(questsSection.getByRole("link", { name: "Coastal lead" })).toBeVisible();
+  await expect(questsSection.getByRole("link", { name: "Private trail" })).toBeVisible();
+  await expect(questsSection.getByRole("link", { name: "Secret lead" })).toBeVisible();
+  await expect(questsSection).toContainText("leads to");
+  for (const width of [1440, 375]) {
+    await page.setViewportSize({ width, height: 900 });
+    const questsBox = await questsSection.boundingBox();
+    const npcsBox = await npcsSection.boundingBox();
+    expect(questsBox && npcsBox && Math.abs(questsBox.x - npcsBox.x) < 2 && Math.abs(questsBox.width - npcsBox.width) < 2).toBe(true);
+    await page.screenshot({ path: testInfo.outputPath(`location-quests-gm-${width}.png`), fullPage: true });
+  }
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await questsSection.getByRole("link", { name: "Coastal lead" }).click();
+  await expect(page).toHaveURL(/\/quests\/coastal-quest$/);
+  await page.goto(`/maps/${harbor.id}`);
 
   await page.goto(`/npcs/${npc.id}`);
   const locationsSection = page.locator("section").filter({ has: page.getByRole("heading", { name: "Locations", exact: true }) }).last();
@@ -188,4 +220,13 @@ test("Location and NPC profiles share one link and NPC search keeps linked name 
   await page.reload();
   await expect(locationsSection).toContainText("Harbor");
   await expect(locationsSection).not.toContainText("Hidden Vault");
+  await page.goto(`/maps/${harbor.id}`);
+  await expect(questsSection.getByRole("link", { name: "Coastal lead" })).toBeVisible();
+  await expect(questsSection.getByRole("link", { name: "Private trail" })).toHaveCount(0);
+  await expect(questsSection.getByRole("link", { name: "Secret lead" })).toHaveCount(0);
+  await expect(questsSection).not.toContainText("related");
+  for (const width of [1440, 375]) {
+    await page.setViewportSize({ width, height: 900 });
+    await page.screenshot({ path: testInfo.outputPath(`location-quests-player-${width}.png`), fullPage: true });
+  }
 });

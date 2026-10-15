@@ -1108,6 +1108,8 @@ export default function MapProfile() {
             onLinksChanged={handleLinksChanged}
           />
 
+          <QuestReciprocalLinks campaignId={selectedCampaignId} entityType="Map" entityId={id} locationLayout />
+
           <MapLinkSection
             key={`map-lore-${linkDraftKey}`}
             title="Lore"
@@ -1292,7 +1294,6 @@ export default function MapProfile() {
           </div>
         </div>
       ), document.body) : null}
-      <QuestReciprocalLinks campaignId={selectedCampaignId} entityType="Map" entityId={id} />
     </main>
   );
 }
