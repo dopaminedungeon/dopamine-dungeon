@@ -10,6 +10,7 @@ export const ALLOWED_ENTITY_LINKS: Record<EntityType, EntityType[]> = {
   Session: [
     "Quest",
     "Arc",
+    "Milestone",
     "Lore",
     "Map",
     "NPC",
@@ -41,6 +42,15 @@ export const ALLOWED_ENTITY_LINKS: Record<EntityType, EntityType[]> = {
     "Condition",
   ],
 
+  Milestone: [
+    "Session",
+    "NPC",
+    "PC",
+    "Item",
+    "Map",
+    "Lore",
+  ],
+
   Lore: [
     "Session",
     "Quest",
@@ -50,6 +60,7 @@ export const ALLOWED_ENTITY_LINKS: Record<EntityType, EntityType[]> = {
     "Item",
     "Map",
     "Condition",
+    "Milestone",
   ],
 
   Map: [
@@ -60,6 +71,7 @@ export const ALLOWED_ENTITY_LINKS: Record<EntityType, EntityType[]> = {
     "PC",
     "Item",
     "Lore",
+    "Milestone",
   ],
 
   NPC: [
@@ -72,6 +84,7 @@ export const ALLOWED_ENTITY_LINKS: Record<EntityType, EntityType[]> = {
     "Condition",
     "NPC",
     "PC",
+    "Milestone",
   ],
 
   PC: [
@@ -83,6 +96,7 @@ export const ALLOWED_ENTITY_LINKS: Record<EntityType, EntityType[]> = {
     "Item",
     "Condition",
     "NPC",
+    "Milestone",
   ],
 
   Item: [
@@ -95,6 +109,7 @@ export const ALLOWED_ENTITY_LINKS: Record<EntityType, EntityType[]> = {
     "PC",
     "Condition",
     "BagOfHolding",
+    "Milestone",
   ],
 
   Condition: [
@@ -105,6 +120,7 @@ export const ALLOWED_ENTITY_LINKS: Record<EntityType, EntityType[]> = {
     "Item",
     "NPC",
     "PC",
+    "Milestone",
   ],
 
   BagOfHolding: [
@@ -153,6 +169,7 @@ export const ALLOWED_LINK_LABELS: Record<string, string[]> = {
   "Session|Lore": ["revealed", "hinted"],
   "Session|Quest": ["related", "started", "advanced", "progressed", "completed", "failed"],
   "Session|Arc": ["advanced", "pivoted"],
+  "Session|Milestone": ["advanced", "reached", "mentioned"],
   "Session|Condition": ["applied", "worsened", "improved", "removed"],
   "Session|BagOfHolding": ["inventory_changed"],
 
@@ -176,6 +193,15 @@ export const ALLOWED_LINK_LABELS: Record<string, string[]> = {
   "Arc|Map": ["set_in"],
   "Arc|Lore": ["rooted_in"],
   "Arc|Condition": ["driven_by"],
+
+  // ─────────────────────────
+  // Milestone
+  // ─────────────────────────
+  "Milestone|NPC": ["involved", "antagonist", "ally"],
+  "Milestone|PC": ["central_to", "affected_by"],
+  "Milestone|Item": ["key_item"],
+  "Milestone|Map": ["set_in"],
+  "Milestone|Lore": ["rooted_in"],
 
   // ─────────────────────────
   // Lore

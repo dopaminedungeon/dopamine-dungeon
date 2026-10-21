@@ -183,6 +183,13 @@
       "when": 1791902563849,
       "tag": "0025_friendly_malice",
       "breakpoints": true
+    },
+    {
+      "idx": 26,
+      "version": "7",
+      "when": 1792597043221,
+      "tag": "0026_arcs_milestones",
+      "breakpoints": true
     }
   ]
 }

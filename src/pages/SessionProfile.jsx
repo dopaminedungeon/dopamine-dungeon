@@ -9,6 +9,7 @@ import { npcsRepo } from "../data/npcs/npcs.repo";
 import { loreRepo } from "../data/lore/lore.repo";
 import { QuestReciprocalLinks } from "../components/QuestReciprocalLinks.jsx";
 import { locationsRepo } from "../data/maps/locations.repo";
+import { arcsRepo, milestonesRepo } from "../data/arcs/arcs.repo";
 import { createLink } from "../domain/links/link.service";
 import { editableProfileLinks } from "../domain/links/questManagedLinks";
 import { addLink, getLinksForEntity, loadLinks, removeLink, updateLink } from "../data/links/links.repo";
@@ -134,6 +135,9 @@ function getNpcLabel(npc) {
 function getLocationLabel(location) {
   return location?.name || "Untitled location";
 }
+
+function getArcLabel(arc) { return arc?.name || "Untitled Arc"; }
+function getMilestoneLabel(milestone) { return milestone?.title || "Untitled milestone"; }
 
 function SelectInput({ value, onChange, disabled, children }) {
   return (
@@ -451,6 +455,8 @@ export default function SessionProfile() {
   const [allNpcs, setAllNpcs] = useState([]);
   const [allLore, setAllLore] = useState([]);
   const [allLocations, setAllLocations] = useState([]);
+  const [allArcs, setAllArcs] = useState([]);
+  const [allMilestones, setAllMilestones] = useState([]);
   const [linksVersion, setLinksVersion] = useState(0);
   const [campaignPeople, setCampaignPeople] = useState([]);
   const [campaignCharacters, setCampaignCharacters] = useState([]);
@@ -463,6 +469,8 @@ export default function SessionProfile() {
         setAllNpcs([]);
         setAllLore([]);
         setAllLocations([]);
+        setAllArcs([]);
+        setAllMilestones([]);
         setCampaignPeople([]);
       setCampaignCharacters([]);
       setAssignmentRows([]);
@@ -473,12 +481,14 @@ export default function SessionProfile() {
     async function load() {
       setLoading(true);
       try {
-        const [sessionData, itemData, npcData, loreData, locationData] = await Promise.all([
+        const [sessionData, itemData, npcData, loreData, locationData, arcData, milestoneData] = await Promise.all([
           sessionsRepo.getAll(selectedCampaignId),
           itemsRepo.getAll(selectedCampaignId),
           npcsRepo.getAll(selectedCampaignId),
           loreRepo.getAll(selectedCampaignId),
           locationsRepo.getAll(selectedCampaignId),
+          arcsRepo.getAll(selectedCampaignId),
+          milestonesRepo.getAll(selectedCampaignId),
           loadLinks(selectedCampaignId),
         ]);
         setAllSessions(Array.isArray(sessionData) ? sessionData : []);
@@ -486,6 +496,8 @@ export default function SessionProfile() {
         setAllNpcs(Array.isArray(npcData) ? npcData : []);
         setAllLore(Array.isArray(loreData) ? loreData : []);
         setAllLocations(Array.isArray(locationData) ? locationData : []);
+        setAllArcs(Array.isArray(arcData) ? arcData : []);
+        setAllMilestones(Array.isArray(milestoneData) ? milestoneData : []);
         setLinksVersion((version) => version + 1);
       } catch (error) {
         console.error("[SessionProfile] Failed to load session data", error);
@@ -494,6 +506,8 @@ export default function SessionProfile() {
         setAllNpcs([]);
         setAllLore([]);
         setAllLocations([]);
+        setAllArcs([]);
+        setAllMilestones([]);
       } finally {
         setLoading(false);
       }
@@ -646,6 +660,15 @@ export default function SessionProfile() {
     () => new Map(visibleLocations.map((location) => [String(location.id), location])),
     [visibleLocations]
   );
+  const visibleArcs = isGM ? allArcs : allArcs.filter((arc) => arc?.visibility === "public");
+  const arcNamesById = useMemo(() => new Map(allArcs.map((arc) => [String(arc.id), arc.name])), [allArcs]);
+  const visibleMilestones = useMemo(() => allMilestones
+    .filter((milestone) => isGM || (
+      milestone?.visibility === "public" &&
+      allArcs.some((arc) => String(arc.id) === String(milestone.arcId) && arc.visibility === "public")
+    ))
+    .map((milestone) => ({ ...milestone, arcName: arcNamesById.get(String(milestone.arcId)) || "" })),
+  [allArcs, allMilestones, arcNamesById, isGM]);
 
   const sessionLinks = useMemo(() => {
     void linksVersion;
@@ -1205,6 +1228,45 @@ export default function SessionProfile() {
             />
 
             <QuestReciprocalLinks key={`session-quests-${linkDraftKey}`} campaignId={selectedCampaignId} entityType="Session" entityId={id} links={visibleSessionLinks} managedLinks={sessionLinks} isEditing={editMode} isSaving={isSaving} onLinksChanged={handleLinksChanged} />
+            <SessionLinkSection
+              key={`session-arcs-${linkDraftKey}`}
+              title="Arcs advanced"
+              emptyText="No linked Arcs yet."
+              sessionId={String(id)}
+              entityType="Arc"
+              addLabel="Arc"
+              entities={visibleArcs}
+              links={visibleSessionLinks}
+              allowedLabels={["advanced", "pivoted"]}
+              defaultLabel="advanced"
+              isGM={isGM}
+              editMode={editMode}
+              isSaving={isSaving}
+              getEntityLabel={getArcLabel}
+              getEntityMeta={(arc) => arc?.status || ""}
+              getEntityPath={(arc) => `/arcs/${arc.id}`}
+              onLinksChanged={handleLinksChanged}
+            />
+
+            <SessionLinkSection
+              key={`session-milestones-${linkDraftKey}`}
+              title="Milestones reached"
+              emptyText="No linked milestones yet."
+              sessionId={String(id)}
+              entityType="Milestone"
+              addLabel="Milestone"
+              entities={visibleMilestones}
+              links={visibleSessionLinks}
+              allowedLabels={["advanced", "reached", "mentioned"]}
+              defaultLabel="reached"
+              isGM={isGM}
+              editMode={editMode}
+              isSaving={isSaving}
+              getEntityLabel={getMilestoneLabel}
+              getEntityMeta={(milestone) => `${milestone?.status || ""}${milestone?.arcName ? ` · ${milestone.arcName}` : ""}`}
+              getEntityPath={(milestone) => `/arcs/${milestone.arcId}#milestone-${milestone.id}`}
+              onLinksChanged={handleLinksChanged}
+            />
 
             {/* Session timeline */}
             {(editMode || (viewSession?.timeline && viewSession.timeline.trim().length > 0)) && (

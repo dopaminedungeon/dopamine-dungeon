@@ -7,4 +7,5 @@ export const features = {
     pcs: true,
     sessions: true,
     quests: true,
+    arcs: true,
 } as const;

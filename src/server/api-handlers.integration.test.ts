@@ -4,7 +4,9 @@ import { drizzle } from "drizzle-orm/postgres-js";
 import { beforeEach, test, vi } from "vitest";
 
 import { characterAssignments } from "../../db/schema/characterAssignments.js";
+import { arcs, milestones } from "../../db/schema/arcs.js";
 import { characters } from "../../db/schema/characters.js";
+import { AuthenticationError } from "./apiErrors.js";
 import { entityLinks } from "../../db/schema/entityLinks.js";
 import { items } from "../../db/schema/items.js";
 import { locations } from "../../db/schema/locations.js";
@@ -16,6 +18,7 @@ import { sessions } from "../../db/schema/sessions.js";
 const mocks = vi.hoisted(() => {
   const state = {
     selectRows: [] as unknown[][],
+    selectError: null as Error | null,
     writeRows: [] as unknown[][],
     whereClauses: [] as unknown[],
     insertValues: [] as unknown[],
@@ -25,6 +28,13 @@ const mocks = vi.hoisted(() => {
   };
 
   function queryResult(rows: unknown[]) {
+    if (state.selectError) {
+      const error = state.selectError;
+      state.selectError = null;
+      return Object.assign(Promise.reject(error), {
+        limit: vi.fn().mockRejectedValue(error),
+      });
+    }
     return Object.assign(Promise.resolve(rows), {
       limit: vi.fn().mockResolvedValue(rows),
     });
@@ -108,6 +118,8 @@ import locationsHandler from "./api-handlers/locations.js";
 import loreHandler from "./api-handlers/lore.js";
 import npcsHandler from "./api-handlers/npcs.js";
 import sessionsHandler from "./api-handlers/sessions.js";
+import arcsHandler from "./api-handlers/arcs.js";
+import milestonesHandler from "./api-handlers/milestones.js";
 import identityContinuityHandler from "../../api/auth/identity-continuity.js";
 import { users } from "../../db/schema/users.js";
 
@@ -197,6 +209,7 @@ function linkRow(overrides: Record<string, unknown> = {}) {
 beforeEach(() => {
   vi.clearAllMocks();
   mocks.state.selectRows.length = 0;
+  mocks.state.selectError = null;
   mocks.state.writeRows.length = 0;
   mocks.state.whereClauses.length = 0;
   mocks.state.insertValues.length = 0;
@@ -531,6 +544,166 @@ test("API integration: a dual-role user in Player mode receives only Player rela
       createdAt: "2026-01-01T00:00:00.000Z",
     },
   ]);
+});
+
+test("API integration: Arc and Milestone reads enforce campaign and hidden-parent visibility", async () => {
+  mocks.requireCampaignMember.mockResolvedValue({ role: "gm" });
+  mocks.state.selectRows.push([], []);
+  const arcResponse = response();
+  await arcsHandler(request("GET"), arcResponse.res);
+  assert.equal(arcResponse.result.status, 200);
+  const arcQuery = sqlDatabase.select().from(arcs).where(mocks.state.whereClauses[0] as never).toSQL();
+  assert.match(arcQuery.sql, /"campaign_id" = \$1/);
+  assert.match(arcQuery.sql, /"visibility" = \$2/);
+  assert.deepEqual(arcQuery.params, [campaign.id, "public"]);
+
+  const milestoneResponse = response();
+  await milestonesHandler(request("GET", { campaignId: campaign.slug, arcId: "visible-arc" }), milestoneResponse.res);
+  assert.equal(milestoneResponse.result.status, 200);
+  const milestoneQuery = sqlDatabase.select().from(milestones).where(mocks.state.whereClauses[1] as never).toSQL();
+  assert.match(milestoneQuery.sql, /"campaign_id" = \$1/);
+  assert.match(milestoneQuery.sql, /"arc_id" = \$2/);
+  assert.match(milestoneQuery.sql, /"visibility" = \$3/);
+  assert.match(milestoneQuery.sql, /exists \(select 1 from "arcs"/);
+  assert.match(milestoneQuery.sql, /"arcs"\."visibility" = 'public'/);
+  assert.deepEqual(milestoneQuery.params, [campaign.id, "visible-arc", "public"]);
+});
+
+test("API integration: missing Arc tables are reported as server errors, not authentication failures", async () => {
+  mocks.state.selectError = new Error('relation "arcs" does not exist');
+  const { res, result } = response();
+
+  await arcsHandler(request("GET"), res);
+
+  assert.equal(result.status, 500);
+  assert.deepEqual(result.body, { ok: false, error: "Internal server error" });
+
+  mocks.state.selectError = new Error('relation "milestones" does not exist');
+  const milestoneResponse = response();
+  await milestonesHandler(request("GET"), milestoneResponse.res);
+
+  assert.equal(milestoneResponse.result.status, 500);
+  assert.deepEqual(milestoneResponse.result.body, { ok: false, error: "Internal server error" });
+});
+
+test("API integration: invalid Firebase authentication remains a 401 for Arc reads", async () => {
+  mocks.getCurrentUser.mockRejectedValueOnce(new AuthenticationError("Invalid authentication token"));
+  const { res, result } = response();
+
+  await arcsHandler(request("GET"), res);
+
+  assert.equal(result.status, 401);
+  assert.deepEqual(result.body, { ok: false, error: "Invalid authentication token" });
+});
+
+test("API integration: GM Arc create and edit use one campaign-scoped upsert", async () => {
+  const saved = { campaignId: campaign.id, id: "arc-main", name: "The Long Road", status: "progressing", visibility: "public" };
+  mocks.state.writeRows.push([saved], [saved]);
+  for (const method of ["PUT", "PUT"] as const) {
+    const { res, result } = response();
+    await arcsHandler(request(method, undefined, { arc: { ...saved, summary: "The fellowship continues." } }, "gm"), res);
+    assert.equal(result.status, 200);
+    assert.deepEqual((result.body as any).arc, saved);
+  }
+  assert.equal(mocks.db.insert.mock.calls.length, 2);
+  assert.deepEqual(mocks.state.insertValues.map((row: any) => [row.campaignId, row.id]), [
+    [campaign.id, "arc-main"], [campaign.id, "arc-main"],
+  ]);
+  for (const config of mocks.state.conflictConfigs as any[]) assert.deepEqual(config.target, [arcs.campaignId, arcs.id]);
+  assert.equal(mocks.requireCampaignGm.mock.calls.length, 2);
+});
+
+test("API integration: Milestones require a parent Arc in the same campaign and are GM-written", async () => {
+  const milestone = { campaignId: campaign.id, id: "arrival", arcId: "arc-main", title: "Reach the city", status: "active", visibility: "public", position: 0 };
+  mocks.state.selectRows.push([{ id: "arc-main" }], []);
+  mocks.state.writeRows.push([milestone]);
+  const created = response();
+  await milestonesHandler(request("PUT", undefined, { milestone }, "gm"), created.res);
+  assert.equal(created.result.status, 200);
+  assert.deepEqual((created.result.body as any).milestone, milestone);
+  assert.equal((mocks.state.insertValues[0] as any).campaignId, campaign.id);
+  assert.equal((mocks.state.insertValues[0] as any).arcId, "arc-main");
+
+  const invalid = response();
+  await milestonesHandler(request("PUT", undefined, { milestone: { ...milestone, id: "wrong-parent", arcId: "foreign-arc" } }, "gm"), invalid.res);
+  assert.equal(invalid.result.status, 400);
+  assert.equal(mocks.db.insert.mock.calls.length, 1);
+});
+
+test("API integration: Player mode cannot write Arcs, Milestones, or their typed relationships", async () => {
+  const arc = response();
+  await arcsHandler(request("PUT", undefined, { arc: { id: "arc-main", name: "A plot" } }, "player"), arc.res);
+  assert.equal(arc.result.status, 403);
+  assert.equal(mocks.db.insert.mock.calls.length, 0);
+
+  const milestone = response();
+  await milestonesHandler(request("PUT", undefined, { milestone: { id: "step-one", arcId: "arc-main", title: "A step" } }, "player"), milestone.res);
+  assert.equal(milestone.result.status, 403);
+  assert.equal(mocks.db.insert.mock.calls.length, 0);
+
+  const link = response();
+  await entityLinksHandler(request("PUT", undefined, { link: {
+    id: "arc-session", entityA: { type: "Arc", id: "arc-main" },
+    entityB: { type: "Session", id: "session-one" }, label: "advanced", visibility: "Player",
+  } }, "player"), link.res);
+  assert.equal(link.result.status, 401);
+  assert.equal(mocks.db.insert.mock.calls.length, 0);
+});
+
+test("API integration: Arc-to-Session links require both endpoints in the resolved campaign", async () => {
+  const link = {
+    campaignId: campaign.id,
+    id: "arc-session",
+    entityAType: "Arc", entityAId: "arc-main",
+    entityBType: "Session", entityBId: "session-one",
+    label: "advanced", visibility: "Player",
+  };
+  mocks.state.selectRows.push([{ id: "arc-main" }], [{ id: "session-one" }], []);
+  mocks.state.writeRows.push([linkRow({
+    id: link.id, entityAType: "Arc", entityAId: "arc-main",
+    entityBType: "Session", entityBId: "session-one", label: "advanced",
+  })]);
+  const created = response();
+  await entityLinksHandler(request("PUT", undefined, { link: {
+    id: link.id,
+    entityA: { type: "Arc", id: "arc-main" },
+    entityB: { type: "Session", id: "session-one" },
+    label: "advanced", visibility: "Player",
+  } }, "gm"), created.res);
+  assert.equal(created.result.status, 200);
+  const arcQuery = sqlDatabase.select().from(arcs).where(mocks.state.whereClauses[0] as never).toSQL();
+  const sessionQuery = sqlDatabase.select().from(sessions).where(mocks.state.whereClauses[1] as never).toSQL();
+  assert.deepEqual(arcQuery.params, [campaign.id, "arc-main"]);
+  assert.deepEqual(sessionQuery.params, [campaign.id, "session-one"]);
+
+  mocks.state.selectRows.push([{ id: "arc-main" }], []);
+  const foreign = response();
+  await entityLinksHandler(request("PUT", undefined, { link: {
+    id: "foreign-session-link",
+    entityA: { type: "Arc", id: "arc-main" },
+    entityB: { type: "Session", id: "foreign-session" },
+    label: "advanced", visibility: "Player",
+  } }, "gm"), foreign.res);
+  assert.equal(foreign.result.status, 401);
+  assert.equal(mocks.db.insert.mock.calls.length, 1);
+});
+
+test("API integration: Player relationship reads omit hidden Arc and Milestone endpoint identities", async () => {
+  mocks.requireCampaignMember.mockResolvedValue({ role: "gm" });
+  mocks.state.selectRows.push([]);
+  const { res, result } = response();
+  await entityLinksHandler(request("GET"), res);
+  assert.equal(result.status, 200);
+  assert.deepEqual((result.body as any).links, []);
+  const query = sqlDatabase.select().from(entityLinks).where(mocks.state.whereClauses[0] as never).toSQL();
+  assert.match(query.sql, /"visibility" = \$2/);
+  assert.match(query.sql, /from "arcs"/);
+  assert.match(query.sql, /from "milestones" join "arcs"/);
+  assert.match(query.sql, /"milestones"\."visibility" = 'public'/);
+  assert.match(query.sql, /"arcs"\."visibility" = 'public'/);
+  assert.match(query.sql, /"characters"\."is_player_visible" = true/);
+  assert.match(query.sql, /"items"\."visibility" = 'public'/);
+  assert.deepEqual(query.params, [campaign.id, "Player"]);
 });
 
 test("API integration: Player Location-NPC links require both public endpoints in the same campaign", async () => {

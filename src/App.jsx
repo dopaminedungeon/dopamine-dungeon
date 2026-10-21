@@ -21,6 +21,8 @@ import Settings from "./pages/Settings";
 import Lore from "./pages/Lore";
 import LoreProfile from "./pages/LoreProfile";
 import Quests from "./pages/Quests";
+import Arcs from "./pages/Arcs.jsx";
+import ArcProfile from "./pages/ArcProfile.jsx";
 import PCs from "./pages/PCs";
 import PCProfile from "./pages/PCProfile";
 import BagOfHolding from "./pages/BagOfHolding";
@@ -307,6 +309,13 @@ function AppGate() {
           <>
             <Route path="/quests" element={<Quests />} />
             <Route path="/quests/:id" element={<Quests />} />
+          </>
+        )}
+
+        {features.arcs && (
+          <>
+            <Route path="/arcs" element={<Arcs />} />
+            <Route path="/arcs/:id" element={<ArcProfile />} />
           </>
         )}
 

@@ -4,6 +4,8 @@ import { beforeEach, test, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({
   bag: vi.fn(),
+  arcs: vi.fn(),
+  milestones: vi.fn(),
   characters: vi.fn(),
   entityLinks: vi.fn(),
   items: vi.fn(),
@@ -16,6 +18,8 @@ const mocks = vi.hoisted(() => ({
 }));
 
 vi.mock("./bag.js", () => ({ default: mocks.bag }));
+vi.mock("./arcs.js", () => ({ default: mocks.arcs }));
+vi.mock("./milestones.js", () => ({ default: mocks.milestones }));
 vi.mock("./characters.js", () => ({ default: mocks.characters }));
 vi.mock("./entity-links.js", () => ({ default: mocks.entityLinks }));
 vi.mock("./items.js", () => ({ default: mocks.items }));
@@ -48,6 +52,8 @@ beforeEach(() => {
 
 test.each([
   ["bag", mocks.bag],
+  ["arcs", mocks.arcs],
+  ["milestones", mocks.milestones],
   ["characters", mocks.characters],
   ["entityLinks", mocks.entityLinks],
   ["items", mocks.items],

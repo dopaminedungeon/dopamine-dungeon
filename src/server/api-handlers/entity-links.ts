@@ -12,13 +12,14 @@ import { db } from "../db.js";
 import { entityLinksReadWhere } from "../security-boundaries.js";
 import { canViewAsGm } from "../viewer-mode.js";
 import { entityLinks } from "../../../db/schema/entityLinks.js";
+import { arcs, milestones } from "../../../db/schema/arcs.js";
 import { locations } from "../../../db/schema/locations.js";
-import { npcs } from "../../../db/schema/npcs.js";
-import { quests } from "../../../db/schema/quests.js";
-import { sessions } from "../../../db/schema/sessions.js";
 import { items } from "../../../db/schema/items.js";
 import { lore } from "../../../db/schema/lore.js";
 import { characters } from "../../../db/schema/characters.js";
+import { npcs } from "../../../db/schema/npcs.js";
+import { quests } from "../../../db/schema/quests.js";
+import { sessions } from "../../../db/schema/sessions.js";
 import {
   assertAllowedEntityPair,
   assertAllowedLabelForPair,
@@ -88,6 +89,10 @@ function questPrimaryEditError(label: string) {
     : "Edit the primary Quest relationship on the Quest profile";
 }
 
+function isArcMilestoneLink(entityAType: string, entityBType: string) {
+  return [entityAType, entityBType].some((type) => type === "Arc" || type === "Milestone");
+}
+
 // A Player-visible link cannot disclose a hidden endpoint, even when its own
 // visibility was set to Player. Handle either orientation for historical rows.
 function playerLocationNpcWhere() {
@@ -144,6 +149,92 @@ async function requireQuestEndpoints(values: EntityLinkInsert) {
     db.select({ id: table.id }).from(table).where(and(eq(table.campaignId, values.campaignId), eq(table.id, otherId))).limit(1),
   ]);
   if (!questRows.length || !targetRows.length) throw new Error("Quest relationship target is unavailable in this campaign");
+}
+
+function playerArcMilestoneWhere() {
+  return sql`(
+    (${entityLinks.entityAType} <> 'Arc' or exists (
+      select 1 from ${arcs} where ${arcs.campaignId} = ${entityLinks.campaignId}
+        and ${arcs.id} = ${entityLinks.entityAId} and ${arcs.visibility} = 'public'
+    ))
+    and (${entityLinks.entityBType} <> 'Arc' or exists (
+      select 1 from ${arcs} where ${arcs.campaignId} = ${entityLinks.campaignId}
+        and ${arcs.id} = ${entityLinks.entityBId} and ${arcs.visibility} = 'public'
+    ))
+    and (${entityLinks.entityAType} <> 'Milestone' or exists (
+      select 1 from ${milestones} join ${arcs} on ${arcs.campaignId} = ${milestones.campaignId}
+        and ${arcs.id} = ${milestones.arcId}
+      where ${milestones.campaignId} = ${entityLinks.campaignId}
+        and ${milestones.id} = ${entityLinks.entityAId}
+        and ${milestones.visibility} = 'public' and ${arcs.visibility} = 'public'
+    ))
+    and (${entityLinks.entityBType} <> 'Milestone' or exists (
+      select 1 from ${milestones} join ${arcs} on ${arcs.campaignId} = ${milestones.campaignId}
+        and ${arcs.id} = ${milestones.arcId}
+      where ${milestones.campaignId} = ${entityLinks.campaignId}
+        and ${milestones.id} = ${entityLinks.entityBId}
+        and ${milestones.visibility} = 'public' and ${arcs.visibility} = 'public'
+    ))
+    and (${entityLinks.entityAType} <> 'Session' or
+      (${entityLinks.entityBType} not in ('Arc', 'Milestone')) or exists (
+        select 1 from ${sessions} where ${sessions.campaignId} = ${entityLinks.campaignId}
+          and ${sessions.id} = ${entityLinks.entityAId} and ${sessions.visibility} = 'public'
+      ))
+    and (${entityLinks.entityBType} <> 'Session' or
+      (${entityLinks.entityAType} not in ('Arc', 'Milestone')) or exists (
+        select 1 from ${sessions} where ${sessions.campaignId} = ${entityLinks.campaignId}
+          and ${sessions.id} = ${entityLinks.entityBId} and ${sessions.visibility} = 'public'
+      ))
+    and ((${entityLinks.entityAType} not in ('Arc', 'Milestone') and ${entityLinks.entityBType} not in ('Arc', 'Milestone')) or (
+      (${entityLinks.entityAType} <> 'NPC' or exists (select 1 from ${npcs} where ${npcs.campaignId} = ${entityLinks.campaignId} and ${npcs.id} = ${entityLinks.entityAId} and ${npcs.visibility} = 'public'))
+      and (${entityLinks.entityBType} <> 'NPC' or exists (select 1 from ${npcs} where ${npcs.campaignId} = ${entityLinks.campaignId} and ${npcs.id} = ${entityLinks.entityBId} and ${npcs.visibility} = 'public'))
+      and (${entityLinks.entityAType} <> 'Map' or exists (select 1 from ${locations} where ${locations.campaignId} = ${entityLinks.campaignId} and ${locations.id} = ${entityLinks.entityAId} and ${locations.visibility} = 'public'))
+      and (${entityLinks.entityBType} <> 'Map' or exists (select 1 from ${locations} where ${locations.campaignId} = ${entityLinks.campaignId} and ${locations.id} = ${entityLinks.entityBId} and ${locations.visibility} = 'public'))
+      and (${entityLinks.entityAType} <> 'Item' or exists (select 1 from ${items} where ${items.campaignId} = ${entityLinks.campaignId} and ${items.id} = ${entityLinks.entityAId} and ${items.visibility} = 'public'))
+      and (${entityLinks.entityBType} <> 'Item' or exists (select 1 from ${items} where ${items.campaignId} = ${entityLinks.campaignId} and ${items.id} = ${entityLinks.entityBId} and ${items.visibility} = 'public'))
+      and (${entityLinks.entityAType} <> 'Lore' or exists (select 1 from ${lore} where ${lore.campaignId} = ${entityLinks.campaignId} and ${lore.id} = ${entityLinks.entityAId} and ${lore.visibility} = 'public'))
+      and (${entityLinks.entityBType} <> 'Lore' or exists (select 1 from ${lore} where ${lore.campaignId} = ${entityLinks.campaignId} and ${lore.id} = ${entityLinks.entityBId} and ${lore.visibility} = 'public'))
+      and (${entityLinks.entityAType} <> 'PC' or exists (select 1 from ${characters} where ${characters.campaignId} = ${entityLinks.campaignId} and ${characters.id} = ${entityLinks.entityAId} and ${characters.isPlayerVisible} = true))
+      and (${entityLinks.entityBType} <> 'PC' or exists (select 1 from ${characters} where ${characters.campaignId} = ${entityLinks.campaignId} and ${characters.id} = ${entityLinks.entityBId} and ${characters.isPlayerVisible} = true))
+    ))
+  )`;
+}
+
+async function requireArcMilestoneEndpoints(values: EntityLinkInsert) {
+  if (!isArcMilestoneLink(values.entityAType, values.entityBType)) return;
+  const checks: Promise<unknown>[] = [];
+  for (const endpoint of [
+    { type: values.entityAType, id: values.entityAId },
+    { type: values.entityBType, id: values.entityBId },
+  ]) {
+    if (endpoint.type === "Arc") {
+      checks.push(db.select({ id: arcs.id }).from(arcs).where(and(
+        eq(arcs.campaignId, values.campaignId), eq(arcs.id, endpoint.id)
+      )).limit(1).then((rows) => { if (!rows.length) throw new Error("Arc is unavailable in this campaign"); }));
+    }
+    if (endpoint.type === "Milestone") {
+      checks.push(db.select({ id: milestones.id }).from(milestones).innerJoin(arcs, and(
+        eq(arcs.campaignId, milestones.campaignId), eq(arcs.id, milestones.arcId)
+      )).where(and(
+        eq(milestones.campaignId, values.campaignId), eq(milestones.id, endpoint.id)
+      )).limit(1).then((rows) => { if (!rows.length) throw new Error("Milestone is unavailable in this campaign"); }));
+    }
+    const table = endpoint.type === "Session" ? sessions
+      : endpoint.type === "NPC" ? npcs
+        : endpoint.type === "PC" ? characters
+          : endpoint.type === "Item" ? items
+            : endpoint.type === "Map" ? locations
+              : endpoint.type === "Lore" ? lore
+                : null;
+    if (table) {
+      checks.push(db.select({ id: table.id }).from(table).where(and(
+        eq(table.campaignId, values.campaignId), eq(table.id, endpoint.id)
+      )).limit(1).then((rows) => {
+        if (!rows.length) throw new Error("Related entity is unavailable in this campaign");
+      }));
+    }
+  }
+  await Promise.all(checks);
 }
 
 async function requireLocationNpcEndpoints(values: EntityLinkInsert) {
@@ -296,7 +387,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           and(entityLinksReadWhere(entityLinks, {
             campaignId: campaign.id,
             isGm: isGmView,
-          }), isGmView ? undefined : playerLocationNpcWhere(), isGmView ? undefined : playerQuestWhere())
+          }),
+            isGmView ? undefined : playerLocationNpcWhere(),
+            isGmView ? undefined : playerQuestWhere(),
+            isGmView ? undefined : playerArcMilestoneWhere()
+          )
         );
 
       return res.status(200).json({
@@ -341,12 +436,14 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       if (isLocationNpcLink(values.entityAType, values.entityBType) && !isGmView) {
         throw new Error("GM mode is required to edit this relationship");
       }
-      if ((values.entityAType === "Quest" || values.entityBType === "Quest") && !isGmView) {
+      if (((values.entityAType === "Quest" || values.entityBType === "Quest") ||
+        isArcMilestoneLink(values.entityAType, values.entityBType)) && !isGmView) {
         throw new Error("GM mode is required to edit this relationship");
       }
 
       await requireLocationNpcEndpoints(values);
       await requireQuestEndpoints(values);
+      await requireArcMilestoneEndpoints(values);
 
       const existingLink = await findExistingLink(values);
       if ((values.entityAType === "Quest" || values.entityBType === "Quest") &&
@@ -403,7 +500,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       // Match the absent-link response without revealing this link's existence.
       return res.status(200).json({ ok: true });
     }
-    if ((link.entityAType === "Quest" || link.entityBType === "Quest") && !isGmView) {
+    if (((link.entityAType === "Quest" || link.entityBType === "Quest") ||
+      isArcMilestoneLink(link.entityAType, link.entityBType)) && !isGmView) {
       return res.status(200).json({ ok: true });
     }
     if ((link.entityAType === "Quest" || link.entityBType === "Quest") && isQuestPrimaryLabel(link.label)) {
