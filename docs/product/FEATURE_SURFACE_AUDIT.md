@@ -9,6 +9,10 @@ This audit records which product surfaces are active, which were retired, and
 which domain concepts remain only as infrastructure or future work. It is not a
 roadmap and does not authorize future feature implementation.
 
+The Quests row and retirement record below describe the 12 October audit.
+Issue #281 subsequently restored Quests as a persisted campaign module; the
+current state is recorded in [CURRENT_STATE.md](CURRENT_STATE.md).
+
 Since the #319 inventory, the bounded NPC–Location canonical-link repair and
 application width audit shipped in [PR #398](https://github.com/dopaminedungeon/dopamine-dungeon/pull/398)
 and [PR #401](https://github.com/dopaminedungeon/dopamine-dungeon/pull/401);

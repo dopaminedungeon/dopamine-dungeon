@@ -50,10 +50,9 @@ release operator and must not be described as product implementation.
   Firebase Authentication remains the identity authority and Brevo is the
   direct application mail transport.
 - Current persisted campaign functionality includes PCs, Bag of Holding,
-  Items, Sessions, NPCs, Locations, Lore, and typed entity links.
-- The former standalone Relationships, Arcs, Quests, and Conditions screens
-  are retired. Reserved typed-link concepts do not imply active standalone
-  modules.
+  Items, Sessions, NPCs, Locations, Lore, Quests, and typed entity links.
+- The former standalone Relationships, Arcs, and Conditions screens remain
+  retired. Quests now use persisted campaign records and protected APIs.
 - Filters are user preferences, never access control. The selected mode and
   current workspace/campaign determine the authorized projection.
 - Application-level Firestore runtime removal does not prove Production data

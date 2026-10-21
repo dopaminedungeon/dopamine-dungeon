@@ -9,6 +9,7 @@ import { sessions } from "../../../db/schema/sessions.js";
 import { npcs } from "../../../db/schema/npcs.js";
 import { items } from "../../../db/schema/items.js";
 import { locations } from "../../../db/schema/locations.js";
+import { lore } from "../../../db/schema/lore.js";
 import { entityLinks } from "../../../db/schema/entityLinks.js";
 import { QUEST_SECTIONS, QUEST_STATUSES, questTypeIsValid } from "../../domain/quests/quest.types.js";
 import type { QuestObjective, QuestRecord, QuestVisibility } from "../../domain/quests/quest.types.js";
@@ -115,7 +116,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       const rows = await db.select().from(quests).where(and(eq(quests.campaignId, campaign.id), id ? eq(quests.id, id) : undefined,
         isGm ? undefined : eq(quests.visibility, "public")));
       // Reference labels are projected from the same campaign and visibility scope.
-      const [sessionRows, npcRows, itemRows, locationRows, mainLinks] = await Promise.all([
+      const [sessionRows, npcRows, itemRows, locationRows, loreRows, mainLinks] = await Promise.all([
         db.select({ id: sessions.id, name: sessions.name, sessionNumber: sessions.sessionNumber }).from(sessions)
           .where(and(eq(sessions.campaignId, campaign.id), isGm ? undefined : eq(sessions.visibility, "public"))),
         db.select({ id: npcs.id, name: npcs.name }).from(npcs)
@@ -124,6 +125,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           .where(and(eq(items.campaignId, campaign.id), isGm ? undefined : eq(items.visibility, "public"))),
         db.select({ id: locations.id, name: locations.name, visibility: locations.visibility }).from(locations)
           .where(eq(locations.campaignId, campaign.id)),
+        db.select({ id: lore.id, name: lore.name }).from(lore)
+          .where(and(eq(lore.campaignId, campaign.id), isGm ? undefined : eq(lore.visibility, "public"))),
         db.select().from(entityLinks).where(and(questLinksWhere(campaign.id, id || undefined), eq(entityLinks.label, "leads_to"))),
       ]);
       const sessionIds = new Set(sessionRows.map((row) => row.id));
@@ -144,7 +147,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         };
       });
       return res.status(200).json({ ok: true, ...(id ? { quest: projected[0] ?? null } : { quests: projected }),
-        references: { sessions: sessionRows, npcs: npcRows, items: itemRows, locations: visibleLocationRows } });
+        references: { sessions: sessionRows, npcs: npcRows, items: itemRows, locations: visibleLocationRows, lore: loreRows } });
     }
     if (!isGm) throw new QuestError("GM mode is required to edit quests", 403);
     const quest = parseQuest(req.body?.quest);
@@ -188,10 +191,13 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       const locationLinks = await tx.select().from(entityLinks).where(questLinksWhere(campaign.id, quest.id));
       const currentMain = locationLinks.find((link) => link.label === "leads_to" && mapEndpoint(link, quest.id));
       if (currentMain && mapEndpoint(currentMain, quest.id) !== mainLocationId) {
-        await tx.update(entityLinks).set({ label: "takes_place_in" }).where(eq(entityLinks.rowId, currentMain.rowId));
+        const duplicateHistory = locationLinks.some((link) => link !== currentMain && link.label === "takes_place_in" &&
+          link.visibility === currentMain.visibility && mapEndpoint(link, quest.id) === mapEndpoint(currentMain, quest.id));
+        if (duplicateHistory) await tx.delete(entityLinks).where(eq(entityLinks.rowId, currentMain.rowId));
+        else await tx.update(entityLinks).set({ label: "takes_place_in" }).where(eq(entityLinks.rowId, currentMain.rowId));
       }
       if (mainLocationId) {
-        const existingLocation = locationLinks.find((link) => mapEndpoint(link, quest.id) === mainLocationId);
+        const existingLocation = locationLinks.find((link) => link.label === "leads_to" && mapEndpoint(link, quest.id) === mainLocationId);
         if (existingLocation) {
           await tx.update(entityLinks).set({ label: "leads_to", visibility: quest.visibility === "public" ? "Player" : "GM" })
             .where(eq(entityLinks.rowId, existingLocation.rowId));

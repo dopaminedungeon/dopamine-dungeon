@@ -1,6 +1,6 @@
 # System Overview
 
-Last updated: 2026-10-12
+Last updated: 2026-10-21
 
 Dopamine Dungeon is a multi-tenant campaign-management application for game
 masters and players. This document is the current high-level architecture and
@@ -18,14 +18,16 @@ Workspace
     |-- NPCs
     |-- Locations
     |-- Lore
+    |-- Quests
     `-- PCs
         `-- Bag of Holding
 
 Typed entity links connect active campaign entities. The retired standalone
 Relationships page is not part of the product. Future PC-NPC and NPC-NPC
 relationship behavior belongs to cross-linking and Friendship Index work.
-`Arc`, `Quest`, and `Condition` remain reserved typed link endpoints, but their
-former mock-backed pages are not active persisted product modules.
+Quests are a persisted product module with campaign-scoped records and typed
+relationships. `Arc` and `Condition` remain reserved typed link endpoints;
+their former mock-backed pages are not active persisted product modules.
 
 ## Runtime layers
 
@@ -88,7 +90,7 @@ Neon PostgreSQL, accessed through the Vercel API and Drizzle-backed
 repositories, is the canonical store for application state, including users'
 profile preferences, workspaces, campaigns, memberships, invitations, settings,
 authentication-email limiter state, and core relational campaign entities:
-sessions, items, inventory, NPCs, locations, lore, PCs, and typed
+sessions, items, inventory, NPCs, locations, lore, quests, PCs, and typed
 entity links. APIs and repositories are the persistence boundary. Campaign
 and workspace scoping is implemented through endpoint-specific resolvers,
 membership predicates, and scoped queries; do not infer that every route uses

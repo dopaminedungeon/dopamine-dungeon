@@ -7,6 +7,7 @@ export type QuestReferences = {
   characters: { id: string; name: string }[];
   items: { id: string; name: string }[];
   locations: { id: string; name: string }[];
+  lore: { id: string; name: string }[];
 };
 
 function endpoint(campaignId: string, questId?: string) {

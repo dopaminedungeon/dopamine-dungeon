@@ -6,6 +6,7 @@ import { sessions } from "../../../db/schema/sessions.js";
 import { npcs } from "../../../db/schema/npcs.js";
 import { items } from "../../../db/schema/items.js";
 import { locations } from "../../../db/schema/locations.js";
+import { lore } from "../../../db/schema/lore.js";
 import { entityLinks } from "../../../db/schema/entityLinks.js";
 
 const mocks = vi.hoisted(() => ({
@@ -49,7 +50,7 @@ beforeEach(() => {
   mocks.campaign.mockResolvedValue({ id: campaignId, slug: "campaign-281" });
   mocks.rows.set(sessions, [{ id: "session-one", name: "Opening", sessionNumber: 1 }]);
   mocks.rows.set(npcs, [{ id: "npc-one", name: "Guide" }]);
-  mocks.rows.set(items, []); mocks.rows.set(locations, []);
+  mocks.rows.set(items, []); mocks.rows.set(locations, []); mocks.rows.set(lore, []);
   mocks.select.mockImplementation(() => ({ from: (table: unknown) => ({ where: async () =>
     table === quests ? mocks.saved : mocks.rows.get(table) || [] }) }));
   mocks.insert.mockImplementation((table: unknown) => ({ values: (value: any) => {
@@ -99,6 +100,15 @@ test("Player projection excludes hidden sections, objectives, and hidden entity 
   assert.equal(JSON.stringify(shown.result.body).includes("receiverIds"), false);
   assert.equal(JSON.stringify(shown.result.body).includes("Secret hook"), false);
   assert.equal(JSON.stringify(shown.result.body).includes("Guide"), false);
+});
+
+test("Quest references include campaign Lore for GM relationship selection", async () => {
+  mocks.saved = [{ ...base, campaignId }];
+  mocks.rows.set(lore, [{ id: "lore-one", name: "The chronicle" }]);
+  const result = response();
+  await handler(request("GET", "gm", undefined, base.id), result.res);
+  assert.equal(result.result.status, 200);
+  assert.deepEqual(result.result.body.references.lore, [{ id: "lore-one", name: "The chronicle" }]);
 });
 
 test("a GM-only Quest is absent from Player list and detail responses", async () => {
@@ -199,6 +209,18 @@ test("saving a main destination uses one Quest location link and omits receiver 
   assert.equal(mainLinks.length, 1);
   assert.equal(mainLinks[0].value.entityBId === "location-one" || mainLinks[0].value.entityAId === "location-one", true);
   assert.equal(mainLinks[0].value.visibility, "Player");
+});
+
+test("choosing an already related location preserves its separate relationship", async () => {
+  mocks.rows.set(locations, [{ id: "location-one", name: "Destination" }]);
+  mocks.links = [{ id: "generic-location", label: "related", visibility: "Player", entityAType: "Quest",
+    entityAId: base.id, entityBType: "Map", entityBId: "location-one" }];
+  const saved = response();
+  await handler(request("PUT", "gm", { ...base, mainLocationId: "location-one" }), saved.res);
+  assert.equal(saved.result.status, 200);
+  assert.equal(mocks.update.mock.calls.length, 0);
+  assert.equal(mocks.links.some((link) => link.id === "generic-location" && link.label === "related"), true);
+  assert.equal(mocks.values.filter((entry) => entry.table === entityLinks && entry.value.label === "leads_to").length, 1);
 });
 
 test("failed relationship persistence does not report a saved Quest", async () => {

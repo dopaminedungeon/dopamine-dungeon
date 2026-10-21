@@ -17,6 +17,7 @@ import { npcs } from "../../../db/schema/npcs.js";
 import { quests } from "../../../db/schema/quests.js";
 import { sessions } from "../../../db/schema/sessions.js";
 import { items } from "../../../db/schema/items.js";
+import { lore } from "../../../db/schema/lore.js";
 import { characters } from "../../../db/schema/characters.js";
 import {
   assertAllowedEntityPair,
@@ -72,6 +73,21 @@ function isLocationNpcLink(entityAType: string, entityBType: string) {
     [entityAType, entityBType].every((type) => type === "Map" || type === "NPC");
 }
 
+function isQuestLoreLink(entityAType: string, entityBType: string) {
+  return new Set([entityAType, entityBType]).size === 2 &&
+    [entityAType, entityBType].every((type) => type === "Quest" || type === "Lore");
+}
+
+function isQuestPrimaryLabel(label: string) {
+  return ["started", "completed", "failed", "given_by", "leads_to"].includes(label);
+}
+
+function questPrimaryEditError(label: string) {
+  return label === "leads_to"
+    ? "Edit the main location on the Quest profile"
+    : "Edit the primary Quest relationship on the Quest profile";
+}
+
 // A Player-visible link cannot disclose a hidden endpoint, even when its own
 // visibility was set to Player. Handle either orientation for historical rows.
 function playerLocationNpcWhere() {
@@ -108,6 +124,8 @@ function playerQuestWhere() {
           and ${locations.id} = ${otherId} and ${locations.visibility} = 'public'))
         or (${otherType} = 'Item' and exists (select 1 from ${items} where ${items.campaignId} = ${entityLinks.campaignId}
           and ${items.id} = ${otherId} and ${items.visibility} = 'public'))
+        or (${otherType} = 'Lore' and exists (select 1 from ${lore} where ${lore.campaignId} = ${entityLinks.campaignId}
+          and ${lore.id} = ${otherId} and ${lore.visibility} = 'public'))
         or (${otherType} = 'PC' and exists (select 1 from ${characters} where ${characters.campaignId} = ${entityLinks.campaignId}
           and ${characters.id} = ${otherId} and ${characters.isPlayerVisible} = true))
       ))
@@ -119,7 +137,7 @@ async function requireQuestEndpoints(values: EntityLinkInsert) {
   const questId = values.entityAType === "Quest" ? values.entityAId : values.entityBId;
   const otherType = values.entityAType === "Quest" ? values.entityBType : values.entityAType;
   const otherId = values.entityAType === "Quest" ? values.entityBId : values.entityAId;
-  const table = { Session: sessions, NPC: npcs, Map: locations, Item: items, PC: characters }[otherType];
+  const table = { Session: sessions, NPC: npcs, Map: locations, Item: items, Lore: lore, PC: characters }[otherType];
   if (!table) throw new Error("Quest relationship target is not available");
   const [questRows, targetRows] = await Promise.all([
     db.select({ id: quests.id }).from(quests).where(and(eq(quests.campaignId, values.campaignId), eq(quests.id, questId))).limit(1),
@@ -229,7 +247,7 @@ async function findExistingLink(values: EntityLinkInsert) {
           eq(entityLinks.label, values.label),
           eq(entityLinks.visibility, values.visibility)
         ),
-        isLocationNpcLink(values.entityAType, values.entityBType)
+        (isLocationNpcLink(values.entityAType, values.entityBType) || isQuestLoreLink(values.entityAType, values.entityBType))
           ? and(
               eq(entityLinks.campaignId, values.campaignId),
               or(
@@ -332,8 +350,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
       const existingLink = await findExistingLink(values);
       if ((values.entityAType === "Quest" || values.entityBType === "Quest") &&
-        (values.label === "leads_to" || existingLink?.label === "leads_to")) {
-        return res.status(400).json({ ok: false, error: "Edit the main location on the Quest profile" });
+        (isQuestPrimaryLabel(values.label) || (existingLink && isQuestPrimaryLabel(existingLink.label)))) {
+        return res.status(400).json({ ok: false, error: questPrimaryEditError(existingLink?.label || values.label) });
       }
       let returnedRows: EntityLinkRow[];
 
@@ -388,8 +406,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     if ((link.entityAType === "Quest" || link.entityBType === "Quest") && !isGmView) {
       return res.status(200).json({ ok: true });
     }
-    if ((link.entityAType === "Quest" || link.entityBType === "Quest") && link.label === "leads_to") {
-      return res.status(400).json({ ok: false, error: "Edit the main location on the Quest profile" });
+    if ((link.entityAType === "Quest" || link.entityBType === "Quest") && isQuestPrimaryLabel(link.label)) {
+      return res.status(400).json({ ok: false, error: questPrimaryEditError(link.label) });
     }
 
     if (!isGmMember && !isBagItemLink(link.entityAType, link.entityBType)) {
