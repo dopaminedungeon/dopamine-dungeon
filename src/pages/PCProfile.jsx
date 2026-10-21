@@ -6,6 +6,7 @@ import { useCampaign } from "../context/CampaignContext";
 import { getCharacterById, removeCharacter, upsertCharacter } from "../data/characters/characters.repo";
 import { getApiCharacterAssignments, unassignApiCharacter } from "../data/api/apiClient";
 import { MarkdownContent } from "../components/MarkdownContent.jsx";
+import { QuestReciprocalLinks } from "../components/QuestReciprocalLinks.jsx";
 
 const abilityLabels = {
   str: "STR",
@@ -1883,6 +1884,7 @@ const PCProfile = () => {
         </section>
         ) : null}
       </div>
+      <QuestReciprocalLinks campaignId={selectedCampaignId} entityType="PC" entityId={pcId} />
     </div>
   );
 };

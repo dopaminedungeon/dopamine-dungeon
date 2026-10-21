@@ -159,10 +159,10 @@ export const ALLOWED_LINK_LABELS: Record<string, string[]> = {
   // ─────────────────────────
   // Quest
   // ─────────────────────────
-  "Quest|NPC": ["given_by", "target", "ally"],
+  "Quest|NPC": ["related", "given_by", "target", "ally"],
   "Quest|PC": ["assigned_to", "personal"],
-  "Quest|Item": ["requires", "rewards", "unlocks"],
-  "Quest|Map": ["takes_place_in", "leads_to"],
+  "Quest|Item": ["related", "requires", "rewards", "unlocks"],
+  "Quest|Map": ["related", "takes_place_in", "leads_to"],
   "Quest|Lore": ["based_on", "reveals"],
   "Quest|Condition": ["applies", "resolves"],
   "Quest|Arc": ["advances", "belongs_to"],

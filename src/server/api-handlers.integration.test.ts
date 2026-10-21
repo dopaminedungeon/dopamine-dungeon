@@ -10,6 +10,7 @@ import { items } from "../../db/schema/items.js";
 import { locations } from "../../db/schema/locations.js";
 import { lore } from "../../db/schema/lore.js";
 import { npcs } from "../../db/schema/npcs.js";
+import { quests } from "../../db/schema/quests.js";
 import { sessions } from "../../db/schema/sessions.js";
 
 const mocks = vi.hoisted(() => {
@@ -551,6 +552,117 @@ test("API integration: Player Location-NPC links require both public endpoints i
   assert.match(query.sql, /"npcs"\."visibility" = 'public'/);
   assert.deepEqual(query.params, [campaign.id, "Player"]);
   assert.equal((result.body as any).links[0].label, "controls");
+});
+
+test("API integration: Player Quest links require a public Quest and visible campaign endpoint", async () => {
+  mocks.state.selectRows.push([linkRow({ entityAType: "Quest", entityAId: "quest-one",
+    entityBType: "NPC", entityBId: "archivist", label: "given_by", note: "Secret GM detail" })]);
+  const { res, result } = response();
+  await entityLinksHandler(request("GET"), res);
+  assert.equal(result.status, 200);
+  const query = sqlDatabase.select().from(entityLinks).where(mocks.state.whereClauses[0] as never).toSQL();
+  assert.match(query.sql, /from "quests"/);
+  assert.match(query.sql, /"quests"\."visibility" = 'public'/);
+  assert.match(query.sql, /"npcs"\."visibility" = 'public'/);
+  assert.match(query.sql, /"lore"\."visibility" = 'public'/);
+  assert.match(query.sql, /"quests"\."campaign_id" = "entity_links"\."campaign_id"/);
+  assert.equal(JSON.stringify(result.body).includes("Secret GM detail"), false);
+});
+
+test("API integration: Quest-Lore writes validate both campaign endpoints and reuse one directional record", async () => {
+  const existing = linkRow({ entityAType: "Lore", entityAId: "chronicle", entityBType: "Quest",
+    entityBId: "quest-one", label: "based_on", visibility: "Player" });
+  mocks.state.selectRows.push([{ id: "quest-one" }], [{ id: "chronicle" }], [existing]);
+  mocks.state.writeRows.push([{ ...existing, label: "reveals" }]);
+  const { res, result } = response();
+  await entityLinksHandler(request("PUT", undefined, { link: {
+    id: "opposite-direction-id", entityA: { type: "Lore", id: "chronicle" },
+    entityB: { type: "Quest", id: "quest-one" }, label: "reveals", visibility: "Player",
+  } }, "gm"), res);
+  assert.equal(result.status, 200);
+  assert.equal(mocks.db.insert.mock.calls.length, 0);
+  assert.equal((mocks.state.updateValues[0] as any).id, existing.id);
+  assert.equal((result.body as any).link.id, existing.id);
+  const loreQuery = sqlDatabase.select().from(lore).where(mocks.state.whereClauses[1] as never).toSQL();
+  assert.deepEqual(loreQuery.params, [campaign.id, "chronicle"]);
+});
+
+test("API integration: Quest-Lore cannot link to Lore outside the selected campaign or write in Player mode", async () => {
+  mocks.state.selectRows.push([{ id: "quest-one" }], []);
+  const submitted = { link: { entityA: { type: "Quest", id: "quest-one" },
+    entityB: { type: "Lore", id: "other-campaign-lore" }, label: "based_on", visibility: "Player" } };
+  const denied = response();
+  await entityLinksHandler(request("PUT", undefined, submitted, "gm"), denied.res);
+  assert.equal(denied.result.status, 401);
+  assert.equal(mocks.db.insert.mock.calls.length, 0);
+  const player = response();
+  await entityLinksHandler(request("PUT", undefined, submitted), player.res);
+  assert.equal(player.result.status, 401);
+  assert.equal(mocks.db.insert.mock.calls.length, 0);
+});
+
+test("API integration: Quest links reject targets outside the campaign before writing", async () => {
+  mocks.state.selectRows.push([{ id: "quest-one" }], []);
+  const { res, result } = response();
+  await entityLinksHandler(request("PUT", undefined, { link: {
+    entityA: { type: "Quest", id: "quest-one" }, entityB: { type: "Item", id: "other-campaign-item" },
+    label: "requires", visibility: "Player",
+  } }, "gm"), res);
+  assert.equal(result.status, 401);
+  assert.equal(mocks.db.insert.mock.calls.length, 0);
+  const query = sqlDatabase.select().from(quests).where(mocks.state.whereClauses[0] as never).toSQL();
+  assert.deepEqual(query.params, [campaign.id, "quest-one"]);
+});
+
+test.each([
+  ["Session", "started"],
+  ["NPC", "given_by"],
+  ["Map", "leads_to"],
+])("API integration: generic %s-Quest writes cannot assign reserved %s", async (entityType, label) => {
+  mocks.state.selectRows.push([{ id: "quest-one" }], [{ id: "target-one" }], []);
+  const { res, result } = response();
+  await entityLinksHandler(request("PUT", undefined, { link: {
+    id: "generic-link", entityA: { type: entityType, id: "target-one" },
+    entityB: { type: "Quest", id: "quest-one" }, label, visibility: "Player",
+  } }, "gm"), res);
+  assert.equal(result.status, 400);
+  assert.equal(mocks.db.insert.mock.calls.length, 0);
+  assert.equal(mocks.db.update.mock.calls.length, 0);
+});
+
+test("API integration: generic Quest links cannot overwrite or delete a primary link", async () => {
+  const primary = linkRow({ id: "quest-hero:quest-one:NPC:archivist:given_by", entityAType: "Quest", entityAId: "quest-one", entityBType: "NPC", entityBId: "archivist", label: "given_by" });
+  mocks.state.selectRows.push([{ id: "quest-one" }], [{ id: "archivist" }], [primary]);
+  const update = response();
+  await entityLinksHandler(request("PUT", undefined, { link: {
+    id: primary.id, entityA: { type: "Quest", id: "quest-one" },
+    entityB: { type: "NPC", id: "archivist" }, label: "related", visibility: "Player",
+  } }, "gm"), update.res);
+  assert.equal(update.result.status, 400);
+  assert.equal(mocks.db.update.mock.calls.length, 0);
+  mocks.state.selectRows.push([primary]);
+  const deletion = response();
+  await entityLinksHandler(request("DELETE", { campaignId: campaign.slug, linkId: primary.id }, undefined, "gm"), deletion.res);
+  assert.equal(deletion.result.status, 400);
+  assert.equal(mocks.db.delete.mock.calls.length, 0);
+});
+
+test("API integration: a generic Session-Quest link can coexist with a managed start session", async () => {
+  const generic = linkRow({ id: "persisted-session-quest-related", entityAType: "Quest", entityAId: "quest-one",
+    entityBType: "Session", entityBId: "session-one", label: "related", visibility: "Player" });
+  // The endpoint lookups succeed. The exact generic identity lookup has no row,
+  // even though the same endpoints also have a managed `started` row.
+  mocks.state.selectRows.push([{ id: "quest-one" }], [{ id: "session-one" }], []);
+  mocks.state.writeRows.push([generic]);
+  const created = response();
+  await entityLinksHandler(request("PUT", undefined, { link: {
+    id: generic.id, entityA: { type: "Quest", id: "quest-one" },
+    entityB: { type: "Session", id: "session-one" }, label: "related", visibility: "Player",
+  } }, "gm"), created.res);
+  assert.equal(created.result.status, 200);
+  assert.equal((created.result.body as any).link.id, generic.id);
+  assert.equal(mocks.db.insert.mock.calls.length, 1);
+  assert.equal(mocks.db.update.mock.calls.length, 0);
 });
 
 test("API integration: GM mode retains Location-NPC links without the Player endpoint filter", async () => {

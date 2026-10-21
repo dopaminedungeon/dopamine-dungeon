@@ -10,8 +10,10 @@ import { npcsRepo } from "../data/npcs/npcs.repo";
 import { sessionsRepo } from "../data/sessions/sessions.repo";
 import { itemsRepo } from "../data/items/items.repo";
 import { loreRepo } from "../data/lore/lore.repo";
+import { QuestReciprocalLinks } from "../components/QuestReciprocalLinks.jsx";
 import { locationsRepo } from "../data/maps/locations.repo";
 import { createLink } from "../domain/links/link.service";
+import { editableProfileLinks } from "../domain/links/questManagedLinks";
 import {
   addLink,
   getLinksForEntity,
@@ -1251,16 +1253,18 @@ export default function NpcProfile() {
   async function applyDraftLinkChanges(originalLinks, nextLinks) {
     if (!selectedCampaignId) return;
 
-    const originalById = new Map(originalLinks.map((link) => [link.id, link]));
-    const nextById = new Map(nextLinks.map((link) => [link.id, link]));
+    const originalEditable = editableProfileLinks(originalLinks);
+    const nextEditable = editableProfileLinks(nextLinks);
+    const originalById = new Map(originalEditable.map((link) => [link.id, link]));
+    const nextById = new Map(nextEditable.map((link) => [link.id, link]));
 
-    for (const originalLink of originalLinks) {
+    for (const originalLink of originalEditable) {
       if (!nextById.has(originalLink.id)) {
         await removeLink(originalLink.id, selectedCampaignId);
       }
     }
 
-    for (const nextLink of nextLinks) {
+    for (const nextLink of nextEditable) {
       const originalLink = originalById.get(nextLink.id);
 
       if (!originalLink) {
@@ -1401,7 +1405,8 @@ export default function NpcProfile() {
   const handleStartEdit = () => {
     if (!isGM || !npc || isSaving || isDeleting) return;
     setDraft(buildDraft(npc));
-    setDraftLinks(npcLinks);
+    setDraftLinks(editableProfileLinks(npcLinks));
+    setError("");
     setLinkDraftKey((key) => key + 1);
     setIsEditing(true);
   };
@@ -1410,6 +1415,7 @@ export default function NpcProfile() {
     if (isSaving) return;
     setDraft(buildDraft(npc));
     setDraftLinks(null);
+    setError("");
     setLinkDraftKey((key) => key + 1);
     setIsEditing(false);
   };
@@ -1417,8 +1423,10 @@ export default function NpcProfile() {
   const handleSave = async () => {
     if (!isGM || !selectedCampaignId || !draft || isSaving) return;
 
+    let npcSaved = false;
     try {
       setIsSaving(true);
+      setError("");
       const savedNpc = await npcsRepo.upsert(selectedCampaignId, {
         ...draft,
         name: draft.name.trim(),
@@ -1433,6 +1441,7 @@ export default function NpcProfile() {
         statBlock: normalizeStatBlock(draft.statBlock),
         statBlockVisibility: normalizeStatBlockVisibility(draft.statBlockVisibility),
       });
+      npcSaved = true;
       if (draftLinks) {
         await applyDraftLinkChanges(npcLinks, draftLinks);
       }
@@ -1444,7 +1453,17 @@ export default function NpcProfile() {
       setIsEditing(false);
     } catch (saveError) {
       console.error("[NpcProfile] Failed to save NPC", saveError);
-      setError("Unable to save this NPC right now.");
+      if (npcSaved) {
+        try {
+          await loadLinks(selectedCampaignId);
+          setLinksVersion((version) => version + 1);
+        } catch (refreshError) {
+          console.error("[NpcProfile] Failed to refresh links after save error", refreshError);
+        }
+      }
+      setError(npcSaved
+        ? "NPC details may have saved, but a relationship did not. Your draft is still here. Review it and retry Save, or Cancel and reload to inspect saved changes."
+        : "The NPC could not be saved. Your draft is still here; retry Save.");
     } finally {
       setIsSaving(false);
     }
@@ -1740,7 +1759,7 @@ export default function NpcProfile() {
         </section>
 
         {error ? (
-          <div className="rounded-xl border border-rose-500/30 bg-rose-500/10 px-4 py-3 text-sm text-rose-100">
+          <div role="alert" className="rounded-xl border border-rose-500/30 bg-rose-500/10 px-4 py-3 text-sm text-rose-100">
             {error}
           </div>
         ) : null}
@@ -1881,6 +1900,8 @@ export default function NpcProfile() {
             getEntityPath={(location) => `/maps/${location.id}`}
             onLinksChanged={setDraftLinks}
           />
+
+          <QuestReciprocalLinks key={`npc-quests-${linkDraftKey}`} campaignId={selectedCampaignId} entityType="NPC" entityId={id} links={visibleNpcLinks} managedLinks={npcLinks} isEditing={isEditing} isSaving={isSaving} onLinksChanged={setDraftLinks} />
 
           </>}
 

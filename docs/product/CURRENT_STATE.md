@@ -1,6 +1,6 @@
 # Current State
 
-Last updated: 2026-10-12
+Last updated: 2026-10-21
 Maintainer: Magda
 
 ## Current release state
@@ -23,9 +23,9 @@ configuration.
 - Direct Brevo is the application mail transport. Firestore has no active
   browser application-state repository or application mail/limiter writer.
 - The active campaign product includes PCs, Bag of Holding, Items, Sessions,
-  NPCs, Locations, Lore, and typed entity links. The standalone Relationships,
-  Arcs, Quests, and Conditions pages are retired; reserved link endpoints are
-  not active standalone features.
+  NPCs, Locations, Lore, Quests, and typed entity links. Quests now have a
+  campaign-scoped persisted profile and reciprocal relationships. The
+  standalone Relationships, Arcs, and Conditions pages remain retired.
 - Issue #360 persists explicit filters per user/context. Issue #340 resolves
   canonical NPC–Location links from both profiles. Issue #268 adds measured,
   targeted loading feedback. Issues #342/#389 establish responsive width

@@ -1,6 +1,6 @@
 # Dopamine Dungeon Product Principles
 
-Last updated: 2026-07-24
+Last updated: 2026-10-14
 Owner: Magda
 
 ## Purpose
@@ -136,6 +136,11 @@ This includes:
 - mobile layouts.
 
 A new pattern should not be introduced when an adequate existing pattern exists.
+
+On entity list pages, the Add New action belongs on the same horizontal row as
+the filters, unless an approved feature-specific layout provides a different
+arrangement. Quests use the approved NPC-style controls panel: search and Add
+new share the first row, with labeled filters on a second row.
 
 ## 9. Accessibility and clarity over decoration
 

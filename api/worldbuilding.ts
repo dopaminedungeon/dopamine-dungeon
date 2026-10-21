@@ -8,6 +8,7 @@ import loreHandler from "../src/server/api-handlers/lore.js";
 import locationsHandler from "../src/server/api-handlers/locations.js";
 import npcsHandler from "../src/server/api-handlers/npcs.js";
 import sessionsHandler from "../src/server/api-handlers/sessions.js";
+import questsHandler from "../src/server/api-handlers/quests.js";
 import { setCorsHeaders } from "../src/server/cors.js";
 
 function getQueryValue(value: string | string[] | undefined) {
@@ -68,6 +69,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
   if (resource === "sessions") {
     return sessionsHandler(req, res);
+  }
+  if (resource === "quests") {
+    return questsHandler(req, res);
   }
 
   setCorsHeaders(res, "GET, PUT, POST, DELETE, OPTIONS");

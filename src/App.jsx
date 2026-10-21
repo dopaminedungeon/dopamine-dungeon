@@ -20,6 +20,7 @@ import MapProfile from "./pages/MapProfile";
 import Settings from "./pages/Settings";
 import Lore from "./pages/Lore";
 import LoreProfile from "./pages/LoreProfile";
+import Quests from "./pages/Quests";
 import PCs from "./pages/PCs";
 import PCProfile from "./pages/PCProfile";
 import BagOfHolding from "./pages/BagOfHolding";
@@ -300,6 +301,12 @@ function AppGate() {
           <>
             <Route path="/lore" element={<Lore />} />
             <Route path="/lore/:id" element={<LoreProfile />} />
+          </>
+        )}
+        {features.quests && (
+          <>
+            <Route path="/quests" element={<Quests />} />
+            <Route path="/quests/:id" element={<Quests />} />
           </>
         )}
 

@@ -8,6 +8,11 @@ tabletop role-playing campaigns.
 The authenticated user may belong to multiple workspaces and campaigns.
 Campaign data must never leak across campaign or workspace boundaries.
 
+Design for narrative importance, low cognitive load, explicit entities and meaningful
+typed relationships. Prefer understandable, reversible solutions over clever
+abstractions. GM mode may access secrets; Player mode must be spoiler-safe.
+Mode-specific data access must be enforced server-side, not only hidden in the UI.
+
 ## Repository workflow
 
 - `dev` is the integration and preview branch.
@@ -29,7 +34,7 @@ Campaign data must never leak across campaign or workspace boundaries.
 
 ## Scope discipline
 
-- Implement only the requested issue.
+- For code changes, implement only the requested issue or explicitly authorized task.
 - Do not perform unrelated refactoring.
 - Do not change schemas or API contracts unless the issue requires it.
 - Do not add a new dependency without explaining why it is necessary.
@@ -38,6 +43,10 @@ Campaign data must never leak across campaign or workspace boundaries.
 - Preserve tenant and campaign isolation.
 - Do not replace persisted functionality with mock state.
 - Do not claim persistence exists unless it is backed by the API and database.
+- Do not create GitHub issues unless explicitly requested. Search for duplicates
+  first; if one is created, verify it once and report its number and title.
+- Do not create commits, branches, or PRs during design/documentation-only work
+  unless explicitly instructed.
 
 ## Architecture
 
@@ -54,6 +63,27 @@ Current core technologies include:
 - pnpm
 
 Treat repository code as the source of truth when this list becomes stale.
+
+## Repository skills
+
+Skills are stored under `.agents/skills/` and provide task-specific workflows.
+Follow the relevant skill when its activation criteria match; an explicit
+`$skill-name` request also activates it. The repository and accepted decisions
+remain authoritative over outdated skill assumptions.
+
+- **`dd-architecture-guardian`**: use for architecture-impacting planning,
+  implementation, or reviews (persistence, access control, tenant boundaries,
+  APIs, migrations, environments). It assesses architectural integrity and
+  determines when an explicit architectural decision or ADR is needed.
+- **`design-decision-keeper`**: use for product/feature/UX design discussions,
+  explicit requirement corrections, mockups, and updating existing design issues.
+  It records clearly confirmed decisions and reconciles relevant existing issues;
+  it does not turn tentative suggestions into requirements.
+
+When both apply, check architecture with the Guardian and manage confirmed
+product decisions with the Keeper. Neither skill overrides authorization rules,
+accepted ADRs, or the user's explicit approval boundaries. Do not interpret
+an architectural review verdict as approval for an architectural change.
 
 ## Local development environments
 
@@ -116,7 +146,7 @@ Use the commands documented in `docs/operations/TESTING.md`.
 
 ## Completion report
 
-Every completed task must include:
+Every completed coding/implementation task must include:
 
 - Summary
 - Files changed
@@ -126,3 +156,86 @@ Every completed task must include:
 - Risks or unresolved questions
 - Manual verification steps
 - Rollback approach
+
+For design-only work, documentation updates, or existing-issue edits, use a
+compact report of decisions, files/issues updated, verification, and unresolved
+questions. Do not imply GitHub updates or commits occurred without confirmation.
+
+
+## Project skill routing
+
+Use relevant repository-local skills automatically within the current task.
+Do not wait for an explicit $skill invocation when the task matches.
+Read each selected SKILL.md and briefly announce which skill is being used.
+
+### Design Decision Keeper
+
+Path: .agents/skills/design-decision-keeper/SKILL.md
+
+Use for product or UX discussions, mockup reviews, requirement corrections,
+confirmed design decisions, and reconciliation of existing GitHub issues.
+
+Distinguish exploratory proposals from confirmed decisions.
+Record clear decisions and reconcile clearly affected existing issues
+according to the Keeper's operating rules without requesting approval again.
+Clarify ambiguous decisions or targets before dependent updates.
+
+Use existing authoritative records:
+- Feature requirements: their owning issue or requirement document.
+- Cross-cutting product/UX standards: reusable product documentation.
+- Architectural decisions: the Guardian and existing ADR process.
+
+Create issues only when explicitly requested. Check for duplicates first,
+create only the requested issue, and never add issues opportunistically.
+
+### DD Architecture Guardian
+
+Path: .agents/skills/dd-architecture-guardian/SKILL.md
+
+Use when a task affects architecture, authorization, GM/Player projection,
+tenant or campaign isolation, persistence boundaries, data models,
+API contracts, or architectural implementation planning and review.
+
+Ground reviews in repository evidence and follow the Guardian's existing
+verdict and escalation rules.
+
+### UI Consistency Scout
+
+Path: .agents/skills/ui-consistency-scout/SKILL.md
+
+Use when implementing or changing UI, reviewing mockups, or investigating
+visual or interaction inconsistencies.
+
+Automatically review the affected UI against applicable approved patterns.
+Keep the review scoped to the current task; inspect other pages as references.
+Do not initiate an app-wide audit unless requested.
+
+Report findings by default. Implement corrections only when explicitly
+requested, including requests such as “fix the inconsistencies,” and only
+within the authorized scope.
+
+Locate the canonical UI pattern library through repository documentation.
+Issue #418 owns its initial audit, approval, and review method; its suggested
+document path is docs/product/ui-patterns.md.
+
+Distinguish observed, proposed, and approved patterns.
+Do not treat common implementations as approved standards or override
+documented exceptions.
+
+### Coordination and boundaries
+
+Use multiple skills when their responsibilities apply to the same task:
+- Scout identifies and verifies visual/interaction differences.
+- Keeper records confirmed decisions and reconciles requirements/issues.
+- Guardian assesses architectural and authorization implications.
+
+Do not duplicate records or repeat the same review under multiple skills.
+Route unresolved product choices to the user and architectural concerns
+to the Guardian; do not silently convert either into approved requirements.
+
+Explicit task restrictions apply to every skill. A read-only task permits
+no writes. Automatic skill selection does not expand implementation scope
+or authorize commits, branches, PRs, deployments, or issue creation.
+
+If a required skill is unavailable, report that limitation rather than
+claiming it was used.

@@ -1,0 +1,7 @@
+interface:
+  display_name: "DD Architecture Guardian"
+  short_description: "Review DD architecture and technical boundaries"
+  default_prompt: "Use $dd-architecture-guardian to review this Dopamine Dungeon change for architectural consistency, authorization risks, and implementation concerns."
+
+policy:
+  allow_implicit_invocation: true
