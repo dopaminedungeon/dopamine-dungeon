@@ -1,0 +1,1 @@
+ALTER TABLE "milestones" ADD CONSTRAINT "milestones_campaign_id_campaigns_id_fk" FOREIGN KEY ("campaign_id") REFERENCES "public"."campaigns"("id") ON DELETE no action ON UPDATE no action;

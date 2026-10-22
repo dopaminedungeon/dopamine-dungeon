@@ -8,6 +8,7 @@ export type EntityType =
   | "Session"
   | "Quest"
   | "Arc"
+  | "Milestone"
   | "Lore"
   | "Map"
   | "NPC"

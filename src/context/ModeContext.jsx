@@ -79,6 +79,7 @@ export function ModeProvider({ children }) {
   }, [selectedCampaignId, canActAsGM]);
 
   const [mode, setMode] = useState(null);
+  const [resolvedStorageKey, setResolvedStorageKey] = useState(null);
 
   // Rehydrate mode whenever the (tenant,campaign) scope changes.
   useEffect(() => {
@@ -92,6 +93,7 @@ export function ModeProvider({ children }) {
     if (stored) {
       const safe = stored === "gm" && !canActAsGM ? "player" : stored;
       setMode(safe);
+      setResolvedStorageKey(storageKey);
       // Also persist the safe value to keep keys consistent.
       writeStoredMode(storageKey, safe);
       return;
@@ -100,9 +102,11 @@ export function ModeProvider({ children }) {
     // Otherwise choose the default derived from role.
     if (defaultMode) {
       setMode(defaultMode);
+      setResolvedStorageKey(storageKey);
       writeStoredMode(storageKey, defaultMode);
     } else {
       setMode(null);
+      setResolvedStorageKey(storageKey);
     }
   }, [storageKey, canActAsGM, defaultMode, selectedCampaignId, campaignStatus]);
 
@@ -135,6 +139,7 @@ export function ModeProvider({ children }) {
   const value = useMemo(
   () => ({
     mode,
+    isModeReady: Boolean(selectedCampaignId && mode && resolvedStorageKey === storageKey),
     isGM: String(mode || "").toLowerCase() === "gm",
     isGMMode: String(mode || "").toLowerCase() === "gm",
     setMode: setModeSafe,
@@ -144,7 +149,7 @@ export function ModeProvider({ children }) {
     activeCampaignId: selectedCampaignId,
     user,
   }),
-  [mode, setModeSafe, canActAsGM, storageKey, selectedTenantId, selectedCampaignId, user]
+  [mode, resolvedStorageKey, setModeSafe, canActAsGM, storageKey, selectedTenantId, selectedCampaignId, user]
 );
 
   return <ModeContext.Provider value={value}>{children}</ModeContext.Provider>;

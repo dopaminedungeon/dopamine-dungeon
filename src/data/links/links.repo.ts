@@ -4,7 +4,6 @@ import { apiFetch } from "../api/apiClient";
 import { Link } from "../../domain/links/link.types";
 
 let links: Link[] = [];
-let linkKeys = new Set<string>();
 let loadedCampaignId: string | null = null;
 let latestLoad = 0;
 
@@ -16,10 +15,6 @@ function getSelectedCampaignId(): string {
   }
 }
 
-function rebuildKeys(nextLinks: Link[]) {
-  linkKeys = new Set(nextLinks.map(getLinkKey));
-}
-
 function getLinkKey(link: {
   entityA: { type: any; id: any };
   entityB: { type: any; id: any };
@@ -29,7 +24,7 @@ function getLinkKey(link: {
   const a = `${link.entityA.type}:${link.entityA.id}`;
   const b = `${link.entityB.type}:${link.entityB.id}`;
 
-  return [...[a, b].sort(), link.label, link.visibility].join("|");
+  return [...[a, b].sort(), link.label].join("|");
 }
 
 export async function loadLinks(campaignId = getSelectedCampaignId()): Promise<Link[]> {
@@ -37,7 +32,6 @@ export async function loadLinks(campaignId = getSelectedCampaignId()): Promise<L
   if (!campaignId) {
     links = [];
     loadedCampaignId = null;
-    rebuildKeys(links);
     return [];
   }
 
@@ -51,7 +45,6 @@ export async function loadLinks(campaignId = getSelectedCampaignId()): Promise<L
   if (loadId === latestLoad) {
     links = nextLinks;
     loadedCampaignId = campaignId;
-    rebuildKeys(links);
   }
   return [...nextLinks];
 }
@@ -71,24 +64,23 @@ export async function addLink(
   campaignId = getSelectedCampaignId()
 ): Promise<void> {
   await ensureLoaded(campaignId);
+  // Let the API reconcile stale or reciprocal endpoint drafts against the
+  // canonical campaign record. A cache hit is not proof the write is redundant.
   const key = getLinkKey(link);
-
-  if (linkKeys.has(key)) {
-    throw new Error(`Duplicate link prevented: ${key}`);
-  }
+  const existing = links.find((candidate) => getLinkKey(candidate) === key);
+  const payload = existing ? { ...link, id: existing.id } : link;
 
   const response = await apiFetch<{ ok: true; link: Link }>(
     `/api/worldbuilding?resource=entityLinks&campaignId=${encodeURIComponent(campaignId)}`,
     {
       method: "PUT",
-      body: JSON.stringify({ link }),
+      body: JSON.stringify({ link: payload }),
     }
   );
   const nextLink = response.link ?? link;
 
-  links = links.filter((candidate) => candidate.id !== nextLink.id);
+  links = links.filter((candidate) => candidate.id !== nextLink.id && getLinkKey(candidate) !== getLinkKey(nextLink));
   links.push(nextLink);
-  rebuildKeys(links);
 }
 
 /** Update the canonical row in place so edits retain its stable id. */
@@ -101,8 +93,45 @@ export async function updateLink(
     `/api/worldbuilding?resource=entityLinks&campaignId=${encodeURIComponent(campaignId)}`,
     { method: "PUT", body: JSON.stringify({ link }) }
   );
-  links = links.map((candidate) => candidate.id === link.id ? response.link : candidate);
-  rebuildKeys(links);
+  links = links.filter((candidate) => candidate.id !== link.id && candidate.id !== response.link.id && getLinkKey(candidate) !== getLinkKey(response.link));
+  links.push(response.link);
+}
+
+function sameEndpoints(a: Link, b: Link) {
+  return getLinkKey({ ...a, label: "" }) === getLinkKey({ ...b, label: "" });
+}
+
+export async function saveLinkDraft(
+  campaignId: string,
+  endpointType: string,
+  endpointId: string,
+  desired: Link[],
+  original: Link[],
+  isProtected: (link: Link) => boolean = () => false
+): Promise<Link[]> {
+  const current = (await loadLinks(campaignId)).filter((link) =>
+    ((link.entityA.type === endpointType && String(link.entityA.id) === String(endpointId)) ||
+      (link.entityB.type === endpointType && String(link.entityB.id) === String(endpointId))) && !isProtected(link));
+  const editableDesired = desired.filter((link) => !isProtected(link));
+  const sameRelationship = (a: Link, b: Link) => sameEndpoints(a, b) && a.label === b.label;
+  const desiredFor = (link: Link) => editableDesired.some((candidate) =>
+    candidate.id === link.id || sameRelationship(candidate, link));
+
+  for (const prior of original.filter((link) => !isProtected(link))) {
+    if (desiredFor(prior)) continue;
+    const persisted = current.find((link) => link.id === prior.id) || current.find((link) => sameRelationship(link, prior));
+    if (persisted) await removeLink(persisted.id, campaignId);
+  }
+
+  for (const draft of editableDesired) {
+    const persisted = current.find((link) => link.id === draft.id) || current.find((link) => sameRelationship(link, draft));
+    if (!persisted) await addLink(draft, campaignId);
+    else if (persisted.label !== draft.label || persisted.visibility !== draft.visibility ||
+      (persisted.note || "") !== (draft.note || "") || (persisted.createdInSession || "") !== (draft.createdInSession || "")) {
+      await updateLink({ ...draft, id: persisted.id }, campaignId);
+    }
+  }
+  return loadLinks(campaignId);
 }
 
 /**
@@ -161,7 +190,6 @@ export async function removeLink(
   );
 
   links = links.filter((candidate) => candidate.id !== linkId);
-  rebuildKeys(links);
 }
 
 /**

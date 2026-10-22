@@ -5,9 +5,10 @@ import { ArrowLeft, Compass, Feather, Flag, PackageSearch, Plus, ScrollText, Sea
 import { useCampaign } from "../context/CampaignContext";
 import { useMode } from "../context/ModeContext.jsx";
 import { MarkdownContent } from "../components/MarkdownContent.jsx";
+import ProgressTrack from "../components/ProgressTrack.jsx";
 import { QUEST_SECTIONS, QUEST_STATUSES, QUEST_TYPES } from "../domain/quests/quest.types";
 import { questsRepo } from "../data/quests/quests.repo";
-import { addLink, loadLinks, removeLink, updateLink } from "../data/links/links.repo";
+import { loadLinks, saveLinkDraft } from "../data/links/links.repo";
 import { createLink } from "../domain/links/link.service";
 
 const ICONS = { fetch: PackageSearch, delivery: Flag, combat: Swords, investigation: Search,
@@ -39,19 +40,7 @@ function TypeIcon({ type, size = 20, className = "text-violet-300" }) {
   return React.createElement(ICONS[type] || ScrollText, { size, className: `shrink-0 ${className}`, "aria-hidden": true });
 }
 
-function Progress({ value, onChange }) {
-  const fill = <span data-testid="quest-progress-fill" aria-hidden="true" className="pointer-events-none absolute inset-0 rounded-full"
-    style={{ backgroundImage: "linear-gradient(90deg, #a855f7, #f472b6 35%, #0ea5e9 70%, #2dd4bf)", clipPath: `inset(0 ${100 - value}% 0 0)` }} />;
-  return <div className="space-y-2">
-    <div className="flex justify-between text-xs text-zinc-400"><span>Progress</span><span>{value}%</span></div>
-    <div className="relative h-3 rounded-full bg-zinc-800" {...(!onChange ? { role: "progressbar", "aria-label": `Quest progress ${value}%`, "aria-valuemin": 0, "aria-valuemax": 100, "aria-valuenow": value } : {})}>
-      {fill}
-      {onChange && <input aria-label="Set progress" aria-valuetext={`${value}%`} type="range" min="0" max="100" value={value}
-        onChange={(event) => onChange(Number(event.target.value))}
-        className="absolute inset-0 block h-3 w-full cursor-pointer appearance-none rounded-full bg-transparent focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-purple-300 [&::-webkit-slider-runnable-track]:h-3 [&::-webkit-slider-runnable-track]:rounded-full [&::-webkit-slider-runnable-track]:bg-transparent [&::-webkit-slider-thumb]:-mt-1 [&::-webkit-slider-thumb]:h-5 [&::-webkit-slider-thumb]:w-5 [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:border-2 [&::-webkit-slider-thumb]:border-white [&::-webkit-slider-thumb]:bg-purple-500 [&::-moz-range-track]:h-3 [&::-moz-range-track]:rounded-full [&::-moz-range-track]:bg-transparent [&::-moz-range-thumb]:h-5 [&::-moz-range-thumb]:w-5 [&::-moz-range-thumb]:rounded-full [&::-moz-range-thumb]:border-2 [&::-moz-range-thumb]:border-white [&::-moz-range-thumb]:bg-purple-500" />}
-    </div>
-  </div>;
-}
+const Progress = ProgressTrack;
 
 function Visibility({ value, onChange, ariaLabel = "Visibility" }) {
   return onChange ? <select aria-label={ariaLabel} className={INPUT} value={value} onChange={(event) => onChange(event.target.value)}>
@@ -310,18 +299,7 @@ export default function Quests() {
   }
 
   async function applyDraftLinks(campaignId, questId, desired, original) {
-    const current = (await loadLinks(campaignId)).filter((link) =>
-      ((link.entityA.type === "Quest" && link.entityA.id === questId) || (link.entityB.type === "Quest" && link.entityB.id === questId)) && !managedLabels.has(link.label));
-    const wanted = desired;
-    const desiredIds = new Set(wanted.map((link) => link.id));
-    const originalIds = new Set(original.filter((link) => !managedLabels.has(link.label)).map((link) => link.id));
-    const currentById = new Map(current.map((link) => [link.id, link]));
-    for (const link of current) if (originalIds.has(link.id) && !desiredIds.has(link.id)) await removeLink(link.id, campaignId);
-    for (const link of wanted) {
-      const prior = currentById.get(link.id);
-      if (!prior) await addLink(link, campaignId);
-      else if (prior.label !== link.label || prior.visibility !== link.visibility) await updateLink(link, campaignId);
-    }
+    return saveLinkDraft(campaignId, "Quest", questId, desired, original, (link) => managedLabels.has(link.label));
   }
 
   async function save() {

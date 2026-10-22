@@ -57,12 +57,12 @@ export function QuestReciprocalLinks({ campaignId, entityType, entityId, links =
   const rows = [...grouped.values()];
   const candidates = quests.filter((quest) => {
     if (!String(quest.name || "").toLowerCase().includes(query.trim().toLowerCase())) return false;
-    return !editableLinks.some((link) => questIdFor(link, entityType, entityId) === String(quest.id));
+    return !editableLinks.some((link) => questIdFor(link, entityType, entityId) === String(quest.id) && link.label === selectedLabel);
   }).slice(0, 30);
 
   function addQuest(quest) {
     if (!isGM || !isEditing || isSaving || !onLinksChanged || !allowedLabels.includes(selectedLabel)) return;
-    if (editableLinks.some((link) => questIdFor(link, entityType, entityId) === String(quest.id))) return;
+    if (editableLinks.some((link) => questIdFor(link, entityType, entityId) === String(quest.id) && link.label === selectedLabel)) return;
     const link = createLink({ entityA: { type: entityType, id: String(entityId) }, entityB: { type: "Quest", id: String(quest.id) }, label: selectedLabel, visibility: selectedVisibility });
     onLinksChanged([...editableLinks, link]);
     setQuery("");
