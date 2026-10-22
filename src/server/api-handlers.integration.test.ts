@@ -735,20 +735,29 @@ test("API integration: Arc-to-Session links require both endpoints in the resolv
   assert.equal(mocks.db.insert.mock.calls.length, 1);
 });
 
-test("API integration: standalone Milestones remain eligible for campaign-scoped Session links", async () => {
-  const link = linkRow({ id: "session-milestone", entityAType: "Session", entityAId: "session-one",
-    entityBType: "Milestone", entityBId: "standalone-step", label: "reached" });
-  mocks.state.selectRows.push([{ id: "standalone-step" }], [{ id: "session-one" }], []);
-  mocks.state.writeRows.push([link]);
-  const { res, result } = response();
-  await entityLinksHandler(request("PUT", undefined, { link: {
-    id: link.id, entityA: { type: "Session", id: "session-one" },
-    entityB: { type: "Milestone", id: "standalone-step" }, label: "reached", visibility: "GM",
-  } }, "gm"), res);
-  assert.equal(result.status, 200);
-  const milestoneQuery = sqlDatabase.select().from(milestones).where(mocks.state.whereClauses[0] as never).toSQL();
-  assert.deepEqual(milestoneQuery.params, [campaign.id, "standalone-step"]);
-  assert.doesNotMatch(milestoneQuery.sql, /join "arcs"/i);
+test.each([
+  ["Session", "session-one", "reached"],
+  ["NPC", "archivist", "involved"],
+])("API integration: GM cannot create or update %s-to-Milestone links in either endpoint orientation", async (sourceType, sourceId, label) => {
+  for (const [operation, id] of [["create", undefined], ["update", "existing-milestone-link"]] as const) {
+    for (const reversed of [false, true]) {
+      const source = { type: sourceType, id: sourceId };
+      const milestone = { type: "Milestone", id: "standalone-step" };
+      const { res, result } = response();
+      await entityLinksHandler(request("PUT", undefined, { link: {
+        ...(id ? { id } : {}),
+        entityA: reversed ? milestone : source,
+        entityB: reversed ? source : milestone,
+        label,
+        visibility: "GM",
+      } }, "gm"), res);
+      assert.equal(result.status, 400, `${operation} (${reversed ? "reverse" : "forward"}) must be rejected`);
+      assert.match((result.body as any).error, /Milestones cannot have generic entity relationships/);
+      assert.equal(mocks.db.insert.mock.calls.length, 0);
+      assert.equal(mocks.db.update.mock.calls.length, 0);
+      assert.equal(mocks.db.delete.mock.calls.length, 0);
+    }
+  }
 });
 
 test.each([

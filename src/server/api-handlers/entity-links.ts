@@ -12,7 +12,7 @@ import { db } from "../db.js";
 import { entityLinksReadWhere } from "../security-boundaries.js";
 import { canViewAsGm } from "../viewer-mode.js";
 import { entityLinks } from "../../../db/schema/entityLinks.js";
-import { arcs, milestones } from "../../../db/schema/arcs.js";
+import { arcs } from "../../../db/schema/arcs.js";
 import { locations } from "../../../db/schema/locations.js";
 import { items } from "../../../db/schema/items.js";
 import { lore } from "../../../db/schema/lore.js";
@@ -171,11 +171,6 @@ async function requireArcMilestoneEndpoints(values: EntityLinkInsert) {
       checks.push(db.select({ id: arcs.id }).from(arcs).where(and(
         eq(arcs.campaignId, values.campaignId), eq(arcs.id, endpoint.id)
       )).limit(1).then((rows) => { if (!rows.length) throw new Error("Arc is unavailable in this campaign"); }));
-    }
-    if (endpoint.type === "Milestone") {
-      checks.push(db.select({ id: milestones.id }).from(milestones).where(and(
-        eq(milestones.campaignId, values.campaignId), eq(milestones.id, endpoint.id)
-      )).limit(1).then((rows) => { if (!rows.length) throw new Error("Milestone is unavailable in this campaign"); }));
     }
     const table = endpoint.type === "Session" ? sessions
       : endpoint.type === "NPC" ? npcs
@@ -412,6 +407,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       const submitted = rawLink as Record<string, unknown>;
       const aType = (submitted.entityA as Record<string, unknown> | undefined)?.type;
       const bType = (submitted.entityB as Record<string, unknown> | undefined)?.type;
+      if (aType === "Milestone" || bType === "Milestone") {
+        return res.status(400).json({ ok: false, error: "Milestones cannot have generic entity relationships" });
+      }
       if ((aType === "Quest" || bType === "Quest") && !["GM", "Player"].includes(String(submitted.visibility))) {
         return res.status(400).json({ ok: false, error: "Invalid Quest relationship visibility" });
       }

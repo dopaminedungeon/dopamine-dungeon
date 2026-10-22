@@ -192,6 +192,12 @@ test("GM creates an Arc and milestone, links a Session, and Player view hides a 
   await expect(page.getByText("The party earns the river oath.")).toBeVisible();
   await page.reload();
   await expect(page.getByText("Level 4 → Level 5")).toBeVisible();
+  await page.goto("/arcs");
+  await page.getByRole("button", { name: "Milestone progression", exact: true }).click();
+  const milestoneCard = page.getByRole("button", { name: /Cross the river/ });
+  await expect(milestoneCard).toContainText("Level progression: Level 4 → Level 5");
+  await milestoneCard.click();
+  await expect(page).toHaveURL(/\/milestones\//);
   await page.goto(`/arcs/${arcId}`);
   expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(390);
   await page.setViewportSize({ width: 1280, height: 900 });
@@ -209,9 +215,18 @@ test("GM creates an Arc and milestone, links a Session, and Player view hides a 
   expect(links).toHaveLength(2);
   expect(links.some((link) => link.entityA.type === "Arc" && link.entityA.id === arcId || link.entityB.type === "Arc" && link.entityB.id === arcId)).toBe(true);
 
+  const legacyMilestoneLink = { id: "preserved-legacy-milestone-link", entityA: { type: "Session", id: "session-one" }, entityB: { type: "Milestone", id: "hidden-child" }, label: "reached", visibility: "GM" };
+  links.push(legacyMilestoneLink);
   await page.goto("/sessions/session-one");
   await expect(page.getByRole("heading", { name: "Arcs advanced" })).toBeVisible();
   await expect(page.getByText("The River Oath")).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Milestones reached" })).toHaveCount(0);
+  await expect(page.getByText("Secret milestone")).toHaveCount(0);
+  await page.getByRole("button", { name: "Edit", exact: true }).click();
+  await expect(page.getByRole("heading", { name: "Milestones reached" })).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "Add Milestone", exact: true })).toHaveCount(0);
+  await page.getByRole("button", { name: "Cancel", exact: true }).click();
+  expect(links.some((link) => link.id === legacyMilestoneLink.id)).toBe(true);
 
   await page.goto("/arcs/hidden-arc");
   await expect(page.getByRole("heading", { name: "Secret plot" })).toBeVisible();
