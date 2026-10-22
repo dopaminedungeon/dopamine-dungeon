@@ -58,6 +58,7 @@ const mocks = vi.hoisted(() => {
             state.conflictConfigs.push(config);
             return { returning };
           }),
+          onConflictDoNothing: vi.fn(() => ({ returning })),
           returning,
         };
       }),
@@ -705,6 +706,86 @@ test("API integration: Arc-to-Session links require both endpoints in the resolv
   } }, "gm"), foreign.res);
   assert.equal(foreign.result.status, 401);
   assert.equal(mocks.db.insert.mock.calls.length, 1);
+});
+
+test.each([
+  ["Arc endpoint", { type: "Arc", id: "arc-main" }, { type: "Quest", id: "quest-one" }],
+  ["Quest endpoint", { type: "Quest", id: "quest-one" }, { type: "Arc", id: "arc-main" }],
+])("API integration: duplicate Arc-Quest saves from the %s reuse the canonical relationship", async (_label, entityA, entityB) => {
+  const existing = linkRow({ id: "persisted-arc-quest", entityAType: "Arc", entityAId: "arc-main",
+    entityBType: "Quest", entityBId: "quest-one", label: "advances", visibility: "GM" });
+  // Quest target, Arc target, Arc endpoint check, then canonical relationship match.
+  mocks.state.selectRows.push([{ id: "quest-one" }], [{ id: "arc-main" }], [{ id: "arc-main" }], [existing]);
+  mocks.state.writeRows.push([{ ...existing, visibility: "Player" }]);
+  const { res, result } = response();
+  await entityLinksHandler(request("PUT", undefined, { link: {
+    id: "new-client-link-id", entityA, entityB, label: "advances", visibility: "Player",
+  } }, "gm"), res);
+  assert.equal(result.status, 200);
+  assert.equal(mocks.db.insert.mock.calls.length, 0);
+  assert.equal((mocks.state.updateValues[0] as any).id, existing.id);
+  assert.equal((result.body as any).link.id, existing.id);
+  assert.deepEqual((result.body as any).link.entityA, { type: "Arc", id: "arc-main" });
+});
+
+test("API integration: concurrent Arc-Quest endpoint saves reuse the row committed between lookup and insert", async () => {
+  const raced = linkRow({ rowId: "race-row", id: "race-persisted", entityAType: "Arc", entityAId: "arc-main",
+    entityBType: "Quest", entityBId: "quest-one", label: "advances", visibility: "GM" });
+  // Endpoint validation, initial no-match lookup, then the post-conflict lookup.
+  mocks.state.selectRows.push([{ id: "quest-one" }], [{ id: "arc-main" }], [{ id: "arc-main" }], [], [raced]);
+  mocks.state.writeRows.push([], [{ ...raced, visibility: "Player" }]);
+  const { res, result } = response();
+  await entityLinksHandler(request("PUT", undefined, { link: {
+    id: "stale-endpoint-id", entityA: { type: "Quest", id: "quest-one" }, entityB: { type: "Arc", id: "arc-main" },
+    label: "advances", visibility: "Player",
+  } }, "gm"), res);
+  assert.equal(result.status, 200);
+  assert.equal(mocks.db.insert.mock.calls.length, 1);
+  assert.equal((mocks.state.updateValues[0] as any).id, raced.id);
+  assert.equal((result.body as any).link.id, raced.id);
+});
+
+test("API integration: Arc-Quest links preserve a distinct allowed label and deny Player writes in either direction", async () => {
+  const existing = linkRow({ id: "arc-quest-advances", entityAType: "Arc", entityAId: "arc-main",
+    entityBType: "Quest", entityBId: "quest-one", label: "advances", visibility: "GM" });
+  mocks.state.selectRows.push([{ id: "quest-one" }], [{ id: "arc-main" }], [{ id: "arc-main" }], []);
+  const belongsTo = linkRow({ id: "arc-quest-belongs", entityAType: "Arc", entityAId: "arc-main",
+    entityBType: "Quest", entityBId: "quest-one", label: "belongs_to", visibility: "GM" });
+  mocks.state.writeRows.push([belongsTo]);
+  const created = response();
+  await entityLinksHandler(request("PUT", undefined, { link: {
+    entityA: { type: "Quest", id: "quest-one" }, entityB: { type: "Arc", id: "arc-main" },
+    label: "belongs_to", visibility: "GM",
+  } }, "gm"), created.res);
+  assert.equal(created.result.status, 200);
+  assert.equal(mocks.db.insert.mock.calls.length, 1);
+  assert.equal((created.result.body as any).link.label, "belongs_to");
+  assert.equal(existing.label, "advances");
+
+  for (const [entityA, entityB] of [
+    [{ type: "Arc", id: "arc-main" }, { type: "Quest", id: "quest-one" }],
+    [{ type: "Quest", id: "quest-one" }, { type: "Arc", id: "arc-main" }],
+  ]) {
+    const denied = response();
+    await entityLinksHandler(request("PUT", undefined, { link: { entityA, entityB, label: "advances", visibility: "GM" } }, "player"), denied.res);
+    assert.equal(denied.result.status, 401);
+  }
+  assert.equal(mocks.db.insert.mock.calls.length, 1);
+});
+
+test("API integration: a label change colliding with a distinct persisted relationship returns a clear conflict", async () => {
+  const old = linkRow({ rowId: "old-row", id: "old-link", entityAType: "Arc", entityAId: "arc-main", entityBType: "Quest", entityBId: "quest-one", label: "belongs_to" });
+  const target = linkRow({ rowId: "target-row", id: "target-link", entityAType: "Arc", entityAId: "arc-main", entityBType: "Quest", entityBId: "quest-one", label: "advances" });
+  mocks.state.selectRows.push([{ id: "quest-one" }], [{ id: "arc-main" }], [{ id: "arc-main" }], [old, target]);
+  const { res, result } = response();
+  await entityLinksHandler(request("PUT", undefined, { link: {
+    id: old.id, entityA: { type: "Quest", id: "quest-one" }, entityB: { type: "Arc", id: "arc-main" },
+    label: "advances", visibility: "Player",
+  } }, "gm"), res);
+  assert.equal(result.status, 409);
+  assert.match((result.body as any).error, /already exists.*Reload.*keep or remove/i);
+  assert.equal(mocks.db.update.mock.calls.length, 0);
+  assert.equal(mocks.db.delete.mock.calls.length, 0);
 });
 
 test("API integration: Player relationship reads omit Arc and Milestone endpoint identities", async () => {

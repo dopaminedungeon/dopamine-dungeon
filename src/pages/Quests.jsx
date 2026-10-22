@@ -8,7 +8,7 @@ import { MarkdownContent } from "../components/MarkdownContent.jsx";
 import ProgressTrack from "../components/ProgressTrack.jsx";
 import { QUEST_SECTIONS, QUEST_STATUSES, QUEST_TYPES } from "../domain/quests/quest.types";
 import { questsRepo } from "../data/quests/quests.repo";
-import { addLink, loadLinks, removeLink, updateLink } from "../data/links/links.repo";
+import { loadLinks, saveLinkDraft } from "../data/links/links.repo";
 import { createLink } from "../domain/links/link.service";
 
 const ICONS = { fetch: PackageSearch, delivery: Flag, combat: Swords, investigation: Search,
@@ -299,18 +299,7 @@ export default function Quests() {
   }
 
   async function applyDraftLinks(campaignId, questId, desired, original) {
-    const current = (await loadLinks(campaignId)).filter((link) =>
-      ((link.entityA.type === "Quest" && link.entityA.id === questId) || (link.entityB.type === "Quest" && link.entityB.id === questId)) && !managedLabels.has(link.label));
-    const wanted = desired;
-    const desiredIds = new Set(wanted.map((link) => link.id));
-    const originalIds = new Set(original.filter((link) => !managedLabels.has(link.label)).map((link) => link.id));
-    const currentById = new Map(current.map((link) => [link.id, link]));
-    for (const link of current) if (originalIds.has(link.id) && !desiredIds.has(link.id)) await removeLink(link.id, campaignId);
-    for (const link of wanted) {
-      const prior = currentById.get(link.id);
-      if (!prior) await addLink(link, campaignId);
-      else if (prior.label !== link.label || prior.visibility !== link.visibility) await updateLink(link, campaignId);
-    }
+    return saveLinkDraft(campaignId, "Quest", questId, desired, original, (link) => managedLabels.has(link.label));
   }
 
   async function save() {

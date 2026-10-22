@@ -79,6 +79,11 @@ function isQuestLoreLink(entityAType: string, entityBType: string) {
     [entityAType, entityBType].every((type) => type === "Quest" || type === "Lore");
 }
 
+function isArcQuestLink(entityAType: string, entityBType: string) {
+  return new Set([entityAType, entityBType]).size === 2 &&
+    [entityAType, entityBType].every((type) => type === "Arc" || type === "Quest");
+}
+
 function isQuestPrimaryLabel(label: string) {
   return ["started", "completed", "failed", "given_by", "leads_to"].includes(label);
 }
@@ -142,7 +147,7 @@ async function requireQuestEndpoints(values: EntityLinkInsert) {
   const questId = values.entityAType === "Quest" ? values.entityAId : values.entityBId;
   const otherType = values.entityAType === "Quest" ? values.entityBType : values.entityAType;
   const otherId = values.entityAType === "Quest" ? values.entityBId : values.entityAId;
-  const table = { Session: sessions, NPC: npcs, Map: locations, Item: items, Lore: lore, PC: characters }[otherType];
+  const table = { Session: sessions, NPC: npcs, Map: locations, Item: items, Lore: lore, PC: characters, Arc: arcs }[otherType];
   if (!table) throw new Error("Quest relationship target is not available");
   const [questRows, targetRows] = await Promise.all([
     db.select({ id: quests.id }).from(quests).where(and(eq(quests.campaignId, values.campaignId), eq(quests.id, questId))).limit(1),
@@ -277,13 +282,30 @@ function toLinkValues(
   };
 }
 
+class LinkConflictError extends Error {}
+
+function sameCanonicalRelationship(row: EntityLinkRow, values: EntityLinkInsert) {
+  return row.campaignId === values.campaignId &&
+    row.entityAType === values.entityAType && row.entityAId === values.entityAId &&
+    row.entityBType === values.entityBType && row.entityBId === values.entityBId &&
+    row.label === values.label;
+}
+
 async function findExistingLink(values: EntityLinkInsert) {
-  const rows = await db
+  const arcQuestLink = isArcQuestLink(values.entityAType, values.entityBType);
+  // Arc↔Quest drafts can carry different client-generated IDs from either
+  // endpoint. Reconcile those by campaign, endpoints, and label, allowing a
+  // visibility edit to reuse the canonical row. Other pairs keep their prior
+  // matching rules and label semantics.
+  const selection = db
     .select()
     .from(entityLinks)
     .where(
       or(
-        and(eq(entityLinks.campaignId, values.campaignId), eq(entityLinks.id, values.id)),
+        and(
+          eq(entityLinks.campaignId, values.campaignId),
+          eq(entityLinks.id, values.id)
+        ),
         and(
           eq(entityLinks.campaignId, values.campaignId),
           eq(entityLinks.entityAType, values.entityAType),
@@ -291,9 +313,9 @@ async function findExistingLink(values: EntityLinkInsert) {
           eq(entityLinks.entityBType, values.entityBType),
           eq(entityLinks.entityBId, values.entityBId),
           eq(entityLinks.label, values.label),
-          eq(entityLinks.visibility, values.visibility)
+          ...(arcQuestLink ? [] : [eq(entityLinks.visibility, values.visibility)])
         ),
-        (isLocationNpcLink(values.entityAType, values.entityBType) || isQuestLoreLink(values.entityAType, values.entityBType))
+        !arcQuestLink && (isLocationNpcLink(values.entityAType, values.entityBType) || isQuestLoreLink(values.entityAType, values.entityBType))
           ? and(
               eq(entityLinks.campaignId, values.campaignId),
               or(
@@ -305,10 +327,27 @@ async function findExistingLink(values: EntityLinkInsert) {
             )
           : undefined
       )
-    )
-    .limit(1);
+    );
+  const rows = arcQuestLink ? await selection : await selection.limit(1);
 
-  return rows[0] ?? null;
+  if (!arcQuestLink) return rows[0] ?? null;
+
+  const byId = rows.find((row) => row.id === values.id) as EntityLinkRow | undefined;
+  const sameRelationship = rows.filter((row) => sameCanonicalRelationship(row as EntityLinkRow, values)) as EntityLinkRow[];
+  const matchingVisibility = sameRelationship.find((row) => row.visibility === values.visibility);
+  const byRelationship = matchingVisibility || sameRelationship[0];
+
+  if (byId && byRelationship && byId.rowId !== byRelationship.rowId) {
+    if (byId.entityAType !== values.entityAType || byId.entityAId !== values.entityAId ||
+        byId.entityBType !== values.entityBType || byId.entityBId !== values.entityBId) {
+      throw new LinkConflictError("This link ID belongs to a different relationship. Reload the profile before saving.");
+    }
+    // A label change collided with a relationship already saved elsewhere.
+    // Keep both labels meaningful by requiring the caller to resolve the draft.
+    throw new LinkConflictError("A relationship with this label already exists for these entities. Reload the profile and keep or remove the existing link before retrying.");
+  }
+
+  return byRelationship || byId || null;
 }
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
@@ -425,7 +464,30 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           .where(eq(entityLinks.rowId, existingLink.rowId))
           .returning();
       } else {
-        returnedRows = await db.insert(entityLinks).values(values).returning();
+        returnedRows = await db.insert(entityLinks).values(values).onConflictDoNothing().returning();
+        if (!returnedRows.length) {
+          // A concurrent endpoint save may have committed after the preflight
+          // lookup. Re-read the canonical relationship and reuse its record.
+          const racedLink = await findExistingLink(values);
+          if (!racedLink) {
+            throw new LinkConflictError("This relationship changed while you were saving. Reload the profile and retry.");
+          }
+          if ((values.entityAType === "Quest" || values.entityBType === "Quest") && isQuestPrimaryLabel(racedLink.label)) {
+            return res.status(400).json({ ok: false, error: questPrimaryEditError(racedLink.label) });
+          }
+          returnedRows = await db.update(entityLinks).set({
+            id: racedLink.id,
+            entityAType: values.entityAType,
+            entityAId: values.entityAId,
+            entityBType: values.entityBType,
+            entityBId: values.entityBId,
+            label: values.label,
+            visibility: values.visibility,
+            createdInSession: values.createdInSession,
+            note: values.note,
+            updatedAt: values.updatedAt,
+          }).where(eq(entityLinks.rowId, racedLink.rowId)).returning();
+        }
       }
 
       return res.status(200).json({
@@ -473,7 +535,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     return res.status(200).json({ ok: true });
   } catch (error) {
-    return res.status(401).json({
+    return res.status(error instanceof LinkConflictError ? 409 : 401).json({
       ok: false,
       error: error instanceof Error ? error.message : "Unauthorized",
     });

@@ -8,10 +8,10 @@ test("GM creates an Arc and milestone, links a Session, and Player view hides a 
     { id: "hidden-arc", type: "main_story", name: "Secret plot", summary: "Hidden story", status: "active", progress: 45, visibility: "gm-only" },
     { id: "character-arc", type: "character_arc", name: "Kriaxin’s Descent", summary: "Corruption and consequences.", status: "progressing", progress: 30, visibility: "gm-only" },
     { id: "supporting-arc", type: "supporting_arc", name: "The Broken Crown", summary: "A fractured kingdom.", status: "waiting", progress: 70, visibility: "gm-only" },
-    { id: "milestone-arc", type: "milestone_progression", name: "The Great Sundering", summary: "A turning point.", status: "resolved", progress: 100, visibility: "gm-only" },
   ];
   let milestones: Array<Record<string, any>> = [
     { id: "hidden-child", arcId: "hidden-arc", title: "Secret milestone", description: "Do not disclose", progress: 50, conditionsForLevelUp: "", intendedLevelProgression: "", status: "active", visibility: "public", position: 0 },
+    { id: "great-sundering", arcId: "character-arc", title: "The Great Sundering", description: "A turning point.", progress: 100, conditionsForLevelUp: "The party reaches the nexus.", intendedLevelProgression: "Level 8", status: "resolved", visibility: "gm-only", position: 1 },
   ];
   let links: Array<Record<string, any>> = [];
   const linkWrites: Array<Record<string, any>> = [];
@@ -106,7 +106,7 @@ test("GM creates an Arc and milestone, links a Session, and Player view hides a 
   failArcListRequests = 2;
   expectedConsoleErrors.push("503 (Service Unavailable)");
   await page.goto("/arcs");
-  await expect(page.getByRole("alert")).toContainText("Unable to load Arcs");
+  await expect(page.getByRole("alert")).toContainText("Arc list unavailable");
   await page.getByRole("button", { name: "Retry" }).click();
   await expect(page.getByRole("heading", { name: "Arcs", exact: true })).toBeVisible();
   await page.setViewportSize({ width: 390, height: 844 });
@@ -117,9 +117,9 @@ test("GM creates an Arc and milestone, links a Session, and Player view hides a 
   for (const status of ["active", "progressing", "waiting", "resolved"]) await expect(page.getByRole("heading", { name: status, exact: true })).toBeVisible();
   for (const [label, title] of [["Character arc", "Kriaxin’s Descent"], ["Main story", "Secret plot"], ["Supporting arc", "The Broken Crown"], ["Milestone progression", "The Great Sundering"]]) {
     await page.getByRole("button", { name: label, exact: true }).click();
-    await expect(page.getByRole("button", { name: new RegExp(title) })).toBeVisible();
+    await expect(page.getByRole("heading", { name: title, exact: true })).toBeVisible();
     const otherTitles = ["Kriaxin’s Descent", "Secret plot", "The Broken Crown", "The Great Sundering"].filter((candidate) => candidate !== title);
-    for (const otherTitle of otherTitles) await expect(page.getByRole("button", { name: new RegExp(otherTitle) })).toHaveCount(0);
+    for (const otherTitle of otherTitles) await expect(page.getByRole("heading", { name: otherTitle, exact: true })).toHaveCount(0);
   }
   await page.getByRole("button", { name: "All", exact: true }).click();
   await page.getByRole("button", { name: "Character arc", exact: true }).click();
@@ -135,7 +135,10 @@ test("GM creates an Arc and milestone, links a Session, and Player view hides a 
   await page.getByRole("button", { name: "Add new arc" }).click();
   await expect(page.getByRole("dialog", { name: "Add new arc" })).toBeVisible();
   expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(390);
-  await page.getByRole("button", { name: "Close" }).click();
+  await page.getByRole("dialog").getByLabel("Type").selectOption("character_arc");
+  await expect(page.getByRole("dialog").getByLabel("Assigned PC")).toBeVisible();
+  await page.getByRole("dialog").getByLabel("Type").selectOption("main_story");
+  await page.getByRole("button", { name: "Close", exact: true }).click();
   await page.setViewportSize({ width: 1280, height: 900 });
   await page.getByRole("button", { name: "Add new arc" }).click();
   await expect(page.getByRole("dialog", { name: "Add new arc" })).toBeVisible();
@@ -152,18 +155,22 @@ test("GM creates an Arc and milestone, links a Session, and Player view hides a 
   await page.getByRole("button", { name: "Cancel", exact: true }).first().click();
   await expect(page.getByRole("heading", { name: "The River Oath" })).toBeVisible();
 
+  await page.goto("/arcs");
   await page.getByRole("button", { name: "Add milestone" }).click();
-  await page.getByLabel("Title", { exact: true }).fill("Cross the river");
+  await expect(page.getByRole("dialog", { name: "Add milestone progression" })).toBeVisible();
+  await page.getByLabel("Milestone title").fill("Cross the river");
+  await page.getByLabel("Parent Arc").selectOption(arcId);
   await page.getByLabel("Details", { exact: true }).fill("The group earns passage.");
-  await page.getByRole("button", { name: "Save milestone" }).click();
-  await expect(page.getByRole("link", { name: "Cross the river" })).toBeVisible();
-  const milestoneCard = page.locator("article").filter({ has: page.getByRole("link", { name: "Cross the river" }) });
-  await milestoneCard.getByRole("button", { name: "Edit" }).click();
-  await page.locator("textarea").last().fill("The party earns passage and reaches the far bank.");
-  await page.getByRole("button", { name: "Save milestone" }).click();
-  await expect(page.getByText("The party earns passage and reaches the far bank.")).toBeVisible();
-  await page.getByRole("link", { name: "Cross the river" }).click();
+  await page.getByLabel("Conditions for level up").fill("The party earns safe passage.");
+  await page.getByLabel("Intended level progression").fill("Level 4 → Level 5");
+  await page.getByRole("button", { name: "Create milestone" }).click();
+  await expect(page.getByRole("heading", { name: "Cross the river" })).toBeVisible();
   await expect(page.getByRole("heading", { name: "Conditions for level up" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Connections" })).toHaveCount(0);
+  await page.getByRole("button", { name: "Edit", exact: true }).click();
+  await page.getByRole("textbox", { name: "Details", exact: true }).fill("The party earns passage and reaches the far bank.");
+  await page.getByRole("button", { name: "Save changes" }).first().click();
+  await expect(page.getByText("The party earns passage and reaches the far bank.")).toBeVisible();
   await page.setViewportSize({ width: 390, height: 844 });
   expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(390);
   await page.getByRole("button", { name: "Edit", exact: true }).click();
@@ -187,6 +194,7 @@ test("GM creates an Arc and milestone, links a Session, and Player view hides a 
   await arcSessions.selectOption("session-one");
   await arcSessions.locator("xpath=../..").getByRole("button", { name: "Add", exact: true }).click();
   await page.getByRole("button", { name: "Save changes" }).first().click();
+  await expect(page.getByRole("button", { name: "Edit Arc" })).toBeVisible();
   const arcConnections = page.getByRole("heading", { name: "Connections" }).locator("..");
   await expect(arcConnections.getByRole("link", { name: "The Crossing" })).toBeVisible();
   expect(linkWrites.some((link) => link.entityA.type === "Arc" && link.entityB.type === "Session" || link.entityB.type === "Arc" && link.entityA.type === "Session")).toBe(true);
@@ -224,7 +232,7 @@ test("GM creates an Arc and milestone, links a Session, and Player view hides a 
   await page.setViewportSize({ width: 1280, height: 900 });
   await page.getByRole("button", { name: "GM", exact: true }).click();
   await page.goto("/arcs");
-  await expect(page.getByRole("button", { name: /Secret plot/ })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Secret plot", exact: true })).toBeVisible();
   await page.goto(`/arcs/${arcId}`);
   page.once("dialog", (dialog) => dialog.accept());
   await page.getByRole("button", { name: "Delete Arc" }).click();
