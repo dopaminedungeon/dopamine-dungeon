@@ -408,7 +408,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       const aType = (submitted.entityA as Record<string, unknown> | undefined)?.type;
       const bType = (submitted.entityB as Record<string, unknown> | undefined)?.type;
       if (aType === "Milestone" || bType === "Milestone") {
-        return res.status(400).json({ ok: false, error: "Milestones cannot have generic entity relationships" });
+        return res.status(400).json({ ok: false, error: "Milestones do not support entity links; manage their content from the Milestone profile" });
       }
       if ((aType === "Quest" || bType === "Quest") && !["GM", "Player"].includes(String(submitted.visibility))) {
         return res.status(400).json({ ok: false, error: "Invalid Quest relationship visibility" });

@@ -101,9 +101,9 @@ membership predicates, and scoped queries; do not infer that every route uses
 the same workspace resolver or an identical predicate.
 
 Arc/Milestone APIs scope every query to the resolved campaign and membership.
-Player projection returns explicitly public Arcs and only public Milestones
-whose parent Arc is public. Player-visible relationship reads filter hidden
-Arc/Milestone endpoints before returning link IDs or endpoint identifiers.
+The feature is GM-only: Arc and Milestone reads and writes require GM mode, and
+Player relationship reads exclude Arc and Milestone endpoints before returning
+link IDs or endpoint identifiers.
 
 Firestore has no active application-state, transactional-mail, or auth-email
 limiter runtime path. Historical migration/reconciliation scripts and retained

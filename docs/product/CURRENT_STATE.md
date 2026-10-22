@@ -25,8 +25,8 @@ configuration.
 - The active campaign product includes PCs, Bag of Holding, Items, Sessions,
   NPCs, Locations, Lore, Quests, Arcs, Milestones, and typed entity links.
   Quests have campaign-scoped persistence and reciprocal relationships. Arcs
-  and Milestones use authenticated APIs; Player reads require explicit public
-  visibility, and a Milestone is visible only when its parent Arc is public.
+  and Milestones are GM-only: navigation, direct routes, APIs, and reciprocal
+  relationship data are unavailable in Player mode.
   The standalone Relationships and Conditions pages remain retired.
 - Issue #360 persists explicit filters per user/context. Issue #340 resolves
   canonical NPC–Location links from both profiles. Issue #268 adds measured,

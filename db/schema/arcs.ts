@@ -39,9 +39,9 @@ export const milestones = pgTable(
   "milestones",
   {
     rowId: uuid("row_id").defaultRandom().primaryKey(),
-    campaignId: uuid("campaign_id").notNull(),
+    campaignId: uuid("campaign_id").notNull().references(() => campaigns.id),
     id: text("id").notNull(),
-    // Optional for standalone Milestones; existing parent associations remain intact.
+    // Optional for standalone Milestones; campaign ownership remains required.
     arcId: text("arc_id"),
     title: text("title").default("").notNull(),
     description: text("description").default("").notNull(),

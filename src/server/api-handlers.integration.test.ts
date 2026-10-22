@@ -752,7 +752,7 @@ test.each([
         visibility: "GM",
       } }, "gm"), res);
       assert.equal(result.status, 400, `${operation} (${reversed ? "reverse" : "forward"}) must be rejected`);
-      assert.match((result.body as any).error, /Milestones cannot have generic entity relationships/);
+      assert.match((result.body as any).error, /Milestones do not support entity links; manage their content from the Milestone profile/);
       assert.equal(mocks.db.insert.mock.calls.length, 0);
       assert.equal(mocks.db.update.mock.calls.length, 0);
       assert.equal(mocks.db.delete.mock.calls.length, 0);
