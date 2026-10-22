@@ -58,16 +58,25 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     if (!raw || typeof raw !== "object") return res.status(400).json({ ok: false, error: "Milestone payload is required" });
     const milestone = raw as Record<string, unknown>;
     const id = string(milestone.id);
-    const arcId = string(milestone.arcId);
-    if (!id || !arcId) return res.status(400).json({ ok: false, error: "Milestone id and Arc are required" });
+    const hasArcId = Object.prototype.hasOwnProperty.call(milestone, "arcId");
+    let arcId: string | null = hasArcId ? string(milestone.arcId) || null : null;
+    if (!id) return res.status(400).json({ ok: false, error: "Milestone id is required" });
     const status = string(milestone.status, "active");
     if (!MILESTONE_STATUSES.has(status)) return res.status(400).json({ ok: false, error: "Invalid milestone status" });
     const progress = Number(milestone.progress ?? 0);
     if (!Number.isInteger(progress) || progress < 0 || progress > 100) return res.status(400).json({ ok: false, error: "Milestone progress must be a whole number from 0 to 100" });
-    const [parent] = await db.select({ id: arcs.id }).from(arcs).where(and(
-      eq(arcs.campaignId, campaign.id), eq(arcs.id, arcId)
-    )).limit(1);
-    if (!parent) return res.status(400).json({ ok: false, error: "Arc is unavailable in this campaign" });
+    if (!hasArcId) {
+      const [existing] = await db.select({ arcId: milestones.arcId }).from(milestones).where(and(
+        eq(milestones.campaignId, campaign.id), eq(milestones.id, id)
+      )).limit(1);
+      arcId = existing?.arcId ?? null;
+    }
+    if (arcId) {
+      const [parent] = await db.select({ id: arcs.id }).from(arcs).where(and(
+        eq(arcs.campaignId, campaign.id), eq(arcs.id, arcId)
+      )).limit(1);
+      if (!parent) return res.status(400).json({ ok: false, error: "Arc is unavailable in this campaign" });
+    }
 
     const [saved] = await db.insert(milestones).values({
       campaignId: campaign.id,

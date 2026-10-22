@@ -41,7 +41,8 @@ export const milestones = pgTable(
     rowId: uuid("row_id").defaultRandom().primaryKey(),
     campaignId: uuid("campaign_id").notNull(),
     id: text("id").notNull(),
-    arcId: text("arc_id").notNull(),
+    // Optional for standalone Milestones; existing parent associations remain intact.
+    arcId: text("arc_id"),
     title: text("title").default("").notNull(),
     description: text("description").default("").notNull(),
     progress: integer("progress").default(0).notNull(),

@@ -66,7 +66,8 @@ test("GM creates an Arc and milestone, links a Session, and Player view hides a 
         return route.fulfill({ json: { ok: true, milestone } });
       }
       const arcId = url.searchParams.get("arcId");
-      return route.fulfill({ json: { ok: true, milestones: milestones.filter((item) => !arcId || item.arcId === arcId) } });
+      const milestoneId = url.searchParams.get("milestoneId");
+      return route.fulfill({ json: { ok: true, milestones: milestones.filter((item) => (!arcId || item.arcId === arcId) && (!milestoneId || item.id === milestoneId)) } });
     }
     if (resource === "sessions") return route.fulfill({ json: { ok: true, sessions: [session] } });
     if (resource === "quests") return route.fulfill({ json: { ok: true, quests: [], references: { sessions: [], npcs: [], items: [], locations: [], lore: [] } } });
@@ -156,18 +157,23 @@ test("GM creates an Arc and milestone, links a Session, and Player view hides a 
   await expect(page.getByRole("heading", { name: "The River Oath" })).toBeVisible();
 
   await page.goto("/arcs");
+  await page.setViewportSize({ width: 390, height: 844 });
   await page.getByRole("button", { name: "Add milestone" }).click();
   await expect(page.getByRole("dialog", { name: "Add milestone progression" })).toBeVisible();
+  await expect(page.getByLabel("Parent Arc")).toHaveCount(0);
+  expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(390);
   await page.getByLabel("Milestone title").fill("Cross the river");
-  await page.getByLabel("Parent Arc").selectOption(arcId);
   await page.getByLabel("Details", { exact: true }).fill("The group earns passage.");
   await page.getByLabel("Conditions for level up").fill("The party earns safe passage.");
-  await page.getByLabel("Intended level progression").fill("Level 4 → Level 5");
+  await page.getByLabel("Intended level progression").fill("Level 4 -> Level 5; Level 5 <- Level 4");
   await page.getByRole("button", { name: "Create milestone" }).click();
   await expect(page.getByRole("heading", { name: "Cross the river" })).toBeVisible();
+  await expect(page.getByText("Level 4 → Level 5; Level 5 ← Level 4")).toBeVisible();
+  expect(new URL(page.url()).pathname).toMatch(/^\/milestones\/[^/]+$/);
   await expect(page.getByRole("heading", { name: "Conditions for level up" })).toBeVisible();
   await expect(page.getByRole("heading", { name: "Connections" })).toHaveCount(0);
   await page.getByRole("button", { name: "Edit", exact: true }).click();
+  await expect(page.getByLabel("Intended level progression")).toHaveValue("Level 4 -> Level 5; Level 5 <- Level 4");
   await page.getByRole("textbox", { name: "Details", exact: true }).fill("The party earns passage and reaches the far bank.");
   await page.getByRole("button", { name: "Save changes" }).first().click();
   await expect(page.getByText("The party earns passage and reaches the far bank.")).toBeVisible();

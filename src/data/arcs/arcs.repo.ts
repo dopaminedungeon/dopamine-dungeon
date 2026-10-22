@@ -21,7 +21,7 @@ export type Arc = {
 };
 export type Milestone = {
   id: string;
-  arcId: string;
+  arcId: string | null;
   title: string;
   description: string;
   progress: number;
@@ -62,7 +62,7 @@ function normalizeMilestone(value: any): Milestone {
   return {
     ...value,
     id: String(value?.id || ""),
-    arcId: String(value?.arcId || ""),
+    arcId: value?.arcId ? String(value.arcId) : null,
     title: String(value?.title || ""),
     description: String(value?.description || ""),
     progress: Math.max(0, Math.min(100, Number(value?.progress) || 0)),
@@ -95,6 +95,10 @@ export const arcsRepo = {
 };
 
 export const milestonesRepo = {
+  async getById(campaignId: string, id: string) {
+    const response = await apiFetch<{ milestones: unknown[] }>(endpoint("milestones", campaignId, id));
+    return response.milestones?.[0] ? normalizeMilestone(response.milestones[0]) : null;
+  },
   async getByArc(campaignId: string, arcId: string) {
     const params = new URLSearchParams({ resource: "milestones", campaignId, arcId });
     const response = await apiFetch<{ milestones: unknown[] }>(`/api/worldbuilding?${params.toString()}`);

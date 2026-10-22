@@ -567,6 +567,15 @@ test("API integration: Arc and Milestone reads are GM-only and campaign-scoped",
   assert.match(milestoneQuery.sql, /"arc_id" = \$2/);
   assert.doesNotMatch(milestoneQuery.sql, /"visibility" =/);
   assert.deepEqual(milestoneQuery.params, [campaign.id, "visible-arc"]);
+
+  mocks.state.selectRows.push([]);
+  const milestoneById = response();
+  await milestonesHandler(request("GET", { campaignId: campaign.slug, milestoneId: "step-one" }, undefined, "gm"), milestoneById.res);
+  assert.equal(milestoneById.result.status, 200);
+  const byIdQuery = sqlDatabase.select().from(milestones).where(mocks.state.whereClauses[2] as never).toSQL();
+  assert.match(byIdQuery.sql, /"campaign_id" = \$1/);
+  assert.match(byIdQuery.sql, /"id" = \$2/);
+  assert.deepEqual(byIdQuery.params, [campaign.id, "step-one"]);
 });
 
 test("API integration: Player mode cannot read Arc or Milestone data", async () => {
@@ -623,21 +632,39 @@ test("API integration: GM Arc create and edit use one campaign-scoped upsert", a
   assert.equal(mocks.requireCampaignGm.mock.calls.length, 2);
 });
 
-test("API integration: Milestones require a parent Arc in the same campaign and are GM-written", async () => {
-  const milestone = { campaignId: campaign.id, id: "arrival", arcId: "arc-main", title: "Reach the city", description: "", progress: 0, conditionsForLevelUp: "", intendedLevelProgression: "", status: "active", visibility: "gm-only", position: 0 };
-  mocks.state.selectRows.push([{ id: "arc-main" }], []);
-  mocks.state.writeRows.push([milestone]);
+test("API integration: Milestones can be standalone and optional parents remain campaign-scoped", async () => {
+  const standalone = { campaignId: campaign.id, id: "arrival", arcId: null, title: "Reach the city", description: "", progress: 0, conditionsForLevelUp: "", intendedLevelProgression: "", status: "active", visibility: "gm-only", position: 0 };
+  mocks.state.writeRows.push([standalone]);
   const created = response();
-  await milestonesHandler(request("PUT", undefined, { milestone }, "gm"), created.res);
+  await milestonesHandler(request("PUT", undefined, { milestone: standalone }, "gm"), created.res);
   assert.equal(created.result.status, 200);
-  assert.deepEqual((created.result.body as any).milestone, milestone);
+  assert.deepEqual((created.result.body as any).milestone, standalone);
   assert.equal((mocks.state.insertValues[0] as any).campaignId, campaign.id);
-  assert.equal((mocks.state.insertValues[0] as any).arcId, "arc-main");
+  assert.equal((mocks.state.insertValues[0] as any).arcId, null);
+  assert.equal(mocks.db.select.mock.calls.length, 0);
 
+  const linked = { ...standalone, id: "linked-step", arcId: "arc-main" };
+  mocks.state.selectRows.push([{ id: "arc-main" }]);
+  mocks.state.writeRows.push([linked]);
+  const linkedResponse = response();
+  await milestonesHandler(request("PUT", undefined, { milestone: linked }, "gm"), linkedResponse.res);
+  assert.equal(linkedResponse.result.status, 200);
+  assert.equal((mocks.state.insertValues[1] as any).arcId, "arc-main");
+
+  const olderClientPayload = { ...linked, title: "Updated without parent field" } as Record<string, unknown>;
+  delete olderClientPayload.arcId;
+  mocks.state.selectRows.push([{ arcId: "arc-main" }], [{ id: "arc-main" }]);
+  mocks.state.writeRows.push([{ ...linked, title: "Updated without parent field" }]);
+  const updated = response();
+  await milestonesHandler(request("PUT", undefined, { milestone: olderClientPayload }, "gm"), updated.res);
+  assert.equal(updated.result.status, 200);
+  assert.equal((mocks.state.insertValues[2] as any).arcId, "arc-main");
+
+  mocks.state.selectRows.push([]);
   const invalid = response();
-  await milestonesHandler(request("PUT", undefined, { milestone: { ...milestone, id: "wrong-parent", arcId: "foreign-arc" } }, "gm"), invalid.res);
+  await milestonesHandler(request("PUT", undefined, { milestone: { ...standalone, id: "wrong-parent", arcId: "foreign-arc" } }, "gm"), invalid.res);
   assert.equal(invalid.result.status, 400);
-  assert.equal(mocks.db.insert.mock.calls.length, 1);
+  assert.equal(mocks.db.insert.mock.calls.length, 3);
 });
 
 test("API integration: Player mode cannot write Arcs, Milestones, or their typed relationships", async () => {
@@ -706,6 +733,22 @@ test("API integration: Arc-to-Session links require both endpoints in the resolv
   } }, "gm"), foreign.res);
   assert.equal(foreign.result.status, 401);
   assert.equal(mocks.db.insert.mock.calls.length, 1);
+});
+
+test("API integration: standalone Milestones remain eligible for campaign-scoped Session links", async () => {
+  const link = linkRow({ id: "session-milestone", entityAType: "Session", entityAId: "session-one",
+    entityBType: "Milestone", entityBId: "standalone-step", label: "reached" });
+  mocks.state.selectRows.push([{ id: "standalone-step" }], [{ id: "session-one" }], []);
+  mocks.state.writeRows.push([link]);
+  const { res, result } = response();
+  await entityLinksHandler(request("PUT", undefined, { link: {
+    id: link.id, entityA: { type: "Session", id: "session-one" },
+    entityB: { type: "Milestone", id: "standalone-step" }, label: "reached", visibility: "GM",
+  } }, "gm"), res);
+  assert.equal(result.status, 200);
+  const milestoneQuery = sqlDatabase.select().from(milestones).where(mocks.state.whereClauses[0] as never).toSQL();
+  assert.deepEqual(milestoneQuery.params, [campaign.id, "standalone-step"]);
+  assert.doesNotMatch(milestoneQuery.sql, /join "arcs"/i);
 });
 
 test.each([

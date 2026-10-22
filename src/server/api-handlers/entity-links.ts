@@ -173,9 +173,7 @@ async function requireArcMilestoneEndpoints(values: EntityLinkInsert) {
       )).limit(1).then((rows) => { if (!rows.length) throw new Error("Arc is unavailable in this campaign"); }));
     }
     if (endpoint.type === "Milestone") {
-      checks.push(db.select({ id: milestones.id }).from(milestones).innerJoin(arcs, and(
-        eq(arcs.campaignId, milestones.campaignId), eq(arcs.id, milestones.arcId)
-      )).where(and(
+      checks.push(db.select({ id: milestones.id }).from(milestones).where(and(
         eq(milestones.campaignId, values.campaignId), eq(milestones.id, endpoint.id)
       )).limit(1).then((rows) => { if (!rows.length) throw new Error("Milestone is unavailable in this campaign"); }));
     }

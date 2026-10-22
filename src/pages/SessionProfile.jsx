@@ -1268,7 +1268,7 @@ export default function SessionProfile() {
               isSaving={isSaving}
               getEntityLabel={getMilestoneLabel}
               getEntityMeta={(milestone) => `${milestone?.status || ""}${milestone?.arcName ? ` · ${milestone.arcName}` : ""}`}
-              getEntityPath={(milestone) => `/arcs/${milestone.arcId}/milestones/${milestone.id}`}
+              getEntityPath={(milestone) => `/milestones/${milestone.id}`}
               onLinksChanged={handleLinksChanged}
             />}
 

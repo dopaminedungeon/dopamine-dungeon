@@ -204,6 +204,13 @@
       "when": 1792601336369,
       "tag": "0028_arcs_milestone_narrative_fields",
       "breakpoints": true
+    },
+    {
+      "idx": 29,
+      "version": "7",
+      "when": 1792664337777,
+      "tag": "0029_milestone_parent_optional",
+      "breakpoints": true
     }
   ]
 }

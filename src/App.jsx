@@ -323,6 +323,7 @@ function AppGate() {
         {features.arcs && (
           <>
             <Route path="/arcs" element={<GmOnlyRoute><Arcs /></GmOnlyRoute>} />
+            <Route path="/milestones/:milestoneId" element={<GmOnlyRoute><MilestoneProfile /></GmOnlyRoute>} />
             <Route path="/arcs/:arcId/milestones/:milestoneId" element={<GmOnlyRoute><MilestoneProfile /></GmOnlyRoute>} />
             <Route path="/arcs/:id" element={<GmOnlyRoute><ArcProfile /></GmOnlyRoute>} />
           </>
