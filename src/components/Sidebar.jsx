@@ -48,7 +48,7 @@ export default function Sidebar() {
     { to: "/pcs", icon: Users, label: "PCs", on: features.pcs },
     { to: "/maps", icon: Map, label: "Locations", on: features.maps },
     { to: "/lore", icon: BookOpen, label: "Lore", on: features.lore },
-    { to: "/arcs", icon: BookOpen, label: "Arcs", on: features.arcs },
+    { to: "/arcs", icon: BookOpen, label: "Arcs", on: features.arcs && isGM },
   ].filter((x) => x.on);
 
   const gmOnlyItems = (

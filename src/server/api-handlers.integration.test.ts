@@ -81,6 +81,7 @@ const mocks = vi.hoisted(() => {
         return Promise.resolve([]);
       }),
     })),
+    transaction: vi.fn(async (callback: (tx: any) => Promise<unknown>) => callback(db)),
   };
 
   return {
@@ -546,41 +547,49 @@ test("API integration: a dual-role user in Player mode receives only Player rela
   ]);
 });
 
-test("API integration: Arc and Milestone reads enforce campaign and hidden-parent visibility", async () => {
+test("API integration: Arc and Milestone reads are GM-only and campaign-scoped", async () => {
   mocks.requireCampaignMember.mockResolvedValue({ role: "gm" });
   mocks.state.selectRows.push([], []);
   const arcResponse = response();
-  await arcsHandler(request("GET"), arcResponse.res);
+  await arcsHandler(request("GET", undefined, undefined, "gm"), arcResponse.res);
   assert.equal(arcResponse.result.status, 200);
   const arcQuery = sqlDatabase.select().from(arcs).where(mocks.state.whereClauses[0] as never).toSQL();
   assert.match(arcQuery.sql, /"campaign_id" = \$1/);
-  assert.match(arcQuery.sql, /"visibility" = \$2/);
-  assert.deepEqual(arcQuery.params, [campaign.id, "public"]);
+  assert.doesNotMatch(arcQuery.sql, /"visibility" =/);
+  assert.deepEqual(arcQuery.params, [campaign.id]);
 
   const milestoneResponse = response();
-  await milestonesHandler(request("GET", { campaignId: campaign.slug, arcId: "visible-arc" }), milestoneResponse.res);
+  await milestonesHandler(request("GET", { campaignId: campaign.slug, arcId: "visible-arc" }, undefined, "gm"), milestoneResponse.res);
   assert.equal(milestoneResponse.result.status, 200);
   const milestoneQuery = sqlDatabase.select().from(milestones).where(mocks.state.whereClauses[1] as never).toSQL();
   assert.match(milestoneQuery.sql, /"campaign_id" = \$1/);
   assert.match(milestoneQuery.sql, /"arc_id" = \$2/);
-  assert.match(milestoneQuery.sql, /"visibility" = \$3/);
-  assert.match(milestoneQuery.sql, /exists \(select 1 from "arcs"/);
-  assert.match(milestoneQuery.sql, /"arcs"\."visibility" = 'public'/);
-  assert.deepEqual(milestoneQuery.params, [campaign.id, "visible-arc", "public"]);
+  assert.doesNotMatch(milestoneQuery.sql, /"visibility" =/);
+  assert.deepEqual(milestoneQuery.params, [campaign.id, "visible-arc"]);
+});
+
+test("API integration: Player mode cannot read Arc or Milestone data", async () => {
+  const arc = response();
+  await arcsHandler(request("GET"), arc.res);
+  assert.equal(arc.result.status, 403);
+  const milestone = response();
+  await milestonesHandler(request("GET"), milestone.res);
+  assert.equal(milestone.result.status, 403);
+  assert.equal(mocks.db.select.mock.calls.length, 0);
 });
 
 test("API integration: missing Arc tables are reported as server errors, not authentication failures", async () => {
   mocks.state.selectError = new Error('relation "arcs" does not exist');
   const { res, result } = response();
 
-  await arcsHandler(request("GET"), res);
+  await arcsHandler(request("GET", undefined, undefined, "gm"), res);
 
   assert.equal(result.status, 500);
   assert.deepEqual(result.body, { ok: false, error: "Internal server error" });
 
   mocks.state.selectError = new Error('relation "milestones" does not exist');
   const milestoneResponse = response();
-  await milestonesHandler(request("GET"), milestoneResponse.res);
+  await milestonesHandler(request("GET", undefined, undefined, "gm"), milestoneResponse.res);
 
   assert.equal(milestoneResponse.result.status, 500);
   assert.deepEqual(milestoneResponse.result.body, { ok: false, error: "Internal server error" });
@@ -597,11 +606,11 @@ test("API integration: invalid Firebase authentication remains a 401 for Arc rea
 });
 
 test("API integration: GM Arc create and edit use one campaign-scoped upsert", async () => {
-  const saved = { campaignId: campaign.id, id: "arc-main", name: "The Long Road", status: "progressing", visibility: "public" };
+  const saved = { campaignId: campaign.id, id: "arc-main", type: "main_story", name: "The Long Road", summary: "The fellowship continues.", progress: 0, plotHook: "", grimPortentsFrontiers: "", arcStructure: "", climaxConditions: "", resolutionFallout: "", status: "progressing", visibility: "gm-only" };
   mocks.state.writeRows.push([saved], [saved]);
   for (const method of ["PUT", "PUT"] as const) {
     const { res, result } = response();
-    await arcsHandler(request(method, undefined, { arc: { ...saved, summary: "The fellowship continues." } }, "gm"), res);
+    await arcsHandler(request(method, undefined, { arc: saved }, "gm"), res);
     assert.equal(result.status, 200);
     assert.deepEqual((result.body as any).arc, saved);
   }
@@ -614,7 +623,7 @@ test("API integration: GM Arc create and edit use one campaign-scoped upsert", a
 });
 
 test("API integration: Milestones require a parent Arc in the same campaign and are GM-written", async () => {
-  const milestone = { campaignId: campaign.id, id: "arrival", arcId: "arc-main", title: "Reach the city", status: "active", visibility: "public", position: 0 };
+  const milestone = { campaignId: campaign.id, id: "arrival", arcId: "arc-main", title: "Reach the city", description: "", progress: 0, conditionsForLevelUp: "", intendedLevelProgression: "", status: "active", visibility: "gm-only", position: 0 };
   mocks.state.selectRows.push([{ id: "arc-main" }], []);
   mocks.state.writeRows.push([milestone]);
   const created = response();
@@ -648,6 +657,16 @@ test("API integration: Player mode cannot write Arcs, Milestones, or their typed
   } }, "player"), link.res);
   assert.equal(link.result.status, 401);
   assert.equal(mocks.db.insert.mock.calls.length, 0);
+});
+
+test("API integration: Arc deletion atomically removes Arc and Milestone links before cascade", async () => {
+  mocks.state.selectRows.push([{ id: "milestone-a" }, { id: "milestone-b" }]);
+  const deleted = response();
+  await arcsHandler(request("DELETE", { campaignId: campaign.slug, arcId: "arc-main" }, undefined, "gm"), deleted.res);
+  assert.equal(deleted.result.status, 200);
+  assert.equal(mocks.db.transaction.mock.calls.length, 1);
+  assert.equal(mocks.db.delete.mock.calls.length, 2);
+  assert.deepEqual(deleted.result.body, { ok: true, deleted: true });
 });
 
 test("API integration: Arc-to-Session links require both endpoints in the resolved campaign", async () => {
@@ -688,7 +707,7 @@ test("API integration: Arc-to-Session links require both endpoints in the resolv
   assert.equal(mocks.db.insert.mock.calls.length, 1);
 });
 
-test("API integration: Player relationship reads omit hidden Arc and Milestone endpoint identities", async () => {
+test("API integration: Player relationship reads omit Arc and Milestone endpoint identities", async () => {
   mocks.requireCampaignMember.mockResolvedValue({ role: "gm" });
   mocks.state.selectRows.push([]);
   const { res, result } = response();
@@ -697,10 +716,8 @@ test("API integration: Player relationship reads omit hidden Arc and Milestone e
   assert.deepEqual((result.body as any).links, []);
   const query = sqlDatabase.select().from(entityLinks).where(mocks.state.whereClauses[0] as never).toSQL();
   assert.match(query.sql, /"visibility" = \$2/);
-  assert.match(query.sql, /from "arcs"/);
-  assert.match(query.sql, /from "milestones" join "arcs"/);
-  assert.match(query.sql, /"milestones"\."visibility" = 'public'/);
-  assert.match(query.sql, /"arcs"\."visibility" = 'public'/);
+  assert.match(query.sql, /"entity_a_type" not in \('Arc', 'Milestone'\)/);
+  assert.match(query.sql, /"entity_b_type" not in \('Arc', 'Milestone'\)/);
   assert.match(query.sql, /"characters"\."is_player_visible" = true/);
   assert.match(query.sql, /"items"\."visibility" = 'public'/);
   assert.deepEqual(query.params, [campaign.id, "Player"]);

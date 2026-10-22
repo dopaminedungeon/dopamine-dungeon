@@ -1,5 +1,5 @@
 import type { VercelRequest, VercelResponse } from "@vercel/node";
-import { and, eq, sql } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 
 import { getCurrentUser, requireCampaignGm, requireCampaignMember, resolveCampaignBySlug } from "../access.js";
 import { setCorsHeaders } from "../cors.js";
@@ -32,18 +32,15 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     }
     const isGm = canViewAsGm(req, membership.role);
 
+    if (!isGm) throw new ArcApiError("GM mode is required to access Milestones", 403);
+
     if (req.method === "GET") {
       const arcId = string(value(req.query.arcId));
       const milestoneId = string(value(req.query.milestoneId));
       const rows = await db.select().from(milestones).where(and(
         eq(milestones.campaignId, campaign.id),
         arcId ? eq(milestones.arcId, arcId) : undefined,
-        milestoneId ? eq(milestones.id, milestoneId) : undefined,
-        isGm ? undefined : and(
-          eq(milestones.visibility, "public"),
-          sql`exists (select 1 from ${arcs} where ${arcs.campaignId} = ${milestones.campaignId}
-            and ${arcs.id} = ${milestones.arcId} and ${arcs.visibility} = 'public')`
-        )
+        milestoneId ? eq(milestones.id, milestoneId) : undefined
       ));
       return res.status(200).json({ ok: true, campaignId: campaign.slug, milestones: rows });
     }
@@ -65,6 +62,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     if (!id || !arcId) return res.status(400).json({ ok: false, error: "Milestone id and Arc are required" });
     const status = string(milestone.status, "active");
     if (!MILESTONE_STATUSES.has(status)) return res.status(400).json({ ok: false, error: "Invalid milestone status" });
+    const progress = Number(milestone.progress ?? 0);
+    if (!Number.isInteger(progress) || progress < 0 || progress > 100) return res.status(400).json({ ok: false, error: "Milestone progress must be a whole number from 0 to 100" });
     const [parent] = await db.select({ id: arcs.id }).from(arcs).where(and(
       eq(arcs.campaignId, campaign.id), eq(arcs.id, arcId)
     )).limit(1);
@@ -76,6 +75,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       arcId,
       title: string(milestone.title, "Untitled milestone") || "Untitled milestone",
       description: string(milestone.description),
+      progress,
+      conditionsForLevelUp: string(milestone.conditionsForLevelUp),
+      intendedLevelProgression: string(milestone.intendedLevelProgression),
       status,
       visibility: visibility(milestone.visibility),
       position: Number.isFinite(Number(milestone.position)) ? Number(milestone.position) : 0,
@@ -87,6 +89,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         arcId,
         title: string(milestone.title, "Untitled milestone") || "Untitled milestone",
         description: string(milestone.description),
+        progress,
+        conditionsForLevelUp: string(milestone.conditionsForLevelUp),
+        intendedLevelProgression: string(milestone.intendedLevelProgression),
         status,
         visibility: visibility(milestone.visibility),
         position: Number.isFinite(Number(milestone.position)) ? Number(milestone.position) : 0,

@@ -188,7 +188,7 @@ export const ALLOWED_LINK_LABELS: Record<string, string[]> = {
   // Arc
   // ─────────────────────────
   "Arc|NPC": ["involved", "antagonist", "ally"],
-  "Arc|PC": ["central_to", "affected_by"],
+  "Arc|PC": ["central_to", "affected_by", "assigned_to"],
   "Arc|Item": ["key_item"],
   "Arc|Map": ["set_in"],
   "Arc|Lore": ["rooted_in"],

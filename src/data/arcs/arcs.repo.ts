@@ -1,11 +1,19 @@
 import { apiFetch } from "../api/apiClient";
 
 export type ArcStatus = "active" | "progressing" | "resolved" | "waiting";
+export type ArcType = "character_arc" | "main_story" | "supporting_arc" | "milestone_progression";
 export type ArcVisibility = "public" | "gm-only";
 export type Arc = {
   id: string;
+  type: ArcType;
   name: string;
   summary: string;
+  progress: number;
+  plotHook: string;
+  grimPortentsFrontiers: string;
+  arcStructure: string;
+  climaxConditions: string;
+  resolutionFallout: string;
   status: ArcStatus;
   visibility: ArcVisibility;
   createdAt?: string;
@@ -16,6 +24,9 @@ export type Milestone = {
   arcId: string;
   title: string;
   description: string;
+  progress: number;
+  conditionsForLevelUp: string;
+  intendedLevelProgression: string;
   status: ArcStatus;
   visibility: ArcVisibility;
   position: number;
@@ -33,8 +44,15 @@ function normalizeArc(value: any): Arc {
   return {
     ...value,
     id: String(value?.id || ""),
+    type: ["character_arc", "main_story", "supporting_arc", "milestone_progression"].includes(value?.type) ? value.type : "main_story",
     name: String(value?.name || ""),
     summary: String(value?.summary || ""),
+    progress: Math.max(0, Math.min(100, Number(value?.progress) || 0)),
+    plotHook: String(value?.plotHook || ""),
+    grimPortentsFrontiers: String(value?.grimPortentsFrontiers || ""),
+    arcStructure: String(value?.arcStructure || ""),
+    climaxConditions: String(value?.climaxConditions || ""),
+    resolutionFallout: String(value?.resolutionFallout || ""),
     status: ["active", "progressing", "resolved", "waiting"].includes(value?.status) ? value.status : "active",
     visibility: value?.visibility === "public" ? "public" : "gm-only",
   };
@@ -47,6 +65,9 @@ function normalizeMilestone(value: any): Milestone {
     arcId: String(value?.arcId || ""),
     title: String(value?.title || ""),
     description: String(value?.description || ""),
+    progress: Math.max(0, Math.min(100, Number(value?.progress) || 0)),
+    conditionsForLevelUp: String(value?.conditionsForLevelUp || ""),
+    intendedLevelProgression: String(value?.intendedLevelProgression || ""),
     status: ["active", "progressing", "resolved", "waiting"].includes(value?.status) ? value.status : "active",
     visibility: value?.visibility === "public" ? "public" : "gm-only",
     position: Number.isFinite(Number(value?.position)) ? Number(value.position) : 0,
@@ -67,6 +88,9 @@ export const arcsRepo = {
       method: "PUT", body: JSON.stringify({ arc }),
     });
     return normalizeArc(response.arc);
+  },
+  async delete(campaignId: string, id: string) {
+    await apiFetch(endpoint("arcs", campaignId, id), { method: "DELETE" });
   },
 };
 

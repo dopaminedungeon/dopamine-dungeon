@@ -152,52 +152,7 @@ async function requireQuestEndpoints(values: EntityLinkInsert) {
 }
 
 function playerArcMilestoneWhere() {
-  return sql`(
-    (${entityLinks.entityAType} <> 'Arc' or exists (
-      select 1 from ${arcs} where ${arcs.campaignId} = ${entityLinks.campaignId}
-        and ${arcs.id} = ${entityLinks.entityAId} and ${arcs.visibility} = 'public'
-    ))
-    and (${entityLinks.entityBType} <> 'Arc' or exists (
-      select 1 from ${arcs} where ${arcs.campaignId} = ${entityLinks.campaignId}
-        and ${arcs.id} = ${entityLinks.entityBId} and ${arcs.visibility} = 'public'
-    ))
-    and (${entityLinks.entityAType} <> 'Milestone' or exists (
-      select 1 from ${milestones} join ${arcs} on ${arcs.campaignId} = ${milestones.campaignId}
-        and ${arcs.id} = ${milestones.arcId}
-      where ${milestones.campaignId} = ${entityLinks.campaignId}
-        and ${milestones.id} = ${entityLinks.entityAId}
-        and ${milestones.visibility} = 'public' and ${arcs.visibility} = 'public'
-    ))
-    and (${entityLinks.entityBType} <> 'Milestone' or exists (
-      select 1 from ${milestones} join ${arcs} on ${arcs.campaignId} = ${milestones.campaignId}
-        and ${arcs.id} = ${milestones.arcId}
-      where ${milestones.campaignId} = ${entityLinks.campaignId}
-        and ${milestones.id} = ${entityLinks.entityBId}
-        and ${milestones.visibility} = 'public' and ${arcs.visibility} = 'public'
-    ))
-    and (${entityLinks.entityAType} <> 'Session' or
-      (${entityLinks.entityBType} not in ('Arc', 'Milestone')) or exists (
-        select 1 from ${sessions} where ${sessions.campaignId} = ${entityLinks.campaignId}
-          and ${sessions.id} = ${entityLinks.entityAId} and ${sessions.visibility} = 'public'
-      ))
-    and (${entityLinks.entityBType} <> 'Session' or
-      (${entityLinks.entityAType} not in ('Arc', 'Milestone')) or exists (
-        select 1 from ${sessions} where ${sessions.campaignId} = ${entityLinks.campaignId}
-          and ${sessions.id} = ${entityLinks.entityBId} and ${sessions.visibility} = 'public'
-      ))
-    and ((${entityLinks.entityAType} not in ('Arc', 'Milestone') and ${entityLinks.entityBType} not in ('Arc', 'Milestone')) or (
-      (${entityLinks.entityAType} <> 'NPC' or exists (select 1 from ${npcs} where ${npcs.campaignId} = ${entityLinks.campaignId} and ${npcs.id} = ${entityLinks.entityAId} and ${npcs.visibility} = 'public'))
-      and (${entityLinks.entityBType} <> 'NPC' or exists (select 1 from ${npcs} where ${npcs.campaignId} = ${entityLinks.campaignId} and ${npcs.id} = ${entityLinks.entityBId} and ${npcs.visibility} = 'public'))
-      and (${entityLinks.entityAType} <> 'Map' or exists (select 1 from ${locations} where ${locations.campaignId} = ${entityLinks.campaignId} and ${locations.id} = ${entityLinks.entityAId} and ${locations.visibility} = 'public'))
-      and (${entityLinks.entityBType} <> 'Map' or exists (select 1 from ${locations} where ${locations.campaignId} = ${entityLinks.campaignId} and ${locations.id} = ${entityLinks.entityBId} and ${locations.visibility} = 'public'))
-      and (${entityLinks.entityAType} <> 'Item' or exists (select 1 from ${items} where ${items.campaignId} = ${entityLinks.campaignId} and ${items.id} = ${entityLinks.entityAId} and ${items.visibility} = 'public'))
-      and (${entityLinks.entityBType} <> 'Item' or exists (select 1 from ${items} where ${items.campaignId} = ${entityLinks.campaignId} and ${items.id} = ${entityLinks.entityBId} and ${items.visibility} = 'public'))
-      and (${entityLinks.entityAType} <> 'Lore' or exists (select 1 from ${lore} where ${lore.campaignId} = ${entityLinks.campaignId} and ${lore.id} = ${entityLinks.entityAId} and ${lore.visibility} = 'public'))
-      and (${entityLinks.entityBType} <> 'Lore' or exists (select 1 from ${lore} where ${lore.campaignId} = ${entityLinks.campaignId} and ${lore.id} = ${entityLinks.entityBId} and ${lore.visibility} = 'public'))
-      and (${entityLinks.entityAType} <> 'PC' or exists (select 1 from ${characters} where ${characters.campaignId} = ${entityLinks.campaignId} and ${characters.id} = ${entityLinks.entityAId} and ${characters.isPlayerVisible} = true))
-      and (${entityLinks.entityBType} <> 'PC' or exists (select 1 from ${characters} where ${characters.campaignId} = ${entityLinks.campaignId} and ${characters.id} = ${entityLinks.entityBId} and ${characters.isPlayerVisible} = true))
-    ))
-  )`;
+  return sql`(${entityLinks.entityAType} not in ('Arc', 'Milestone') and ${entityLinks.entityBType} not in ('Arc', 'Milestone'))`;
 }
 
 async function requireArcMilestoneEndpoints(values: EntityLinkInsert) {

@@ -190,6 +190,20 @@
       "when": 1792597043221,
       "tag": "0026_arcs_milestones",
       "breakpoints": true
+    },
+    {
+      "idx": 27,
+      "version": "7",
+      "when": 1792601142918,
+      "tag": "0027_arcs_milestone_narrative_fields",
+      "breakpoints": true
+    },
+    {
+      "idx": 28,
+      "version": "7",
+      "when": 1792601336369,
+      "tag": "0028_arcs_milestone_narrative_fields",
+      "breakpoints": true
     }
   ]
 }

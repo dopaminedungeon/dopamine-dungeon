@@ -23,6 +23,7 @@ import LoreProfile from "./pages/LoreProfile";
 import Quests from "./pages/Quests";
 import Arcs from "./pages/Arcs.jsx";
 import ArcProfile from "./pages/ArcProfile.jsx";
+import MilestoneProfile from "./pages/MilestoneProfile.jsx";
 import PCs from "./pages/PCs";
 import PCProfile from "./pages/PCProfile";
 import BagOfHolding from "./pages/BagOfHolding";
@@ -32,6 +33,7 @@ import BootstrapCampaign from "./pages/BootstrapCampaign.jsx";
 import { useAuth } from "./context/AuthContext.jsx";
 import { useTenant } from "./context/TenantContext.jsx";
 import { useCampaign } from "./context/CampaignContext.jsx";
+import { useMode } from "./context/ModeContext.jsx";
 import AppProviders, { useAccessResolution } from "./context/AppProviders.jsx";
 import { features } from "./config/features";
 import React, { useEffect } from "react";
@@ -128,6 +130,12 @@ function ApplicationBoundary() {
       <AppGate />
     </AppProviders>
   );
+}
+
+function GmOnlyRoute({ children }) {
+  const { isGM, isModeReady } = useMode();
+  if (!isModeReady) return <LoadingScreen label="Loading access…" />;
+  return isGM ? children : <Navigate to="/home" replace />;
 }
 
 function AppGate() {
@@ -314,8 +322,9 @@ function AppGate() {
 
         {features.arcs && (
           <>
-            <Route path="/arcs" element={<Arcs />} />
-            <Route path="/arcs/:id" element={<ArcProfile />} />
+            <Route path="/arcs" element={<GmOnlyRoute><Arcs /></GmOnlyRoute>} />
+            <Route path="/arcs/:arcId/milestones/:milestoneId" element={<GmOnlyRoute><MilestoneProfile /></GmOnlyRoute>} />
+            <Route path="/arcs/:id" element={<GmOnlyRoute><ArcProfile /></GmOnlyRoute>} />
           </>
         )}
 
