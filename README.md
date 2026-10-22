@@ -6,7 +6,7 @@ Dopamine Dungeon is a **campaign management app** for tabletop RPGs (D&D-first),
 - Campaign-scoped data + global navigation
 - Cozy UI, fast lookup, and structured flows
 
-**Live app:** https://dopamine-dungeon-final.vercel.app
+**Live app:** https://dopamine-dungeon.com
 
 ---
 
