@@ -22,7 +22,9 @@ import { npcsRepo } from "../data/npcs/npcs.repo";
 import { sessionsRepo } from "../data/sessions/sessions.repo";
 import { itemsRepo } from "../data/items/items.repo";
 import { loreRepo } from "../data/lore/lore.repo";
+import { QuestReciprocalLinks } from "../components/QuestReciprocalLinks.jsx";
 import { createLink } from "../domain/links/link.service";
+import { editableProfileLinks } from "../domain/links/questManagedLinks";
 import { addLink, getLinksForEntity, loadLinks, removeLink, updateLink } from "../data/links/links.repo";
 
 const IMAGE_MAX_BYTES = 1024 * 1024;
@@ -639,16 +641,18 @@ export default function MapProfile() {
   async function applyDraftLinkChanges(originalLinks, nextLinks) {
     if (!selectedCampaignId) return;
 
-    const originalById = new Map(originalLinks.map((link) => [link.id, link]));
-    const nextById = new Map(nextLinks.map((link) => [link.id, link]));
+    const originalEditable = editableProfileLinks(originalLinks);
+    const nextEditable = editableProfileLinks(nextLinks);
+    const originalById = new Map(originalEditable.map((link) => [link.id, link]));
+    const nextById = new Map(nextEditable.map((link) => [link.id, link]));
 
-    for (const originalLink of originalLinks) {
+    for (const originalLink of originalEditable) {
       if (!nextById.has(originalLink.id)) {
         await removeLink(originalLink.id, selectedCampaignId);
       }
     }
 
-    for (const nextLink of nextLinks) {
+    for (const nextLink of nextEditable) {
       const originalLink = originalById.get(nextLink.id);
 
       if (!originalLink) {
@@ -702,9 +706,11 @@ export default function MapProfile() {
   async function handleSave() {
     if (!selectedCampaignId || !draft || isSavingRef.current) return;
 
+    let locationSaved = false;
     try {
       isSavingRef.current = true;
       setIsSaving(true);
+      setError("");
       const payload = {
         ...draft,
         name: draft.name.trim(),
@@ -723,6 +729,7 @@ export default function MapProfile() {
       const savedLocation = normalizeLocation(
         await locationsRepo.upsert(selectedCampaignId, payload)
       );
+      locationSaved = true;
       if (draftLinks) {
         await applyDraftLinkChanges(mapLinks, draftLinks);
       }
@@ -734,7 +741,17 @@ export default function MapProfile() {
       setImageError("");
     } catch (saveError) {
       console.error("[LocationProfile] Failed to save location", saveError);
-      setError("Unable to save this Location.");
+      if (locationSaved) {
+        try {
+          await loadLinks(selectedCampaignId);
+          setLinksVersion((version) => version + 1);
+        } catch (refreshError) {
+          console.error("[LocationProfile] Failed to refresh links after save error", refreshError);
+        }
+      }
+      setError(locationSaved
+        ? "Location details may have saved, but a relationship did not. Your draft is still here. Review it and retry Save, or Cancel and reload to inspect saved changes."
+        : "The Location could not be saved. Your draft is still here; retry Save.");
     } finally {
       isSavingRef.current = false;
       setIsSaving(false);
@@ -800,7 +817,7 @@ export default function MapProfile() {
       </button>
 
       {error && (
-        <div className="mb-4 rounded-xl border border-red-400/20 bg-red-500/10 p-3 text-sm text-red-200">
+        <div role="alert" className="mb-4 rounded-xl border border-red-400/20 bg-red-500/10 p-3 text-sm text-red-200">
           {error}
         </div>
       )}
@@ -951,7 +968,7 @@ export default function MapProfile() {
                     disabled={isDeleting}
                     onClick={() => {
                       setDraft(location);
-                      setDraftLinks(mapLinks);
+                      setDraftLinks(editableProfileLinks(mapLinks));
                       setLinkDraftKey((key) => key + 1);
                       setImageError("");
                       setIsEditing(true);
@@ -1106,6 +1123,8 @@ export default function MapProfile() {
             getEntityPath={(npc) => `/npcs/${npc.id}`}
             onLinksChanged={handleLinksChanged}
           />
+
+          <QuestReciprocalLinks key={`map-quests-${linkDraftKey}`} campaignId={selectedCampaignId} entityType="Map" entityId={id} links={visibleMapLinks} managedLinks={mapLinks} isEditing={isEditing} isSaving={isSaving} onLinksChanged={handleLinksChanged} />
 
           <MapLinkSection
             key={`map-lore-${linkDraftKey}`}

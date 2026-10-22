@@ -6,4 +6,6 @@ export const features = {
     npcs: true,
     pcs: true,
     sessions: true,
+    quests: true,
+    arcs: true,
 } as const;

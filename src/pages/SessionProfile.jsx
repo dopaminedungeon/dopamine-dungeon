@@ -7,9 +7,12 @@ import { sessionsRepo } from "../data/sessions/sessions.repo";
 import { itemsRepo } from "../data/items/items.repo";
 import { npcsRepo } from "../data/npcs/npcs.repo";
 import { loreRepo } from "../data/lore/lore.repo";
+import { QuestReciprocalLinks } from "../components/QuestReciprocalLinks.jsx";
 import { locationsRepo } from "../data/maps/locations.repo";
+import { arcsRepo } from "../data/arcs/arcs.repo";
 import { createLink } from "../domain/links/link.service";
-import { addLink, getLinksForEntity, loadLinks, removeLink } from "../data/links/links.repo";
+import { editableProfileLinks } from "../domain/links/questManagedLinks";
+import { addLink, getLinksForEntity, loadLinks, removeLink, updateLink } from "../data/links/links.repo";
 import { useCampaign } from "../context/CampaignContext";
 import { getApiCampaignPeople, getApiCharacterAssignments } from "../data/api/apiClient.ts";
 import { getAllCharacters } from "../data/characters/characters.repo";
@@ -132,6 +135,8 @@ function getNpcLabel(npc) {
 function getLocationLabel(location) {
   return location?.name || "Untitled location";
 }
+
+function getArcLabel(arc) { return arc?.name || "Untitled Arc"; }
 
 function SelectInput({ value, onChange, disabled, children }) {
   return (
@@ -449,56 +454,68 @@ export default function SessionProfile() {
   const [allNpcs, setAllNpcs] = useState([]);
   const [allLore, setAllLore] = useState([]);
   const [allLocations, setAllLocations] = useState([]);
+  const [allArcs, setAllArcs] = useState([]);
   const [linksVersion, setLinksVersion] = useState(0);
   const [campaignPeople, setCampaignPeople] = useState([]);
   const [campaignCharacters, setCampaignCharacters] = useState([]);
   const [assignmentRows, setAssignmentRows] = useState([]);
 
   useEffect(() => {
+    let current = true;
+    if (!isGM) {
+      setAllArcs([]);
+    }
       if (!selectedCampaignId) {
         setAllSessions([]);
         setAllItems([]);
         setAllNpcs([]);
         setAllLore([]);
         setAllLocations([]);
+        setAllArcs([]);
         setCampaignPeople([]);
       setCampaignCharacters([]);
       setAssignmentRows([]);
       setLoading(false);
-      return;
+      return () => { current = false; };
     }
 
     async function load() {
       setLoading(true);
       try {
-        const [sessionData, itemData, npcData, loreData, locationData] = await Promise.all([
+        const [sessionData, itemData, npcData, loreData, locationData, arcData] = await Promise.all([
           sessionsRepo.getAll(selectedCampaignId),
           itemsRepo.getAll(selectedCampaignId),
           npcsRepo.getAll(selectedCampaignId),
           loreRepo.getAll(selectedCampaignId),
           locationsRepo.getAll(selectedCampaignId),
+          isGM ? arcsRepo.getAll(selectedCampaignId) : Promise.resolve([]),
           loadLinks(selectedCampaignId),
         ]);
+        if (!current) return;
         setAllSessions(Array.isArray(sessionData) ? sessionData : []);
         setAllItems(Array.isArray(itemData) ? itemData : []);
         setAllNpcs(Array.isArray(npcData) ? npcData : []);
         setAllLore(Array.isArray(loreData) ? loreData : []);
         setAllLocations(Array.isArray(locationData) ? locationData : []);
+        setAllArcs(Array.isArray(arcData) ? arcData : []);
         setLinksVersion((version) => version + 1);
       } catch (error) {
+        if (!current) return;
         console.error("[SessionProfile] Failed to load session data", error);
         setAllSessions([]);
         setAllItems([]);
         setAllNpcs([]);
         setAllLore([]);
         setAllLocations([]);
+        setAllArcs([]);
       } finally {
-        setLoading(false);
+        if (current) setLoading(false);
       }
     }
 
     load();
-  }, [selectedCampaignId]);
+    return () => { current = false; };
+  }, [selectedCampaignId, isGM]);
 
   useEffect(() => {
     if (!selectedCampaignId || !isGM) {
@@ -563,6 +580,7 @@ export default function SessionProfile() {
   const [isSaving, setIsSaving] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
   const [draftLinks, setDraftLinks] = useState(null);
+  const [saveError, setSaveError] = useState("");
   const [linkDraftKey, setLinkDraftKey] = useState(0);
   const [editableSession, setEditableSession] = useState(() =>
     normalizedSession ? { ...normalizedSession } : null
@@ -643,6 +661,7 @@ export default function SessionProfile() {
     () => new Map(visibleLocations.map((location) => [String(location.id), location])),
     [visibleLocations]
   );
+  const visibleArcs = isGM ? allArcs : [];
 
   const sessionLinks = useMemo(() => {
     void linksVersion;
@@ -660,16 +679,18 @@ export default function SessionProfile() {
   async function applyDraftLinkChanges(originalLinks, nextLinks) {
     if (!selectedCampaignId) return;
 
-    const originalById = new Map(originalLinks.map((link) => [link.id, link]));
-    const nextById = new Map(nextLinks.map((link) => [link.id, link]));
+    const originalEditable = editableProfileLinks(originalLinks);
+    const nextEditable = editableProfileLinks(nextLinks);
+    const originalById = new Map(originalEditable.map((link) => [link.id, link]));
+    const nextById = new Map(nextEditable.map((link) => [link.id, link]));
 
-    for (const originalLink of originalLinks) {
+    for (const originalLink of originalEditable) {
       if (!nextById.has(originalLink.id)) {
         await removeLink(originalLink.id, selectedCampaignId);
       }
     }
 
-    for (const nextLink of nextLinks) {
+    for (const nextLink of nextEditable) {
       const originalLink = originalById.get(nextLink.id);
 
       if (!originalLink) {
@@ -678,8 +699,7 @@ export default function SessionProfile() {
       }
 
       if (getLinkSignature(originalLink) !== getLinkSignature(nextLink)) {
-        await removeLink(originalLink.id, selectedCampaignId);
-        await addLink(nextLink, selectedCampaignId);
+        await updateLink(nextLink, selectedCampaignId);
       }
     }
 
@@ -691,7 +711,8 @@ export default function SessionProfile() {
     if (!isGM || isSaving || isDeleting) return;
 
     setEditableSession(normalizedSession ? { ...normalizedSession } : null);
-    setDraftLinks(sessionLinks);
+    setDraftLinks(editableProfileLinks(sessionLinks));
+    setSaveError("");
     setLinkDraftKey((key) => key + 1);
     setEditMode(true);
   }
@@ -702,6 +723,7 @@ export default function SessionProfile() {
     setEditableSession(normalizedSession ? { ...normalizedSession } : null);
     setGmPrepText(normalizedSession?.gmPrep?.join("\n") || "");
     setDraftLinks(null);
+    setSaveError("");
     setLinkDraftKey((key) => key + 1);
     setEditMode(false);
   }
@@ -733,15 +755,31 @@ export default function SessionProfile() {
       links: draftLinks || sessionLinks,
     });
 
+    let sessionSaved = false;
     try {
       setIsSaving(true);
+      setSaveError("");
       await sessionsRepo.upsert(selectedCampaignId, toSave);
+      sessionSaved = true;
       await applyDraftLinkChanges(sessionLinks, nextLinks);
       const data = await sessionsRepo.getAll(selectedCampaignId);
       setAllSessions(Array.isArray(data) ? data : []);
       setDraftLinks(null);
       setLinkDraftKey((key) => key + 1);
       setEditMode(false);
+    } catch (saveFailure) {
+      console.error("[SessionProfile] Failed to save Session", saveFailure);
+      if (sessionSaved) {
+        try {
+          await loadLinks(selectedCampaignId);
+          setLinksVersion((version) => version + 1);
+        } catch (refreshFailure) {
+          console.error("[SessionProfile] Failed to refresh links after save error", refreshFailure);
+        }
+      }
+      setSaveError(sessionSaved
+        ? "Session details may have saved, but a relationship did not. Your draft is still here. Review it and retry Save, or Cancel and reload to inspect saved changes."
+        : "The Session could not be saved. Your draft is still here; retry Save.");
     } finally {
       setIsSaving(false);
     }
@@ -955,7 +993,8 @@ export default function SessionProfile() {
           )}
         </div>
 
-	        <fieldset disabled={isSaving} className="contents disabled:opacity-60">
+        {saveError && <p role="alert" className="rounded-xl border border-red-400/30 bg-red-500/10 px-4 py-3 text-sm text-red-200">{saveError}</p>}
+        <fieldset disabled={isSaving} className="contents disabled:opacity-60">
 	        {isGM && editMode ? (
           <div className="rounded-xl border border-white/10 bg-white/[0.03] p-4 sm:p-5">
             <h2 className="text-lg font-semibold text-white mb-4">Session details</h2>
@@ -1180,6 +1219,27 @@ export default function SessionProfile() {
               getEntityPath={(location) => `/maps/${location.id}`}
               onLinksChanged={handleLinksChanged}
             />
+
+            <QuestReciprocalLinks key={`session-quests-${linkDraftKey}`} campaignId={selectedCampaignId} entityType="Session" entityId={id} links={visibleSessionLinks} managedLinks={sessionLinks} isEditing={editMode} isSaving={isSaving} onLinksChanged={handleLinksChanged} />
+            {isGM && <SessionLinkSection
+              key={`session-arcs-${linkDraftKey}`}
+              title="Arcs advanced"
+              emptyText="No linked Arcs yet."
+              sessionId={String(id)}
+              entityType="Arc"
+              addLabel="Arc"
+              entities={visibleArcs}
+              links={visibleSessionLinks}
+              allowedLabels={["advanced", "pivoted"]}
+              defaultLabel="advanced"
+              isGM={isGM}
+              editMode={editMode}
+              isSaving={isSaving}
+              getEntityLabel={getArcLabel}
+              getEntityMeta={(arc) => arc?.status || ""}
+              getEntityPath={(arc) => `/arcs/${arc.id}`}
+              onLinksChanged={handleLinksChanged}
+            />}
 
             {/* Session timeline */}
             {(editMode || (viewSession?.timeline && viewSession.timeline.trim().length > 0)) && (

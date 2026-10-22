@@ -41,6 +41,7 @@ export const LINK_SECTIONS: Record<
   Item: {},
   Quest: {},
   Arc: {},
+  Milestone: {},
   Lore: {},
   Map: {},
   Condition: {},

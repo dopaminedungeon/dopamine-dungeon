@@ -1,0 +1,7 @@
+interface:
+  display_name: "DD Design Decision Keeper"
+  short_description: "Track decisions and reconcile existing GitHub issues"
+  default_prompt: "Use $design-decision-keeper to capture confirmed Dopamine Dungeon design decisions, reconcile existing issues, and identify unresolved requirements."
+
+policy:
+  allow_implicit_invocation: true

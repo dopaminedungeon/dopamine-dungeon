@@ -19,8 +19,10 @@ import { npcsRepo } from "../data/npcs/npcs.repo";
 import { sessionsRepo } from "../data/sessions/sessions.repo";
 import { itemsRepo } from "../data/items/items.repo";
 import { locationsRepo } from "../data/maps/locations.repo";
+import { questsRepo } from "../data/quests/quests.repo";
 import { createLink } from "../domain/links/link.service";
-import { addLink, getLinksForEntity, loadLinks, removeLink } from "../data/links/links.repo";
+import { addLink, getLinksForEntity, loadLinks, removeLink, updateLink } from "../data/links/links.repo";
+import { editableProfileLinks } from "../domain/links/questManagedLinks";
 
 const LORE_TYPES = [
   "Religion",
@@ -554,10 +556,23 @@ export default function LoreProfile() {
   const [sessions, setSessions] = useState([]);
   const [items, setItems] = useState([]);
   const [locations, setLocations] = useState([]);
+  const [questReferences, setQuestReferences] = useState({ scope: "", rows: [] });
   const [linksVersion, setLinksVersion] = useState(0);
   const [draftLinks, setDraftLinks] = useState(null);
   const [linkDraftKey, setLinkDraftKey] = useState(0);
   const isSavingRef = useRef(false);
+  const questScope = `${selectedCampaignId}:${isGM}`;
+
+  useEffect(() => {
+    let active = true;
+    if (!selectedCampaignId) return;
+    Promise.all([questsRepo.all(selectedCampaignId), loadLinks(selectedCampaignId)]).then(([result]) => {
+      if (!active) return;
+      setQuestReferences({ scope: questScope, rows: result.quests || [] });
+      setLinksVersion((version) => version + 1);
+    }).catch(() => { if (active) setQuestReferences({ scope: questScope, rows: [] }); });
+    return () => { active = false; };
+  }, [selectedCampaignId, isGM, questScope]);
 
   useEffect(() => {
     let cancelled = false;
@@ -647,6 +662,7 @@ export default function LoreProfile() {
     if (isGM) return locations;
     return locations.filter((location) => location?.visibility === "public");
   }, [isGM, locations]);
+  const visibleQuests = questReferences.scope === questScope ? questReferences.rows.filter((quest) => isGM || quest.visibility === "public") : [];
 
   const loreLinks = useMemo(() => {
     void linksVersion;
@@ -662,16 +678,18 @@ export default function LoreProfile() {
   async function applyDraftLinkChanges(originalLinks, nextLinks) {
     if (!selectedCampaignId) return;
 
-    const originalById = new Map(originalLinks.map((link) => [link.id, link]));
-    const nextById = new Map(nextLinks.map((link) => [link.id, link]));
+    const originalEditable = editableProfileLinks(originalLinks);
+    const nextEditable = editableProfileLinks(nextLinks);
+    const originalById = new Map(originalEditable.map((link) => [link.id, link]));
+    const nextById = new Map(nextEditable.map((link) => [link.id, link]));
 
-    for (const originalLink of originalLinks) {
+    for (const originalLink of originalEditable) {
       if (!nextById.has(originalLink.id)) {
         await removeLink(originalLink.id, selectedCampaignId);
       }
     }
 
-    for (const nextLink of nextLinks) {
+    for (const nextLink of nextEditable) {
       const originalLink = originalById.get(nextLink.id);
 
       if (!originalLink) {
@@ -680,8 +698,7 @@ export default function LoreProfile() {
       }
 
       if (getLinkSignature(originalLink) !== getLinkSignature(nextLink)) {
-        await removeLink(originalLink.id, selectedCampaignId);
-        await addLink(nextLink, selectedCampaignId);
+        await updateLink(nextLink, selectedCampaignId);
       }
     }
 
@@ -717,9 +734,11 @@ export default function LoreProfile() {
   async function handleSave() {
     if (!selectedCampaignId || !draft || isSavingRef.current) return;
 
+    let loreSaved = false;
     try {
       isSavingRef.current = true;
       setIsSaving(true);
+      setError("");
       const normalizedAliases = normalizeAliases(draft.aliases);
       const payload = {
         ...draft,
@@ -736,8 +755,10 @@ export default function LoreProfile() {
         },
       };
       const savedLore = normalizeLore(await loreRepo.upsert(selectedCampaignId, payload));
+      loreSaved = true;
       if (draftLinks) {
         await applyDraftLinkChanges(loreLinks, draftLinks);
+        setLinksVersion((version) => version + 1);
       }
       setLore(savedLore);
       setDraft(savedLore);
@@ -746,7 +767,17 @@ export default function LoreProfile() {
       setIsEditing(false);
     } catch (saveError) {
       console.error("[LoreProfile] Failed to save Lore", saveError);
-      setError("Unable to save this Lore entry.");
+      if (loreSaved) {
+        try {
+          await loadLinks(selectedCampaignId);
+          setLinksVersion((version) => version + 1);
+        } catch (refreshError) {
+          console.error("[LoreProfile] Failed to refresh links after save error", refreshError);
+        }
+      }
+      setError(loreSaved
+        ? "Lore details may have saved, but a relationship change failed. Your draft is still open; review the links and retry Save."
+        : "Unable to save this Lore entry. Your draft is still open; retry Save.");
     } finally {
       isSavingRef.current = false;
       setIsSaving(false);
@@ -813,7 +844,7 @@ export default function LoreProfile() {
       </button>
 
       {error && (
-        <div className="mb-4 rounded-xl border border-red-400/20 bg-red-500/10 p-3 text-sm text-red-200">
+        <div role="alert" className="mb-4 rounded-xl border border-red-400/20 bg-red-500/10 p-3 text-sm text-red-200">
           {error}
         </div>
       )}
@@ -936,6 +967,7 @@ export default function LoreProfile() {
                     onClick={() => {
                       setDraft(lore);
                       setDraftLinks(null);
+                      setError("");
                       setLinkDraftKey((key) => key + 1);
                       setIsEditing(false);
                     }}
@@ -959,7 +991,8 @@ export default function LoreProfile() {
                     disabled={isDeleting}
                     onClick={() => {
                       setDraft(lore);
-                      setDraftLinks(loreLinks);
+                      setDraftLinks(editableProfileLinks(loreLinks));
+                      setError("");
                       setLinkDraftKey((key) => key + 1);
                       setIsEditing(true);
                     }}
@@ -1077,6 +1110,26 @@ export default function LoreProfile() {
             getEntityLabel={getSessionLabel}
             getEntityMeta={(session) => session?.date || session?.status || ""}
             getEntityPath={(session) => `/sessions/${session.id}`}
+            onLinksChanged={handleLinksChanged}
+          />
+
+          <LoreLinkSection
+            key={`lore-quests-${linkDraftKey}`}
+            title="Quests"
+            emptyText="No linked quests yet."
+            loreId={viewLore.id}
+            entityType="Quest"
+            addLabel="Quest"
+            entities={visibleQuests}
+            links={visibleLoreLinks}
+            allowedLabels={["based_on", "reveals"]}
+            defaultLabel="based_on"
+            isGM={isGM}
+            isEditing={isEditing}
+            isSaving={isSaving}
+            getEntityLabel={(quest) => quest?.name || "Untitled quest"}
+            getEntityMeta={(quest) => quest?.status || ""}
+            getEntityPath={(quest) => `/quests/${quest.id}`}
             onLinksChanged={handleLinksChanged}
           />
 

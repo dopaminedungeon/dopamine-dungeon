@@ -6,6 +6,7 @@ import {
   Drama,
   Package,
   BookOpen,
+  ScrollText,
   Map,
   Settings,
 } from "lucide-react";
@@ -41,11 +42,13 @@ export default function Sidebar() {
   const baseNavItems = [
     { to: "/home", icon: LayoutDashboard, label: "Home", on: features.dashboard },
     { to: "/sessions", icon: BookOpen, label: "Sessions", on: features.sessions },
+    { to: "/quests", icon: ScrollText, label: "Quests", on: features.quests },
     { to: "/items", icon: Package, label: "Items", on: features.items },
     { to: "/npcs", icon: Drama, label: "NPCs", on: features.npcs },
     { to: "/pcs", icon: Users, label: "PCs", on: features.pcs },
     { to: "/maps", icon: Map, label: "Locations", on: features.maps },
     { to: "/lore", icon: BookOpen, label: "Lore", on: features.lore },
+    { to: "/arcs", icon: BookOpen, label: "Arcs", on: features.arcs && isGM },
   ].filter((x) => x.on);
 
   const gmOnlyItems = (
@@ -65,8 +68,7 @@ export default function Sidebar() {
       ? [...baseNavItems, { to: "/campaigns/settings", icon: Settings, label: "Settings", on: true }]
       : [...baseNavItems]
   )
-    .filter((x) => x.on)
-    .slice(0, 5);
+    .filter((x) => x.on);
 
   return (
     <>
@@ -127,7 +129,7 @@ export default function Sidebar() {
         aria-label="Primary"
       >
         <div className="mx-auto max-w-screen-sm px-2">
-          <div className="grid grid-cols-5 gap-1 py-2">
+          <div className="flex gap-1 overflow-x-auto py-2">
             {mobileNavItems.map(({ to, icon, label }) => {
               const active = to === "/"
                 ? location.pathname === "/"
@@ -138,7 +140,7 @@ export default function Sidebar() {
                   key={to}
                   to={to}
                   end={to === "/"}
-                  className={`flex flex-col items-center justify-center gap-1 rounded-xl px-2 py-2 transition-colors ${
+                  className={`flex min-w-[62px] shrink-0 flex-col items-center justify-center gap-1 rounded-xl px-2 py-2 transition-colors ${
                     active
                       ? "bg-linear-to-r from-purple-500/20 to-pink-500/20 text-white border border-purple-500/30"
                       : "text-zinc-400 hover:text-white hover:bg-white/5"

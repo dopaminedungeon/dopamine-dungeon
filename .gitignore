@@ -16,3 +16,4 @@ test-results/
 reports/firestore-reconciliation/
 *firebase-adminsdk*.json
 .pnpm-store/
+.env*.local

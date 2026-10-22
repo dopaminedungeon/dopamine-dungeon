@@ -3,13 +3,16 @@ import { Link, useParams, useNavigate } from "react-router-dom";
 import { useMode } from "../context/ModeContext.jsx";
 import { ArrowLeft, Swords, Shield, Sparkles, Trash2 } from "lucide-react";
 import { itemsRepo } from "../data/items/items.repo";
+import { parseWorthGp } from "../domain/currency/worth";
 import { sessionsRepo } from "../data/sessions/sessions.repo";
 import { npcsRepo } from "../data/npcs/npcs.repo";
 import { loreRepo } from "../data/lore/lore.repo";
+import { QuestReciprocalLinks } from "../components/QuestReciprocalLinks.jsx";
 import { locationsRepo } from "../data/maps/locations.repo";
 import { useCampaign } from "../context/CampaignContext";
 import { createLink } from "../domain/links/link.service";
-import { addLink, getLinksForEntity, loadLinks, removeLink } from "../data/links/links.repo";
+import { editableProfileLinks } from "../domain/links/questManagedLinks";
+import { addLink, getLinksForEntity, loadLinks, removeLink, updateLink } from "../data/links/links.repo";
 import { getApiCampaignPeople, getApiCharacterAssignments } from "../data/api/apiClient";
 import { getAllCharacters } from "../data/characters/characters.repo";
 import { MarkdownContent } from "../components/MarkdownContent.jsx";
@@ -440,6 +443,8 @@ export default function ItemProfile() {
   const [locations, setLocations] = useState([]);
   const [loading, setLoading] = useState(true);
   const [isItemSaving, setIsItemSaving] = useState(false);
+  const [worthError, setWorthError] = useState("");
+  const [saveError, setSaveError] = useState("");
   const [isItemDeleting, setIsItemDeleting] = useState(false);
   const isItemSavingRef = useRef(false);
   const [linksVersion, setLinksVersion] = useState(0);
@@ -594,16 +599,18 @@ export default function ItemProfile() {
   async function applyDraftLinkChanges(originalLinks, nextLinks) {
     if (!selectedCampaignId) return;
 
-    const originalById = new Map(originalLinks.map((link) => [link.id, link]));
-    const nextById = new Map(nextLinks.map((link) => [link.id, link]));
+    const originalEditable = editableProfileLinks(originalLinks);
+    const nextEditable = editableProfileLinks(nextLinks);
+    const originalById = new Map(originalEditable.map((link) => [link.id, link]));
+    const nextById = new Map(nextEditable.map((link) => [link.id, link]));
 
-    for (const originalLink of originalLinks) {
+    for (const originalLink of originalEditable) {
       if (!nextById.has(originalLink.id)) {
         await removeLink(originalLink.id, selectedCampaignId);
       }
     }
 
-    for (const nextLink of nextLinks) {
+    for (const nextLink of nextEditable) {
       const originalLink = originalById.get(nextLink.id);
 
       if (!originalLink) {
@@ -612,8 +619,7 @@ export default function ItemProfile() {
       }
 
       if (getLinkSignature(originalLink) !== getLinkSignature(nextLink)) {
-        await removeLink(originalLink.id, selectedCampaignId);
-        await addLink(nextLink, selectedCampaignId);
+        await updateLink(nextLink, selectedCampaignId);
       }
     }
 
@@ -625,7 +631,9 @@ export default function ItemProfile() {
     if (!isGM || isItemSaving || isItemDeleting) return;
 
     setFormData(rawItem || null);
-    setDraftLinks(itemLinks);
+    setWorthError("");
+    setSaveError("");
+    setDraftLinks(editableProfileLinks(itemLinks));
     setLinkDraftKey((key) => key + 1);
     setIsEditing(true);
   }
@@ -634,6 +642,8 @@ export default function ItemProfile() {
     if (isItemSaving) return;
 
     setFormData(rawItem || null);
+    setWorthError("");
+    setSaveError("");
     setDraftLinks(null);
     setLinkDraftKey((key) => key + 1);
     setIsEditing(false);
@@ -643,9 +653,20 @@ export default function ItemProfile() {
     if (isItemSavingRef.current || isItemDeleting || !formData || !selectedCampaignId) return;
 
     try {
+      parseWorthGp(formData.worthGp);
+      setWorthError("");
+    } catch (error) {
+      setWorthError(error instanceof Error ? error.message : "Enter a valid item worth.");
+      return;
+    }
+
+    let itemSaved = false;
+    try {
       isItemSavingRef.current = true;
       setIsItemSaving(true);
+      setSaveError("");
       const savedItem = await itemsRepo.upsert(selectedCampaignId, formData);
+      itemSaved = true;
       if (draftLinks) {
         await applyDraftLinkChanges(itemLinks, draftLinks);
       }
@@ -653,6 +674,19 @@ export default function ItemProfile() {
       setDraftLinks(null);
       setLinkDraftKey((key) => key + 1);
       setIsEditing(false);
+    } catch (error) {
+      console.error("[ItemProfile] Failed to save Item", error);
+      if (itemSaved) {
+        try {
+          await loadLinks(selectedCampaignId);
+          setLinksVersion((version) => version + 1);
+        } catch (refreshError) {
+          console.error("[ItemProfile] Failed to refresh links after save error", refreshError);
+        }
+      }
+      setSaveError(itemSaved
+        ? "Item details may have saved, but a relationship did not. Your draft is still here. Review it and retry Save, or Cancel and reload to inspect saved changes."
+        : "The Item could not be saved. Your draft is still here; retry Save.");
     } finally {
       isItemSavingRef.current = false;
       setIsItemSaving(false);
@@ -748,6 +782,8 @@ export default function ItemProfile() {
             <ArrowLeft className="w-5 h-5" />
             Back to Items
           </button>
+
+          {saveError && <p role="alert" className="rounded-xl border border-red-400/30 bg-red-500/10 px-4 py-3 text-sm text-red-200">{saveError}</p>}
 
           <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
             <div className="min-w-0">
@@ -883,7 +919,7 @@ export default function ItemProfile() {
             </div>
           </div>
 
-          <div className="grid grid-cols-2 md:grid-cols-3 gap-3 text-sm">
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-sm">
             <div className="bg-white/5 rounded-xl border border-white/10 px-4 py-3">
               <p className="text-zinc-500 text-xs uppercase tracking-wide">Bonus</p>
               {isEditing && isGM ? (
@@ -943,8 +979,27 @@ export default function ItemProfile() {
                 </p>
               )}
             </div>
+            <div className="bg-white/5 rounded-xl border border-white/10 px-4 py-3">
+              <label htmlFor="item-worth-gp" className="text-zinc-500 text-xs uppercase tracking-wide">Worth (gp each)</label>
+              {isEditing && isGM ? (
+                <input
+                  id="item-worth-gp"
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  inputMode="decimal"
+                  className="mt-1 w-full bg-transparent border border-white/20 rounded-lg px-2 py-1 text-white"
+                  value={formData.worthGp ?? ""}
+                  onChange={(event) => { handleFieldChange("worthGp", event.target.value); if (worthError) setWorthError(""); }}
+                  placeholder="Not set"
+                />
+              ) : (
+                <p className="text-white text-xl font-bold">{formData.worthGp == null ? "—" : `${formData.worthGp} gp`}</p>
+              )}
+            </div>
           </div>
         </div>
+        {worthError ? <p role="alert" className="mt-3 rounded-xl border border-red-400/30 bg-red-500/10 px-3 py-2 text-sm text-red-200">{worthError}</p> : null}
       </div>
 
       {/* Player vs GM columns */}
@@ -1171,6 +1226,8 @@ export default function ItemProfile() {
             getEntityPath={(location) => `/maps/${location.id}`}
             onLinksChanged={handleLinksChanged}
           />
+
+          <QuestReciprocalLinks key={`item-quests-${linkDraftKey}`} campaignId={selectedCampaignId} entityType="Item" entityId={id} links={visibleItemLinks} managedLinks={itemLinks} isEditing={isEditing} isSaving={isItemSaving} onLinksChanged={handleLinksChanged} />
 
           <section className="bg-white/5 border border-white/10 rounded-2xl p-5">
             <h2 className="text-lg font-semibold text-white mb-2">Bag of Holding</h2>

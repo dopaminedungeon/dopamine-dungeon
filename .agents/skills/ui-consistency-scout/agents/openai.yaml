@@ -1,0 +1,7 @@
+interface:
+  display_name: "DD UI Consistency Scout"
+  short_description: "Review DD visual and interaction consistency"
+  default_prompt: "Use $ui-consistency-scout to review the affected Dopamine Dungeon UI against approved visual and interaction patterns and report actionable findings."
+
+policy:
+  allow_implicit_invocation: true

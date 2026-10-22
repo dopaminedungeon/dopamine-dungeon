@@ -1,6 +1,6 @@
 # System Overview
 
-Last updated: 2026-10-12
+Last updated: 2026-10-21
 
 Dopamine Dungeon is a multi-tenant campaign-management application for game
 masters and players. This document is the current high-level architecture and
@@ -18,14 +18,20 @@ Workspace
     |-- NPCs
     |-- Locations
     |-- Lore
+    |-- Quests
+    |-- Arcs
+        `-- Milestones
     `-- PCs
         `-- Bag of Holding
 
 Typed entity links connect active campaign entities. The retired standalone
 Relationships page is not part of the product. Future PC-NPC and NPC-NPC
 relationship behavior belongs to cross-linking and Friendship Index work.
-`Arc`, `Quest`, and `Condition` remain reserved typed link endpoints, but their
-former mock-backed pages are not active persisted product modules.
+Quests, Arcs, and Milestones are persisted campaign-scoped entities with typed
+relationships. Arc and Milestone links reuse the typed entity-link table; a
+Milestone's parent is enforced by a campaign-and-Arc composite foreign key.
+Condition remains a reserved typed link endpoint without an active standalone
+module.
 
 ## Runtime layers
 
@@ -88,11 +94,16 @@ Neon PostgreSQL, accessed through the Vercel API and Drizzle-backed
 repositories, is the canonical store for application state, including users'
 profile preferences, workspaces, campaigns, memberships, invitations, settings,
 authentication-email limiter state, and core relational campaign entities:
-sessions, items, inventory, NPCs, locations, lore, PCs, and typed
-entity links. APIs and repositories are the persistence boundary. Campaign
-and workspace scoping is implemented through endpoint-specific resolvers,
+sessions, items, inventory, NPCs, locations, lore, quests, PCs, Arcs,
+Milestones, and typed entity links. APIs and repositories are the persistence
+boundary. Campaign and workspace scoping is implemented through endpoint-specific resolvers,
 membership predicates, and scoped queries; do not infer that every route uses
 the same workspace resolver or an identical predicate.
+
+Arc/Milestone APIs scope every query to the resolved campaign and membership.
+The feature is GM-only: Arc and Milestone reads and writes require GM mode, and
+Player relationship reads exclude Arc and Milestone endpoints before returning
+link IDs or endpoint identifiers.
 
 Firestore has no active application-state, transactional-mail, or auth-email
 limiter runtime path. Historical migration/reconciliation scripts and retained
